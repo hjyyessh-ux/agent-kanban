@@ -41,7 +41,8 @@ test.describe('Foldable UI — Board Card Phase Blocks', () => {
     const promptPhase = dialog.locator('.kv2-phase--prompt');
     await expect(promptPhase).toBeVisible();
     await expect(promptPhase.locator('.kv2-phase-content')).toBeVisible();
-    await expect(promptPhase.locator('.kv2-phase-content')).toHaveClass(/kv2-phase-content--collapsed/);
+    // Prompt is always expanded by default in every status.
+    await expect(promptPhase.locator('.kv2-phase-content')).toHaveClass(/kv2-phase-content--expanded/);
   });
 
   test('dialog phase toggle expands and collapses', async ({ page, seedCard, trackCard }) => {
@@ -67,16 +68,17 @@ test.describe('Foldable UI — Board Card Phase Blocks', () => {
     const promptContent = promptPhase.locator('.kv2-phase-content');
     const toggleBtn = dialog.locator('.kv2-phase-action[aria-expanded]').first();
 
-    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+    // Prompt starts expanded; toggle collapses then re-expands.
+    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
+    await expect(promptContent).toHaveClass(/kv2-phase-content--expanded/);
+
+    await toggleBtn.click();
     await expect(promptContent).toHaveClass(/kv2-phase-content--collapsed/);
+    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
 
     await toggleBtn.click();
     await expect(promptContent).toHaveClass(/kv2-phase-content--expanded/);
     await expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
-
-    await toggleBtn.click();
-    await expect(promptContent).toHaveClass(/kv2-phase-content--collapsed/);
-    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('board card click opens dialog (no separate toggle)', async ({ page, seedCard, trackCard }) => {
@@ -96,7 +98,7 @@ test.describe('Foldable UI — Board Card Phase Blocks', () => {
     await expect(page.locator('.kv2-dialog-overlay')).toBeVisible();
   });
 
-  test('modal phase blocks are collapsed by default', async ({ page, seedCard, trackCard }) => {
+  test('modal prompt phase is expanded by default', async ({ page, seedCard, trackCard }) => {
     const card = await seedCard({
       title: '[E2E-FOLD] Modal Expanded',
       description: 'This is a long description that exceeds fifty characters to ensure we have meaningful content to collapse and expand in the phase block.',
@@ -109,17 +111,17 @@ test.describe('Foldable UI — Board Card Phase Blocks', () => {
     const cardEl = todoColumn.locator('.kv2-card', { hasText: '[E2E-FOLD] Modal Expanded' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.locator('.kv2-card-title').click();
+    await cardEl.click();
     await expect(page.locator('.kv2-dialog-overlay')).toBeVisible();
 
     const modalPhaseText = page.locator('.kv2-phase-content').first();
-    await expect(modalPhaseText).toHaveClass(/kv2-phase-content--collapsed/);
+    await expect(modalPhaseText).toHaveClass(/kv2-phase-content--expanded/);
 
     const modalToggleBtn = page.locator('.kv2-phase-card-wrapper .kv2-phase-action[aria-expanded]').first();
-    await expect(modalToggleBtn).toHaveAttribute('aria-expanded', 'false');
+    await expect(modalToggleBtn).toHaveAttribute('aria-expanded', 'true');
   });
 
-  test('modal toggle expands phase block', async ({ page, seedCard, trackCard }) => {
+  test('modal toggle collapses and re-expands prompt phase', async ({ page, seedCard, trackCard }) => {
     const card = await seedCard({
       title: '[E2E-FOLD] Modal Collapse',
       description: 'This is a long description that exceeds fifty characters to ensure we have meaningful content to collapse and expand in the phase block.',
@@ -132,13 +134,17 @@ test.describe('Foldable UI — Board Card Phase Blocks', () => {
     const cardEl = todoColumn.locator('.kv2-card', { hasText: '[E2E-FOLD] Modal Collapse' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.locator('.kv2-card-title').click();
+    await cardEl.click();
     await expect(page.locator('.kv2-dialog-overlay')).toBeVisible();
 
     const modalToggleBtn = page.locator('.kv2-phase-card-wrapper .kv2-phase-action[aria-expanded]').first();
-    await modalToggleBtn.click();
-
     const modalPhaseText = page.locator('.kv2-phase-content').first();
+
+    await modalToggleBtn.click();
+    await expect(modalPhaseText).toHaveClass(/kv2-phase-content--collapsed/);
+    await expect(modalToggleBtn).toHaveAttribute('aria-expanded', 'false');
+
+    await modalToggleBtn.click();
     await expect(modalPhaseText).toHaveClass(/kv2-phase-content--expanded/);
     await expect(modalToggleBtn).toHaveAttribute('aria-expanded', 'true');
   });

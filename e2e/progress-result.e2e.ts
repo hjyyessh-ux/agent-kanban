@@ -77,7 +77,7 @@ test.describe('Progress & Result Phase Blocks', () => {
     const cardEl = todoColumn.locator('.kv2-card', { hasText: '[E2E-PHASE] Modal Progress' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.locator('.kv2-card-title').click();
+    await cardEl.click();
     await expect(page.locator('.kv2-dialog-overlay')).toBeVisible();
 
     const progressPhase = page.locator('.kv2-phase--progress');

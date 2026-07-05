@@ -1287,6 +1287,16 @@
   user-select: none;
 }
 
+/* Square box so the rotated glyph's bounding box stays inside the button
+   (a rotated ▼ otherwise inflates scrollWidth past clientWidth). */
+.kv2-chevron {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  text-align: center;
+}
+
 .kv2-session-title .kv2-chevron {
   font-size: 10px;
   transition: transform 0.15s ease;

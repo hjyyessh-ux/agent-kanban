@@ -220,8 +220,8 @@ test.describe('Settings - Model Visibility Filter', () => {
     const section = modelVisibilitySection(page);
     await expect(section).toBeVisible({ timeout: 10_000 });
 
-    // Find the toggle all button
-    const toggleBtn = section.locator('.settings-model-filter-header .neo-button');
+    // Find the toggle all button (the header also has a "Sync models" button)
+    const toggleBtn = section.getByRole('button', { name: /Select All|Deselect All/ });
 
     // If currently "Deselect All", click it to deselect all
     const btnText = await toggleBtn.textContent();
@@ -257,7 +257,7 @@ test.describe('Settings - Model Visibility Filter', () => {
     await expect(section).toBeVisible({ timeout: 10_000 });
 
     // Click "Deselect All" first to start clean, then "Select All"
-    const toggleBtn = section.locator('.settings-model-filter-header .neo-button');
+    const toggleBtn = section.getByRole('button', { name: /Select All|Deselect All/ });
     const btnText = await toggleBtn.textContent();
     if (btnText?.includes('Deselect All')) {
       await toggleBtn.click();

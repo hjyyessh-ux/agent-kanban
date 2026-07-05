@@ -136,8 +136,15 @@ test.describe('v2 visual audit', () => {
 
     await page.goto('/');
 
-    const openAndCapture = async (title: string, screenshotPath: string, expectedAction: string) => {
-      await page.locator('.kv2-card', { hasText: title }).click();
+    const openAndCapture = async (title: string, screenshotPath: string, expectedAction: string, fromDoneGroup = false) => {
+      if (fromDoneGroup) {
+        // Done cards render inside collapsed session groups.
+        const doneColumn = page.locator('.kv2-column[data-status="done"]');
+        await doneColumn.locator('.kv2-complete-session-toggle').first().click();
+        await doneColumn.locator('.kv2-complete-session-card-title', { hasText: title }).click();
+      } else {
+        await page.locator('.kv2-card', { hasText: title }).click();
+      }
       await expect(page.locator('.kv2-dialog')).toBeVisible();
       await expect(page.locator('.kv2-title-text')).toContainText(title);
       await expect(page.locator('.kv2-detail-sidebar .kv2-screenshot-panel')).toBeVisible();
@@ -166,7 +173,7 @@ test.describe('v2 visual audit', () => {
 
     await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress.png', 'REOPEN');
     await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete.png', 'DONE');
-    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done.png', 'REOPEN');
+    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done.png', 'REOPEN', true);
   });
 
   test('captures create modal and responsive board states', async ({ page }) => {
@@ -176,7 +183,9 @@ test.describe('v2 visual audit', () => {
     await page.locator('.kv2-create-btn').click();
     await expect(page.locator('.kv2-dialog')).toBeVisible();
     await expect(page.locator('.kv2-dialog--create')).toBeVisible();
-    await expect(page.locator('.kv2-create-agent-chip')).toHaveCount(4);
+    // 3 runtime chips (Opencode/Codex/Claude) + 4 opencode agent presets
+    await expect(page.locator('[class*="kv2-create-agent-chip--runtime-"]')).toHaveCount(3);
+    await expect(page.locator('.kv2-create-agent-chip:not([class*="--runtime-"])')).toHaveCount(4);
     await page.screenshot({ path: 'e2e/results/v2-visual-create-modal.png', fullPage: true });
     await page.keyboard.press('Escape');
     await expect(page.locator('.kv2-dialog')).not.toBeVisible();

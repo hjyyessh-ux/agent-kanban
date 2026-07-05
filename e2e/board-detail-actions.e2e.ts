@@ -27,12 +27,14 @@ test.describe('Board Detail Actions', () => {
     await expect(page.locator('.kv2-dialog')).toBeVisible();
     await expect(page.locator('.kv2-dialog .kv2-btn--subtle-danger', { hasText: 'DELETE' })).toBeVisible();
 
+    // Queue After panel is collapsed by default; expand it first.
+    await page.locator('.kv2-dialog').getByRole('button', { name: 'Queue After' }).click();
+    // Queue targets render as an inline list with SELECT buttons.
     const queuePicker = page.locator('#detail-queue-select');
     await expect(queuePicker).toBeVisible();
-    await queuePicker.click();
-    await expect(page.locator('.kv2-queue-target-popover')).toBeVisible();
-    await page.getByRole('option', { name: /After: \[E2E-DETAIL\] Queue Parent/ }).click();
-    await expect(queuePicker).toContainText('After: [E2E-DETAIL] Queue Parent');
+    const targetItem = queuePicker.locator('.kv2-session-item', { hasText: '[E2E-DETAIL] Queue Parent' });
+    await targetItem.getByRole('button', { name: 'SELECT', exact: true }).click();
+    await expect(targetItem).toHaveClass(/kv2-session-item--selected/);
     await page.getByText('SAVE QUEUE SETTINGS').click();
 
     await expect(page.getByText('Remove from Queue')).toBeVisible();
@@ -61,11 +63,13 @@ test.describe('Board Detail Actions', () => {
     await expect(todoCard).toBeVisible();
     await todoCard.click();
 
+    // Queue After panel is collapsed by default; expand it first.
+    await page.locator('.kv2-dialog').getByRole('button', { name: 'Queue After' }).click();
     const queuePicker = page.locator('#detail-queue-select');
     await expect(queuePicker).toBeVisible();
-    await queuePicker.click();
-    await page.getByRole('option', { name: /After: \[E2E-DETAIL\] Continue Queue Parent/ }).click();
-    await page.getByLabel('Continue After Session').check();
+    const targetItem = queuePicker.locator('.kv2-session-item', { hasText: '[E2E-DETAIL] Continue Queue Parent' });
+    await targetItem.getByRole('button', { name: 'SELECT', exact: true }).click();
+    await page.getByRole('radio', { name: /Continue After Session/ }).check();
     await page.getByText('SAVE QUEUE SETTINGS').click();
 
     await expect(page.getByText('Remove from Queue')).toBeVisible();
@@ -116,16 +120,21 @@ test.describe('Board Detail Actions', () => {
     await page.goto('/');
 
     await page.locator('.kv2-card', { hasText: '[E2E-DETAIL] Queue Reset Source' }).click();
+    // Queue After panel is collapsed by default; expand it first.
+    await page.locator('.kv2-dialog').getByRole('button', { name: 'Queue After' }).click();
     const queuePicker = page.locator('#detail-queue-select');
     await expect(queuePicker).toBeVisible();
-    await queuePicker.click();
-    await page.getByRole('option', { name: /After: \[E2E-DETAIL\] Queue Reset Parent/ }).click();
-    await expect(queuePicker).toContainText('After: [E2E-DETAIL] Queue Reset Parent');
+    const draftItem = queuePicker.locator('.kv2-session-item', { hasText: '[E2E-DETAIL] Queue Reset Parent' });
+    await draftItem.getByRole('button', { name: 'SELECT', exact: true }).click();
+    await expect(draftItem).toHaveClass(/kv2-session-item--selected/);
     await expect(page.getByText('SAVE QUEUE SETTINGS')).toBeVisible();
 
     await page.locator('.kv2-child-link', { hasText: '[E2E-DETAIL] Queue Reset Target' }).click();
     await expect(page.locator('.kv2-title-text')).toContainText('[E2E-DETAIL] Queue Reset Target');
-    await expect(queuePicker).toContainText('Start independently');
+    // Navigating to another card resets the draft and re-collapses the panel.
+    // The feedback child card cannot be queued, so expanding shows no target list.
+    await page.locator('.kv2-dialog').getByRole('button', { name: 'Queue After' }).click();
+    await expect(page.locator('#detail-queue-select')).not.toBeVisible();
     await expect(page.getByText('SAVE QUEUE SETTINGS')).not.toBeVisible();
   });
 });

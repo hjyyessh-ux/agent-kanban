@@ -9,8 +9,11 @@ test.describe('Archive', () => {
     );
     await page.goto('/');
 
+    // Done cards render as collapsed session groups; expand to see card titles.
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
-    await expect(doneColumn.locator('.kv2-card-title', { hasText: '[E2E] Archive Visible' })).toBeVisible();
+    await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible();
+    await doneColumn.locator('.kv2-complete-session-toggle').first().click();
+    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Visible' })).toBeVisible();
     await expect(doneColumn.getByText('Archive All')).toBeVisible();
   });
 
@@ -22,12 +25,14 @@ test.describe('Archive', () => {
     await page.goto('/');
 
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
-    await expect(doneColumn.locator('.kv2-card-title', { hasText: '[E2E] Archive Remove' })).toBeVisible();
+    await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible();
+    await doneColumn.locator('.kv2-complete-session-toggle').first().click();
+    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Remove' })).toBeVisible();
 
     await doneColumn.getByText('Archive All').click();
 
     // Card should disappear from done column
-    await expect(doneColumn.locator('.kv2-card-title', { hasText: '[E2E] Archive Remove' })).not.toBeVisible({ timeout: 5_000 });
+    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Remove' })).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('Archive All button not visible when done column empty', async ({ page }) => {

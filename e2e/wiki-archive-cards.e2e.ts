@@ -1,7 +1,8 @@
 import { test, expect } from './fixtures/kanban';
 import { apiArchiveCards, apiCreateCard, apiUpdateCard } from './helpers/api';
 
-const ARCHIVE_CARD_COUNT = 55;
+// Must exceed the UI page size (ARCHIVE_CARDS_PAGE_SIZE = 100) so 'Load more' appears.
+const ARCHIVE_CARD_COUNT = 105;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -11,10 +12,12 @@ test('Wiki Archive Cards shows first page and loads more cards', async ({ page }
   const runId = `wiki-archive-${Date.now()}`;
   const cardIds: string[] = [];
 
+  // Archive tiles render the prompt (description) rather than the title,
+  // so the unique run marker goes into the description.
   for (let i = 0; i < ARCHIVE_CARD_COUNT; i++) {
     const card = await apiCreateCard({
       title: `[E2E Wiki Archive ${runId}] ${i}`,
-      description: 'Archive Cards pagination fixture',
+      description: `Archive fixture ${runId} #${i}`,
     });
     cardIds.push(card.id);
     await apiUpdateCard(card.id, { status: 'done' });
@@ -25,7 +28,6 @@ test('Wiki Archive Cards shows first page and loads more cards', async ({ page }
   await page.goto('/');
   await page.getByRole('tab', { name: 'Wiki' }).click();
 
-  await expect(page.getByText('Kept 카드')).toBeVisible();
   const archiveStat = page.getByRole('button', { name: /Archive Cards/i });
   await expect(archiveStat).toBeVisible();
   await archiveStat.click();
@@ -33,11 +35,11 @@ test('Wiki Archive Cards shows first page and loads more cards', async ({ page }
   const search = page.getByRole('searchbox');
   await search.fill(runId);
 
-  await expect(page.getByText(`[E2E Wiki Archive ${runId}] 54`)).toBeVisible();
-  await expect(page.getByText(`[E2E Wiki Archive ${runId}] 0`)).toHaveCount(0);
+  await expect(page.getByText(`Archive fixture ${runId} #104`)).toBeVisible();
+  await expect(page.getByText(`Archive fixture ${runId} #0`, { exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Load more' }).click();
-  await expect(page.getByText(`[E2E Wiki Archive ${runId}] 0`)).toBeVisible();
+  await expect(page.getByText(`Archive fixture ${runId} #0`, { exact: true })).toBeVisible();
 
   await search.fill(`no-match-${runId}`);
   await expect(page.getByText('조건에 맞는 아카이브 카드가 없습니다.')).toBeVisible();
@@ -47,7 +49,7 @@ test('Wiki Archive Cards falls back when the paginated API is missing', async ({
   const runId = `wiki-archive-fallback-${Date.now()}`;
   const card = await apiCreateCard({
     title: `[E2E Wiki Archive Fallback ${runId}]`,
-    description: 'Legacy archive API fallback fixture',
+    description: `Legacy archive API fallback fixture ${runId}`,
   });
   await apiUpdateCard(card.id, { status: 'done' });
   await apiArchiveCards([card.id]);
@@ -65,7 +67,7 @@ test('Wiki Archive Cards falls back when the paginated API is missing', async ({
   await page.getByRole('button', { name: /Archive Cards/i }).click();
   await page.getByRole('searchbox').fill(runId);
 
-  await expect(page.getByText(`[E2E Wiki Archive Fallback ${runId}]`)).toBeVisible();
+  await expect(page.getByText(`Legacy archive API fallback fixture ${runId}`)).toBeVisible();
   await expect(page.getByText(/Archive Cards error/i)).toHaveCount(0);
 });
 

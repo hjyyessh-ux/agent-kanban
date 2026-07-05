@@ -317,11 +317,11 @@ test('capture: scheduler tab', async ({ page }) => {
   await page.screenshot({ path: path.join(OUT_DIR, '09-scheduler.png'), fullPage: false });
 });
 
-test('capture: scripts tab', async ({ page }) => {
+test('capture: capabilities tab (scripts live here)', async ({ page }) => {
   await page.goto('/');
-  await page.locator('#app-tab-scripts').click();
+  await page.locator('#app-tab-capabilities').click();
   await settle(page, 900);
-  await page.screenshot({ path: path.join(OUT_DIR, '10-scripts.png'), fullPage: false });
+  await page.screenshot({ path: path.join(OUT_DIR, '10-capabilities.png'), fullPage: false });
 });
 
 test('capture: list view', async ({ page }) => {

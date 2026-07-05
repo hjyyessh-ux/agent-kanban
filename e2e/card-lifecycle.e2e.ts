@@ -53,9 +53,11 @@ test.describe('Card Lifecycle — Status Transitions', () => {
 
     await cardEl.getByRole('button', { name: 'Done' }).click();
 
-    // Card should move to done
+    // Card should move to done (rendered inside a collapsed session group)
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
-    await expect(doneColumn.locator('.kv2-card-title', { hasText: '[E2E] Verify Test' })).toBeVisible({ timeout: 5_000 });
+    await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible({ timeout: 5_000 });
+    await doneColumn.locator('.kv2-complete-session-toggle').first().click();
+    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Verify Test' })).toBeVisible({ timeout: 5_000 });
   });
 
   test('full lifecycle via API', async ({ seedCard }) => {

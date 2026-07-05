@@ -17,7 +17,7 @@ test.describe('Screenshot - CreateCardModal', () => {
 
     const dropZone = page.locator('.kv2-create-drop-zone');
     await expect(dropZone).toBeVisible();
-    await expect(dropZone).toContainText('Drop images here');
+    await expect(dropZone).toContainText('Click or drop screenshots');
   });
 
   test('attaching file shows preview thumbnail', async ({ page }) => {

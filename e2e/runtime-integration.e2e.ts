@@ -217,7 +217,7 @@ test.describe('Runtime integration', () => {
     await expect(codexDialog.getByText('Fake codex result')).toBeVisible();
     await codexDialog.getByPlaceholder('Describe what needs additional work...').fill('Add one Codex follow-up');
     await codexDialog.getByRole('button', { name: 'CREATE & START' }).click();
-    await expectCardInColumn(page, 'complete', `Feedback: ${codex.title}`);
+    await expectCardInColumn(page, 'complete', `Feedback #1: ${codex.title}`);
 
     await startCard(page, fail.title);
     await expect.poll(async () => {
@@ -262,7 +262,7 @@ test.describe('Runtime integration', () => {
     await expect(claudeDialog.getByText('Fake claude result')).toBeVisible();
     await claudeDialog.getByPlaceholder('Describe what needs additional work...').fill('Add one Claude follow-up');
     await claudeDialog.getByRole('button', { name: 'CREATE & START' }).click();
-    await expectCardInColumn(page, 'complete', `Feedback: ${claude.title}`);
+    await expectCardInColumn(page, 'complete', `Feedback #1: ${claude.title}`);
 
     await startCard(page, fail.title);
     await expect.poll(async () => {
@@ -438,6 +438,8 @@ test.describe('Runtime integration', () => {
     await page.getByRole('button', { name: 'Create new card' }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Opencode', exact: true }).click();
+    // Session Resume panel is collapsed by default; expand it first.
+    await dialog.getByRole('button', { name: /Session Resume/ }).click();
     await expect(dialog.locator('.kv2-session-panel--embedded')).toContainText('Opencode');
     await expect(dialog.locator('.kv2-session-panel--embedded')).toContainText('Codex');
     await expect(dialog.locator('.kv2-session-panel--embedded')).toContainText('Claude');

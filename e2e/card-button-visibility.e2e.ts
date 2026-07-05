@@ -71,7 +71,7 @@ test.describe('Card Button Visibility by Status', () => {
     await expect(card.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
   });
 
-  test('DONE card shows reopen on board', async ({ page, seedCardWithStatus }) => {
+  test('DONE card exposes archive on board and reopen in detail dialog', async ({ page, seedCardWithStatus }) => {
     await seedCardWithStatus(
       { title: '[E2E] BtnVis Done', description: 'Visibility test' },
       'done',
@@ -79,14 +79,20 @@ test.describe('Card Button Visibility by Status', () => {
     );
     await page.goto('/');
 
+    // Done cards render as collapsed session groups: the board exposes a
+    // group-level ARCHIVE action, and per-card Reopen lives in the detail dialog.
     const col = page.locator('.kv2-column[data-status="done"]');
-    const card = col.locator('.kv2-card', { hasText: '[E2E] BtnVis Done' });
-    await expect(card).toBeVisible();
+    const group = col.locator('.kv2-complete-session-group').first();
+    await expect(group).toBeVisible();
+    await expect(group.getByRole('button', { name: 'ARCHIVE', exact: true })).toBeVisible();
+    await expect(col.getByRole('button', { name: '▶ Start' })).not.toBeVisible();
+    await expect(col.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
+    await expect(col.getByRole('button', { name: '✓ Done' })).not.toBeVisible();
 
-    await expect(card.getByRole('button', { name: 'Reopen' })).toBeVisible();
-
-    await expect(card.getByRole('button', { name: '▶ Start' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: '✓ Done' })).not.toBeVisible();
+    await col.locator('.kv2-complete-session-toggle').first().click();
+    await col.locator('.kv2-complete-session-card-title', { hasText: '[E2E] BtnVis Done' }).click();
+    const dialog = page.locator('.kv2-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /REOPEN/i })).toBeVisible();
   });
 });
