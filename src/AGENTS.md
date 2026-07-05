@@ -10,9 +10,9 @@ Backend TypeScript source for the agent-kanban plugin + server. This directory i
 | Directory | Purpose |
 |-----------|---------|
 | `core/` | Shared types (`types.ts` — single source of truth for DTOs), JSON stores with atomic writes + dual locking, agent config, data-dir resolution, Scope Manager stores (see `core/AGENTS.md`) |
-| `plugin/` | `@opencode-ai/plugin` runtime: tools, hooks, dispatch, Telegram, schedulers, runtime adapters, wiki pipeline (see `plugin/AGENTS.md`) |
+| `plugin/` | Backend runtime: shared boot wiring (`bootstrap.ts`), opencode plugin entrypoint, tools, hooks, dispatch, Telegram, schedulers, runtime adapters, wiki pipeline (see `plugin/AGENTS.md`) |
 | `server/` | `Bun.serve()` HTTP server + REST routes (`routes.ts`) + static SPA serving (see `server/AGENTS.md`) |
-| `daemon/` | Standalone daemon bootstrap: store/service wiring and singleton lock ownership (see `daemon/AGENTS.md`) |
+| `daemon/` | Standalone daemon entrypoint (primary): thin wrapper over `plugin/bootstrap.ts` + standalone runtime host (see `daemon/AGENTS.md`) |
 | `__tests__/` | `bun test` unit + integration suites, including high-risk regression tests (see `__tests__/AGENTS.md`) |
 
 ## For AI Agents

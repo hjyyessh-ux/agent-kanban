@@ -1,17 +1,18 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-03-25 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-03-25 | Updated: 2026-07-06 -->
 
 # src/plugin/ — Plugin Runtime Orchestration
 
 ## OVERVIEW
 
-Plugin entrypoint for `@opencode-ai/plugin`. Boots stores, tool factories, event hooks, dispatch flow, server monitor, scheduler engine, stale-card checker, question monitor, Telegram poller, and reminder service.
+Backend runtime shared by both entrypoints. `bootstrap.ts` (`createKanbanApp()`) owns the boot wiring common to the standalone daemon (`src/daemon/index.ts`, the primary entrypoint) and the opencode plugin (`index.ts`): stores, settings seeds, skill discovery, server monitor, scheduler engine, Telegram poller/reminder, wiki worker, and the singleton-runtime lock lifecycle. `index.ts` layers the opencode-specific parts on top: tool factories, event hooks, the inline opencode `dispatchCard`, question monitor, and TUI toasts.
 
 ## STRUCTURE
 
 ```text
 plugin/
-├── index.ts              # Runtime bootstrap + dispatch flow + beforeExit cleanup
+├── bootstrap.ts          # createKanbanApp(): shared boot wiring for daemon + plugin
+├── index.ts              # opencode plugin entrypoint: tools/hooks + inline dispatch + beforeExit cleanup
 ├── server.ts             # ServerMonitor: staticDir resolution + recovery
 ├── scheduler-engine.ts   # Croner-backed scheduler runtime
 ├── stale-checker.ts      # Detect orphaned/stuck cards
@@ -36,7 +37,8 @@ plugin/
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Change plugin startup / shutdown | `index.ts` | Stores, monitors, `beforeExit` cleanup |
+| Change shared startup (stores, seeds, singleton lifecycle) | `bootstrap.ts` | Affects daemon AND plugin — run fragile suites |
+| Change opencode plugin startup / shutdown | `index.ts` | Tools, hooks, `beforeExit` cleanup |
 | Change dispatch prompt/model/agent resolution | `index.ts` | `buildDispatchPromptBody()` + `dispatchCard()` |
 | Change static file discovery or recovery | `server.ts` | Resolves `web/dist`, restarts on failure |
 | Change cron runtime behavior | `scheduler-engine.ts` | Shell execution + next-run updates |
@@ -56,14 +58,15 @@ plugin/
 - Hooks are spread into return: `return { tool: tools, ...eventHooks }`
 - All `input.client.tui` calls wrapped in try/catch — TUI may not be available
 - `process.env.KANBAN_DATA_DIR` and `process.env.KANBAN_PORT` override defaults
-- `index.ts` is the orchestration shell: stores → tools → hooks → monitors.
+- `bootstrap.ts` is the orchestration shell (stores → dispatch factory → server → singleton services); `index.ts` injects opencode-specific factories (`createDispatch`, `createQuestionMonitor`, `createFollowUpFn`, `modelsFn`, `listNativeSessions`) and builds tools/hooks from the returned app.
+- The two `dispatchCard` implementations stay separate on purpose: the plugin's inline one in `index.ts` (opencode session dispatch) and the daemon's `runtimes/runtime-host.ts`. Both are referenced by `docs/invariants.md` — do not merge them.
 - `dispatchCard()` validates `projectDir`, updates the card to `in_progress`, registers dispatch tracking, then calls `promptAsync()`.
 - `stale-checker.ts` must stay aligned with parent/child idle guards: top-level parents waiting on direct child work are not stale/orphan candidates.
 - `buildDispatchPromptBody()` converts `provider/model` strings and resolves shared agent labels from `src/core/agent-config.ts`.
-- Plugin startup ensures the runtime `KANBAN_DATA_DIR/scripts/` directory exists and keeps ScriptStore as the source of persisted script state.
-- Plugin startup also runs `SkillStore.sync()` (best-effort) to scan `~/.claude/skills` and `~/.codex/skills`, then `setDynamicSkillCommands()` so user-authored skills register as runtime commands. `POST /api/skills/sync` re-runs this at runtime; a scan failure must never block startup.
+- `createKanbanApp()` ensures the runtime `KANBAN_DATA_DIR/scripts/` directory exists and keeps ScriptStore as the source of persisted script state.
+- `createKanbanApp()` also runs `SkillStore.sync()` (best-effort) to scan `~/.claude/skills` and `~/.codex/skills`, then `setDynamicSkillCommands()` so user-authored skills register as runtime commands. `POST /api/skills/sync` re-runs this at runtime; a scan failure must never block startup.
 - TUI navigation and toast calls are best-effort and wrapped in try/catch.
-- Every long-lived runtime started here must also be stopped in `beforeExit`.
+- Every long-lived runtime started here must also be stopped in `beforeExit`. Owner-gated services (watchdogs, stale checker) go through `DispatchEngine.singletonServices` so `startSingleton()`/`stopSingleton()` manage them symmetrically.
 - `WikiWorker` runs only on the singleton runtime owner (started/stopped with the scheduler, stale checker, and Telegram poller). It never auto-retries failed groups — they stay `failed` until a backfill/reprocess re-queues them.
 - Wiki LLM calls are one-shot CLI runs routed by model (`wiki/wiki-llm.ts`): `gpt-*` → `codex exec` (read-only sandbox), otherwise `claude -p --output-format json`. The runner is injectable for tests.
 - `dispatchCard()` reuses the original session for feedback cards only through `feedbackForCardId`.
@@ -77,6 +80,7 @@ plugin/
 ## FRAGILE WORKFLOW FILES
 
 - `index.ts` — feedback session reuse and dispatch ordering
+- `bootstrap.ts` — shared boot wiring; a change here hits daemon and plugin at once
 - `telegram-poller.ts` — selected session reuse, `/new_session`, sticky defaults, follow-up failure behavior
 - `telegram-commands.ts` — explicit command semantics and force-new dispatch paths
 - `telegram-reminder.ts` — reminder skip/throttle rules for selected sessions
