@@ -4,6 +4,7 @@ import { KanbanStore } from '../core/store';
 import { SettingsStore } from '../core/settings-store';
 import { TelegramStateStore } from '../core/telegram-state-store';
 import { buildTelegramHelpText, getTelegramRegisteredCommands, resolveTelegramCommand } from '../plugin/telegram-commands';
+import { DEFAULT_CLAUDE_MODEL } from '../core/runtime-config';
 import { withTempDir } from './setup';
 
 // ---------------------------------------------------------------------------
@@ -2306,7 +2307,7 @@ describe('TelegramPoller', () => {
         const newCard = board.cards.find(card => card.description === 'reset 이후 기본 에이전트로 실행');
         expect(newCard).toBeDefined();
         expect(newCard?.agentType).toBeUndefined();
-        expect(newCard?.model).toBe('claude-sonnet-4-6');
+        expect(newCard?.model).toBe(DEFAULT_CLAUDE_MODEL);
         expect(newCard?.agentRuntime).toBe('claude');
 
         state = await telegramStateStore.getChatState(12345);
