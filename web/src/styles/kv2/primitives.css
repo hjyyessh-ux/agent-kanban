@@ -1,0 +1,388 @@
+/* Dialog shell (DialogSkeleton), form elements, buttons, dialog footer/actions */
+/* Pure move from kanban-v2.components.css — cascade order is preserved
+   by the @import order in that barrel file. Do not reorder imports. */
+
+/* ── Dialog Overlay & Structure ───────────────────────────── */
+.kv2-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.kv2-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  cursor: default;
+}
+
+.kv2-dialog {
+  position: relative;
+  background: var(--kv2-surface);
+  border: 2px solid #1f2233;
+  border-radius: 12px;
+  box-shadow: 8px 12px 0 #1f2233;
+  width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+.kv2-dialog--resizable {
+  width: auto;
+  max-width: 95vw;
+  max-height: 95vh;
+  min-width: 480px;
+  min-height: 300px;
+  resize: both;
+  overflow: hidden;
+}
+
+.kv2-dialog-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 2px solid var(--kv2-border);
+  gap: 12px;
+}
+
+.kv2-dialog--detail .kv2-dialog-header {
+  display: none;
+}
+
+.kv2-dialog-title {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: var(--kv2-text-xl);
+  color: var(--kv2-text-primary);
+  margin: 0;
+}
+
+.kv2-dialog-close {
+  width: auto;
+  height: auto;
+  border: none;
+  background: transparent;
+  font-size: var(--kv2-text-display);
+  font-weight: 700;
+  color: #1f2233;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.kv2-dialog-close:hover {
+  background: var(--kv2-bg);
+}
+
+.kv2-dialog-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.kv2-dialog--detail .kv2-dialog-content {
+  padding: 0;
+}
+
+/* ── Dialog Modifiers ─────────────────────────────────────── */
+.kv2-dialog--detail,
+.kv2-dialog--create {
+  box-shadow: -7px 0 0 var(--kv2-dialog-accent, #3b82f6), 8px 12px 0 #1f2233;
+}
+
+.kv2-dialog--status-todo {
+  --kv2-dialog-accent: var(--kv2-status-todo-accent);
+}
+
+.kv2-dialog--status-in_progress {
+  --kv2-dialog-accent: var(--kv2-status-in-progress-accent);
+}
+
+.kv2-dialog--status-complete {
+  --kv2-dialog-accent: var(--kv2-status-complete-accent);
+}
+
+.kv2-dialog--status-done {
+  --kv2-dialog-accent: var(--kv2-status-done-accent);
+}
+
+/* ── Form Elements ────────────────────────────────────────── */
+.kv2-input,
+.kv2-textarea,
+.kv2-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  background: var(--kv2-surface);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  outline: none;
+}
+
+.kv2-input:focus,
+.kv2-textarea:focus,
+.kv2-select:focus {
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.kv2-select {
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h10L5 6z' fill='%231A1A2E'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* ── Buttons ──────────────────────────────────────────────── */
+.kv2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 20px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  box-shadow: var(--kv2-shadow-sm);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--kv2-transition-fast), filter var(--kv2-transition-fast);
+}
+
+.kv2-btn:hover {
+  filter: brightness(0.95);
+}
+
+.kv2-btn--primary {
+  background: #1668e8;
+  color: #fffdf7;
+}
+
+.kv2-btn--primary:hover {
+  filter: brightness(0.9);
+}
+
+.kv2-btn--primary-strong {
+  background: #1668e8;
+  color: #fffdf7;
+}
+
+.kv2-btn--outline {
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-btn--outline:hover {
+  background: var(--kv2-bg);
+  filter: none;
+}
+
+.kv2-btn--danger {
+  background: var(--kv2-text-danger);
+  color: #fff;
+}
+
+.kv2-btn--subtle-danger {
+  background: #ffffff;
+  color: #e11d48;
+  border-color: #1f2233;
+}
+
+.kv2-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.kv2-btn--ghost:hover {
+  background: var(--kv2-bg);
+  filter: none;
+}
+
+.kv2-btn--small {
+  padding: 4px 10px;
+  font-size: var(--kv2-text-xs);
+}
+
+.kv2-btn--success {
+  background: var(--kv2-status-done-accent);
+  color: #fff;
+}
+
+.kv2-btn--full {
+  width: 100%;
+}
+
+.kv2-btn--sidebar-secondary {
+  background: var(--kv2-bg);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-btn--question {
+  background: var(--kv2-btn-start-bg);
+  color: #fff;
+}
+
+/* ── Dialog Footer/Actions ────────────────────────────────── */
+.kv2-dialog-actions {
+  padding: 0 48px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-dialog-actions--sticky {
+  position: sticky;
+  bottom: 0;
+  background: var(--kv2-surface);
+  z-index: 2;
+}
+
+.kv2-dialog-actions--detail,
+.kv2-dialog-actions--create {
+}
+
+.kv2-dialog-footer-session {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: var(--kv2-text-sm);
+  color: #999;
+  align-items: flex-end;
+}
+
+.kv2-dialog-footer-session span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--kv2-font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-dialog-footer-session-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.kv2-dialog-footer-session-copy span {
+  color: #64748b;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.kv2-dialog-footer-session-copy:hover span {
+  color: #2563eb;
+}
+
+.kv2-dialog-footer-telegram {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 2px 0 0;
+  color: #94a3b8;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.kv2-dialog-footer-telegram-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.kv2-dialog-footer-meta,
+.kv2-dialog-footer-meta--detail {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0 0;
+  font-size: var(--kv2-text-xs);
+  color: #94a3b8;
+}
+
+.kv2-dialog-actions-rail {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 32px;
+}
+
+.kv2-dialog-danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.kv2-dialog-actions-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.kv2-dialog-actions-group--detail-priority,
+.kv2-dialog-actions-group--create {
+  margin-left: auto;
+}
+
+.kv2-dialog-actions--detail .kv2-dialog-actions-rail {
+  justify-content: space-between;
+}
+
+.kv2-dialog-actions--detail .kv2-dialog-actions-group--detail-priority {
+  margin-left: 0;
+}
+
+.kv2-dialog-actions--detail .kv2-dialog-danger-row {
+  margin-left: auto;
+}
+
+.kv2-dialog-actions-copy {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-inline-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

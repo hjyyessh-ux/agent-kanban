@@ -1,0 +1,2344 @@
+/* Detail sidebar panels: session resume, meta, phases, run metadata/progress, question, feedback, screenshot, queue settings */
+/* Pure move from kanban-v2.components.css — cascade order is preserved
+   by the @import order in that barrel file. Do not reorder imports. */
+
+/* =============================================================
+   Meta Panel (.kv2-meta-*)
+   ============================================================= */
+.kv2-meta-band {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 20px 48px;
+}
+
+.kv2-detail-agent-selector {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  background: #FFF8E7;
+  border: 2px solid #1f2233;
+  border-radius: 12px;
+  box-shadow: 4px 4px 0 rgba(31, 34, 51, 0.85);
+  z-index: 20;
+}
+
+.kv2-detail-agent-selector-label {
+  font-size: var(--kv2-text-md);
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.kv2-detail-agent-selector-chips {
+  display: flex;
+  gap: 12px;
+}
+
+.kv2-meta-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 2.3fr);
+  grid-template-areas: none;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.kv2-meta-panel--with-agent {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.4fr);
+}
+
+.kv2-meta-panel--with-options {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kv2-meta-panel--with-codex-options {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.kv2-meta-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 76px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.kv2-meta-card--edit {
+  position: relative;
+  height: auto;
+  overflow: visible;
+  z-index: 10;
+  border-color: #1f2233;
+}
+
+.kv2-meta-card--agent {
+  grid-area: auto;
+}
+
+.kv2-meta-card--runtime {
+  grid-area: auto;
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
+
+.kv2-meta-card--runtime-codex {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.kv2-meta-card--runtime-claude {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.kv2-meta-card--runtime-opencode {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.kv2-meta-value--claude {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kv2-meta-card--model {
+  grid-area: auto;
+}
+
+.kv2-meta-card--option-a {
+  grid-area: auto;
+}
+
+.kv2-meta-card--option-b {
+  grid-area: auto;
+}
+
+.kv2-meta-card--option-c {
+  grid-area: auto;
+}
+
+.kv2-meta-card--option-d {
+  grid-area: auto;
+}
+
+.kv2-meta-card--codex-options {
+  border-color: #93c5fd;
+  background: #ffffff;
+}
+
+.kv2-meta-card--claude-options {
+  border-color: #fdba74;
+  background: #ffffff;
+}
+
+.kv2-meta-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: #1f2233;
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.kv2-meta-checkbox-row input {
+  width: 15px;
+  height: 15px;
+  accent-color: #2563eb;
+  flex: 0 0 auto;
+}
+
+.kv2-meta-value--danger {
+  color: #b91c1c;
+}
+
+.kv2-meta-select-inline {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-size: var(--kv2-text-base);
+  font-weight: 600;
+  color: #1f2233;
+  font-family: var(--kv2-font-sans);
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h10L5 6z' fill='%231f2233'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0 center;
+  padding-right: 16px;
+}
+
+.kv2-runtime-picker {
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.kv2-runtime-picker.is-open {
+  z-index: 70;
+}
+
+.kv2-runtime-trigger {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 34px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2233;
+  cursor: pointer;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-sm);
+  font-weight: 900;
+  padding: 4px 8px 4px 5px;
+  box-shadow: 3px 3px 0 #1f2233;
+  text-align: left;
+}
+
+.kv2-runtime-trigger:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #1f2233;
+}
+
+.kv2-runtime-trigger-icon,
+.kv2-runtime-option-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1f2233;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.kv2-runtime-trigger-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.kv2-runtime-trigger-icon .kv2-runtime-badge-icon,
+.kv2-runtime-option-icon .kv2-runtime-badge-icon {
+  width: 15px;
+  height: 15px;
+  flex-basis: 15px;
+}
+
+.kv2-runtime-trigger-icon--codex,
+.kv2-runtime-option-icon--codex {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+.kv2-runtime-trigger-icon--claude,
+.kv2-runtime-option-icon--claude {
+  background: #fff7ed;
+  border-color: #d97757;
+}
+
+.kv2-runtime-trigger-icon--claude .kv2-runtime-badge-icon--claude svg path,
+.kv2-runtime-option-icon--claude .kv2-runtime-badge-icon--claude svg path {
+  fill: #d97757;
+}
+
+.kv2-runtime-trigger-icon--opencode,
+.kv2-runtime-option-icon--opencode {
+  background: #111111;
+  border-color: #111111;
+}
+
+.kv2-runtime-trigger-icon--opencode .kv2-runtime-badge-icon--opencode,
+.kv2-runtime-option-icon--opencode .kv2-runtime-badge-icon--opencode {
+  background: transparent;
+  border-color: #ffffff;
+}
+
+.kv2-runtime-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-runtime-trigger-arrow {
+  text-align: right;
+  font-size: var(--kv2-text-lg);
+  line-height: 1;
+}
+
+.kv2-runtime-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  background: #fffdf5;
+  box-shadow: 6px 6px 0 #1f2233;
+  padding: 10px;
+  z-index: 80;
+}
+
+.kv2-runtime-popover::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 22px;
+  width: 16px;
+  height: 16px;
+  border-left: 2px solid #1f2233;
+  border-top: 2px solid #1f2233;
+  background: #fffdf5;
+  transform: rotate(45deg);
+}
+
+.kv2-runtime-popover-head {
+  position: relative;
+  z-index: 1;
+  color: #1f2233;
+  font-size: var(--kv2-text-xs);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.kv2-runtime-list {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kv2-runtime-option {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  border: 2px solid #1f2233;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2233;
+  cursor: pointer;
+  padding: 6px 8px;
+  text-align: left;
+  font-family: var(--kv2-font-sans);
+}
+
+.kv2-runtime-option:hover,
+.kv2-runtime-option.is-selected {
+  background: #bfdbfe;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #1f2233;
+}
+
+.kv2-runtime-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+.kv2-runtime-option-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.kv2-runtime-option-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kv2-runtime-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--kv2-text-base);
+  font-weight: 900;
+}
+
+.kv2-runtime-option-note {
+  color: #b91c1c;
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+}
+
+.kv2-runtime-option-check {
+  font-size: var(--kv2-text-lg);
+  font-weight: 900;
+  text-align: right;
+}
+
+/* ── Portal dropdown layer (escapes dialog overflow clipping) ── */
+.kv2-meta-dropdown-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+}
+
+.kv2-meta-dropdown-portal > * {
+  pointer-events: auto;
+}
+
+/* The runtime popover is anchored via the portal layer; switch it from
+   absolute (clipped) to fixed and drop the parent-relative offsets. */
+.kv2-meta-dropdown-portal .kv2-runtime-popover {
+  position: fixed;
+  top: auto;
+  left: auto;
+}
+
+/* ── Custom inline meta dropdown (replaces native <select>) ── */
+.kv2-meta-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.kv2-meta-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-base);
+  font-weight: 600;
+  color: #1f2233;
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+}
+
+.kv2-meta-dropdown-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.kv2-meta-dropdown-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-meta-dropdown-trigger-arrow {
+  flex: 0 0 auto;
+  font-size: var(--kv2-text-sm);
+  line-height: 1;
+  color: #1f2233;
+}
+
+.kv2-meta-dropdown-popover {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  min-width: 200px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  background: #fffdf5;
+  box-shadow: 6px 6px 0 #1f2233;
+  padding: 6px;
+}
+
+.kv2-meta-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2233;
+  cursor: pointer;
+  padding: 8px 10px;
+  text-align: left;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+}
+
+.kv2-meta-dropdown-option:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.kv2-meta-dropdown-option.is-selected {
+  background: #bfdbfe;
+  border-color: #1f2233;
+}
+
+.kv2-meta-dropdown-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kv2-meta-dropdown-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-meta-dropdown-option-hint {
+  flex: 0 0 auto;
+  font-size: var(--kv2-text-xs);
+  font-weight: 600;
+  color: #64748b;
+}
+
+.kv2-meta-dropdown-option-check {
+  flex: 0 0 auto;
+  font-weight: 900;
+}
+
+.kv2-meta-card--directory {
+  grid-area: auto;
+  grid-column: 1 / -1;
+  height: auto;
+  min-height: 76px;
+}
+
+.kv2-meta-command-row {
+  grid-area: auto;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  overflow: visible;
+}
+
+.kv2-meta-card--command {
+  height: auto;
+  min-height: 76px;
+  overflow: visible;
+  position: relative;
+  z-index: 5;
+}
+
+.kv2-meta-card--command:has(.kv2-command-picker.is-open) {
+  z-index: 90;
+}
+
+.kv2-meta-card--arguments {
+  height: auto;
+  min-height: 76px;
+}
+
+.kv2-meta-label {
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  opacity: 0.85;
+}
+
+.kv2-meta-value {
+  font-size: var(--kv2-text-md-plus);
+  font-weight: 600;
+  color: #1f2233;
+  line-height: 1.2;
+  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-meta-value--runtime {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  overflow: visible;
+  line-height: 1;
+  white-space: normal;
+}
+
+.kv2-meta-card--directory .kv2-meta-value {
+  font-size: var(--kv2-text-base);
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.kv2-meta-value--mono {
+  font-family: var(--kv2-font-mono);
+}
+
+.kv2-meta-card--arguments .kv2-meta-value {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.kv2-meta-subtitle {
+  display: none;
+}
+
+.kv2-meta-subline {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #64748b;
+  font-size: var(--kv2-text-xs);
+  font-weight: 600;
+}
+
+.kv2-meta-placeholder {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-muted);
+  font-style: italic;
+}
+
+.kv2-meta-editable {
+  cursor: pointer;
+  text-align: left;
+}
+
+.kv2-meta-editable:hover {
+  background: #f8fafc;
+}
+
+.kv2-meta-select {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--kv2-border);
+  font-size: var(--kv2-text-sm);
+  background: var(--kv2-surface);
+}
+
+.kv2-meta-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--kv2-border);
+  font-size: var(--kv2-text-sm);
+  background: var(--kv2-surface);
+}
+
+.kv2-meta-card--editable-field {
+  gap: 8px;
+}
+
+.kv2-meta-field-trigger {
+  display: flex;
+  width: 100%;
+  text-align: left;
+}
+
+.kv2-meta-field-trigger:disabled {
+  cursor: not-allowed;
+}
+
+.kv2-meta-actions {
+  justify-content: flex-end;
+}
+
+.kv2-meta-action-btn {
+  border: 1px solid var(--kv2-border);
+  background: #fff;
+  color: #475569;
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.kv2-meta-action-btn:hover {
+  background: #f8fafc;
+}
+
+.kv2-meta-card--arguments:disabled {
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.kv2-context-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 48px;
+}
+
+.kv2-context-chips--subtle {
+  opacity: 1;
+}
+
+.kv2-context-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 44px;
+  font-size: var(--kv2-text-xl2);
+  color: #94a3b8;
+  background: #ffffff;
+  border: 1px solid #1f2233;
+  border-radius: 999px;
+}
+
+/* =============================================================
+   Phases (.kv2-phase-*)
+   ============================================================= */
+.kv2-phase {
+  background: rgba(22, 104, 232, 0.09);
+  border: 1px solid #1f2233;
+  border-radius: 8px;
+  margin: 0 48px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-left: 12px;
+}
+
+.kv2-phase::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  border-radius: 6px 0 0 6px;
+}
+
+.kv2-phase--prompt {
+  background: rgba(22, 104, 232, 0.09);
+}
+
+.kv2-phase--prompt::before {
+  background-color: #1668e8;
+}
+
+.kv2-phase--progress {
+  background: rgba(250, 204, 21, 0.09);
+}
+
+.kv2-phase--progress::before {
+  background-color: #facc15;
+}
+
+.kv2-phase--result {
+  background: rgba(255, 59, 107, 0.09);
+}
+
+.kv2-phase--result::before {
+  background-color: #ff3b6b;
+}
+
+.kv2-phase--question {
+  background: rgba(255, 59, 107, 0.09);
+}
+
+.kv2-phase--question::before {
+  background-color: var(--kv2-status-complete-accent);
+}
+
+.kv2-phase--meta {
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.kv2-phase--meta::before {
+  background-color: #14b8a6;
+}
+
+.kv2-phase-card-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-phase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.kv2-phase-header--outer {
+  padding: 0 48px;
+  margin-bottom: 4px;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.kv2-phase-header--outer span {
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+  color: #1f2233;
+  opacity: 0.85;
+}
+
+.kv2-phase-header--question {
+}
+
+.kv2-phase-subtitle {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-phase-header-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.kv2-phase-action {
+  padding: 1px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-caption);
+  font-weight: 400;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.12s, opacity 0.12s;
+  line-height: 1.4;
+  opacity: 0.82;
+}
+
+.kv2-phase-action:hover {
+  color: #475569;
+  opacity: 0.8;
+}
+
+.kv2-phase-action[aria-expanded] {
+  font-size: var(--kv2-text-caption);
+  font-weight: 400;
+  color: #64748b;
+}
+
+.kv2-phase-action[aria-expanded]:hover {
+  color: #475569;
+}
+
+.kv2-phase-action--edit {
+}
+
+.kv2-phase-action--save {
+  background: var(--kv2-btn-start-bg);
+  color: #fff;
+  border-color: var(--kv2-btn-stroke-color);
+}
+
+.kv2-phase-edit-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.kv2-phase-edit-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 14px;
+  border: none;
+  border-top: 1px solid var(--kv2-border);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-md);
+  line-height: 1.6;
+  color: #334155;
+  resize: vertical;
+  outline: none;
+}
+
+.kv2-phase-content {
+  padding: 20px 28px;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-md);
+  line-height: 1.6;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.kv2-phase-content--markdown {
+  white-space: normal;
+}
+
+.kv2-markdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kv2-markdown-heading,
+.kv2-markdown-paragraph,
+.kv2-markdown-list,
+.kv2-markdown-quote,
+.kv2-markdown-code {
+  margin: 0;
+}
+
+.kv2-markdown-heading {
+  color: #0f172a;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.kv2-markdown h1.kv2-markdown-heading {
+  font-size: 1.45rem;
+}
+
+.kv2-markdown h2.kv2-markdown-heading {
+  font-size: 1.28rem;
+}
+
+.kv2-markdown h3.kv2-markdown-heading {
+  font-size: 1.12rem;
+}
+
+.kv2-markdown h4.kv2-markdown-heading {
+  font-size: 1rem;
+}
+
+.kv2-markdown-paragraph {
+  white-space: pre-wrap;
+}
+
+.kv2-markdown-list {
+  padding-left: 1.35rem;
+}
+
+.kv2-markdown-list li + li {
+  margin-top: 6px;
+}
+
+.kv2-markdown-quote {
+  border-left: 3px solid #94a3b8;
+  color: #475569;
+  padding: 2px 0 2px 14px;
+}
+
+.kv2-markdown-code {
+  background: #0f172a;
+  border-radius: 6px;
+  color: #e2e8f0;
+  overflow-x: auto;
+  padding: 14px 16px;
+  white-space: pre;
+}
+
+.kv2-markdown-code code,
+.kv2-markdown-inline-code {
+  font-family: var(--kv2-font-mono);
+}
+
+.kv2-markdown-inline-code {
+  background: #e2e8f0;
+  border-radius: 4px;
+  color: #0f172a;
+  font-size: 0.92em;
+  padding: 0.1em 0.35em;
+}
+
+.kv2-markdown a {
+  color: #2563eb;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.kv2-markdown-table-wrap {
+  overflow-x: auto;
+}
+
+.kv2-markdown-table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+  width: 100%;
+}
+
+.kv2-markdown-table th,
+.kv2-markdown-table td {
+  border: 1px solid #cbd5e1;
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.kv2-markdown-table th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.kv2-markdown-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.kv2-markdown-table input[type='checkbox'] {
+  margin-right: 0;
+}
+
+.kv2-markdown-list .task-list-item {
+  list-style: none;
+}
+
+.kv2-markdown-list .task-list-item input[type='checkbox'] {
+  margin: 0 0.4em 0 -1.1em;
+}
+
+.kv2-phase-content--collapsed {
+  max-height: 120px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+}
+
+.kv2-phase-content--expanded {
+  max-height: none;
+}
+
+/* Inter-agent message thread (subagent SendMessage exchanges) */
+.kv2-agent-msgs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-agent-msg {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 8px;
+  align-items: baseline;
+  font-size: var(--kv2-text-sm);
+}
+
+.kv2-agent-msg-dir {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.kv2-agent-msg--out .kv2-agent-msg-dir {
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-agent-msg--in .kv2-agent-msg-dir {
+  color: var(--kv2-text-muted);
+}
+
+.kv2-agent-msg-peer {
+  font-family: var(--kv2-font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-agent-msg-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--kv2-text-primary);
+}
+
+/* =============================================================
+   Run metadata (.kv2-runmeta-*) — git branches + MCP + shell commands
+   ============================================================= */
+.kv2-runmeta {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kv2-runmeta-group {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.kv2-runmeta-label {
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+}
+
+.kv2-runmeta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kv2-runmeta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-surface);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 600;
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+}
+
+.kv2-runmeta-group--commands {
+  align-items: start;
+}
+
+.kv2-runmeta-group--commands .kv2-runmeta-chips {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 7px;
+}
+
+.kv2-runmeta-chip--command {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+
+.kv2-runmeta-group--expanded .kv2-runmeta-chip--command {
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kv2-runmeta-show {
+  align-self: flex-start;
+  border: 1px solid var(--kv2-border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.kv2-runmeta-show:hover {
+  border-color: var(--kv2-border-strong);
+  color: var(--kv2-text-primary);
+}
+
+/* =============================================================
+   Run progress (.kv2-progress-*) — intermediate-step timeline
+   ============================================================= */
+.kv2-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kv2-progress-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kv2-progress-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: var(--kv2-text-xs);
+}
+
+.kv2-progress-step-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kv2-progress-step--expandable .kv2-progress-step-row {
+  cursor: pointer;
+}
+
+.kv2-progress-step--expandable .kv2-progress-step-row:hover {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 4px;
+}
+
+.kv2-progress-step--gap {
+  color: var(--kv2-text-muted);
+  font-style: italic;
+}
+
+.kv2-progress-kind {
+  flex: 0 0 auto;
+  min-width: 44px;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-progress-step--skill .kv2-progress-kind {
+  color: #7c3aed;
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+}
+
+.kv2-progress-step--agent .kv2-progress-kind {
+  color: #0369a1;
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.kv2-progress-step--mcp .kv2-progress-kind {
+  color: #b45309;
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.kv2-progress-step--memory .kv2-progress-kind {
+  color: #be185d;
+  border-color: #fbcfe8;
+  background: #fdf2f8;
+}
+
+.kv2-progress-step--command .kv2-progress-kind {
+  color: #166534;
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.kv2-progress-label {
+  font-family: var(--kv2-font-mono);
+  font-weight: 600;
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+}
+
+.kv2-progress-detail {
+  font-family: var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.kv2-progress-caret {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--kv2-text-muted);
+  font-size: 10px;
+}
+
+.kv2-progress-body {
+  margin: 0 0 0 52px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--kv2-border-strong);
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.04);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  line-height: 1.5;
+  color: var(--kv2-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.kv2-progress-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kv2-progress-note {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-progress-live {
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: #16a34a;
+  animation: kv2-progress-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes kv2-progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.kv2-phase-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kv2-phase-section-label {
+  font-size: var(--kv2-text-xl2);
+  font-weight: 700;
+  color: #6b7280;
+  padding: 0 48px;
+}
+
+/* =============================================================
+   Question Panel (.kv2-question-*)
+   ============================================================= */
+.kv2-question-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.kv2-question-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kv2-question-text {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  font-weight: 600;
+}
+
+.kv2-question-hint {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kv2-question-option {
+  padding: 8px 12px;
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  background: var(--kv2-surface);
+  cursor: pointer;
+  font-size: var(--kv2-text-sm);
+  transition: all var(--kv2-transition-fast);
+}
+
+.kv2-question-option:hover {
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-question-option--selected {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-bg);
+  box-shadow: 2px 2px 0 var(--kv2-border-strong);
+}
+
+.kv2-question-option-desc {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+  margin-top: 2px;
+}
+
+.kv2-question-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.kv2-question-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+/* =============================================================
+   Feedback Panel (.kv2-feedback-*)
+   ============================================================= */
+.kv2-feedback-panel {
+  background: transparent;
+  border: none;
+  padding: 24px 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kv2-feedback-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kv2-feedback-title {
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-base);
+  color: #1f2233;
+  opacity: 0.85;
+}
+
+.kv2-feedback-subtitle {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-feedback-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-sm);
+  resize: vertical;
+  outline: none;
+}
+
+.kv2-feedback-textarea:focus {
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-feedback-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* =============================================================
+   Screenshot Panel (.kv2-screenshot-*)
+   ============================================================= */
+.kv2-screenshot-panel {
+  background: transparent;
+  border: none;
+  padding: 24px 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-screenshot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kv2-screenshot-label {
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+  color: #1f2233;
+  opacity: 0.85;
+}
+
+.kv2-screenshot-upload-btn {
+  /* Ghost button style */
+}
+
+.kv2-screenshot-error {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-danger);
+}
+
+.kv2-screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.kv2-screenshot-grid--create {
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+}
+
+.kv2-screenshot-grid--upload-target {
+  position: relative;
+  overflow: hidden;
+}
+
+.kv2-screenshot-grid--empty,
+.kv2-screenshot-grid--create-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  background: #f9fafb;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 6px;
+  color: #64748b;
+  font-size: var(--kv2-text-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kv2-screenshot-grid--dragging {
+  background: #e0f2fe;
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.kv2-screenshot-grid--dragging::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(14, 165, 233, 0.14);
+  border: 2px dashed #0ea5e9;
+  pointer-events: none;
+}
+
+.kv2-screenshot-drop-hint {
+  position: absolute;
+  inset: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1.5px solid #0ea5e9;
+  border-radius: 6px;
+  color: #0369a1;
+  font-size: var(--kv2-text-sm);
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.kv2-screenshot-item {
+  position: relative;
+  border: 1px solid var(--kv2-border);
+  overflow: hidden;
+}
+
+.kv2-screenshot-thumb-btn {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+
+.kv2-screenshot-thumb {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+}
+
+.kv2-screenshot-meta {
+  padding: 4px 6px;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-screenshot-name {
+}
+
+.kv2-screenshot-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--kv2-border);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-danger);
+  font-size: var(--kv2-text-ui-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--kv2-transition-fast);
+}
+
+.kv2-screenshot-item:hover .kv2-screenshot-delete {
+  opacity: 1;
+}
+
+.kv2-screenshot-card {
+  position: relative;
+  border: 1px solid var(--kv2-border);
+  overflow: hidden;
+}
+
+.kv2-screenshot-card:hover .kv2-screenshot-delete {
+  opacity: 1;
+}
+
+.kv2-screenshot-img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+}
+
+.kv2-screenshot-placeholder {
+  padding: 20px;
+  text-align: center;
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-sm);
+}
+
+.kv2-screenshot-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.kv2-screenshot-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.kv2-screenshot-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 40px;
+  border: 2px solid #fff;
+  background: transparent;
+  color: #fff;
+  font-size: var(--kv2-text-xl);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kv2-screenshot-lightbox-close:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+/* =============================================================
+   Queue Settings Panel (.kv2-queue-*)
+   ============================================================= */
+.kv2-queue-panel {
+  background: transparent;
+  border: none;
+  padding: 24px 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 사이드바에서 Queue After 위에 놓이는 Command 토글 래퍼. Queue After 패널과 동일한 패딩으로 정렬. */
+.kv2-command-sidebar-panel {
+  padding: 24px 48px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-queue-title {
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+  color: #1f2233;
+  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kv2-queue-summary-card {
+  background: #fff6e1;
+  border: 1.5px dashed #3b82f6;
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kv2-btn--queue-remove {
+  height: 30px;
+  padding: 0 12px;
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  background: #ffffff;
+  color: #b45309;
+  border: 1.5px solid #d97706;
+  border-radius: 6px;
+}
+
+.kv2-queue-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--kv2-text-lg);
+}
+
+.kv2-queue-target-label {
+  font-size: var(--kv2-text-lg);
+  font-weight: 600;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-queue-mode-label {
+  font-size: var(--kv2-text-md-plus);
+  font-weight: 600;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-queue-mode-summary {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--kv2-text-md-plus);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-queue-empty-state {
+  padding: 8px 0;
+  font-size: var(--kv2-text-2xl);
+  color: #94a3b8;
+}
+
+.kv2-queue-config-card {
+  background: #fff6e1;
+  border: 1.5px dashed #3b82f6;
+  border-radius: 6px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kv2-queue-config-card--create {
+  padding: 12px;
+}
+
+.kv2-queue-target-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.kv2-queue-target-control {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 0 0 12px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2233;
+  box-shadow: 3px 3px 0 #1f2233;
+  cursor: pointer;
+  font-size: var(--kv2-text-md);
+  font-weight: 800;
+  text-align: left;
+}
+
+.kv2-queue-target-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.kv2-queue-target-control-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-queue-target-control-icon {
+  align-self: stretch;
+  width: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 2px solid #1f2233;
+  background: #fef3c7;
+  font-size: var(--kv2-text-xl);
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.kv2-queue-target-popover {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 2px solid #1f2233;
+  border-radius: 8px;
+  background: #fffdf5;
+  box-shadow: 6px 6px 0 #1f2233;
+}
+
+.kv2-queue-target-popover::before {
+  content: "";
+  position: absolute;
+  top: -9px;
+  left: 22px;
+  width: 16px;
+  height: 16px;
+  border-left: 2px solid #1f2233;
+  border-top: 2px solid #1f2233;
+  background: #fffdf5;
+  transform: rotate(45deg);
+}
+
+.kv2-queue-target-option {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2233;
+  cursor: pointer;
+  text-align: left;
+}
+
+.kv2-queue-target-option:hover,
+.kv2-queue-target-option.is-selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.kv2-queue-target-option-title {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--kv2-text-md);
+  font-weight: 800;
+}
+
+.kv2-queue-target-option-meta {
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.kv2-queue-target-empty {
+  position: relative;
+  z-index: 1;
+  padding: 10px;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #94a3b8;
+  font-size: var(--kv2-text-md);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .kv2-meta-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kv2-meta-panel--with-agent {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .kv2-meta-panel--with-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kv2-meta-panel--with-codex-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kv2-dialog-overlay {
+    padding: 10px;
+  }
+
+  .kv2-dialog--resizable {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px);
+    min-width: 0;
+    resize: none;
+  }
+
+  .kv2-dialog--create,
+  .kv2-dialog--detail {
+    box-shadow: -4px 0 0 var(--kv2-dialog-accent, #3b82f6), 4px 6px 0 #1f2233;
+  }
+
+  .kv2-create-header,
+  .kv2-create-body,
+  .kv2-create-footer,
+  .kv2-meta-band,
+  .kv2-phase-header--outer,
+  .kv2-phase-section-label,
+  .kv2-feedback-panel,
+  .kv2-screenshot-panel,
+  .kv2-session-panel--sidebar,
+  .kv2-queue-panel,
+  .kv2-dialog-actions {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .kv2-create-header {
+    padding-top: 18px;
+  }
+
+  .kv2-create-header-title {
+    font-size: var(--kv2-text-2xl);
+  }
+
+  .kv2-create-input-row,
+  .kv2-feedback-actions,
+  .kv2-create-footer,
+  .kv2-dialog-actions-rail,
+  .kv2-dialog-actions-group {
+    flex-wrap: wrap;
+  }
+
+  .kv2-create-input-row .kv2-create-select,
+  .kv2-create-input-row .kv2-create-input {
+    flex: 1 1 100%;
+  }
+
+  .kv2-create-aux-btn,
+  .kv2-directory-action,
+  .kv2-create-footer .kv2-btn,
+  .kv2-feedback-actions .kv2-btn {
+    width: 100%;
+  }
+
+  .kv2-directory-control {
+    grid-template-columns: 36px minmax(0, 1fr) 40px;
+  }
+
+  .kv2-directory-popover {
+    max-height: 280px;
+  }
+
+  .kv2-directory-option {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .kv2-directory-actions {
+    flex-wrap: wrap;
+  }
+
+  .kv2-command-control {
+    grid-template-columns: 36px minmax(0, 1fr) 40px;
+  }
+
+  .kv2-command-popover {
+    max-height: 300px;
+  }
+
+  .kv2-command-option {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+    min-height: 76px;
+  }
+
+  .kv2-command-option-name {
+    grid-row: auto;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+
+  .kv2-command-option-desc,
+  .kv2-command-option-params {
+    line-height: 1.35;
+  }
+
+  .kv2-meta-panel {
+    grid-template-columns: 1fr;
+    grid-template-areas: none;
+    gap: 10px;
+  }
+
+  .kv2-meta-card {
+    grid-area: auto;
+    grid-column: 1 / -1;
+  }
+
+  .kv2-meta-command-row {
+    grid-area: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+  }
+
+  .kv2-session-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kv2-session-item-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .kv2-btn--session-select {
+    flex: 0 0 auto;
+  }
+
+  .kv2-dialog-footer-session,
+  .kv2-dialog-footer-telegram,
+  .kv2-dialog-footer-meta,
+  .kv2-dialog-footer-meta--detail {
+    align-items: flex-start;
+    justify-content: flex-start;
+    white-space: normal;
+  }
+}
+
+/* ── Session Conversation Modal ───────────────────────────── */
+.session-conversation-dialog.kv2-dialog {
+  border: 3px solid var(--kv2-frame);
+  border-radius: 2px;
+  box-shadow: var(--kv2-shadow-lg);
+}
+
+.session-conversation-dialog.kv2-dialog--resizable {
+  resize: both;
+}
+
+/* 좌측 accent stripe + rail/node 색 토큰(--session-accent): complete=핫핑크, done=회색 */
+.session-conversation-dialog--complete.kv2-dialog {
+  --session-accent: var(--kv2-status-complete-accent);
+  --session-accent-soft: rgba(255, 59, 107, 0.09);
+  --session-accent-wash: rgba(255, 59, 107, 0.045);
+  box-shadow: -8px 0 0 var(--kv2-status-complete-accent), var(--kv2-shadow-lg);
+}
+
+.session-conversation-dialog--done.kv2-dialog {
+  --session-accent: var(--kv2-status-done-accent, #8a8fa3);
+  --session-accent-soft: rgba(138, 143, 163, 0.14);
+  --session-accent-wash: rgba(138, 143, 163, 0.07);
+  box-shadow: -8px 0 0 var(--kv2-status-done-accent, #8a8fa3), var(--kv2-shadow-lg);
+}
+
+/* DialogSkeleton 기본 헤더(닫기 X만)는 빈 공간이 되므로, 닫기 버튼만 우상단에 오버레이 */
+.session-conversation-dialog .kv2-dialog-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 8px 10px;
+  border-bottom: none;
+  z-index: 5;
+}
+
+/* flex 3분할: content = 클리핑 셸, scroll만 스크롤포트(sticky 제거) */
+.session-conversation-dialog .kv2-dialog-content {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.session-conversation-stickyHeader {
+  flex: 0 0 auto;
+  background: var(--kv2-surface);
+  border-bottom: 3px solid var(--kv2-frame);
+  padding: 16px 44px 14px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-conversation-stickyTopRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-conversation-turnCount {
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary, #5a5f72);
+}
+
+.session-conversation-resumeChip {
+  margin-left: auto;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  padding: 3px 8px;
+  border: 2px solid var(--kv2-frame);
+  border-radius: 3px;
+  background: var(--kv2-bg);
+  color: var(--kv2-text-primary);
+  cursor: pointer;
+}
+
+.session-conversation-resumeChip:hover {
+  background: var(--kv2-surface);
+}
+
+.session-conversation-resumeChip.is-copied {
+  background: var(--kv2-status-complete-accent);
+  color: #fff;
+}
+
+.session-conversation-stickyTitle {
+  margin: 0;
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: var(--kv2-text-lg);
+  color: var(--kv2-text-primary);
+  line-height: 1.25;
+}
+
+.session-conversation-stickyMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary, #5a5f72);
+}
+
+.session-conversation-stickyProject {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+.session-conversation-stickyRange {
+  font-family: var(--kv2-font-mono);
+}
+
+/* Turn 바로가기 칩 스트립: turn 수가 많아질 수 있어 가로 스크롤 처리 */
+.session-conversation-turnNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 2px 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--kv2-border) transparent;
+}
+
+.session-conversation-turnNav::-webkit-scrollbar {
+  height: 5px;
+}
+
+.session-conversation-turnNav::-webkit-scrollbar-thumb {
+  background: var(--kv2-border);
+  border-radius: 999px;
+}
+
+/* 스트립이 가로로 밀려도 'Turn' 라벨은 좌측에 고정 */
+.session-conversation-turnNavLabel {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding-right: 8px;
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv2-text-muted, #8a8fa3);
+}
+
+.session-conversation-turnNavChip {
+  flex: 0 0 auto;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1.5px solid var(--kv2-border-strong);
+  border-radius: 999px;
+  background: var(--kv2-bg, #fff);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  color: var(--kv2-text-secondary, #5a5f72);
+  cursor: pointer;
+  transition: background var(--kv2-transition-fast), color var(--kv2-transition-fast),
+    border-color var(--kv2-transition-fast);
+}
+
+.session-conversation-turnNavChip:hover {
+  border-color: var(--session-accent, var(--kv2-status-complete-accent));
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-turnNavChip.is-active {
+  background: var(--session-accent, var(--kv2-status-complete-accent));
+  border-color: var(--session-accent, var(--kv2-status-complete-accent));
+  color: #fff;
+}
+
+.session-conversation-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 보드 .kv2-complete-session-timeline 재사용 — 배경/패딩/turn 간격만 모달에 맞게 */
+.session-conversation-timeline {
+  background: transparent;
+  padding: 20px 22px 22px 40px;
+  gap: 22px;
+}
+
+/* turn 카드: 보드 스타일 재사용하되, 모달에서는 색을 입히고 여백을 넉넉히 준다.
+   클릭 대상이 아니므로 cursor 해제. */
+.session-conversation-dialog .kv2-complete-session-turn-body,
+.session-conversation-dialog .kv2-complete-session-card-title {
+  cursor: default;
+}
+
+.session-conversation-dialog .kv2-complete-session-turn-body {
+  border-width: 2px;
+  border-radius: 10px;
+  background: var(--session-accent-wash, #fafbff);
+  box-shadow: 2px 2px 0 rgba(17, 24, 39, 0.05);
+}
+
+.session-conversation-dialog .kv2-complete-session-turn--current .kv2-complete-session-turn-body {
+  box-shadow: 2px 2px 0 rgba(17, 24, 39, 0.05);
+}
+
+/* 헤더 바: 액센트 워시로 turn 칸을 구분 + 여유 패딩 */
+.session-conversation-dialog .kv2-complete-session-turn-header {
+  padding: 12px 16px;
+  gap: 10px;
+  background: var(--session-accent-soft, rgba(255, 59, 107, 0.09));
+  border-bottom: 2px solid var(--kv2-border-strong);
+}
+
+/* Turn N: pill 형태로 크게, 가장 눈에 띄게 */
+.session-conversation-turnLabel {
+  flex: 0 0 auto;
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: var(--kv2-text-md);
+  letter-spacing: 0.01em;
+  color: #fff;
+  background: var(--session-accent, var(--kv2-status-complete-accent));
+  padding: 4px 14px;
+  border-radius: 999px;
+  box-shadow: 1px 1px 0 rgba(17, 24, 39, 0.14);
+}
+
+.session-conversation-turnLatestTag {
+  flex: 0 0 auto;
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-accent));
+  background: #fff;
+  color: var(--session-accent, var(--kv2-status-complete-accent));
+}
+
+/* Started/Completed/duration: 기존 title 자리(헤더 우측)로 이동 */
+.session-conversation-turnMeta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  padding: 0;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  color: var(--kv2-text-secondary, #5a5f72);
+}
+
+.session-conversation-turnDuration {
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+/* CardDetailDialog의 phase 비주얼(.kv2-phase*) 직접 재사용.
+   .kv2-phase margin:0 48px / header padding:0 48px 는 상세 다이얼로그 전용 인셋이므로
+   모달에서는 turn body 안쪽 패딩으로 대체해 Prompt/Result가 칸 경계에서 떨어지게 한다. */
+.session-conversation-phaseStack {
+  padding: 16px 16px 18px;
+  gap: 14px;
+}
+
+.session-conversation-dialog .kv2-phase {
+  margin: 0;
+}
+
+.session-conversation-dialog .kv2-phase-header--outer {
+  padding: 0 2px;
+  margin-bottom: 4px;
+}

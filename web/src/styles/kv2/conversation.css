@@ -1,0 +1,103 @@
+/* Session conversation modal: speaker labels + subagent blocks */
+/* Pure move from kanban-v2.components.css — cascade order is preserved
+   by the @import order in that barrel file. Do not reorder imports. */
+
+/* =============================================================
+   발화 주체(speaker) 라벨 + subagent 대화 블록 — SessionConversationModal
+   ============================================================= */
+.session-conversation-partLabel {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--kv2-text-secondary, #5a5f72);
+}
+
+.session-conversation-subagents {
+  margin: 4px 16px 18px;
+  padding: 12px;
+  border: 1.5px dashed var(--kv2-border, rgba(17, 24, 39, 0.18));
+  border-radius: 10px;
+  background: rgba(17, 24, 39, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-conversation-subagents-label {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-secondary, #5a5f72);
+}
+
+.session-conversation-subagent {
+  border: 1px solid var(--kv2-border, rgba(17, 24, 39, 0.14));
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.session-conversation-subagent-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.session-conversation-subagent-speaker {
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-subagent-flow {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  color: var(--kv2-text-muted, #8a8fa3);
+}
+
+.session-conversation-subagent-toggle {
+  margin-left: auto;
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+}
+
+.session-conversation-subagent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 12px 14px;
+}
+
+.session-conversation-subagent-part {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-conversation-dialog .kv2-phase-content {
+  padding: 14px 16px;
+  font-size: var(--kv2-text-sm);
+  line-height: 1.6;
+}
+
+.session-conversation-feedbackDock {
+  flex: 0 0 auto;
+  background: var(--kv2-surface);
+  border-top: 3px solid var(--kv2-frame);
+  padding: 14px 20px;
+}
+
+.session-conversation-feedbackDisabled {
+  margin: 0;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-muted, #8a8fa3);
+  text-align: center;
+}
