@@ -7,8 +7,6 @@ import type { CompleteSessionGroup } from './BoardCompleteSessionView';
 import { BoardListView } from './BoardListView';
 import type { BoardFilters } from './board-filters';
 import { filterBoardCards } from './board-filters';
-import '../../styles/kanban-v2.tokens.css';
-import '../../styles/kanban-v2.components.css';
 
 export interface BoardScreenProps {
   cards: KanbanCard[];

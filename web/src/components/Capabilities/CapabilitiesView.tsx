@@ -10,8 +10,6 @@ import type {
   CreateScriptInput,
   UpdateScriptInput,
 } from '../../../../src/core/types';
-import '../../styles/kanban-v2.tokens.css';
-import '../../styles/kanban-v2.components.css';
 import {
   COMMAND_FILTER_KEY,
   formatCommandName,

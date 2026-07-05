@@ -1,11 +1,12 @@
 /* =============================================================
    Agent Kanban v2 — Design Tokens
    Penpot Page 2 source of truth.
-   Scoped under .kv2 to avoid v1 token collision.
+   Global (:root) — every token carries the --kv2- prefix, so there
+   is no collision with the legacy v1 tokens.
    ============================================================= */
 
 /* ── Status color map ─────────────────────────────────────── */
-.kv2 {
+:root {
   --kv2-app-bg: #FFF8E7;
   --kv2-frame: #1A1A2E;
   --kv2-status-todo-bg: #1e66f5;
