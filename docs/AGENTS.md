@@ -18,6 +18,7 @@ Human-facing documentation for agent-kanban, written in Korean. Covers installat
 | `plugin-tools.md` | Contract reference for the kanban + scheduler plugin tools registered via `createKanbanTools()`/`createSchedulerTools()` |
 | `api-reference.md` | REST endpoint reference for cards, schedulers, settings, scripts, screenshots, models, questions |
 | `architecture.md` | Three-layer system diagram (plugin -> server -> web), tech stack, data flow |
+| `design-system.md` | **MUST READ before UI work**: kv2 tokens/primitives, DialogSkeleton modal contract, new-screen checklist, forbidden UI patterns |
 | `invariants.md` | Canonical checklist of workflow regression invariants (parent-child cards, completion transitions, Telegram follow-up, feedback reuse, runtime dispatch) tied to specific source files and tests |
 | `assets/` | Screenshots referenced by the docs (`agent-kanban-board.png`, `capabilities.png`, `llm-wiki.png`) |
 

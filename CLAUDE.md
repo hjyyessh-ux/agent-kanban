@@ -38,7 +38,7 @@ Bun plugin backend + React/Vite SPA. JSON file persistence under `~/.agent-kanba
 - **Tools**: use `tool.schema` for validation, always return `string`.
 - **Server**: `Bun.serve()` only. All responses include CORS headers. Errors return `{ error: string }`.
 - **UI hooks**: `fetch()` lives in hooks, not components. Polling is the sync model (board 3s, others 10s).
-- **Styling**: plain CSS with `.neo-*` token classes. No CSS-in-JS or utility frameworks.
+- **Styling**: plain CSS on the kv2 design system — read `docs/design-system.md` before any UI work. kv2 primitives (`kv2-btn`, `kv2-input`, …) + `DialogSkeleton` for modals; `.neo-*` is legacy under retirement. No CSS-in-JS or utility frameworks.
 - **Persistence**: each domain has its own JSON store with temp-file atomic writes and dual locking.
 
 ## Workflow Invariants

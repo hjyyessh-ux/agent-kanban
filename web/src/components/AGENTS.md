@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-01 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-07-01 | Updated: 2026-07-06 -->
 
 # components
 
@@ -24,10 +24,11 @@ This directory itself contains no files — see Subdirectories below.
 
 ## For AI Agents
 ### Working In This Directory
+- **MUST READ before adding or changing any UI: [`docs/design-system.md`](../../../docs/design-system.md).** Board cards and the Card Detail dialog define the look; every screen reuses the kv2 primitives (`kv2-btn`, `kv2-input`, `kv2-badge`, …) and `Card/DialogSkeleton.tsx` for modals. No new `.neo-*` usage, no local overrides of `kv2-*` primitives, no hand-rolled modal overlays.
 - Never fork DTOs — all shared types come from `src/core/types.ts` (imported via the `../../../../src/core/types` relative path from most component files).
 - `fetch()` calls belong in `web/src/hooks/*`, not in components. Components receive data/handlers as props or call hook-exported functions (e.g. `useScopeInventory`, `useSkillsApi`).
-- Each domain directory owns one `.css` file with `.neo-*` (and domain-prefixed, e.g. `.cap-*`, `.kv2-*`, `.inv-*`) token classes. No CSS-in-JS, no Tailwind.
-- Modals follow a consistent shape: overlay `div` with `role="dialog" aria-modal="true"`, Escape-to-close via a `keydown` listener, and mousedown-vs-click tracking on the overlay so drag gestures that end outside the modal don't accidentally close it.
+- Each domain directory owns at most one `.css` file containing **layout only** (grid/flex/gap); colors, typography, and control looks come from kv2 tokens/primitives. Legacy `.neo-*`/domain-prefixed looks are being migrated out. No CSS-in-JS, no Tailwind.
+- Modals use `Card/DialogSkeleton.tsx` (overlay/backdrop/dialog structure, `useModalAccessibility` focus trap + Escape, optional size persistence). Do not build a bespoke overlay.
 - Resizable dialogs use `usePersistedDialogSize(storageKey, ref, defaultSize)` to remember width/height in localStorage.
 
 ### Testing Requirements

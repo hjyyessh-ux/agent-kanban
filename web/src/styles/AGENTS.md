@@ -1,39 +1,46 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-01 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-07-01 | Updated: 2026-07-06 -->
 
 # styles/
 
 ## Purpose
-All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modules, or Tailwind. Two design-token generations coexist: a global neobrutalism system (`tokens.css`/`components.css`, imported once in `main.tsx`) and a newer, scoped `.kv2-*` board redesign (`kanban-v2.*.css`, imported only by `BoardScreen.tsx`).
+All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modules, or Tailwind. The **kv2 design system is the standard** (`kanban-v2.tokens.css` + the `kv2/` slices behind the `kanban-v2.components.css` barrel, all loaded globally from `main.tsx`). The legacy neobrutalism system (`tokens.css`/`components.css`, `.neo-*` classes) is being retired screen by screen — do not add new `.neo-*` usage.
+
+**MUST READ before any UI work: [`docs/design-system.md`](../../../docs/design-system.md)** — primitives table, DialogSkeleton contract, new-screen checklist, forbidden patterns.
 
 ## Key Files
 | File | Description |
 |------|-------------|
-| `reset.css` | Minimal CSS reset (box-sizing, margin/padding zero, text-size-adjust). Imported by `base.css`. |
-| `tokens.css` | Root-level `:root` design tokens for the neobrutalism system — colors, border width, shadow, radius. |
-| `base.css` | Applies tokens to `html`/`body` and other root primitives; `@import`s `tokens.css` and `reset.css`. |
-| `components.css` | Global `.neo-*` utility component classes (`.neo-card`, `.neo-button`, etc.) built on the tokens above. |
-| `kanban-v2.tokens.css` | Design tokens for the v2 board redesign, scoped under a `.kv2` class (status colors, frame/background) to avoid colliding with the v1 tokens above. Sourced from a Penpot spec. |
-| `kanban-v2.components.css` | Large (~6900 line) stylesheet of `.kv2-*` prefixed component classes (board layout, columns, cards, etc.) for the v2 board. Hot path — imported directly by `BoardScreen.tsx`, not `main.tsx`. |
+| `reset.css` | Minimal CSS reset (box-sizing, margin/padding zero, text-size-adjust). |
+| `tokens.css` | **Legacy** v1 neobrutalism `:root` tokens. Retirement target — do not extend. |
+| `base.css` | Applies v1 tokens to `html`/`body`. Retirement target. |
+| `components.css` | **Legacy** global `.neo-*` classes. Retirement target — no new usage. |
+| `kanban-v2.tokens.css` | Global (`:root`) kv2 design tokens — every token carries the `--kv2-` prefix (status/agent colors, surfaces, typography, `--kv2-font-scale`-scaled text sizes). |
+| `kanban-v2.components.css` | `@import` barrel over `kv2/*.css`. Import order preserves the cascade — **do not reorder**. |
+| `kv2/board.css` | Board layout, columns, done-session groups, cards, card actions, container queries. |
+| `kv2/primitives.css` | Dialog shell, form elements (`kv2-input/select/textarea`), buttons (`kv2-btn` + variants), dialog footer/actions. |
+| `kv2/card-detail.css` | Detail/create dialog layouts, agent selector, radio group, badge, queue mode, children. |
+| `kv2/panels.css` | Detail sidebar panels: session resume, meta, phases, run metadata/progress, question, feedback, screenshot, queue settings. |
+| `kv2/conversation.css` | Session conversation modal speaker blocks. |
 
 ## For AI Agents
 ### Working In This Directory
-- `main.tsx` imports `reset.css`, `tokens.css`, `base.css`, `components.css` once, globally, in that order — this is the v1 neobrutalism baseline used app-wide (`.neo-*` classes).
-- `kanban-v2.tokens.css` and `kanban-v2.components.css` are imported only from `web/src/components/Board/BoardScreen.tsx`, not globally. Do not move these imports to `main.tsx` — they are intentionally scoped to the board screen under the `.kv2` root class.
-- When editing `kanban-v2.components.css`, always prefix new classes `.kv2-` and keep selectors scoped under `.kv2` to avoid leaking into v1 (`.neo-*`) styling. This file is large; use targeted search (`grep`) rather than reading it in full.
-- Component-local CSS files (e.g. `components/Settings/Settings.css`, `components/Wiki/Wiki.css`, `components/Capabilities/Capabilities.css`) live next to their component, not here — this directory is for cross-cutting/global styles only.
+- `main.tsx` imports, in order: `reset.css`, `tokens.css`, `base.css`, `components.css` (legacy), then `kanban-v2.tokens.css`, `kanban-v2.components.css` (kv2). kv2 loads **after** neo so it wins ties during the migration. Do not import kv2 files from components.
+- New classes are always `.kv2-`-prefixed and belong in the matching `kv2/` slice. New primitive variants go in `kv2/primitives.css`.
+- kv2 tokens are global `:root` custom properties; the `.kv2` marker class on some roots/portals is a legacy leftover slated for removal — do not rely on it for scoping.
+- Component-local CSS files (e.g. `components/Wiki/Wiki.css`) live next to their component and must contain **layout only** — colors/typography/control looks come from tokens and primitives. Never override a `kv2-*` primitive from a local file.
 - No Tailwind, CSS-in-JS, styled-components, or CSS modules anywhere in this project.
 
 ### Testing Requirements
-- No automated tests target CSS directly. Visual changes to shared tokens (`tokens.css`, `kanban-v2.tokens.css`) can affect every consumer — check both the v1 board and v2 board screens after edits, and prefer the `run`/`verify` skill for a manual visual check over assuming correctness.
+- No automated tests target CSS directly, but `e2e/v2-visual-audit.e2e.ts` asserts key kv2 metrics (board gap, card radius, dialog width) and captures screenshots — run it plus `board.e2e.ts` after touching shared tokens or `kv2/` files.
 
 ### Common Patterns
-- Tokens are plain CSS custom properties (`--color-*`, `--kv2-*`) consumed via `var(...)` — do not hardcode hex values in component CSS if an equivalent token already exists.
-- v1 and v2 systems intentionally do not share tokens or class prefixes; do not "unify" them without an explicit request — the v2 system is a scoped, in-progress redesign layered on top of v1.
+- Tokens are plain CSS custom properties consumed via `var(--kv2-…)` — do not hardcode hex values if an equivalent token exists.
+- Text sizes use the `--kv2-text-*` scale (multiplied by `--kv2-font-scale`, set via JS) — do not hardcode font-size px in component CSS.
 
 ## Dependencies
 ### Internal
-- None — pure CSS, no imports from TS/TSX. Consumed by `main.tsx` (v1) and `components/Board/BoardScreen.tsx` (v2), plus component-local CSS files that assume these tokens are already loaded.
+- None — pure CSS, no imports from TS/TSX. Consumed globally via `main.tsx`; component-local CSS files assume these tokens are already loaded.
 
 ### External
 - None.

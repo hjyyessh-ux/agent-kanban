@@ -68,6 +68,7 @@
 - **Persistence**: store classes own JSON reads/writes, temp-file rename, and dual locking.
 - **Doc hierarchy**: nearest `AGENTS.md` overrides parent guidance; child docs should contain local delta, not parent copy.
 - **Workflow contract**: card lifecycle, Telegram routing, feedback reuse, and sanitization boundaries are anchored in `docs/invariants.md` and must stay in sync with tests.
+- **UI contract (MUST READ before any UI work)**: `docs/design-system.md` — kv2 tokens/primitives, DialogSkeleton modal contract, new-screen checklist, forbidden patterns. New screens must reuse the Board/Card Detail look; no new `.neo-*`, no bespoke modals.
 
 ## CRITICAL INVARIANTS
 
