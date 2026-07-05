@@ -1,4 +1,4 @@
-const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:24681';
+const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681';
 
 interface Screenshot {
   id: string;

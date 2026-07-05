@@ -15,7 +15,7 @@ const __dirname = path.dirname(__filename);
 const OUT_DIR = path.resolve(__dirname, '..', 'outputs', 'slides', 'img');
 mkdirSync(OUT_DIR, { recursive: true });
 
-const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:24681';
+const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681';
 
 // Wide viewport so board columns are roomy and card titles fit on one line.
 const BOARD_VIEWPORT = { width: 2200, height: 1320 };

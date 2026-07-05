@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const TEST_IMAGE = path.join(__dirname, 'fixtures', 'test-screenshot.png');
-const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:24681';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681';
 const E2E_DATA_DIR = path.resolve(process.cwd(), '.e2e-data');
 
 async function startCard(page: import('@playwright/test').Page, title: string) {

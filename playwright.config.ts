@@ -12,7 +12,7 @@ export default defineConfig({
   timeout: 20_000,
   expect: { timeout: 5_000 },
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:24681',
+    baseURL: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
