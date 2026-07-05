@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun install                # Install dependencies
 bun run dev                # Vite dev server (port 5173, proxies /api → :24680)
-bun run dev:plugin         # Run plugin directly
-bun run build              # Build plugin + web
-bun run build:plugin       # Plugin only
+bun start                  # Run standalone daemon (primary entrypoint)
+bun run dev:plugin         # Run opencode plugin directly
+bun run build              # Build backend (daemon + plugin) + web
+bun run build:backend      # Daemon + plugin only
 bun run build:web          # Web SPA only
 bunx tsc --noEmit          # Type check
 bun test                   # All unit/integration tests

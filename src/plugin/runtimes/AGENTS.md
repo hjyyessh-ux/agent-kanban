@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Runtime layer for the standalone daemon (non-opencode dispatch path). Defines the `AgentAdapter` contract and implements it for `claude` (Claude Code CLI, streaming JSON) and `codex` (Codex CLI, JSONL), plus a disabled/unavailable stand-in for `opencode` when running outside the opencode plugin host. Also owns run bookkeeping (`RuntimeRunStore`), subagent→child-card linking, stuck-run watchdog, and the shared git/usage capture helpers used by both the standalone host and the embedded plugin dispatch path.
+Runtime layer for the standalone daemon (non-opencode dispatch path). Defines the `AgentAdapter` contract and implements it for `claude` (Claude Code CLI, streaming JSON) and `codex` (Codex CLI, JSONL), plus an unavailable stand-in for `opencode` when running outside the opencode plugin host. Also owns run bookkeeping (`RuntimeRunStore`), subagent→child-card linking, stuck-run watchdog, and the shared git/usage capture helpers used by both the standalone host and the embedded plugin dispatch path.
 
 ## Key Files
 
@@ -18,7 +18,6 @@ Runtime layer for the standalone daemon (non-opencode dispatch path). Defines th
 | `codex-cli-adapter.ts` | `createCodexCliAdapter()` — spawns `codex exec --json -o <last-message> resume <threadId>`, parses `thread.started`/`session_configured` for the thread id, same completion/queue/capture contract as the Claude adapter |
 | `opencode-adapter.ts` | `createOpencodeAdapter()` — the embedded (non-standalone) opencode dispatch path: session create/reuse, `runCommandThenPrompt`, fallback-to-new-session on prompt failure when reusing |
 | `unavailable-opencode-adapter.ts` | Standalone-only stub: opencode dispatch always fails 409 with `STANDALONE_OPENCODE_UNAVAILABLE_REASON` and returns the card to `todo` |
-| `disabled-adapter.ts` | Generic `createDisabledAdapter(runtime)` — 501 stub for any non-opencode runtime not yet wired |
 | `runtime-run-store.ts` | `RuntimeRunStore` — JSON-persisted run records (`runtime-runs/runs.json` + per-run `prompt.md`/`events.jsonl`/`stderr.log`/`last-message.md`); `findActiveRunByCard/BySession` enforce one active run per card/session; `reconcileStale()` runs at boot to fail orphaned `starting`/`running` rows, re-derive child cards from `events.jsonl`, close stuck subagent children, and return parent cards to `todo` |
 | `child-linker.ts` | `ChildLinker.onChildEvent()` — creates/updates/completes subagent child cards from Claude stream events; dedups by `(parentCardId, childRunId, taskId)` and cross-run by `(parentCardId, childTaskId)` |
 | `claude-codex-watchdog.ts` | `ClaudeCodexWatchdog` — 30s poll over `in_progress` claude/codex cards; no active run → back to `todo`; active run idle >30min → `staleStatus: 'stuck'` |

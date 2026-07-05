@@ -33,7 +33,7 @@
 | [`src/`](./src/AGENTS.md) | Bun backend: shared types/stores (`core/`), opencode plugin runtime (`plugin/`), Bun.serve() HTTP server (`server/`), unit/integration tests (`__tests__/`) |
 | [`web/`](./web/src/AGENTS.md) | React/Vite SPA — board, capabilities, scheduler, scripts, settings, wiki UI |
 | [`e2e/`](./e2e/AGENTS.md) | Playwright browser specs, fixtures, and API seed helpers |
-| [`scripts/`](./scripts/AGENTS.md) | Operational CLI scripts: test server, install/restart, wiki maintenance, deck build tooling |
+| [`scripts/`](./scripts/AGENTS.md) | Operational CLI scripts: test server, install/restart, wiki maintenance |
 | [`docs/`](./docs/AGENTS.md) | Human-facing docs (Korean): getting started, kanban board, scheduler, plugin tools, API reference, architecture, invariants |
 
 ## WHERE TO LOOK
@@ -52,7 +52,7 @@
 | Change board/scheduler/scripts/settings/question UI | `web/src/App.tsx`, `web/src/components/` | App shell owns tabs + modal orchestration |
 | Change unit/integration expectations | `src/__tests__/AGENTS.md` | Invariant-heavy coverage map |
 | Change browser flows | `e2e/AGENTS.md` | Playwright fixtures + test server flow |
-| Change operational scripts | `scripts/AGENTS.md` | Test server, install/restart, wiki backfill/reindex, deck build tooling |
+| Change operational scripts | `scripts/AGENTS.md` | Test server, install/restart, wiki backfill/reindex |
 | Change LLM wiki pipeline (triage/classify/vault) | `src/plugin/wiki/` | Archive stamps `wiki.pending`; worker writes Obsidian vault docs; `/api/wiki/*` + Settings panel |
 | Change human-facing docs | `docs/AGENTS.md` | Getting started, kanban board, scheduler, plugin tools, API reference, architecture, invariants |
 

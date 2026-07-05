@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Standalone operational scripts that run outside the main plugin runtime: the Playwright E2E test server, install/uninstall of the opencode plugin and Claude Code/Codex hooks, runtime-owner restart helpers, the LLM wiki backfill/reindex maintenance tools, and a set of Python/Node scripts for building the project's presentation deck. These are repo-managed CLI entrypoints, not the user-managed Scripts-tab sync source (that data lives under `KANBAN_DATA_DIR/scripts/`).
+Standalone operational scripts that run outside the main plugin runtime: the Playwright E2E test server, install/uninstall of the opencode plugin and Claude Code/Codex hooks, runtime-owner restart helpers, and the LLM wiki backfill/reindex maintenance tools. These are repo-managed CLI entrypoints, not the user-managed Scripts-tab sync source (that data lives under `KANBAN_DATA_DIR/scripts/`).
 
 ## Key Files
 
@@ -17,10 +17,6 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 | `restart-opencode-plugin.sh` | Restart helper scoped to the opencode plugin process, same data-dir resolution pattern as `restart-main-session.sh` |
 | `wiki-backfill.ts` | One-off/maintenance script to backfill LLM wiki documents from existing archived cards, using `WikiWorker`/`groupCardsBySession` |
 | `wiki-reindex.ts` | Pure reformat of the wiki `index.md`: re-derives `processed` date + `topics` per row from each document's frontmatter via `buildIndexLine()`; no LLM calls, idempotent, writes a timestamped `.bak` before changing anything. Usage: `bun scripts/wiki-reindex.ts [vaultDir] [--dry-run]` |
-| `build-deck.py` | Builds the `outputs/agent-kanban-deck.pptx` presentation deck (dark, screenshot-first theme) from images in `outputs/slides/img` |
-| `add-code-arch-slide.py`, `fix-arch-slide.py`, `revise-code-slide.py` | Deck-editing helpers that add/patch specific slides in the generated `.pptx` |
-| `_inspect_deck.py` | Debug helper to inspect the generated deck's slide/shape structure |
-| `capture-diagram.mjs` | Uses Playwright's `chromium` to screenshot HTML diagrams (`outputs/slides/diagram.html`) into `outputs/slides/img` for the deck |
 
 ## For AI Agents
 
@@ -30,7 +26,6 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 - `test-server.ts` runs TypeScript source directly (`bun scripts/test-server.ts`), not compiled dist output — keep it in sync with `src/server/index.ts` and store constructors when their signatures change.
 - Wiki scripts (`wiki-backfill.ts`, `wiki-reindex.ts`) import directly from `src/plugin/wiki/` and `src/core/`; keep them aligned with `WikiDocType`, `loadWikiConfig()`, and `buildIndexLine()` if those change shape.
 - Shell scripts (`install.sh`, `restart-*.sh`) resolve `KANBAN_DATA_DIR` with the same fallback-to-`$HOME/.agent-kanban` pattern; preserve that convention if adding new scripts that touch the data dir.
-- The deck-building Python/Node scripts (`build-deck.py`, `*-slide.py`, `capture-diagram.mjs`, `_inspect_deck.py`) are presentation tooling, unrelated to the app runtime — safe to ignore unless asked to update the deck.
 
 ### Testing Requirements
 
@@ -51,7 +46,5 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 
 ### External
 - `jq` (used by `install.sh` for JSON hook config editing)
-- `@playwright/test` (used by `capture-diagram.mjs`)
-- `python-pptx`, `Pillow` (used by the deck-building Python scripts)
 
 <!-- MANUAL: -->

@@ -2,8 +2,11 @@
   "name": "agent-kanban",
   "version": "0.1.0",
   "description": "Kanban board plugin for opencode — dispatch and track agent (opencode / Codex / Claude) sessions",
-  "main": "dist/plugin/index.js",
-  "module": "index.ts",
+  "main": "dist/daemon/index.js",
+  "exports": {
+    ".": "./dist/daemon/index.js",
+    "./opencode": "./dist/plugin/index.js"
+  },
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -49,9 +52,10 @@
   },
   "scripts": {
     "dev": "bunx vite --port 5173",
-    "build": "bun run build:plugin && bun run build:web",
-    "build:plugin": "bun build src/plugin/index.ts --outdir dist/plugin --target bun",
+    "build": "bun run build:backend && bun run build:web",
+    "build:backend": "bun build src/daemon/index.ts --outdir dist/daemon --target bun && bun build src/plugin/index.ts --outdir dist/plugin --target bun",
     "build:web": "bunx vite build",
+    "start": "bun run src/daemon/index.ts",
     "test": "bun test",
     "dev:plugin": "bun run src/plugin/index.ts",
     "dev:daemon": "bun run src/daemon/index.ts",
