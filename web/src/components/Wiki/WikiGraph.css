@@ -1,0 +1,322 @@
+/* =============================================================
+   WikiGraph — Obsidian-style knowledge graph, neobrutalism skin
+   ============================================================= */
+
+.wiki-graph {
+  position: relative;
+  width: 100%;
+  /* Height is set inline (JS) to fill the viewport down to the bottom; this is a fallback. */
+  min-height: 360px;
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--border-color);
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.wiki-graph canvas {
+  display: block;
+}
+
+.wiki-graph-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: var(--font-body);
+  font-weight: 600;
+  color: var(--color-text);
+  opacity: 0.55;
+  padding: var(--space-6);
+  text-align: center;
+}
+
+/* ─── Shared overlay panel chrome ─── */
+.neo-panel,
+.wiki-graph-zoom,
+.wiki-graph-stat {
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--border-color);
+}
+
+/* ─── Filter legend (top-left) ─── */
+.wiki-graph-legend {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3);
+  max-width: 180px;
+}
+
+.wiki-graph-legend-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.wiki-graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border: 2px solid var(--border-color);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: transform 0.05s ease;
+  text-align: left;
+}
+
+.wiki-graph-legend-item:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--border-color);
+}
+
+.wiki-graph-legend-item.is-off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.wiki-graph-swatch {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border-color);
+  flex: 0 0 auto;
+}
+
+.wiki-graph-swatch--square {
+  width: 11px;
+  height: 11px;
+}
+
+.wiki-graph-swatch--dot {
+  border-radius: 50%;
+}
+
+.wiki-graph-legend-divider {
+  height: 2px;
+  background: var(--border-color);
+  margin: 4px 0 2px;
+}
+
+.wiki-graph-legend-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text);
+  opacity: 0.8;
+}
+
+/* ─── Zoom controls (bottom-right) ─── */
+.wiki-graph-zoom {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  gap: 4px;
+}
+
+.wiki-graph-zoombtn {
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--border-color);
+  background: var(--color-surface);
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wiki-graph-zoombtn:hover {
+  background: var(--color-warning);
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--border-color);
+}
+
+.wiki-graph-zoombtn:active {
+  transform: translate(0, 0);
+  box-shadow: none;
+}
+
+/* ─── Gear button (top-right) ─── */
+.wiki-graph-gear {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 36px;
+  height: 36px;
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow-offset) var(--shadow-offset) 0 var(--border-color);
+  background: var(--color-surface);
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+}
+
+.wiki-graph-gear:hover {
+  background: var(--color-warning);
+  transform: translate(-1px, -1px);
+  box-shadow: calc(var(--shadow-offset) + 1px) calc(var(--shadow-offset) + 1px) 0 var(--border-color);
+}
+
+.wiki-graph-gear.is-active {
+  background: var(--color-warning);
+}
+
+/* ─── Settings panel (top-right, under the gear) ─── */
+.wiki-graph-settings {
+  position: absolute;
+  top: calc(var(--space-3) + 44px);
+  right: var(--space-3);
+  width: 248px;
+  max-height: calc(100% - var(--space-3) - 60px);
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  z-index: 6;
+}
+
+.wgs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--color-text);
+}
+
+.wgs-reset {
+  border: 2px solid var(--border-color);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.wgs-reset:hover {
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.wgs-section {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text);
+  opacity: 0.6;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 2px;
+  margin-top: 4px;
+}
+
+.wgs-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-family: var(--font-body);
+}
+
+.wgs-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.wgs-label em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.wgs-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.wgs-row--color,
+.wgs-row--check {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wgs-row--color input[type='color'] {
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--border-color);
+  background: none;
+  cursor: pointer;
+}
+
+.wgs-row--check input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.wgs-select {
+  border: 2px solid var(--border-color);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.74rem;
+  padding: 3px 6px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+/* ─── Count summary (bottom-left) ─── */
+.wiki-graph-stat {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--color-text);
+}
+
+.wiki-graph-stat strong {
+  font-weight: 800;
+}

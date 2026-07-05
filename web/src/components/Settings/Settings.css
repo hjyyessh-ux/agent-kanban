@@ -1,0 +1,673 @@
+/* =============================================================
+   Settings — Neobrutalism Styles
+   Thick borders. Hard shadows. Secret management.
+   ============================================================= */
+
+/* ── Settings View ──────────────────────────────────────────── */
+.settings-view {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.settings-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+.settings-toolbar-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.settings-empty {
+  border: var(--border-width) dashed var(--border-color);
+  padding: var(--space-8);
+  text-align: center;
+  font-family: var(--font-body);
+  color: var(--color-text);
+  opacity: 0.5;
+}
+
+/* ── Settings List ──────────────────────────────────────────── */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-item {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.settings-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-item-key {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.settings-item-desc {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  opacity: 0.7;
+  margin: var(--space-1) 0 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text);
+  opacity: 0.6;
+}
+
+.settings-item-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border: 2px solid var(--border-color);
+  word-break: break-all;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings-item-value-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-reveal-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px var(--space-2);
+  border: 2px solid var(--border-color);
+  background: var(--color-surface);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-reveal-btn:hover {
+  background: var(--color-bg);
+}
+
+.settings-item-actions {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Category Badge ─────────────────────────────────────────── */
+.settings-badge--category {
+  background: var(--color-primary);
+  color: white;
+}
+
+.settings-badge--masked {
+  background: var(--color-text);
+  color: var(--color-surface);
+}
+
+/* ── Settings Entry Modal ───────────────────────────────────── */
+.settings-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.settings-modal {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: 8px 8px 0 var(--border-color);
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 560px;
+  max-height: 95vh;
+  max-width: 95vw;
+  min-width: 360px;
+  min-height: 200px;
+  overflow: auto;
+  resize: both;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-modal-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--color-text);
+}
+
+.settings-modal-close {
+  width: 32px;
+  height: 32px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-surface);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.settings-modal-close:hover {
+  background: var(--color-bg);
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.settings-label {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text);
+  opacity: 0.5;
+}
+
+.settings-masked-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.settings-masked-checkbox {
+  width: 20px;
+  height: 20px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-bg);
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.settings-modal-actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+/* ── Network Toggle ─────────────────────────────────────────── */
+.settings-network-toggle {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.settings-network-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-network-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.settings-network-desc {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  opacity: 0.7;
+  margin: var(--space-1) 0 0 0;
+}
+
+/* ── Toggle Switch (Neobrutalism) ───────────────────────────── */
+.settings-toggle-switch {
+  position: relative;
+  width: 80px;
+  height: 40px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-bg);
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+
+.settings-toggle-switch--on {
+  background: var(--color-primary);
+}
+
+.settings-toggle-knob {
+  position: absolute;
+  left: 4px;
+  width: 28px;
+  height: 28px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-surface);
+  box-shadow: 2px 2px 0 var(--border-color);
+  transition: left 0.15s ease;
+}
+
+.settings-toggle-switch--on .settings-toggle-knob {
+  left: calc(100% - 32px);
+}
+
+.settings-toggle-label {
+  position: absolute;
+  right: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-text);
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settings-toggle-switch--on .settings-toggle-label {
+  right: auto;
+  left: 8px;
+  color: white;
+  opacity: 1;
+}
+
+/* ── Maintenance ────────────────────────────────────────────── */
+.settings-maintenance {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-maintenance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.settings-maintenance-status {
+  border: 2px solid var(--border-color);
+  box-shadow: 2px 2px 0 var(--border-color);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 4px var(--space-2);
+  flex-shrink: 0;
+}
+
+.settings-maintenance-status--running {
+  background: var(--color-warning);
+}
+
+.settings-maintenance-status--success {
+  background: var(--color-success);
+  color: white;
+}
+
+.settings-maintenance-status--fail {
+  background: var(--color-danger);
+  color: white;
+}
+
+.settings-maintenance-message {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--border-color);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text);
+}
+
+.settings-maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.settings-maintenance-reconnect {
+  border: 2px solid var(--border-color);
+  background: var(--color-warning);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.settings-maintenance-error {
+  border: 2px solid var(--border-color);
+  background: var(--color-danger);
+  color: white;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-heading);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+
+.settings-maintenance-log {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-3);
+  border: 2px solid var(--border-color);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.settings-maintenance-modal {
+  max-width: 640px;
+}
+
+.settings-maintenance-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+
+.settings-maintenance-confirm p {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.settings-maintenance-command-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 2px solid var(--border-color);
+  background: var(--color-bg);
+}
+
+.settings-maintenance-command-list code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+
+/* ── Model Visibility Filter ──────────────────────────────────── */
+.settings-model-filter {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-surface);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.settings-model-filter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.settings-model-filter-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-model-filter-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.settings-model-sync-status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.settings-model-group-title {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.settings-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 300px;
+  overflow-y: auto;
+  border: 2px solid var(--border-color);
+  padding: var(--space-2);
+  background: var(--color-bg);
+}
+
+.settings-model-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+}
+
+.settings-model-item:hover {
+  background: var(--color-surface);
+}
+
+.settings-model-checkbox {
+  width: 18px;
+  height: 18px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-surface);
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.settings-model-name {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-model-provider {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+/* Command Visibility rows carry a long description, so give the name its own
+   intrinsic width (never clipped to 0) and let the meta text take the rest. */
+.settings-command-item {
+  align-items: flex-start;
+}
+
+.settings-command-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.settings-command-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+/* ── Font Scale Slider ────────────────────────────────────────── */
+.settings-font-scale-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--border-color);
+  background: var(--color-bg);
+}
+
+.settings-font-scale-label {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--color-text);
+  opacity: 0.5;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.settings-font-scale-label--lg {
+  font-size: 20px;
+  opacity: 0.7;
+}
+
+.settings-font-scale-slider {
+  flex: 1;
+  height: 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--border-color);
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-font-scale-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-surface);
+  box-shadow: 2px 2px 0 var(--border-color);
+  cursor: grab;
+}
+
+.settings-font-scale-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 0;
+  background: var(--color-surface);
+  box-shadow: 2px 2px 0 var(--border-color);
+  cursor: grab;
+}
+
+.settings-font-scale-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  background: var(--color-primary);
+}
+
+.settings-font-scale-slider:active::-moz-range-thumb {
+  cursor: grabbing;
+  background: var(--color-primary);
+}
+
+.settings-font-scale-value {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text);
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+

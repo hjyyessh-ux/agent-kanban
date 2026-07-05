@@ -1,0 +1,61 @@
+{
+  "name": "agent-kanban",
+  "version": "0.1.0",
+  "description": "Kanban board plugin for opencode — dispatch and track agent (opencode / Codex / Claude) sessions",
+  "main": "dist/plugin/index.js",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/hjyyessh-ux/agent-kanban#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hjyyessh-ux/agent-kanban.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hjyyessh-ux/agent-kanban/issues"
+  },
+  "keywords": [
+    "opencode",
+    "kanban",
+    "plugin",
+    "agent",
+    "codex",
+    "claude"
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/bun": "^1.3.9",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.2.14",
+    "@vitejs/plugin-react": "^5.1.4",
+    "bun": "^1.3.14",
+    "croner": "^10.0.1",
+    "nanoid": "^5.1.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-force-graph-2d": "^1.29.1",
+    "react-markdown": "^10.1.0",
+    "remark-breaks": "^4.0.0",
+    "remark-gfm": "^4.0.1",
+    "vite": "^7.3.1",
+    "zod": "^4.3.6"
+  },
+  "scripts": {
+    "dev": "bunx vite --port 5173",
+    "build": "bun run build:plugin && bun run build:web",
+    "build:plugin": "bun build src/plugin/index.ts --outdir dist/plugin --target bun",
+    "build:web": "bunx vite build",
+    "test": "bun test",
+    "dev:plugin": "bun run src/plugin/index.ts",
+    "dev:daemon": "bun run src/daemon/index.ts",
+    "test:e2e": "npx playwright test",
+    "prepare": "bun run build"
+  }
+}

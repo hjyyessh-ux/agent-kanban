@@ -1,0 +1,12 @@
+[install]
+# Use exact versions for reproducibility
+exact = false
+
+[run]
+# Default shell
+shell = "bun"
+
+[test]
+# Preload the shared setup so every test file inherits an isolated KANBAN_DATA_DIR
+# before any plugin/server module has a chance to resolve the real user home path.
+preload = ["./src/__tests__/setup.ts"]

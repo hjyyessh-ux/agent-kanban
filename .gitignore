@@ -1,0 +1,92 @@
+# dependencies (bun install)
+node_modules
+
+# output
+out
+dist
+*.tgz
+
+# code coverage
+coverage
+*.lcov
+
+# logs
+logs
+_.log
+report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# caches
+.eslintcache
+.cache
+*.tsbuildinfo
+
+# IntelliJ based IDEs
+.idea
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Exception: Include AGENTS.md / CLAUDE.md docs (overrides global gitignore)
+!AGENTS.md
+!**/AGENTS.md
+!CLAUDE.md
+!**/CLAUDE.md
+
+# Compiled JS duplicates (subagent artifacts - never commit)
+# Source is TypeScript; bun/vite handle compilation
+src/**/*.js
+web/src/**/*.js
+vite.config.js
+
+
+# Playwright
+e2e/results/
+playwright-report/
+test-results/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Workspace artifacts
+.sisyphus/
+.omc/
+.omx/
+.e2e-data/
+screenshots/
+todo/
+kanban-*.png
+
+# Agent config dirs: ignore personal settings/state, but keep the product hook
+# scripts that scripts/install.sh distributes. The leading `!.claude/` re-includes
+# the directory so these negations override the user's global gitignore.
+!.claude/
+.claude/*
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/*.sh
+!.codex/
+.codex/*
+!.codex/hooks/
+.codex/hooks/*
+!.codex/hooks/*.sh
+
+# UX-review tool working data
+.ux-review-data-*/
+
+# Local scratch / mockups (not part of the project)
+.tmp/
+/mockups/
+/filter-panel-*.png
+/favorite-row.html
+/current-state.png
+/outputs/
+
+# Large generated Playwright snapshot artifact (not user docs)
+docs/screenshots/snapshot.md

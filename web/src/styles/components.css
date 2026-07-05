@@ -1,0 +1,308 @@
+/* =============================================================
+   Neobrutalism Utility Components — Agent Kanban
+   Hard borders. Solid shadows. No softness.
+   ============================================================= */
+
+/* ── Card ─────────────────────────────────────────────────── */
+.neo-card {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-surface);
+  border-radius: var(--border-radius);
+}
+
+/* ── Button ───────────────────────────────────────────────── */
+.neo-button {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: var(--shadow);
+  background: var(--color-primary);
+  color: white;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  border-radius: var(--border-radius);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.neo-button:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--border-color);
+}
+
+.neo-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--border-color);
+}
+
+/* ── Input ────────────────────────────────────────────────── */
+.neo-input {
+  border: var(--border-width) solid var(--border-color);
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--border-radius);
+  outline: none;
+  width: 100%;
+}
+
+.neo-input:focus {
+  box-shadow: 0 0 0 3px var(--color-primary);
+}
+
+/* ── Badge ────────────────────────────────────────────────── */
+.neo-badge {
+  border: 2px solid var(--border-color);
+  display: inline-block;
+  font-size: calc(11px * var(--kv2-font-scale, 1));
+  font-weight: 700;
+  padding: 2px var(--space-2);
+  border-radius: 0;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Header text ──────────────────────────────────────────── */
+.neo-header {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--color-text);
+}
+
+/* ── Queue Badge ─────────────────────────────────────────── */
+.neo-badge--queue {
+  background: var(--color-warning);
+  color: black;
+  font-weight: bold;
+  font-size: calc(10px * var(--kv2-font-scale, 1));
+}
+
+.neo-badge--queue-count {
+  background: var(--color-bg);
+  font-size: calc(10px * var(--kv2-font-scale, 1));
+  border: 2px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ── Button Variants ──────────────────────────────────────── */
+.neo-button--sm {
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8rem;
+}
+
+.neo-button--danger {
+  background: transparent;
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  box-shadow: 2px 2px 0 var(--color-danger);
+}
+
+.neo-button--danger:hover {
+  background: var(--color-danger-bg);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--color-danger);
+}
+
+.neo-button--danger:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 var(--color-danger);
+}
+
+.neo-button--ghost {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 2px 2px 0 var(--border-color);
+}
+
+.neo-button--ghost:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--border-color);
+}
+
+.neo-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: var(--border-width) solid var(--color-danger);
+  box-shadow: 4px 4px 0 var(--color-danger);
+  background: linear-gradient(135deg, #fff4f6 0%, #ffe4e6 100%);
+  color: var(--color-text);
+}
+
+.neo-alert--inline {
+  margin-bottom: var(--space-5);
+  border-width: 2px;
+  box-shadow: 3px 3px 0 var(--color-danger);
+}
+
+.neo-alert__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--color-danger);
+  background: #fff;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--color-danger);
+}
+
+.neo-alert__content {
+  min-width: 0;
+}
+
+.neo-alert__title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #7f1d1d;
+}
+
+.neo-alert__message {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #3f1d27;
+}
+
+.neo-alert__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.neo-alert__action {
+  min-width: 154px;
+  justify-content: center;
+  background: #fff;
+}
+
+.neo-alert__dismiss {
+  border: 2px solid transparent;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7f1d1d;
+}
+
+.neo-alert__dismiss:hover {
+  border-color: rgba(127, 29, 29, 0.28);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+@media (max-width: 720px) {
+  .neo-alert {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .neo-alert__actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-left: calc(32px + var(--space-3));
+  }
+}
+
+/* ── Badge Variants ───────────────────────────────────────── */
+.neo-badge--light {
+  border-width: 1px;
+  font-size: calc(10px * var(--kv2-font-scale, 1));
+  padding: 1px 6px;
+  opacity: 0.85;
+}
+
+.neo-badge--model {
+  border-width: 1px;
+  font-size: calc(10px * var(--kv2-font-scale, 1));
+  padding: 1px 6px;
+  background: #e8f4f8;
+  border-color: #5ba3c9;
+  color: #2a6f97;
+}
+
+/* ── WIP Limit ────────────────────────────────────────────── */
+.wip-indicator {
+  font-family: var(--font-mono);
+  font-size: 0.75em;
+  font-weight: 700;
+  padding: 1px 6px;
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.wip-indicator--over {
+  background: var(--color-wip-over);
+  color: white;
+  border-color: var(--color-wip-over);
+  animation: wip-pulse 1.5s ease-in-out infinite;
+}
+
+.wip-indicator--warning {
+  background: var(--color-wip-warning);
+  color: white;
+  border-color: var(--color-wip-warning);
+}
+
+@keyframes wip-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── Stale Status Badges ─────────────────────────────────────── */
+
+.neo-badge--orphan {
+  background: var(--color-text);
+  color: white;
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--kv2-font-scale, 1));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+}
+
+.neo-badge--orphan::before {
+  content: '⚡';
+  filter: grayscale(1);
+  margin-right: 3px;
+}
+
+.neo-badge--stuck {
+  background: var(--color-warning);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: calc(9px * var(--kv2-font-scale, 1));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+}
+
+.neo-badge--stuck-blink {
+  animation: neo-blink 1s step-end infinite;
+}
+
+@keyframes neo-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

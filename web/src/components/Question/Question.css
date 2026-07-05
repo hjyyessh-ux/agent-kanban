@@ -1,0 +1,205 @@
+/* =============================================================
+   Question Banner — Neobrutalism Styles
+   Hard border. Bold type. Demands attention.
+   ============================================================= */
+
+/* ── Overlay (full-screen backdrop) ──────────────────────────── */
+.question-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+}
+
+/* ── Banner container ─────────────────────────────────────────── */
+.question-banner {
+  border: var(--border-width) solid var(--border-color);
+  box-shadow: 8px 8px 0 var(--border-color);
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Banner header ────────────────────────────────────────────── */
+.question-banner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: var(--border-width) solid var(--border-color);
+  background: var(--color-warning);
+}
+
+.question-banner-title {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.question-banner-title-icon {
+  font-size: 1.1rem;
+}
+
+.question-banner-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text);
+  opacity: 0.6;
+}
+
+/* ── Single question block ────────────────────────────────────── */
+.question-block {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.question-block:last-of-type {
+  border-bottom: none;
+}
+
+.question-header-text {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--color-text);
+  opacity: 0.7;
+  margin: 0;
+}
+
+.question-text {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Options ──────────────────────────────────────────────────── */
+.question-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.question-option {
+  border: 2px solid var(--border-color);
+  background: var(--color-bg);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  transition: background 0.1s, box-shadow 0.1s, transform 0.1s;
+}
+
+.question-option:hover {
+  background: var(--color-surface);
+  box-shadow: 3px 3px 0 var(--border-color);
+  transform: translate(-1px, -1px);
+}
+
+.question-option--selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 3px 3px 0 var(--border-color);
+}
+
+.question-option--selected:hover {
+  background: var(--color-primary);
+}
+
+.question-option-label {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.question-option--selected .question-option-label {
+  color: white;
+}
+
+.question-option-desc {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--color-text);
+  opacity: 0.7;
+}
+
+.question-option--selected .question-option-desc {
+  color: rgba(255, 255, 255, 0.8);
+  opacity: 1;
+}
+
+/* ── Custom text input ────────────────────────────────────────── */
+.question-custom-input {
+  margin-top: var(--space-1);
+}
+
+.question-custom-label {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: var(--space-1);
+  opacity: 0.6;
+}
+
+/* ── Action row ───────────────────────────────────────────────── */
+.question-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--border-width) solid var(--border-color);
+  background: var(--color-bg);
+}
+
+.question-submit-btn {
+  flex: 1;
+}
+
+.question-reject-btn {
+  flex-shrink: 0;
+}
+
+/* ── Multiple selection hint ──────────────────────────────────── */
+.question-multi-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text);
+  opacity: 0.45;
+  margin-top: calc(-1 * var(--space-1));
+}
+
+/* ── Submitting state ─────────────────────────────────────────── */
+.question-banner--submitting .question-option,
+.question-banner--submitting .neo-input {
+  pointer-events: none;
+  opacity: 0.6;
+}
