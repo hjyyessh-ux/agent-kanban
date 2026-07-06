@@ -140,7 +140,7 @@ export function WikiConfigPanel({ config, busy, onSave }: WikiConfigPanelProps) 
         <div className="wiki-config-actions">
           <button
             type="button"
-            className="neo-button neo-button--primary"
+            className="kv2-btn kv2-btn--primary"
             onClick={() => { void handleSave(true); }}
             disabled={!canSave}
           >
@@ -176,7 +176,7 @@ export function WikiConfigPanel({ config, busy, onSave }: WikiConfigPanelProps) 
       <div className="wiki-config-actions">
         <button
           type="button"
-          className="neo-button neo-button--primary"
+          className="kv2-btn kv2-btn--primary"
           onClick={() => { void handleSave(); }}
           disabled={!canSave}
         >

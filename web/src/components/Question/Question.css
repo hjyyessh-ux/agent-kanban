@@ -15,14 +15,14 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: var(--space-8) var(--space-4) var(--space-4);
+  padding: 32px 16px 16px;
 }
 
 /* ── Banner container ─────────────────────────────────────────── */
 .question-banner {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: 8px 8px 0 var(--border-color);
-  background: var(--color-surface);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: 8px 8px 0 var(--kv2-frame);
+  background: var(--kv2-surface);
   width: 100%;
   max-width: 600px;
   max-height: 80vh;
@@ -37,21 +37,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: var(--border-width) solid var(--border-color);
-  background: var(--color-warning);
+  padding: 16px 20px;
+  border-bottom: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-status-in-progress-accent);
 }
 
 .question-banner-title {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
   font-size: 1rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .question-banner-title-icon {
@@ -59,19 +59,19 @@
 }
 
 .question-banner-meta {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.6;
 }
 
 /* ── Single question block ────────────────────────────────────── */
 .question-block {
-  padding: var(--space-5);
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  border-bottom: 2px solid var(--border-color);
+  gap: 16px;
+  border-bottom: 2px solid var(--kv2-frame);
 }
 
 .question-block:last-of-type {
@@ -79,19 +79,19 @@
 }
 
 .question-header-text {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 700;
   font-size: 0.9375rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.7;
   margin: 0;
 }
 
 .question-text {
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-weight: 600;
   font-size: 1rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   margin: 0;
   line-height: 1.4;
 }
@@ -100,42 +100,42 @@
 .question-options {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .question-option {
-  border: 2px solid var(--border-color);
-  background: var(--color-bg);
-  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  padding: 12px 16px;
   cursor: pointer;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
   transition: background 0.1s, box-shadow 0.1s, transform 0.1s;
 }
 
 .question-option:hover {
-  background: var(--color-surface);
-  box-shadow: 3px 3px 0 var(--border-color);
+  background: var(--kv2-surface);
+  box-shadow: 3px 3px 0 var(--kv2-frame);
   transform: translate(-1px, -1px);
 }
 
 .question-option--selected {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  box-shadow: 3px 3px 0 var(--border-color);
+  background: var(--kv2-status-todo-accent);
+  border-color: var(--kv2-status-todo-accent);
+  box-shadow: 3px 3px 0 var(--kv2-frame);
 }
 
 .question-option--selected:hover {
-  background: var(--color-primary);
+  background: var(--kv2-status-todo-accent);
 }
 
 .question-option-label {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 700;
   font-size: 0.875rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
 }
 
 .question-option--selected .question-option-label {
@@ -143,9 +143,9 @@
 }
 
 .question-option-desc {
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 0.8125rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.7;
 }
 
@@ -156,28 +156,28 @@
 
 /* ── Custom text input ────────────────────────────────────────── */
 .question-custom-input {
-  margin-top: var(--space-1);
+  margin-top: 4px;
 }
 
 .question-custom-label {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 700;
   font-size: 0.75rem;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: block;
-  margin-bottom: var(--space-1);
+  margin-bottom: 4px;
   opacity: 0.6;
 }
 
 /* ── Action row ───────────────────────────────────────────────── */
 .question-actions {
   display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-top: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
 }
 
 .question-submit-btn {
@@ -190,16 +190,16 @@
 
 /* ── Multiple selection hint ──────────────────────────────────── */
 .question-multi-hint {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.45;
-  margin-top: calc(-1 * var(--space-1));
+  margin-top: calc(-1 * 4px);
 }
 
 /* ── Submitting state ─────────────────────────────────────────── */
 .question-banner--submitting .question-option,
-.question-banner--submitting .neo-input {
+.question-banner--submitting .kv2-input {
   pointer-events: none;
   opacity: 0.6;
 }

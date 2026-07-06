@@ -3,7 +3,7 @@
 .wiki-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 /* ─── Hero + options ─────────────────────────────────────────────── */
@@ -12,12 +12,12 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
+  gap: 12px;
   align-items: stretch;
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-5);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
+  background: var(--kv2-surface);
+  padding: 20px;
   overflow: hidden;
 }
 
@@ -27,26 +27,26 @@
   inset: 0 auto 0 0;
   width: 12px;
   background: #0066ff;
-  border-right: var(--border-width) solid var(--border-color);
+  border-right: var(--kv2-card-border-width) solid var(--kv2-frame);
 }
 
 .wiki-hero-copy {
   position: relative;
   min-width: 0;
-  padding-left: var(--space-4);
+  padding-left: 16px;
 }
 
 .wiki-hero-kicker {
   display: inline-flex;
   align-items: center;
   width: max-content;
-  margin-bottom: var(--space-2);
-  padding: 3px var(--space-2);
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: 3px 3px 0 var(--border-color);
+  margin-bottom: 8px;
+  padding: 3px 8px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: 3px 3px 0 var(--kv2-frame);
   background: var(--color-warning, #f1c40f);
-  color: var(--color-text);
-  font-family: var(--font-mono);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
@@ -54,8 +54,8 @@
 
 .wiki-hero-title {
   margin: 0;
-  color: var(--color-text);
-  font-family: var(--font-heading);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-heading);
   font-size: 30px;
   line-height: 1.08;
   letter-spacing: 0;
@@ -63,9 +63,9 @@
 
 .wiki-hero-desc {
   max-width: none;
-  margin: var(--space-2) 0 0 0;
-  color: var(--color-text);
-  font-family: var(--font-body);
+  margin: 8px 0 0 0;
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-sans);
   font-size: 15px;
   line-height: 1.55;
   white-space: nowrap;
@@ -74,20 +74,20 @@
 .wiki-pipeline {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .wiki-pipeline span {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  padding: 2px var(--space-2);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  color: var(--color-text);
-  box-shadow: 2px 2px 0 var(--border-color);
-  font-family: var(--font-mono);
+  padding: 2px 8px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  color: var(--kv2-text-primary);
+  box-shadow: 2px 2px 0 var(--kv2-frame);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
@@ -97,7 +97,7 @@
   position: relative;
   display: flex;
   align-items: stretch;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .wiki-hero-status-card {
@@ -105,19 +105,19 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: var(--space-2);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  padding: var(--space-3);
+  gap: 8px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  padding: 12px;
 }
 
 .wiki-hero-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-1);
-  font-family: var(--font-mono);
+  gap: 4px;
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   text-transform: uppercase;
 }
 
@@ -140,12 +140,12 @@
   justify-content: center;
   gap: 4px;
   min-width: 72px;
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
   background: #0066ff;
   color: #fff;
   cursor: pointer;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
   font-weight: 900;
   text-transform: uppercase;
@@ -162,49 +162,49 @@
 
 .wiki-options-trigger.is-active {
   background: var(--color-warning, #f1c40f);
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
 }
 
 .wiki-options-panel {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
+  background: var(--kv2-surface);
+  padding: 16px;
 }
 
 .wiki-options-section {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
   min-width: 0;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  padding: var(--space-3);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  padding: 12px;
 }
 
 .wiki-options-section--unified {
-  background: var(--color-bg);
+  background: var(--kv2-bg);
 }
 
 .wiki-options-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
-  border-bottom: var(--border-width) solid var(--border-color);
-  padding-bottom: var(--space-2);
+  gap: 8px;
+  border-bottom: var(--kv2-card-border-width) solid var(--kv2-frame);
+  padding-bottom: 8px;
 }
 
 .wiki-options-section-head h3 {
   margin: 0;
-  color: var(--color-text);
-  font-family: var(--font-heading);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-heading);
   font-size: 15px;
   text-transform: uppercase;
 }
 
 .wiki-options-section-head span {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -213,16 +213,16 @@
 .wiki-options-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .wiki-worker-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-3);
+  gap: 12px;
   align-items: center;
-  border-top: var(--border-width) solid var(--border-color);
-  padding-top: var(--space-3);
+  border-top: var(--kv2-card-border-width) solid var(--kv2-frame);
+  padding-top: 12px;
 }
 
 .wiki-backfill-note {
@@ -230,18 +230,18 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
 }
 
 .wiki-backfill-note strong {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .wiki-backfill-note span {
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -277,7 +277,7 @@
 
 @media (max-width: 640px) {
   .wiki-hero {
-    padding: var(--space-4);
+    padding: 16px;
   }
 
   .wiki-hero-title {
@@ -291,13 +291,13 @@
 }
 
 .wiki-status {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
-  border: var(--border-width) solid var(--border-color);
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-bg);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  padding: 4px 8px;
+  background: var(--kv2-bg);
   white-space: nowrap;
 }
 
@@ -307,9 +307,9 @@
 }
 
 .wiki-lastrun {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.6;
   white-space: nowrap;
 }
@@ -322,12 +322,12 @@
 /* ─── Log panel ──────────────────────────────────────────────────── */
 
 .wiki-logs {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
   background: #1e1e1e;
   max-height: 220px;
   overflow-y: auto;
-  padding: var(--space-2);
+  padding: 8px;
 }
 
 .wiki-log-list {
@@ -341,8 +341,8 @@
 
 .wiki-log {
   display: flex;
-  gap: var(--space-2);
-  font-family: var(--font-mono);
+  gap: 8px;
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
   line-height: 1.5;
   color: #d4d4d4;
@@ -371,12 +371,12 @@
 .wiki-log-msg { word-break: break-word; }
 
 .wiki-log-empty {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   color: #888;
   margin: 0;
   text-align: center;
-  padding: var(--space-2);
+  padding: 8px;
 }
 
 /* ─── Stat cards (clickable filters) ─────────────────────────────── */
@@ -384,7 +384,7 @@
 .wiki-stat-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 @media (max-width: 720px) {
@@ -392,7 +392,7 @@
 }
 
 .wiki-stat {
-  --wiki-accent: var(--border-color);
+  --wiki-accent: var(--kv2-frame);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -400,20 +400,20 @@
   justify-content: center;
   gap: 4px;
   min-height: 62px;
-  padding: var(--space-2) var(--space-1);
-  border: var(--border-width) solid var(--border-color);
+  padding: 8px 4px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   border-top: 5px solid var(--wiki-accent);
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
   cursor: pointer;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   transition: transform 0.05s ease, box-shadow 0.05s ease;
 }
 
 .wiki-stat:hover {
   transform: translate(-1px, -1px);
-  box-shadow: 2px 2px 0 var(--border-color);
+  box-shadow: 2px 2px 0 var(--kv2-frame);
 }
 
 .wiki-stat:focus-visible {
@@ -424,8 +424,8 @@
 /* Selected filter: invert to a solid dark card. The accent bar stays on top so
    the category is still identifiable, and the value inherits the light text. */
 .wiki-stat.is-active {
-  background: var(--color-text);
-  color: var(--color-surface);
+  background: var(--kv2-text-primary);
+  color: var(--kv2-surface);
 }
 
 /* The number and label always inherit the card's text color, so they stay
@@ -450,7 +450,7 @@
 }
 
 /* Per-category accent (top bar only — guarantees the value stays high-contrast). */
-.wiki-stat--docs        { --wiki-accent: var(--border-color); }
+.wiki-stat--docs        { --wiki-accent: var(--kv2-frame); }
 .wiki-stat--archive     { --wiki-accent: #0066ff; }
 .wiki-stat--kept        { --wiki-accent: var(--color-success, #2ecc71); }
 .wiki-stat--archive     { --wiki-accent: #0066ff; }
@@ -465,8 +465,8 @@
    after .is-active so it wins when the pending card is both active and running. */
 .wiki-stat--pending.is-running {
   background: var(--color-warning, #f1c40f);
-  color: var(--color-text);
-  border-top-color: var(--color-text);
+  color: var(--kv2-text-primary);
+  border-top-color: var(--kv2-text-primary);
   animation: wiki-pulse 1.4s ease-in-out infinite;
 }
 
@@ -475,78 +475,78 @@
 .wiki-filterbar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .wiki-search {
   flex: 1 1 220px;
   max-width: 360px;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 13px;
-  padding: var(--space-2);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-text);
+  padding: 8px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
 }
 
 .wiki-filter-select {
   min-height: 35px;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 700;
-  padding: var(--space-1) var(--space-2);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
-  color: var(--color-text);
+  padding: 4px 8px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
 }
 
 .wiki-filter-summary {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.75;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .wiki-clear {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  color: var(--color-text);
-  padding: 1px var(--space-2);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  color: var(--kv2-text-primary);
+  padding: 1px 8px;
   cursor: pointer;
 }
 
-.wiki-clear:hover { background: var(--color-text); color: var(--color-surface); }
+.wiki-clear:hover { background: var(--kv2-text-primary); color: var(--kv2-surface); }
 
 /* View toggle (board ↔ list) */
 .wiki-viewtoggle {
   display: inline-flex;
-  border: var(--border-width) solid var(--border-color);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
 }
 
 .wiki-viewbtn {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 700;
-  padding: var(--space-1) var(--space-2);
-  background: var(--color-surface);
-  color: var(--color-text);
+  padding: 4px 8px;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
   border: none;
   cursor: pointer;
 }
 
-.wiki-viewbtn + .wiki-viewbtn { border-left: var(--border-width) solid var(--border-color); }
-.wiki-viewbtn.is-active { background: var(--color-text); color: var(--color-surface); }
+.wiki-viewbtn + .wiki-viewbtn { border-left: var(--kv2-card-border-width) solid var(--kv2-frame); }
+.wiki-viewbtn.is-active { background: var(--kv2-text-primary); color: var(--kv2-surface); }
 
 .wiki-error {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
   color: var(--color-danger, #c0392b);
   margin: 0;
@@ -554,11 +554,11 @@
 }
 
 .wiki-empty {
-  border: var(--border-width) dashed var(--border-color);
-  padding: var(--space-8);
+  border: var(--kv2-card-border-width) dashed var(--kv2-frame);
+  padding: 32px;
   text-align: center;
-  font-family: var(--font-body);
-  color: var(--color-text);
+  font-family: var(--kv2-font-sans);
+  color: var(--kv2-text-primary);
 }
 
 /* ─── Kanban columns (kept docs by type) ─────────────────────────── */
@@ -566,7 +566,7 @@
 .wiki-board {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-2);
+  gap: 8px;
   align-items: start;
 }
 
@@ -580,9 +580,9 @@
 .wiki-col {
   display: flex;
   flex-direction: column;
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
+  background: var(--kv2-surface);
   min-width: 0;
 }
 
@@ -590,13 +590,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2);
-  border-bottom: var(--border-width) solid var(--border-color);
+  padding: 8px;
+  border-bottom: var(--kv2-card-border-width) solid var(--kv2-frame);
   color: #fff;
 }
 
 .wiki-col-name {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 14px;
   font-weight: 800;
   text-transform: uppercase;
@@ -604,29 +604,29 @@
 }
 
 .wiki-col-count {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 14px;
   font-weight: 800;
   background: rgba(0, 0, 0, 0.25);
-  padding: 0 var(--space-2);
+  padding: 0 8px;
 }
 
 .wiki-col-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-2);
+  gap: 8px;
+  padding: 8px;
   max-height: 70vh;
   overflow-y: auto;
 }
 
 .wiki-col-empty {
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.35;
-  padding: var(--space-3) 0;
+  padding: 12px 0;
 }
 
 /* Per-type accent colors for column headers. */
@@ -641,25 +641,25 @@
 .wiki-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  padding: var(--space-2);
+  gap: 4px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  padding: 8px;
 }
 
 .wiki-card-top {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-1);
+  gap: 4px;
 }
 
 .wiki-card-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 14px;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -671,11 +671,11 @@
 .wiki-card-count {
   flex-shrink: 0;
   align-self: flex-start;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   background: rgba(0, 102, 255, 0.10);
   border: 1px solid rgba(0, 102, 255, 0.30);
   border-radius: 999px;
@@ -689,18 +689,18 @@
   content: attr(data-tip);
   position: absolute;
   top: 50%;
-  right: calc(100% + var(--space-2));
+  right: calc(100% + 8px);
   transform: translateY(-50%);
   white-space: normal;
   width: max-content;
   max-width: 240px;
   z-index: 20;
-  background: var(--color-text);
-  color: var(--color-surface);
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  padding: var(--space-1) var(--space-2);
-  font-family: var(--font-body);
+  background: var(--kv2-text-primary);
+  color: var(--kv2-surface);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
+  padding: 4px 8px;
+  font-family: var(--kv2-font-sans);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
@@ -709,11 +709,11 @@
 }
 
 .wiki-card-path {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  background: var(--color-surface);
-  padding: 1px var(--space-1);
-  color: var(--color-text);
+  background: var(--kv2-surface);
+  padding: 1px 4px;
+  color: var(--kv2-text-primary);
   opacity: 0.75;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -736,17 +736,17 @@
   border: 1px solid rgba(0, 102, 255, 0.22);
   border-radius: 999px;
   padding: 1px 8px;
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 11px;
   line-height: 1.5;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.85;
 }
 
 .wiki-card-date {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.65;
   align-self: flex-end;
 }
@@ -759,7 +759,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
   width: 100%;
   max-width: none;
   background: transparent;
@@ -768,19 +768,19 @@
 .wiki-archive-panel {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 /* Archive rows are session-grouped: Title is the hero, description is the
    supporting line, and runtime/project/date are demoted to a small meta row. */
 .wiki-item--archive {
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .wiki-archive-title-row {
   display: flex;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: 8px;
   min-width: 0;
 }
 
@@ -801,7 +801,7 @@
   font-size: var(--font-size-xs, 0.72rem);
   font-weight: 700;
   padding: 1px 7px;
-  border: var(--border-width) solid var(--border-color);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   background: var(--color-surface-muted, #f1f1f1);
   white-space: nowrap;
 }
@@ -822,7 +822,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 8px;
   font-size: var(--font-size-xs, 0.72rem);
   color: var(--color-text-muted, #777);
 }
@@ -853,19 +853,19 @@
 .wiki-item {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
   min-width: 0;
-  padding: var(--space-3);
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: 3px 3px 0 var(--border-color);
-  background: var(--color-surface);
+  padding: 12px;
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: 3px 3px 0 var(--kv2-frame);
+  background: var(--kv2-surface);
 }
 
 .wiki-item-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
   min-width: 0;
 }
 
@@ -877,19 +877,19 @@
 
 .wiki-item-title {
   min-width: 0;
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 14px;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .wiki-item-date {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.65;
   flex-shrink: 0;
 }
@@ -898,10 +898,10 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  font-family: var(--font-mono);
+  gap: 8px;
+  font-family: var(--kv2-font-mono);
   font-size: 12px;
-  padding-left: calc(128px + var(--space-2));
+  padding-left: calc(128px + 8px);
 }
 
 /* type badge in list view */
@@ -943,7 +943,7 @@
     grid-column: 1 / -1;
     width: 100%;
     min-width: 0;
-    padding: 0 var(--space-2);
+    padding: 0 8px;
   }
 
   .wiki-item-title {
@@ -955,24 +955,24 @@
   }
 }
 
-.wiki-skip-reason { color: var(--color-text); opacity: 0.6; }
+.wiki-skip-reason { color: var(--kv2-text-primary); opacity: 0.6; }
 .wiki-fail-reason { color: var(--color-danger, #c0392b); word-break: break-all; }
 
 .wiki-footer {
   display: flex;
   justify-content: center;
-  margin-top: var(--space-2);
+  margin-top: 8px;
 }
 
 /* ─── Config panel ─────────────────────────────────────────────── */
 .wiki-config {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  box-shadow: var(--kv2-shadow-sm);
+  background: var(--kv2-surface);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .wiki-config--setup {
@@ -980,14 +980,14 @@
 }
 
 .wiki-config-title {
-  font-family: var(--font-heading);
-  color: var(--color-text);
+  font-family: var(--kv2-font-heading);
+  color: var(--kv2-text-primary);
   margin: 0;
 }
 
 .wiki-config-desc {
-  font-family: var(--font-body);
-  color: var(--color-text);
+  font-family: var(--kv2-font-sans);
+  color: var(--kv2-text-primary);
   opacity: 0.8;
   margin: 0;
 }
@@ -996,65 +996,65 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .wiki-config-summary {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .wiki-config-meta {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 0.85em;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.8;
 }
 
 .wiki-config-form {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.7fr) minmax(360px, 1.35fr);
-  gap: var(--space-3);
+  gap: 12px;
   align-items: start;
 }
 
 .wiki-config-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
   min-width: 0;
 }
 
 .wiki-config-label {
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 0.85em;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
 }
 
 .wiki-config-input {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  font-family: var(--font-mono);
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
-  color: var(--color-text);
-  padding: var(--space-1) var(--space-2);
+  font-family: var(--kv2-font-mono);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
+  background: var(--kv2-bg);
+  color: var(--kv2-text-primary);
+  padding: 4px 8px;
 }
 
 .wiki-config-hint {
-  font-family: var(--font-body);
+  font-family: var(--kv2-font-sans);
   font-size: 0.75em;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   opacity: 0.6;
 }
 
 .wiki-config-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 @media (max-width: 980px) {
@@ -1067,22 +1067,22 @@
 
 .wiki-card--clickable { cursor: pointer; }
 .wiki-card--clickable:hover {
-  border-color: var(--color-text);
-  box-shadow: 2px 2px 0 var(--border-color);
+  border-color: var(--kv2-text-primary);
+  box-shadow: 2px 2px 0 var(--kv2-frame);
 }
 .wiki-card--clickable:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px var(--color-text);
+  box-shadow: 0 0 0 3px var(--kv2-text-primary);
 }
 
 .wiki-item--clickable { cursor: pointer; }
 .wiki-item--clickable:hover {
   transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--border-color);
+  box-shadow: 4px 4px 0 var(--kv2-frame);
 }
 .wiki-item--clickable:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--color-text);
+  box-shadow: inset 0 0 0 2px var(--kv2-text-primary);
 }
 
 /* ─── Card detail dialog ──────────────────────────────────────────────

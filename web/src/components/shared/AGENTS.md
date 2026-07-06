@@ -9,7 +9,7 @@ Small, domain-agnostic UI primitives reused across multiple component directorie
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ErrorAlert.tsx` | Reusable error banner (`role="alert"`, `aria-live="assertive"`) with a title, message, optional action button, and optional dismiss button. Supports `banner` (full-width) and `inline` variants via `.neo-alert*` classes. Used by `Card/CreateCardDialog.tsx`, `Scheduler/SchedulerView.tsx`, `Scheduler/SchedulerJobModal.tsx`, `Settings/SettingsView.tsx`, `Settings/SettingsEntryModal.tsx`. |
+| `ErrorAlert.tsx` | Reusable error banner (`role="alert"`, `aria-live="assertive"`) with a title, message, optional action button, and optional dismiss button. Supports `banner` (full-width) and `inline` variants via `.kv2-alert*` classes. Used by `Card/CreateCardDialog.tsx`, `Scheduler/SchedulerView.tsx`, `Scheduler/SchedulerJobModal.tsx`, `Settings/SettingsView.tsx`, `Settings/SettingsEntryModal.tsx`. |
 
 ## For AI Agents
 ### Working In This Directory
@@ -20,7 +20,7 @@ Small, domain-agnostic UI primitives reused across multiple component directorie
 - No colocated tests. `ErrorAlert` is presentational only (no internal state) — unlikely to need dedicated tests beyond what covers its call sites.
 
 ### Common Patterns
-- Uses the same `.neo-*` token class convention as the rest of the app; styling lives in the global `web/src/styles/components.css`, not a local `.css` file in this directory.
+- Uses the kv2 design system (`.kv2-alert*` classes); styling lives in `web/src/styles/kv2/primitives.css`, not a local `.css` file in this directory. See `docs/design-system.md`.
 
 ## Dependencies
 ### Internal

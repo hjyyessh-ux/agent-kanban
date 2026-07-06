@@ -409,7 +409,7 @@ export function WikiView() {
     return (
       <button
         type="button"
-        className="neo-button neo-button--sm neo-button--ghost wiki-reprocess"
+        className="kv2-btn kv2-btn--ghost kv2-btn--small wiki-reprocess"
         onClick={(e) => { e.stopPropagation(); void handleReprocess(tile.cardIds); }}
         disabled={busy || pending}
         title={tip}
@@ -490,7 +490,7 @@ export function WikiView() {
               <div className="wiki-options-actions">
                 <button
                   type="button"
-                  className="neo-button neo-button--secondary"
+                  className="kv2-btn kv2-btn--outline"
                   onClick={() => setShowLogs(v => !v)}
                   title="워커 활동 로그 보기"
                 >
@@ -498,7 +498,7 @@ export function WikiView() {
                 </button>
                 <button
                   type="button"
-                  className="neo-button neo-button--secondary"
+                  className="kv2-btn kv2-btn--outline"
                   onClick={() => { void handleRestart(); }}
                   disabled={busy}
                   title="워커 상태를 리셋하고 타이머를 재시작합니다"
@@ -507,7 +507,7 @@ export function WikiView() {
                 </button>
                 <button
                   type="button"
-                  className="neo-button neo-button--primary"
+                  className="kv2-btn kv2-btn--primary"
                   onClick={() => { void handleBackfill(); }}
                   disabled={busy || !status?.enabled}
                   title="가장 최근 500장까지만 큐잉합니다 (토큰 보호)"
@@ -613,7 +613,7 @@ export function WikiView() {
         {mode === 'cards' && decisionFilter === 'failed' && (stats?.failed ?? 0) > 0 && (
           <button
             type="button"
-            className="neo-button neo-button--sm neo-button--primary wiki-retry-failed"
+            className="kv2-btn kv2-btn--primary kv2-btn--small wiki-retry-failed"
             onClick={() => { void handleReprocessAllFailed(); }}
             disabled={busy}
             title={`Archive 전체에서 Failed 카드 ${stats?.failed ?? 0}장을 모두 다시 처리 대기열에 넣습니다`}
@@ -694,7 +694,7 @@ export function WikiView() {
           <div className="wiki-footer">
             <button
               type="button"
-              className="neo-button neo-button--secondary"
+              className="kv2-btn kv2-btn--outline"
               onClick={() => { void handleLoadMoreArchiveCards(); }}
               disabled={!archiveCursor || archiveLoading || archiveLoadingMore}
             >
@@ -789,7 +789,7 @@ export function WikiView() {
                 title="클릭하면 상세·생성된 문서를 봅니다"
               >
                 <div className="wiki-item-head">
-                  <span className={`neo-badge wiki-list-badge ${badgeClass}`}>{badgeLabel}</span>
+                  <span className={`kv2-badge wiki-list-badge ${badgeClass}`}>{badgeLabel}</span>
                   <span className="wiki-item-title" title={w?.docTitle ?? card.title}>{w?.docTitle ?? card.title}</span>
                   {tile.count > 1 && (
                     <span className="wiki-card-count" title={`이 문서로 묶인 카드 ${tile.count}장`}>

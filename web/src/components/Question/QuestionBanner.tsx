@@ -89,7 +89,7 @@ const QuestionBlock: React.FC<QuestionBlockProps> = ({
         <div className="question-custom-input">
           <label className="question-custom-label">Custom Answer (optional)</label>
           <input
-            className="neo-input"
+            className="kv2-input"
             type="text"
             value={customText}
             onChange={handleCustomTextChange}
@@ -213,7 +213,7 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
         <div className="question-actions">
           <button
             type="button"
-            className="neo-button question-submit-btn"
+            className="kv2-btn question-submit-btn"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting || !canSubmit()}
           >
@@ -221,7 +221,7 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
           </button>
           <button
             type="button"
-            className="neo-button question-reject-btn"
+            className="kv2-btn question-reject-btn"
             style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
             onClick={() => void handleReject()}
             disabled={isSubmitting}

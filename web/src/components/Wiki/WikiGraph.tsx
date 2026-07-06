@@ -524,7 +524,7 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
           )}
 
           {/* ─── Filter legend (type toggles, Obsidian-style) ─── */}
-          <div className="wiki-graph-legend neo-panel">
+          <div className="wiki-graph-legend">
             <span className="wiki-graph-legend-title">타입 필터</span>
             {TYPE_ORDER.map((t) => (
               <button
@@ -559,7 +559,7 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
 
           {/* ─── Settings panel ─── */}
           {showSettings && (
-            <div className="wiki-graph-settings neo-panel">
+            <div className="wiki-graph-settings">
               <div className="wgs-head">
                 <span>그래프 설정</span>
                 <button type="button" className="wgs-reset" onClick={() => setConfig(DEFAULT_CONFIG)} title="기본값으로 되돌리기">초기화</button>

@@ -17,24 +17,24 @@ export function ErrorAlert({
   variant = 'banner',
   className,
 }: ErrorAlertProps) {
-  const classes = ['neo-alert', `neo-alert--${variant}`, className].filter(Boolean).join(' ');
+  const classes = ['kv2-alert', `kv2-alert--${variant}`, className].filter(Boolean).join(' ');
 
   return (
     <section className={classes} role="alert" aria-live="assertive" aria-atomic="true">
-      <div className="neo-alert__icon" aria-hidden="true">⚠</div>
-      <div className="neo-alert__content">
-        <p className="neo-alert__title">{title}</p>
-        <p className="neo-alert__message">{message}</p>
+      <div className="kv2-alert__icon" aria-hidden="true">⚠</div>
+      <div className="kv2-alert__content">
+        <p className="kv2-alert__title">{title}</p>
+        <p className="kv2-alert__message">{message}</p>
       </div>
       {(onAction || onDismiss) && (
-        <div className="neo-alert__actions">
+        <div className="kv2-alert__actions">
           {onAction && actionLabel && (
-            <button type="button" className="neo-button neo-button--ghost neo-alert__action" onClick={onAction}>
+            <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--small kv2-alert__action" onClick={onAction}>
               {actionLabel}
             </button>
           )}
           {onDismiss && (
-            <button type="button" className="neo-alert__dismiss" onClick={onDismiss} aria-label="Dismiss alert">
+            <button type="button" className="kv2-alert__dismiss" onClick={onDismiss} aria-label="Dismiss alert">
               Dismiss
             </button>
           )}

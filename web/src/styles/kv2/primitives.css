@@ -400,3 +400,100 @@
   gap: 6px;
   align-items: center;
 }
+
+/* ── Alert (ErrorAlert component) ─────────────────────────── */
+.kv2-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 3px solid var(--kv2-text-danger);
+  box-shadow: 4px 4px 0 var(--kv2-text-danger);
+  background: linear-gradient(135deg, #fff4f6 0%, #ffe4e6 100%);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-alert--inline {
+  margin-bottom: 20px;
+  border-width: 2px;
+  box-shadow: 3px 3px 0 var(--kv2-text-danger);
+}
+
+.kv2-alert__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--kv2-text-danger);
+  background: #fff;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--kv2-text-danger);
+}
+
+.kv2-alert__content {
+  min-width: 0;
+}
+
+.kv2-alert__title {
+  margin: 0;
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-md);
+  font-weight: 800;
+  line-height: 1.2;
+  color: #7f1d1d;
+}
+
+.kv2-alert__message {
+  margin: 6px 0 0;
+  font-size: var(--kv2-text-base);
+  line-height: 1.5;
+  color: #3f1d27;
+}
+
+.kv2-alert__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.kv2-alert__action {
+  min-width: 154px;
+  justify-content: center;
+  background: #fff;
+}
+
+.kv2-alert__dismiss {
+  border: 2px solid transparent;
+  padding: 2px 6px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #7f1d1d;
+  background: transparent;
+  cursor: pointer;
+}
+
+.kv2-alert__dismiss:hover {
+  border-color: rgba(127, 29, 29, 0.28);
+  background: rgba(255, 255, 255, 0.65);
+}
+
+@media (max-width: 720px) {
+  .kv2-alert {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .kv2-alert__actions {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
