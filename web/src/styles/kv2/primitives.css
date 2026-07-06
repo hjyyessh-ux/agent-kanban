@@ -97,6 +97,15 @@
   padding: 0;
 }
 
+/* Form dialog variant: column content with a pinned action bar — the
+   scrollable body inside carries flex:1 + overflow-y:auto itself. */
+.kv2-dialog--form .kv2-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
 /* ── Dialog Modifiers ─────────────────────────────────────── */
 .kv2-dialog--detail,
 .kv2-dialog--create {

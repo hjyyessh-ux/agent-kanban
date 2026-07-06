@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { SchedulerEntry, SchedulerRun } from '../../../../src/core/types';
 import { fetchSchedulerHistory } from '../../hooks/useSchedulerApi';
-import { useModalAccessibility } from '../../hooks/useModalAccessibility';
-import '../../styles/components.css';
+import { DialogSkeleton } from '../Card/DialogSkeleton';
 import './Scheduler.css';
 
 interface SchedulerHistoryPanelProps {
@@ -14,12 +13,8 @@ export const SchedulerHistoryPanel: React.FC<SchedulerHistoryPanelProps> = ({
   entry,
   onClose,
 }) => {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const [runs, setRuns] = useState<SchedulerRun[]>(entry.history);
   const [loading, setLoading] = useState(false);
-
-  useModalAccessibility(true, dialogRef, onClose);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -38,12 +33,6 @@ export const SchedulerHistoryPanel: React.FC<SchedulerHistoryPanelProps> = ({
     void loadHistory();
   }, [loadHistory]);
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) {
-      onClose();
-    }
-  };
-
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleString();
@@ -58,85 +47,62 @@ export const SchedulerHistoryPanel: React.FC<SchedulerHistoryPanelProps> = ({
   };
 
   return (
-    <div
-      className="scheduler-history-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
+    <DialogSkeleton
+      title={`Run History — ${entry.name}`}
+      onClose={onClose}
+      width="640px"
     >
-      <div
-        className="scheduler-history"
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="scheduler-history-title"
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="scheduler-history-header">
-          <h3 id="scheduler-history-title" className="scheduler-history-title">
-            Run History — {entry.name}
-          </h3>
-          <button
-            type="button"
-            className="scheduler-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
+      {loading ? (
+        <div className="loading-spinner" aria-label="Loading..." />
+      ) : runs.length === 0 ? (
+        <div className="scheduler-history-empty">
+          No runs yet. Click "Run Now" to execute this scheduler.
         </div>
-
-        {loading ? (
-          <div className="loading-spinner" aria-label="Loading..." />
-        ) : runs.length === 0 ? (
-          <div className="scheduler-history-empty">
-            No runs yet. Click "Run Now" to execute this scheduler.
-          </div>
-        ) : (
-          <div className="scheduler-history-list">
-            {runs.map((run) => (
-              <div key={run.id} className="scheduler-history-item">
-                <div className="scheduler-history-item-header">
+      ) : (
+        <div className="scheduler-history-list">
+          {runs.map((run) => (
+            <div key={run.id} className="scheduler-history-item">
+              <div className="scheduler-history-item-header">
+                <span className="scheduler-history-item-time">
+                  {formatTime(run.startedAt)}
+                </span>
+                <div className="scheduler-history-item-meta">
                   <span className="scheduler-history-item-time">
-                    {formatTime(run.startedAt)}
+                    {getDuration(run)}
                   </span>
-                  <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                    <span className="scheduler-history-item-time">
-                      {getDuration(run)}
-                    </span>
-                    <span className={`neo-badge scheduler-badge--${run.status}`}>
-                      {run.status}
-                    </span>
-                  </div>
+                  <span className={`kv2-badge scheduler-badge--${run.status}`}>
+                    {run.status}
+                  </span>
                 </div>
-
-                {run.exitCode !== undefined && (
-                  <span className="scheduler-history-item-time">
-                    Exit code: {run.exitCode}
-                  </span>
-                )}
-
-                {run.stdout && (
-                  <div className="scheduler-history-output">
-                    {run.stdout}
-                  </div>
-                )}
-
-                {run.stderr && (
-                  <div className="scheduler-history-output" style={{ borderColor: 'var(--color-accent)' }}>
-                    {run.stderr}
-                  </div>
-                )}
-
-                {run.error && (
-                  <div className="scheduler-history-output" style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}>
-                    {run.error}
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+
+              {run.exitCode !== undefined && (
+                <span className="scheduler-history-item-time">
+                  Exit code: {run.exitCode}
+                </span>
+              )}
+
+              {run.stdout && (
+                <div className="scheduler-history-output">
+                  {run.stdout}
+                </div>
+              )}
+
+              {run.stderr && (
+                <div className="scheduler-history-output scheduler-history-output--error">
+                  {run.stderr}
+                </div>
+              )}
+
+              {run.error && (
+                <div className="scheduler-history-output scheduler-history-output--error">
+                  {run.error}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </DialogSkeleton>
   );
 };

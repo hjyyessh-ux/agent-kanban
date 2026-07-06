@@ -4,7 +4,6 @@ import { SchedulerJobModal } from './SchedulerJobModal';
 import { SchedulerHistoryPanel } from './SchedulerHistoryPanel';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
-import '../../styles/components.css';
 import './Scheduler.css';
 
 interface SchedulerViewProps {
@@ -86,7 +85,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         </span>
         <button
           type="button"
-          className="neo-button"
+          className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
           + NEW SCHEDULER
@@ -145,12 +144,12 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
 
               <div className="scheduler-item-meta">
                 <span 
-                  className={`neo-badge scheduler-badge--${entry.action.type}`}
+                  className={`kv2-badge scheduler-badge--${entry.action.type}`}
                   aria-label={entry.action.type === 'shell' ? 'Action type: shell' : 'Action type: skill'}
                 >
                   {entry.action.type === 'shell' ? '🖥 shell' : '🧩 skill'}
                 </span>
-                <span className={`neo-badge scheduler-badge--${entry.status}`}>
+                <span className={`kv2-badge scheduler-badge--${entry.status}`}>
                   {entry.status}
                 </span>
                 <span title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
@@ -177,7 +176,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                   <span>
                     Last run: {timeAgo(entry.lastRunAt)}
                     {entry.lastRunStatus && (
-                      <> — <span className={`neo-badge neo-badge--light scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
+                      <> — <span className={`kv2-badge scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
                     )}
                   </span>
                 )}
@@ -189,7 +188,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               <div className="scheduler-item-footer">
                 <button
                   type="button"
-                  className="neo-button neo-button--sm neo-button--ghost"
+                  className="kv2-btn kv2-btn--outline kv2-btn--small"
                   onClick={(event) => {
                     stopClickPropagation(event);
                     void onRunEntry(entry.id);
@@ -199,7 +198,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="neo-button neo-button--sm neo-button--ghost"
+                  className="kv2-btn kv2-btn--outline kv2-btn--small"
                   onClick={(event) => {
                     stopClickPropagation(event);
                     setHistoryEntry(entry);
@@ -209,7 +208,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="neo-button neo-button--sm neo-button--ghost"
+                  className="kv2-btn kv2-btn--outline kv2-btn--small"
                   onClick={(event) => {
                     stopClickPropagation(event);
                     handleEditOpen(entry);
@@ -219,7 +218,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                 </button>
                 <button
                   type="button"
-                  className="neo-button neo-button--sm neo-button--danger"
+                  className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
                   onClick={(event) => {
                     stopClickPropagation(event);
                     handleDelete(entry);
