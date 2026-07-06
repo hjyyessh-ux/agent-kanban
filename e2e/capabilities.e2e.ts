@@ -283,9 +283,9 @@ test.describe('Capabilities tab — modals', () => {
       const item = page.locator('.cap-item--clickable', { hasText: '[E2E-EDIT] Click To Edit' });
       await expect(item).toBeVisible();
       await item.click();
-      const overlay = page.locator('.scripts-modal-overlay');
+      const overlay = page.locator('.kv2-dialog');
       await expect(overlay).toBeVisible();
-      await expect(overlay.locator('.scripts-modal-title')).toContainText('Edit Script');
+      await expect(overlay.locator('.kv2-dialog-title')).toContainText('Edit Script');
       await page.keyboard.press('Escape');
     } finally {
       await apiDeleteScript(script.id);
