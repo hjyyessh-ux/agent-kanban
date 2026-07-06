@@ -305,7 +305,7 @@ export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose,
             <p className="cap-detail-error">{loadError}</p>
           ) : content === null ? (
             skill.filePath ? (
-              <div className="cap-detail-loading"><div className="neo-spinner" /></div>
+              <div className="cap-detail-loading">Loading...</div>
             ) : (
               <p className="cap-detail-empty">No SKILL.md — this skill has no editable content.</p>
             )

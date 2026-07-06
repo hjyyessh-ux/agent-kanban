@@ -51,26 +51,6 @@
   border-color: var(--kv2-border-strong);
 }
 
-/* Temporary: still used by Capabilities/SkillRootsModal until the
-   Capabilities kv2 migration moves it onto DialogSkeleton. */
-.scripts-modal-close {
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--kv2-border-strong);
-  border-radius: 2px;
-  background: var(--kv2-surface);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.scripts-modal-close:hover {
-  background: var(--kv2-bg);
-}
-
 /* ── Script Edit Modal (form inside DialogSkeleton) ────────── */
 .scripts-modal-form {
   flex: 1;

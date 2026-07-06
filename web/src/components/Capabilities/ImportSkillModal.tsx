@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { SkillRoot } from '../../../../src/core/types';
 import { importSkill } from '../../hooks/useSkillsApi';
+import { DialogSkeleton } from '../Card/DialogSkeleton';
 
 interface ImportSkillModalProps {
   skillRoots: SkillRoot[];
@@ -25,20 +26,7 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
   const [dragging, setDragging] = useState(false);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
 
   const acceptFile = (f: File) => {
     setFile(f);
@@ -90,20 +78,7 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
   };
 
   return (
-    <div
-      className="cap-roots-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Import Skill"
-    >
-      <div className="cap-roots-modal cap-import-modal">
-        <div className="cap-roots-header">
-          <h2 className="cap-roots-title">Import Skill</h2>
-          <button type="button" className="neo-button neo-button--ghost neo-button--sm" onClick={onClose}>✕</button>
-        </div>
-
+    <DialogSkeleton title="Import Skill" onClose={onClose} width="560px">
         <form onSubmit={(e) => void handleSubmit(e)} className="cap-new-skill-form">
           {/* Drop zone */}
           <div
@@ -142,7 +117,7 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
             <input
               id="import-name"
               type="text"
-              className={`neo-input${nameError ? ' neo-input--error' : ''}`}
+              className={`kv2-input${nameError ? ' kv2-input--error' : ''}`}
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="derived from filename"
@@ -160,7 +135,7 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
             ) : (
               <select
                 id="import-root"
-                className="neo-input"
+                className="kv2-select"
                 value={targetRootId}
                 onChange={(e) => setTargetRootId(e.target.value)}
               >
@@ -176,17 +151,16 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
           {error && <p className="cap-roots-error">{error}</p>}
 
           <div className="cap-new-skill-footer">
-            <button type="button" className="neo-button neo-button--ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="kv2-btn kv2-btn--ghost" onClick={onClose}>Cancel</button>
             <button
               type="submit"
-              className="neo-button"
+              className="kv2-btn kv2-btn--primary"
               disabled={importing || !file || Boolean(nameError) || enabledRoots.length === 0}
             >
               {importing ? 'Importing...' : 'Import'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </DialogSkeleton>
   );
 }

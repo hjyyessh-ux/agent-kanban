@@ -113,7 +113,7 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
           <>
             <button
               type="button"
-              className="neo-button neo-button--sm"
+              className="kv2-btn kv2-btn--primary kv2-btn--small"
               onClick={onCancel}
             >
               확인
@@ -124,7 +124,7 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
           <>
             <button
               type="button"
-              className="neo-button neo-button--sm neo-button--danger"
+              className="kv2-btn kv2-btn--danger kv2-btn--small"
               onClick={onApply}
               disabled={applying}
             >
@@ -132,7 +132,7 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
             </button>
             <button
               type="button"
-              className="neo-button neo-button--ghost neo-button--sm"
+              className="kv2-btn kv2-btn--ghost kv2-btn--small"
               onClick={onCancel}
               disabled={applying}
             >

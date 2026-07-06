@@ -148,6 +148,11 @@
   border-color: var(--kv2-border-strong);
 }
 
+.kv2-input--error {
+  border-color: var(--kv2-text-danger);
+  outline: 2px solid var(--kv2-text-danger);
+}
+
 .kv2-textarea {
   resize: vertical;
   min-height: 80px;

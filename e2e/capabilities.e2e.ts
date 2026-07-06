@@ -210,9 +210,9 @@ test.describe('Capabilities tab — modals', () => {
   test('⚙ gear opens Skill Directories modal and Escape closes it', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-gear-btn').click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
-    await expect(overlay.locator('.cap-roots-title')).toHaveText('Skill Directories');
+    await expect(overlay.locator('.kv2-dialog-title')).toHaveText('Skill Directories');
     // Escape now closes it, consistent with the New/Import/Detail modals.
     await page.keyboard.press('Escape');
     await expect(overlay).not.toBeVisible();
@@ -221,17 +221,17 @@ test.describe('Capabilities tab — modals', () => {
   test('⚙ gear modal rejects a non-existent directory with an inline error', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-gear-btn').click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
     await overlay.locator('.cap-roots-add input[type="text"]').fill('/nope/not/a/real/dir/xyz');
-    await overlay.locator('.cap-roots-add .neo-button', { hasText: 'Add' }).click();
+    await overlay.locator('.cap-roots-add .kv2-btn', { hasText: 'Add' }).click();
     await expect(overlay.locator('.cap-roots-error')).toContainText('Directory does not exist');
   });
 
   test('⚙ gear modal shows default roots and add-form', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-gear-btn').click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
     // Default roots exist
     await expect(overlay.locator('.cap-root-item').first()).toBeVisible({ timeout: 5000 });
@@ -242,17 +242,17 @@ test.describe('Capabilities tab — modals', () => {
   test('+ New Skill opens New Skill modal and X closes it', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-header-actions .kv2-btn', { hasText: '+ New Skill' }).click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
-    await expect(overlay.locator('.cap-roots-title')).toHaveText('New Skill');
-    await overlay.locator('button', { hasText: '✕' }).click();
+    await expect(overlay.locator('.kv2-dialog-title')).toHaveText('New Skill');
+    await overlay.locator('.kv2-dialog-close').click();
     await expect(overlay).not.toBeVisible();
   });
 
   test('New Skill modal validates name format', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-header-actions .kv2-btn', { hasText: '+ New Skill' }).click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     // Validation runs on-change; submit stays disabled while invalid.
     await overlay.locator('#skill-name').fill('INVALID NAME!');
     await expect(overlay.locator('.cap-field-error')).toBeVisible();
@@ -265,9 +265,9 @@ test.describe('Capabilities tab — modals', () => {
   test('↑ Import opens Import Skill modal', async ({ page }) => {
     await goToListView(page);
     await page.locator('.cap-header-actions .kv2-btn', { hasText: '↑ Import' }).click();
-    const overlay = page.locator('.cap-roots-overlay');
+    const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
-    await expect(overlay.locator('.cap-roots-title')).toHaveText('Import Skill');
+    await expect(overlay.locator('.kv2-dialog-title')).toHaveText('Import Skill');
     await page.keyboard.press('Escape');
     await expect(overlay).not.toBeVisible();
   });
@@ -303,10 +303,10 @@ test.describe('Capabilities tab — script inline actions', () => {
       await goToListView(page);
       const item = page.locator('.cap-item', { hasText: '[E2E-BTN] Button Script' });
       await expect(item).toBeVisible();
-      await expect(item.locator('.neo-button', { hasText: '▶ Run' })).toBeVisible();
-      await expect(item.locator('.neo-button', { hasText: 'History' })).toBeVisible();
-      await expect(item.locator('.neo-button', { hasText: '✎ Edit' })).toBeVisible();
-      await expect(item.locator('.neo-button', { hasText: '✕ Delete' })).toBeVisible();
+      await expect(item.locator('.kv2-btn', { hasText: '▶ Run' })).toBeVisible();
+      await expect(item.locator('.kv2-btn', { hasText: 'History' })).toBeVisible();
+      await expect(item.locator('.kv2-btn', { hasText: '✎ Edit' })).toBeVisible();
+      await expect(item.locator('.kv2-btn', { hasText: '✕ Delete' })).toBeVisible();
     } finally {
       await apiDeleteScript(script.id);
     }
@@ -323,7 +323,7 @@ test.describe('Capabilities tab — script inline actions', () => {
       await expect(item).toBeVisible();
 
       page.on('dialog', (d) => d.dismiss()); // dismiss confirm → item stays
-      await item.locator('.neo-button', { hasText: '✕ Delete' }).click();
+      await item.locator('.kv2-btn', { hasText: '✕ Delete' }).click();
       // Item should still be visible after dismiss
       await expect(item).toBeVisible();
     } finally {
@@ -345,7 +345,7 @@ test.describe('Capabilities tab — Commands section', () => {
   test('toggle-all button toggles all checkboxes off then on', async ({ page }) => {
     await goToListView(page);
     const section = page.locator('.cap-commands-section');
-    const toggleAll = section.locator('.neo-button');
+    const toggleAll = section.locator('.kv2-btn');
 
     // If all enabled, clicking should deselect all
     const firstCheckbox = section.locator('input[type="checkbox"]').first();

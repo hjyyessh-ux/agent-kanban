@@ -22,7 +22,7 @@ Discovery, inventory, and lifecycle management for skills, MCP servers, and oper
 | `ScopeChip.tsx` | Small colored badge for a `CapScope` (`user`/`project`/`local`/`cold`), with optional ⚡ alwaysLoad / 🔒 managed icons. |
 | `ImportSkillModal.tsx` | Drag-and-drop or file-picker import of an existing `SKILL.md`/`.txt` into a chosen skill root, deriving a slug name from the filename. |
 | `NewSkillModal.tsx` | Create-from-scratch skill form (name, target root, description, markdown body) seeded with a `DEFAULT_INSTRUCTIONS` template. |
-| `Capabilities.css` | All `.cap-*`, `.inv-*`, `.ptp-*`, `.scope-*`, `.diag-*`, `.cold-*`, `.mcp-detail-*`, `.vis-*`, `.diff-preview-*` styling for this directory — written in the Board's kv2 design language (kv2 fonts/radius/borders/shadows; requires the `.kv2` class on the view root). Also reskins legacy `.neo-*` primitives scoped under `.cap-view`. |
+| `Capabilities.css` | All `.cap-*`, `.inv-*`, `.ptp-*`, `.scope-*`, `.diag-*`, `.cold-*`, `.mcp-detail-*`, `.vis-*`, `.diff-preview-*` styling for this directory — written on kv2 tokens/primitives (see `docs/design-system.md`). Modals render through `Card/DialogSkeleton`; buttons/inputs/badges are kv2 primitives. |
 
 ## For AI Agents
 ### Working In This Directory

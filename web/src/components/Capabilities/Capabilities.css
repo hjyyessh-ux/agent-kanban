@@ -938,7 +938,7 @@
   margin-left: auto;
 }
 
-/* Legacy list-view badge colors (still rendered via .neo-badge) */
+/* List-view badge colors (rendered via .kv2-badge) */
 .cap-badge--claude  { background: #d97757; color: #fff; border-color: #b35f42; }
 .cap-badge--codex   { background: #2563eb; color: #fff; border-color: #1e40af; }
 .cap-badge--opencode { background: #111111; color: #fff; border-color: #111111; }
@@ -1274,55 +1274,6 @@
 }
 
 /* ── Roots / New Skill / Import modals (legacy shells) ───────── */
-.cap-roots-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--kv2-sp-4);
-}
-
-.cap-roots-modal {
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: 12px;
-  box-shadow: 8px 12px 0 #1f2233;
-  background: var(--kv2-surface);
-  width: 100%;
-  max-width: 720px;
-  min-height: 320px;
-  max-height: 85vh;
-  overflow-y: auto;
-  resize: vertical;
-  padding: var(--kv2-sp-6);
-  display: flex;
-  flex-direction: column;
-  gap: var(--kv2-sp-4);
-  font-family: var(--kv2-font-sans);
-}
-
-.cap-roots-modal--resizable {
-  resize: both;
-  max-width: 95vw;
-  max-height: 95vh;
-}
-
-.cap-roots-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.cap-roots-title {
-  font-family: var(--kv2-font-heading);
-  font-weight: 800;
-  font-size: var(--kv2-text-lg);
-  color: var(--kv2-text-primary);
-  margin: 0;
-}
-
 .cap-roots-list {
   display: flex;
   flex-direction: column;
@@ -1403,16 +1354,6 @@
 }
 
 /* ── New Skill / Import Modals ──────────────────────────────── */
-.cap-new-skill-modal {
-  max-width: 680px;
-  max-height: 92vh;
-  overflow-y: auto;
-}
-
-.cap-import-modal {
-  max-width: 560px;
-}
-
 .cap-new-skill-form {
   display: flex;
   flex-direction: column;
@@ -1453,10 +1394,6 @@
   margin: 0;
 }
 
-.neo-input--error {
-  border-color: var(--kv2-text-danger);
-  outline: 2px solid var(--kv2-text-danger);
-}
 
 .cap-new-skill-body {
   min-height: 220px;
@@ -1912,51 +1849,4 @@
   border-color: #3b5066 !important;
 }
 
-/* =============================================================
-   Legacy neo-* primitives inside the Capabilities tab
-   — reskinned to the kv2 language so modals that still use
-   them (SkillRoots / NewSkill / Import / VisibilityControl /
-   DiffPreview / StorageDrawer) match the Board look.
-   ============================================================= */
-.cap-view .neo-button {
-  border: 2px solid var(--kv2-btn-stroke-color);
-  border-radius: var(--kv2-radius-lg);
-  box-shadow: var(--kv2-shadow-sm);
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-  font-family: var(--kv2-font-sans);
-  font-weight: 700;
-  transition: background var(--kv2-transition-fast), filter var(--kv2-transition-fast);
-}
 
-.cap-view .neo-button:hover:not(:disabled) {
-  transform: none;
-  background: var(--kv2-bg);
-  box-shadow: var(--kv2-shadow-sm);
-}
-
-.cap-view .neo-button--danger {
-  background: var(--kv2-surface);
-  color: #e11d48;
-}
-
-.cap-view .neo-input {
-  border: 2px solid var(--kv2-border);
-  border-radius: var(--kv2-radius-md);
-  font-family: var(--kv2-font-sans);
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-}
-
-.cap-view .neo-input:focus {
-  border-color: var(--kv2-border-strong);
-  outline: none;
-  box-shadow: none;
-}
-
-.cap-view .neo-badge {
-  border-radius: var(--kv2-radius-pill);
-  border-width: 1.5px;
-  font-family: var(--kv2-font-sans);
-  font-weight: 800;
-}

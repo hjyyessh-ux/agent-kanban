@@ -28,7 +28,6 @@ import { NewSkillModal } from './NewSkillModal';
 import { ImportSkillModal } from './ImportSkillModal';
 import { InventoryView } from './InventoryView';
 import { StorageDrawer } from './StorageDrawer';
-import '../../styles/components.css';
 import '../Scripts/Scripts.css';
 import './Capabilities.css';
 
@@ -262,9 +261,8 @@ export function CapabilitiesView({
 
   if (skillsLoading && scriptsLoading && allItems.length === 0) {
     return (
-      <div className="neo-surface scripts-loading">
-        <div className="neo-spinner" />
-        <p>Loading capabilities...</p>
+      <div className="scripts-loading">
+                <p>Loading capabilities...</p>
       </div>
     );
   }
@@ -333,9 +331,8 @@ export function CapabilitiesView({
       {viewMode === 'inventory' && (
         <>
           {inventory.loading && !inventory.data && (
-            <div className="neo-surface scripts-loading">
-              <div className="neo-spinner" />
-              <p>Loading inventory...</p>
+            <div className="scripts-loading">
+                            <p>Loading inventory...</p>
             </div>
           )}
           {inventory.error && (
@@ -373,7 +370,7 @@ export function CapabilitiesView({
       <div className="cap-toolbar">
         <input
           type="search"
-          className="neo-input cap-search"
+          className="kv2-input cap-search"
           placeholder="Search name, description, directory, tools..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -453,20 +450,20 @@ export function CapabilitiesView({
                 <div className="cap-item-header">
                   <div className="cap-item-main">
                     <div className="cap-badges">
-                      <span className={`neo-badge cap-badge--${item.type}`}>{item.type}</span>
+                      <span className={`kv2-badge cap-badge--${item.type}`}>{item.type}</span>
                       {item.agent && (
-                        <span className={`neo-badge cap-badge--${item.agent}`}>
+                        <span className={`kv2-badge cap-badge--${item.agent}`}>
                           {item.agent}
                         </span>
                       )}
                       {item.type === 'script' && scriptEntry?.language && (
-                        <span className={`neo-badge scripts-badge--${scriptEntry.language}`}>
+                        <span className={`kv2-badge scripts-badge--${scriptEntry.language}`}>
                           {scriptEntry.language}
                         </span>
                       )}
                       {item.type === 'script' && scriptEntry?.lastRunStatus && (
                         <span
-                          className={`neo-badge cap-badge--${
+                          className={`kv2-badge cap-badge--${
                             scriptEntry.lastRunStatus === 'success' ? 'success' : 'error'
                           }`}
                         >
@@ -490,12 +487,12 @@ export function CapabilitiesView({
                 {item.tools && item.tools.length > 0 && (
                   <div className="cap-item-tools">
                     {item.tools.slice(0, 5).map((tool) => (
-                      <span key={tool} className="neo-badge cap-badge--tool">
+                      <span key={tool} className="kv2-badge cap-badge--tool">
                         {tool}
                       </span>
                     ))}
                     {item.tools.length > 5 && (
-                      <span className="neo-badge cap-badge--tool">
+                      <span className="kv2-badge cap-badge--tool">
                         +{item.tools.length - 5}
                       </span>
                     )}
@@ -512,7 +509,7 @@ export function CapabilitiesView({
                   >
                     <button
                       type="button"
-                      className="neo-button neo-button--sm"
+                      className="kv2-btn kv2-btn--outline kv2-btn--small"
                       onClick={() => void handleRun(item.id)}
                       disabled={runningIds.has(item.id)}
                     >
@@ -520,21 +517,21 @@ export function CapabilitiesView({
                     </button>
                     <button
                       type="button"
-                      className="neo-button neo-button--ghost neo-button--sm"
+                      className="kv2-btn kv2-btn--ghost kv2-btn--small"
                       onClick={() => setHistoryEntry(scriptEntry)}
                     >
                       History ({scriptEntry.history.length})
                     </button>
                     <button
                       type="button"
-                      className="neo-button neo-button--ghost neo-button--sm"
+                      className="kv2-btn kv2-btn--ghost kv2-btn--small"
                       onClick={() => setEditEntry(scriptEntry)}
                     >
                       ✎ Edit
                     </button>
                     <button
                       type="button"
-                      className="neo-button neo-button--danger neo-button--sm"
+                      className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
                       onClick={() => void handleDelete(item.id)}
                     >
                       ✕ Delete
@@ -558,7 +555,7 @@ export function CapabilitiesView({
           </div>
           <button
             type="button"
-            className="neo-button neo-button--sm"
+            className="kv2-btn kv2-btn--outline kv2-btn--small"
             onClick={toggleAllCommands}
           >
             {allCommands.every(c => enabledCommandIds.has(c.id)) ? '전체 해제' : '전체 선택'}

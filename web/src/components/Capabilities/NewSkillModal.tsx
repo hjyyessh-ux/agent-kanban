@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SkillRoot, SkillRuntime } from '../../../../src/core/types';
 import { createSkill } from '../../hooks/useSkillsApi';
+import { DialogSkeleton } from '../Card/DialogSkeleton';
 
 const DEFAULT_INSTRUCTIONS = `# skill-name
 
@@ -35,24 +36,11 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     nameRef.current?.focus();
   }, []);
-
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [onClose]);
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
 
   const validateName = (v: string) => {
     if (!v) return 'Name is required';
@@ -84,20 +72,7 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
   };
 
   return (
-    <div
-      className="cap-roots-overlay"
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      role="dialog"
-      aria-modal="true"
-      aria-label="New Skill"
-    >
-      <div className="cap-roots-modal cap-new-skill-modal">
-        <div className="cap-roots-header">
-          <h2 className="cap-roots-title">New Skill</h2>
-          <button type="button" className="neo-button neo-button--ghost neo-button--sm" onClick={onClose}>✕</button>
-        </div>
-
+    <DialogSkeleton title="New Skill" onClose={onClose} width="680px">
         <form onSubmit={(e) => void handleSubmit(e)} className="cap-new-skill-form">
           {/* Name */}
           <div className="cap-field">
@@ -108,7 +83,7 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
               id="skill-name"
               ref={nameRef}
               type="text"
-              className={`neo-input${nameError ? ' neo-input--error' : ''}`}
+              className={`kv2-input${nameError ? ' kv2-input--error' : ''}`}
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="my-skill"
@@ -126,7 +101,7 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
             ) : (
               <select
                 id="skill-root"
-                className="neo-input"
+                className="kv2-select"
                 value={targetRootId}
                 onChange={(e) => setTargetRootId(e.target.value)}
               >
@@ -145,7 +120,7 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
             <input
               id="skill-desc"
               type="text"
-              className="neo-input"
+              className="kv2-input"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="One-line summary of what this skill does"
@@ -159,7 +134,7 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
             </label>
             <textarea
               id="skill-instructions"
-              className="neo-input cap-detail-textarea cap-new-skill-body"
+              className="kv2-textarea cap-detail-textarea cap-new-skill-body"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
               spellCheck={false}
@@ -169,19 +144,18 @@ export function NewSkillModal({ skillRoots, defaultAgent, onClose, onCreated }: 
           {error && <p className="cap-roots-error">{error}</p>}
 
           <div className="cap-new-skill-footer">
-            <button type="button" className="neo-button neo-button--ghost" onClick={onClose}>
+            <button type="button" className="kv2-btn kv2-btn--ghost" onClick={onClose}>
               Cancel
             </button>
             <button
               type="submit"
-              className="neo-button"
+              className="kv2-btn kv2-btn--primary"
               disabled={saving || enabledRoots.length === 0 || Boolean(nameError)}
             >
               {saving ? 'Creating...' : 'Create Skill'}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </DialogSkeleton>
   );
 }

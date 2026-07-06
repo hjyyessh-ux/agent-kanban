@@ -86,13 +86,13 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
     <div className="cold-item">
       <div className="cold-item__header">
         <div className="cold-item__badges">
-          <span className={`neo-badge cold-item__kind-badge cold-item__kind-badge--${entry.kind}`}>
+          <span className={`kv2-badge cold-item__kind-badge cold-item__kind-badge--${entry.kind}`}>
             {entry.kind === 'skill' ? '❄ skill' : '❄ MCP'}
           </span>
           {entry.runtime && (
-            <span className={`neo-badge cap-badge--${entry.runtime}`}>{entry.runtime}</span>
+            <span className={`kv2-badge cap-badge--${entry.runtime}`}>{entry.runtime}</span>
           )}
-          <span className="neo-badge cold-item__scope-badge">{entry.sourceScope}</span>
+          <span className="kv2-badge cold-item__scope-badge">{entry.sourceScope}</span>
         </div>
         <span className="cold-item__ref">{entry.ref}</span>
         <span className="cold-item__age">{timeAgo(entry.createdAt)}</span>
@@ -100,7 +100,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
 
       <div className="cold-item__actions">
         <select
-          className="neo-input cold-item__select"
+          className="kv2-select cold-item__select"
           value={restoreTarget}
           onChange={(e) => { setRestoreTarget(e.target.value); setError(null); }}
         >
@@ -119,7 +119,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
         </select>
         <button
           type="button"
-          className="neo-button neo-button--sm"
+          className="kv2-btn kv2-btn--outline kv2-btn--small"
           disabled={!restoreTarget || restoring}
           onClick={() => void handleRestore()}
         >
@@ -127,7 +127,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
         </button>
         <button
           type="button"
-          className="neo-button neo-button--sm neo-button--danger"
+          className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
           disabled={deleting}
           onClick={() => void handleDelete()}
         >
@@ -157,9 +157,8 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
 
   if (cold.loading && cold.entries.length === 0) {
     return (
-      <div className="neo-surface scripts-loading">
-        <div className="neo-spinner" />
-        <p>Loading cold storage...</p>
+      <div className="scripts-loading">
+                <p>Loading cold storage...</p>
       </div>
     );
   }
@@ -197,7 +196,7 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
         <section className="cold-section">
           <div className="cold-section__label">
             Skills
-            <span className="neo-badge cold-section__count">{skillEntries.length}</span>
+            <span className="kv2-badge cold-section__count">{skillEntries.length}</span>
           </div>
           <div className="cold-section__list">
             {skillEntries.map((entry) => (
@@ -218,7 +217,7 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
         <section className="cold-section">
           <div className="cold-section__label">
             MCP Servers
-            <span className="neo-badge cold-section__count">{mcpEntries.length}</span>
+            <span className="kv2-badge cold-section__count">{mcpEntries.length}</span>
           </div>
           <div className="cold-section__list">
             {mcpEntries.map((entry) => (
