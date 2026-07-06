@@ -1,13 +1,11 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import type {
   CreateSettingsInput,
   UpdateSettingsInput,
   SettingsEntry,
 } from '../../../../src/core/types';
-import '../../styles/components.css';
 import './Settings.css';
-import { useModalAccessibility } from '../../hooks/useModalAccessibility';
-import { usePersistedDialogSize } from '../../hooks/usePersistedDialogSize';
+import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { ErrorAlert } from '../shared/ErrorAlert';
 
 interface SettingsEntryModalProps {
@@ -23,10 +21,6 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
   onUpdate,
   editEntry,
 }) => {
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const firstInputRef = useRef<HTMLInputElement>(null);
-
   const [key, setKey] = useState(editEntry?.key ?? '');
   const [value, setValue] = useState(editEntry?.value ?? '');
   const [description, setDescription] = useState(editEntry?.description ?? '');
@@ -36,15 +30,6 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
   const [submitError, setSubmitError] = useState<{ title: string; message: string } | null>(null);
 
   const isEditing = !!editEntry;
-
-  useModalAccessibility(true, modalRef, onClose);
-  usePersistedDialogSize('kanban-settings-modal-size', modalRef, { width: 560, height: 480 });
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) {
-      onClose();
-    }
-  };
 
   const canSubmit = useCallback(() => {
     if (!key.trim()) return false;
@@ -95,50 +80,32 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
   };
 
   return (
-    <div className="settings-modal-overlay" ref={overlayRef}>
-      <div
-        ref={modalRef}
-        className="settings-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-modal-title"
-        tabIndex={-1}
-      >
-        <div className="settings-modal-header">
-          <h2 id="settings-modal-title" className="settings-modal-title">
-            {isEditing ? 'Edit Setting' : 'New Setting'}
-          </h2>
-          <button
-            type="button"
-            className="settings-modal-close"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
+    <DialogSkeleton
+      title={isEditing ? 'Edit Setting' : 'New Setting'}
+      onClose={onClose}
+      persistSizeKey="kanban-settings-modal-size"
+      defaultSize={{ width: 560, height: 480 }}
+      className="kv2-dialog--form"
+    >
+      <div className="settings-modal-body">
         {submitError && (
-          <div style={{ padding: '0 20px 12px' }}>
-            <ErrorAlert
-              variant="inline"
-              title={submitError.title}
-              message={submitError.message}
-              onDismiss={() => setSubmitError(null)}
-            />
-          </div>
+          <ErrorAlert
+            variant="inline"
+            title={submitError.title}
+            message={submitError.message}
+            onDismiss={() => setSubmitError(null)}
+          />
         )}
 
         {/* Key */}
         <div className="settings-field">
-          <label className="settings-label" htmlFor="settings-key-input">Key *</label>
+          <label className="kv2-label" htmlFor="settings-key-input">Key *</label>
           <span className="settings-hint">
             Environment variable name (e.g., GOOGLE_AUTH_TOKEN)
           </span>
           <input
             id="settings-key-input"
-            ref={firstInputRef}
-            className="neo-input"
+            className="kv2-input"
             value={key}
             onChange={e => setKey(e.target.value)}
             placeholder="e.g., GOOGLE_AUTH_TOKEN"
@@ -148,7 +115,7 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
 
         {/* Value */}
         <div className="settings-field">
-          <label className="settings-label" htmlFor="settings-value-input">
+          <label className="kv2-label" htmlFor="settings-value-input">
             Value {isEditing ? '' : '*'}
           </label>
           {isEditing && (
@@ -158,7 +125,7 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
           )}
           <textarea
             id="settings-value-input"
-            className="neo-input"
+            className="kv2-textarea"
             value={value}
             onChange={e => setValue(e.target.value)}
             placeholder={isEditing ? 'Enter a new value to replace it' : 'Secret value'}
@@ -169,10 +136,10 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
 
         {/* Description */}
         <div className="settings-field">
-          <label className="settings-label" htmlFor="settings-description-input">Description *</label>
+          <label className="kv2-label" htmlFor="settings-description-input">Description *</label>
           <input
             id="settings-description-input"
-            className="neo-input"
+            className="kv2-input"
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="e.g., Google API authentication token"
@@ -182,10 +149,10 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
 
         {/* Category */}
         <div className="settings-field">
-          <label className="settings-label" htmlFor="settings-category-input">Category (Optional)</label>
+          <label className="kv2-label" htmlFor="settings-category-input">Category (Optional)</label>
           <input
             id="settings-category-input"
-            className="neo-input"
+            className="kv2-input"
             value={category}
             onChange={e => setCategory(e.target.value)}
             placeholder="e.g., api_keys, tokens, credentials"
@@ -206,29 +173,27 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
             Mask value in UI (recommended for secrets)
           </label>
         </div>
-
-        {/* Actions */}
-        <div className="settings-modal-actions">
-          <button
-            type="button"
-            className="neo-button"
-            style={{ flex: 1, background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            CANCEL
-          </button>
-          <button
-            type="button"
-            className="neo-button"
-            style={{ flex: 1 }}
-            onClick={handleSubmit}
-            disabled={isSubmitting || !canSubmit()}
-          >
-            {isEditing ? 'UPDATE' : 'CREATE'}
-          </button>
-        </div>
       </div>
-    </div>
+
+      {/* Actions */}
+      <div className="kv2-dialog-actions settings-modal-actions">
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--outline settings-modal-btn"
+          onClick={onClose}
+          disabled={isSubmitting}
+        >
+          CANCEL
+        </button>
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--primary settings-modal-btn"
+          onClick={handleSubmit}
+          disabled={isSubmitting || !canSubmit()}
+        >
+          {isEditing ? 'UPDATE' : 'CREATE'}
+        </button>
+      </div>
+    </DialogSkeleton>
   );
 };

@@ -10,7 +10,6 @@ import { SettingsEntryModal } from './SettingsEntryModal';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
-import '../../styles/components.css';
 import './Settings.css';
 
 interface SettingsViewProps {
@@ -213,7 +212,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </span>
         <button
           type="button"
-          className="neo-button"
+          className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
           + NEW SETTING
@@ -288,7 +287,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="settings-model-filter-actions">
             <button
               type="button"
-              className="neo-button neo-button--sm"
+              className="kv2-btn kv2-btn--outline kv2-btn--small"
               onClick={() => void handleSyncModels()}
               disabled={syncing}
               title="Fetch the latest Claude/Codex models from the backend provider list"
@@ -297,7 +296,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </button>
             <button
               type="button"
-              className="neo-button neo-button--sm"
+              className="kv2-btn kv2-btn--outline kv2-btn--small"
               onClick={toggleAllModels}
             >
               {allKnownIds.every(id => enabledModelIds.has(id)) ? 'Deselect All' : 'Select All'}
@@ -382,7 +381,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {fontScale.scale !== 1 && (
             <button
               type="button"
-              className="neo-button neo-button--sm"
+              className="kv2-btn kv2-btn--outline kv2-btn--small"
               onClick={() => fontScale.setScale(1)}
             >
               Reset
@@ -439,14 +438,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <div className="settings-item-actions">
                   <button
                     type="button"
-                    className="neo-button neo-button--sm neo-button--ghost"
+                    className="kv2-btn kv2-btn--outline kv2-btn--small"
                     onClick={(e) => { e.stopPropagation(); setEditEntry(entry); }}
                   >
                     ✎ Edit
                   </button>
                   <button
                     type="button"
-                    className="neo-button neo-button--sm neo-button--danger"
+                    className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
                     onClick={(e) => { e.stopPropagation(); handleDelete(entry); }}
                   >
                     ✕ Delete
@@ -474,12 +473,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
               <div className="settings-item-meta">
                 {entry.category && (
-                  <span className="neo-badge settings-badge--category">
+                  <span className="kv2-badge settings-badge--category">
                     {entry.category}
                   </span>
                 )}
                 {entry.masked !== false && (
-                  <span className="neo-badge settings-badge--masked">
+                  <span className="kv2-badge settings-badge--masked">
                     🔒 masked
                   </span>
                 )}

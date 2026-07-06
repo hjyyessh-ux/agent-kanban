@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   applyUpdateAndRestart,
   fetchMaintenanceLog,
   fetchMaintenanceStatus,
   type MaintenanceStatus,
 } from '../../hooks/useSettingsApi';
-import { useModalAccessibility } from '../../hooks/useModalAccessibility';
+import { DialogSkeleton } from '../Card/DialogSkeleton';
 
 const COMMANDS = [
   'bash scripts/install.sh',
@@ -32,11 +32,6 @@ export function SettingsMaintenancePanel() {
   const [logOpen, setLogOpen] = useState(false);
   const [logText, setLogText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-
-  useModalAccessibility(confirmOpen, modalRef, () => {
-    if (!starting) setConfirmOpen(false);
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -138,7 +133,7 @@ export function SettingsMaintenancePanel() {
       <div className="settings-maintenance-actions">
         <button
           type="button"
-          className="neo-button neo-button--primary"
+          className="kv2-btn kv2-btn--primary"
           onClick={() => {
             setError(null);
             setConfirmOpen(true);
@@ -149,7 +144,7 @@ export function SettingsMaintenancePanel() {
         </button>
         <button
           type="button"
-          className="neo-button neo-button--secondary"
+          className="kv2-btn kv2-btn--outline"
           onClick={() => {
             void handleToggleLog();
           }}
@@ -175,77 +170,54 @@ export function SettingsMaintenancePanel() {
       )}
 
       {confirmOpen && (
-        <div
-          className="settings-modal-overlay"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !starting) setConfirmOpen(false);
+        <DialogSkeleton
+          title="Apply Update & Restart"
+          onClose={() => {
+            if (!starting) setConfirmOpen(false);
           }}
+          width="640px"
         >
-          <div
-            ref={modalRef}
-            className="settings-modal settings-maintenance-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-maintenance-confirm-title"
-            tabIndex={-1}
-          >
-            <div className="settings-modal-header">
-              <h2 id="settings-maintenance-confirm-title" className="settings-modal-title">
-                Apply Update & Restart
-              </h2>
-              <button
-                type="button"
-                className="settings-modal-close"
-                onClick={() => setConfirmOpen(false)}
-                disabled={starting}
-                aria-label="Close"
-              >
-                x
-              </button>
+          <div className="settings-maintenance-confirm">
+            <p>
+              This will rebuild the local plugin, install the latest bundle, and restart the running plugin process from the resolved repo root.
+            </p>
+            <div className="settings-maintenance-command-list">
+              {COMMANDS.map((command) => (
+                <code key={command}>{command}</code>
+              ))}
             </div>
-
-            <div className="settings-maintenance-confirm">
-              <p>
-                This will rebuild the local plugin, install the latest bundle, and restart the running plugin process from the resolved repo root.
-              </p>
-              <div className="settings-maintenance-command-list">
-                {COMMANDS.map((command) => (
-                  <code key={command}>{command}</code>
-                ))}
-              </div>
-              <p>
-                The board may disconnect briefly while the process restarts.
-              </p>
-            </div>
-
-            {error && (
-              <div className="settings-maintenance-error" role="alert">
-                {error}
-              </div>
-            )}
-
-            <div className="settings-modal-actions">
-              <button
-                type="button"
-                className="neo-button neo-button--secondary"
-                onClick={() => setConfirmOpen(false)}
-                disabled={starting}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="neo-button neo-button--danger"
-                onClick={() => {
-                  void handleStart();
-                }}
-                disabled={starting}
-              >
-                {starting ? 'Starting...' : 'Apply Update & Restart'}
-              </button>
-            </div>
+            <p>
+              The board may disconnect briefly while the process restarts.
+            </p>
           </div>
-        </div>
+
+          {error && (
+            <div className="settings-maintenance-error" role="alert">
+              {error}
+            </div>
+          )}
+
+          <div className="kv2-dialog-actions settings-modal-actions">
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--outline settings-modal-btn"
+              onClick={() => setConfirmOpen(false)}
+              disabled={starting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--danger settings-modal-btn"
+              onClick={() => {
+                void handleStart();
+              }}
+              disabled={starting}
+            >
+              {starting ? 'Starting...' : 'Apply Update & Restart'}
+            </button>
+          </div>
+        </DialogSkeleton>
       )}
     </section>
   );

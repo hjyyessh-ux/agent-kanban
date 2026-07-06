@@ -1,59 +1,62 @@
 /* =============================================================
-   Settings — Neobrutalism Styles
-   Thick borders. Hard shadows. Secret management.
+   Settings — kv2 layout + domain variants.
+   Looks (buttons, inputs, badges, dialog shell) come from the kv2
+   primitives; this file only holds screen layout and settings-
+   specific variants. See docs/design-system.md.
    ============================================================= */
 
 /* ── Settings View ──────────────────────────────────────────── */
 .settings-view {
   max-width: 960px;
   margin: 0 auto;
+  font-family: var(--kv2-font-sans);
+  color: var(--kv2-text-primary);
 }
 
 .settings-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-4);
+  margin-bottom: 16px;
 }
 
 .settings-toolbar-title {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
-  font-size: 1.25rem;
-  color: var(--color-text);
+  font-size: var(--kv2-text-lg);
 }
 
 .settings-empty {
-  border: var(--border-width) dashed var(--border-color);
-  padding: var(--space-8);
+  border: 1px dashed var(--kv2-border);
+  border-radius: var(--kv2-card-radius);
+  padding: 32px;
   text-align: center;
-  font-family: var(--font-body);
-  color: var(--color-text);
-  opacity: 0.5;
+  color: var(--kv2-text-muted);
 }
 
 /* ── Settings List ──────────────────────────────────────────── */
 .settings-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .settings-item {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
+  background: var(--kv2-card-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-card-radius);
+  box-shadow: var(--kv2-shadow-sm);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .settings-item-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .settings-item-info {
@@ -62,19 +65,16 @@
 }
 
 .settings-item-key {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 700;
-  font-size: 1rem;
-  color: var(--color-text);
+  font-size: var(--kv2-text-md);
   margin: 0;
 }
 
 .settings-item-desc {
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  color: var(--color-text);
-  opacity: 0.7;
-  margin: var(--space-1) 0 0 0;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  margin: 4px 0 0 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,24 +83,24 @@
 .settings-item-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 8px;
   align-items: center;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text);
-  opacity: 0.6;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
 }
 
 .settings-item-value {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-bg);
-  border: 2px solid var(--border-color);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  padding: 8px 12px;
+  background: var(--kv2-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
   word-break: break-all;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 8px;
 }
 
 .settings-item-value-text {
@@ -111,159 +111,103 @@
 }
 
 .settings-reveal-btn {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 2px var(--space-2);
-  border: 2px solid var(--border-color);
-  background: var(--color-surface);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  padding: 2px 8px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-surface);
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .settings-reveal-btn:hover {
-  background: var(--color-bg);
+  background: var(--kv2-bg);
 }
 
 .settings-item-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: 8px;
   align-items: center;
   flex-shrink: 0;
 }
 
-/* ── Category Badge ─────────────────────────────────────────── */
+/* ── Badge Variants ─────────────────────────────────────────── */
 .settings-badge--category {
-  background: var(--color-primary);
-  color: white;
+  background: var(--kv2-status-todo-accent);
+  color: #fff;
+  border-color: var(--kv2-border-strong);
 }
 
 .settings-badge--masked {
-  background: var(--color-text);
-  color: var(--color-surface);
+  background: var(--kv2-frame);
+  color: #fff;
+  border-color: var(--kv2-border-strong);
 }
 
-/* ── Settings Entry Modal ───────────────────────────────────── */
-.settings-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: var(--space-4);
-}
-
-.settings-modal {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: 8px 8px 0 var(--border-color);
-  background: var(--color-surface);
-  width: 100%;
-  max-width: 560px;
-  max-height: 95vh;
-  max-width: 95vw;
-  min-width: 360px;
-  min-height: 200px;
-  overflow: auto;
-  resize: both;
-  padding: var(--space-6);
+/* ── Settings Entry Modal (body inside DialogSkeleton) ──────── */
+.settings-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-}
-
-.settings-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.settings-modal-title {
-  font-family: var(--font-heading);
-  font-weight: 800;
-  font-size: 1.25rem;
-  color: var(--color-text);
-}
-
-.settings-modal-close {
-  width: 32px;
-  height: 32px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.settings-modal-close:hover {
-  background: var(--color-bg);
+  gap: 16px;
+  padding-right: 8px;
 }
 
 .settings-field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-}
-
-.settings-label {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: 0.8125rem;
-  color: var(--color-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  gap: 4px;
 }
 
 .settings-hint {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text);
-  opacity: 0.5;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
 }
 
 .settings-masked-toggle {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-heading);
+  gap: 8px;
+  font-family: var(--kv2-font-heading);
   font-weight: 700;
-  font-size: 0.8125rem;
-  color: var(--color-text);
+  font-size: var(--kv2-text-xs);
   cursor: pointer;
 }
 
 .settings-masked-checkbox {
   width: 20px;
   height: 20px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--kv2-status-todo-accent);
 }
 
 .settings-modal-actions {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
+  flex-direction: row;
+  gap: 12px;
+  padding: 16px 0 0;
+  border-top: 2px solid var(--kv2-border-strong);
+}
+
+.settings-modal-btn {
+  flex: 1;
 }
 
 /* ── Network Toggle ─────────────────────────────────────────── */
 .settings-network-toggle {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+  background: var(--kv2-card-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-card-radius);
+  box-shadow: var(--kv2-shadow-sm);
+  padding: 16px;
+  margin-bottom: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .settings-network-info {
@@ -272,28 +216,26 @@
 }
 
 .settings-network-title {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
-  font-size: 1rem;
-  color: var(--color-text);
+  font-size: var(--kv2-text-md);
   margin: 0;
 }
 
 .settings-network-desc {
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
-  color: var(--color-text);
-  opacity: 0.7;
-  margin: var(--space-1) 0 0 0;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  margin: 4px 0 0 0;
 }
 
-/* ── Toggle Switch (Neobrutalism) ───────────────────────────── */
+/* ── Toggle Switch ──────────────────────────────────────────── */
 .settings-toggle-switch {
   position: relative;
   width: 80px;
   height: 40px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-bg);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-bg);
   cursor: pointer;
   flex-shrink: 0;
   display: flex;
@@ -303,7 +245,7 @@
 }
 
 .settings-toggle-switch--on {
-  background: var(--color-primary);
+  background: var(--kv2-status-todo-accent);
 }
 
 .settings-toggle-knob {
@@ -311,9 +253,9 @@
   left: 4px;
   width: 28px;
   height: 28px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
-  box-shadow: 2px 2px 0 var(--border-color);
+  border: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-surface);
+  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
   transition: left 0.15s ease;
 }
 
@@ -324,11 +266,10 @@
 .settings-toggle-label {
   position: absolute;
   right: 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
   font-weight: 700;
-  color: var(--color-text);
-  opacity: 0.6;
+  color: var(--kv2-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -336,90 +277,91 @@
 .settings-toggle-switch--on .settings-toggle-label {
   right: auto;
   left: 8px;
-  color: white;
-  opacity: 1;
+  color: #fff;
 }
 
 /* ── Maintenance ────────────────────────────────────────────── */
 .settings-maintenance {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+  background: var(--kv2-card-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-card-radius);
+  box-shadow: var(--kv2-shadow-sm);
+  padding: 16px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .settings-maintenance-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .settings-maintenance-status {
-  border: 2px solid var(--border-color);
-  box-shadow: 2px 2px 0 var(--border-color);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-bg);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
   font-weight: 800;
   text-transform: uppercase;
-  padding: 4px var(--space-2);
+  padding: 4px 8px;
   flex-shrink: 0;
 }
 
 .settings-maintenance-status--running {
-  background: var(--color-warning);
+  background: var(--kv2-status-in-progress-accent);
 }
 
 .settings-maintenance-status--success {
-  background: var(--color-success);
-  color: white;
+  background: var(--kv2-status-done-accent);
+  color: #fff;
 }
 
 .settings-maintenance-status--fail {
-  background: var(--color-danger);
-  color: white;
+  background: var(--kv2-status-complete-accent);
+  color: #fff;
 }
 
 .settings-maintenance-message {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 2px solid var(--border-color);
-  background: var(--color-bg);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text);
+  padding: 8px 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
+  background: var(--kv2-bg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
 }
 
 .settings-maintenance-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 8px;
   align-items: center;
 }
 
 .settings-maintenance-reconnect {
-  border: 2px solid var(--border-color);
-  background: var(--color-warning);
-  padding: var(--space-2) var(--space-3);
-  font-family: var(--font-heading);
-  font-size: 0.8125rem;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-status-in-progress-accent);
+  padding: 8px 12px;
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xs);
   font-weight: 800;
-  color: var(--color-text);
 }
 
 .settings-maintenance-error {
-  border: 2px solid var(--border-color);
-  background: var(--color-danger);
-  color: white;
-  padding: var(--space-2) var(--space-3);
-  font-family: var(--font-heading);
-  font-size: 0.8125rem;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-status-complete-accent);
+  color: #fff;
+  padding: 8px 12px;
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xs);
   font-weight: 800;
 }
 
@@ -427,71 +369,65 @@
   max-height: 260px;
   overflow: auto;
   margin: 0;
-  padding: var(--space-3);
-  border: 2px solid var(--border-color);
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  padding: 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
+  background: var(--kv2-bg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.settings-maintenance-modal {
-  max-width: 640px;
-}
-
 .settings-maintenance-confirm {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  font-family: var(--font-body);
-  color: var(--color-text);
+  gap: 12px;
 }
 
 .settings-maintenance-confirm p {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: var(--kv2-text-base);
   line-height: 1.5;
 }
 
 .settings-maintenance-command-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 2px solid var(--border-color);
-  background: var(--color-bg);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
+  background: var(--kv2-bg);
 }
 
 .settings-maintenance-command-list code {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-
-/* ── Model Visibility Filter ──────────────────────────────────── */
+/* ── Model Visibility Filter ────────────────────────────────── */
 .settings-model-filter {
-  border: var(--border-width) solid var(--border-color);
-  box-shadow: var(--shadow);
-  background: var(--color-surface);
-  padding: var(--space-4);
-  margin-bottom: var(--space-4);
+  background: var(--kv2-card-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-card-radius);
+  box-shadow: var(--kv2-shadow-sm);
+  padding: 16px;
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .settings-model-filter-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-4);
+  gap: 16px;
 }
 
 .settings-model-filter-info {
@@ -501,59 +437,56 @@
 
 .settings-model-filter-actions {
   display: flex;
-  gap: var(--space-2);
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .settings-model-sync-status {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  opacity: 0.7;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
 }
 
 .settings-model-group-title {
-  margin: var(--space-2) 0 0;
-  font-family: var(--font-body);
-  font-size: 0.8125rem;
+  margin: 8px 0 0;
+  font-size: var(--kv2-text-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.75;
+  color: var(--kv2-text-secondary);
 }
 
 .settings-model-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: 4px;
   max-height: 300px;
   overflow-y: auto;
-  border: 2px solid var(--border-color);
-  padding: var(--space-2);
-  background: var(--color-bg);
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
+  padding: 8px;
+  background: var(--kv2-bg);
 }
 
 .settings-model-item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  gap: 8px;
+  padding: 4px 8px;
   cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 0.875rem;
+  font-size: var(--kv2-text-sm);
 }
 
 .settings-model-item:hover {
-  background: var(--color-surface);
+  background: var(--kv2-surface);
 }
 
 .settings-model-checkbox {
   width: 18px;
   height: 18px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
   cursor: pointer;
-  accent-color: var(--color-primary);
+  accent-color: var(--kv2-status-todo-accent);
   flex-shrink: 0;
 }
 
@@ -567,57 +500,35 @@
 }
 
 .settings-model-provider {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  opacity: 0.6;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
   flex-shrink: 0;
 }
 
-/* Command Visibility rows carry a long description, so give the name its own
-   intrinsic width (never clipped to 0) and let the meta text take the rest. */
-.settings-command-item {
-  align-items: flex-start;
-}
-
-.settings-command-name {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.settings-command-meta {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  opacity: 0.6;
-  flex: 1;
-  min-width: 0;
-  line-height: 1.35;
-}
-
-/* ── Font Scale Slider ────────────────────────────────────────── */
+/* ── Font Scale Slider ──────────────────────────────────────── */
 .settings-font-scale-control {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border: 2px solid var(--border-color);
-  background: var(--color-bg);
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 2px;
+  background: var(--kv2-bg);
 }
 
 .settings-font-scale-label {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
   font-size: 12px;
-  color: var(--color-text);
-  opacity: 0.5;
+  color: var(--kv2-text-muted);
   flex-shrink: 0;
   user-select: none;
 }
 
 .settings-font-scale-label--lg {
   font-size: 20px;
-  opacity: 0.7;
+  color: var(--kv2-text-secondary);
 }
 
 .settings-font-scale-slider {
@@ -625,7 +536,7 @@
   height: 6px;
   appearance: none;
   -webkit-appearance: none;
-  background: var(--border-color);
+  background: var(--kv2-border);
   border: none;
   outline: none;
   cursor: pointer;
@@ -635,39 +546,37 @@
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
-  border: var(--border-width) solid var(--border-color);
-  background: var(--color-surface);
-  box-shadow: 2px 2px 0 var(--border-color);
+  border: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-surface);
+  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
   cursor: grab;
 }
 
 .settings-font-scale-slider::-moz-range-thumb {
   width: 22px;
   height: 22px;
-  border: var(--border-width) solid var(--border-color);
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 0;
-  background: var(--color-surface);
-  box-shadow: 2px 2px 0 var(--border-color);
+  background: var(--kv2-surface);
+  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
   cursor: grab;
 }
 
 .settings-font-scale-slider:active::-webkit-slider-thumb {
   cursor: grabbing;
-  background: var(--color-primary);
+  background: var(--kv2-status-todo-accent);
 }
 
 .settings-font-scale-slider:active::-moz-range-thumb {
   cursor: grabbing;
-  background: var(--color-primary);
+  background: var(--kv2-status-todo-accent);
 }
 
 .settings-font-scale-value {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-weight: 700;
-  font-size: 13px;
-  color: var(--color-text);
+  font-size: var(--kv2-text-xs);
   min-width: 40px;
   text-align: right;
   flex-shrink: 0;
 }
-
