@@ -1,9 +1,8 @@
 /* =============================================================
    Global Base Styles — Agent Kanban
-   Applies design tokens to the root, body, and primitives.
+   Applies kv2 design tokens to the root, body, and primitives.
    ============================================================= */
 
-@import './tokens.css';
 @import './reset.css';
 
 html {
@@ -12,19 +11,19 @@ html {
 }
 
 body {
-  font-family: var(--font-body);
-  background-color: var(--color-bg);
-  color: var(--color-text);
+  font-family: var(--kv2-font-sans);
+  background-color: var(--kv2-bg);
+  color: var(--kv2-text-primary);
   min-height: 100vh;
 }
 
 /* Headings */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
 }
 
 h1 { font-size: 2.5rem; }
@@ -42,7 +41,7 @@ p {
 
 /* Code */
 code, pre, kbd, samp {
-  font-family: var(--font-mono);
+  font-family: var(--kv2-font-mono);
   font-size: 0.875em;
 }
 
@@ -58,24 +57,24 @@ a:hover {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
-  border-left: 1px solid var(--border-color);
+  background: var(--kv2-bg);
+  border-left: 1px solid var(--kv2-frame);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-text);
+  background: var(--kv2-text-primary);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
+  background: var(--kv2-status-todo-accent);
 }
 
 /* Selection */
 ::selection {
-  background: var(--color-warning);
-  color: var(--color-text);
+  background: var(--kv2-status-in-progress-accent);
+  color: var(--kv2-text-primary);
 }
 
 /* Focus visible */
 :focus-visible {
-  outline: var(--border-width) solid var(--color-primary);
+  outline: 3px solid var(--kv2-status-todo-accent);
   outline-offset: 2px;
 }

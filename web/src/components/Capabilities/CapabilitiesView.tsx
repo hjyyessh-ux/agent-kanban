@@ -268,7 +268,7 @@ export function CapabilitiesView({
   }
 
   return (
-    <div className="kv2 cap-view">
+    <div className="cap-view">
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="cap-header">
         <div className="cap-title-group">

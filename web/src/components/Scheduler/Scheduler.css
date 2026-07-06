@@ -6,23 +6,22 @@
    ============================================================= */
 
 /* ── Tab Navigation ──────────────────────────────────────────
-   App-wide tab strip; lives here for legacy reasons and still
-   rides the v1 tokens. Slated to move into a shared AppTabs
-   component during the neo retirement milestone. */
+   App-wide tab strip; lives here for legacy reasons (markup is in
+   shared/AppTabs). */
 .app-tabs {
   display: flex;
   gap: 0;
-  margin-left: var(--space-6);
+  margin-left: 24px;
 }
 
 .app-tab {
-  font-family: var(--font-heading);
+  font-family: var(--kv2-font-heading);
   font-weight: 800;
   font-size: 1.125rem;
-  padding: var(--space-3) var(--space-5);
+  padding: 12px 20px;
   background: transparent;
   border: none;
-  color: var(--color-text);
+  color: var(--kv2-text-primary);
   cursor: pointer;
   opacity: 0.65;
   border-bottom: 4px solid transparent;
@@ -37,7 +36,7 @@
 
 .app-tab--active {
   opacity: 1;
-  border-bottom-color: var(--color-primary);
+  border-bottom-color: var(--kv2-status-todo-accent);
 }
 
 /* ── Scheduler View ──────────────────────────────────────────── */

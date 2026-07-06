@@ -1,9 +1,6 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import './styles/reset.css';
-import './styles/tokens.css';
 import './styles/base.css';
-import './styles/components.css';
 import './styles/kanban-v2.tokens.css';
 import './styles/kanban-v2.components.css';
 import App from './App';

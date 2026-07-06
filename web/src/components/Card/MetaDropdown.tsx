@@ -108,7 +108,7 @@ export function useAnchoredPopover(minPopoverWidth = 200) {
  * popover content receives pointer events.
  */
 export const MetaPopoverPortal: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-  createPortal(<div className="kv2 kv2-meta-dropdown-portal">{children}</div>, document.body);
+  createPortal(<div className="kv2-meta-dropdown-portal">{children}</div>, document.body);
 
 export interface MetaSelectOption {
   value: string;

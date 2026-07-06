@@ -1748,7 +1748,7 @@
 }
 
 .kv2-card:focus-within {
-  outline: var(--border-width) solid var(--color-primary);
+  outline: 3px solid var(--kv2-status-todo-accent);
   outline-offset: 2px;
 }
 

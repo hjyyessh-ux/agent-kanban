@@ -36,7 +36,7 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
 
   return (
     <div
-      className="kv2 kv2-dialog-overlay"
+      className="kv2-dialog-overlay"
       ref={overlayRef}
       role="presentation"
     >

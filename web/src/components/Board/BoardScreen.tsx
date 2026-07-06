@@ -79,7 +79,7 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
   );
 
   return (
-    <div className="kv2">
+    <div>
       {viewMode === 'board' ? (
         <div className="kv2-board">
           {columns.map((col) => (

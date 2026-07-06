@@ -1,7 +1,7 @@
 /* =============================================================
    Capabilities — Kanban v2 design language
    Reuses the Board tab's kv2 tokens (fonts, radius, borders,
-   shadows). The view root carries the `.kv2` class so all
+   shadows). kv2 tokens are global (:root), so all
    --kv2-* tokens resolve.
    ============================================================= */
 
