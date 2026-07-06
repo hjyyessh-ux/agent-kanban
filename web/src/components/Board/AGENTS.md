@@ -34,7 +34,7 @@ Renders the kanban board itself: grid (column) view and list view, drag-and-drop
 - View models (`V2CardViewModel`, `V2ColumnViewModel`) are the contract between selectors and rendering — add new derived fields in `board-selectors.ts`, not inline in JSX.
 - Drag-and-drop is native HTML5 DnD (no external DnD library); reordering math lives in `getDragAfterElement` in `BoardColumn.tsx`.
 - Nested/subagent/worker child cards are modeled via `ChildItem`/`linkKind` and rendered through `NestedChildAccordion` in `BoardCardSections.tsx`.
-- Imports `../../styles/kanban-v2.tokens.css` and `../../styles/kanban-v2.components.css` (the `.kv2-*` design tokens) directly in `BoardScreen.tsx`.
+- kv2 tokens/components are loaded globally from `main.tsx`; `BoardScreen.tsx` imports no CSS itself.
 
 ### Testing Requirements
 - Colocate `*.test.ts`/`*.test.tsx` next to the source file; prefer testing exported pure functions (`getRowActionConfig`, `groupCardsByParent`, `confirmBoardCardDelete`, `selectColumns`) over full DOM rendering.

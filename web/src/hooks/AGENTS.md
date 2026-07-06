@@ -13,9 +13,10 @@ All web-side data flow lives here: raw `/api` wrappers, reducer-based domain hoo
 |------|----------|-------|
 | Change card API contract | `useKanbanApi.ts` | Cards, dispatch, screenshots, models, questions |
 | Change board reducer/polling/queue behavior | `useKanbanBoard.ts` | 3s polling, queue reorder, complete-all |
-| Change scheduler data flow | `useSchedulerApi.ts`, `useScheduler.ts` | 10s active-tab polling |
-| Change scripts data flow | `useScriptsApi.ts`, `useScripts.ts` | CRUD, run, sync, history |
-| Change settings data flow | `useSettingsApi.ts`, `useSettings.ts` | CRUD for settings entries |
+| Change shared list-CRUD state (entries/polling/errors) | `useCrudResource.ts` | Generic reducer behind the three hooks below |
+| Change scheduler data flow | `useSchedulerApi.ts`, `useScheduler.ts` | Thin wrapper over `useCrudResource` + toggle/run |
+| Change scripts data flow | `useScriptsApi.ts`, `useScripts.ts` | Thin wrapper over `useCrudResource` + run/sync |
+| Change settings data flow | `useSettingsApi.ts`, `useSettings.ts` | Thin wrapper over `useCrudResource` |
 | Change question overlay data flow | `useQuestionsApi.ts`, `useQuestions.ts` | 3s polling, reply/reject |
 | Change skills data flow | `useSkillsApi.ts`, `useSkills.ts` | Discovery + sync; registers dynamic skill commands via `src/core/commands.ts` |
 | Change skill-roots data flow | `useSkillRootsApi.ts`, `useSkillRoots.ts` | CRUD for scanned skill root directories |

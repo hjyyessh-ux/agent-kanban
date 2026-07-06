@@ -9,6 +9,7 @@ Small, domain-agnostic UI primitives reused across multiple component directorie
 ## Key Files
 | File | Description |
 |------|-------------|
+| `AppTabs.tsx` | Main section tab strip (`role="tablist"`, roving tabindex, Arrow/Home/End keys). Exports `MainTab`, `MAIN_TABS`, `TAB_IDS`, `PANEL_IDS` used by `App.tsx` for the tabpanel wiring. |
 | `ErrorAlert.tsx` | Reusable error banner (`role="alert"`, `aria-live="assertive"`) with a title, message, optional action button, and optional dismiss button. Supports `banner` (full-width) and `inline` variants via `.kv2-alert*` classes. Used by `Card/CreateCardDialog.tsx`, `Scheduler/SchedulerView.tsx`, `Scheduler/SchedulerJobModal.tsx`, `Settings/SettingsView.tsx`, `Settings/SettingsEntryModal.tsx`. |
 
 ## For AI Agents

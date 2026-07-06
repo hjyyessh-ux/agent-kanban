@@ -64,7 +64,7 @@
 - **Tool schema rule**: plugin tools use `tool.schema` and must return `string`.
 - **Server rule**: `Bun.serve()` only; every API response keeps CORS headers and `{ error: string }` failures.
 - **UI data flow**: raw `fetch()` lives in hooks, not components; polling is the default sync model.
-- **Styling**: plain CSS only; `.neo-*` classes and shared tokens drive component styling.
+- **Styling**: plain CSS only; kv2 tokens (`--kv2-*`) and primitives (`kv2-btn`, `kv2-input`, …) drive component styling.
 - **Persistence**: store classes own JSON reads/writes, temp-file rename, and dual locking.
 - **Doc hierarchy**: nearest `AGENTS.md` overrides parent guidance; child docs should contain local delta, not parent copy.
 - **Workflow contract**: card lifecycle, Telegram routing, feedback reuse, and sanitization boundaries are anchored in `docs/invariants.md` and must stay in sync with tests.

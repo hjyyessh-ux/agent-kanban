@@ -20,14 +20,14 @@ This directory itself contains no files — see Subdirectories below.
 | [Scripts](Scripts/AGENTS.md) | User-defined operational script CRUD, run history, and the scripts tab view. |
 | [Settings](Settings/AGENTS.md) | Key/value settings entries CRUD plus the self-update/maintenance panel. |
 | [Wiki](Wiki/AGENTS.md) | LLM-generated knowledge base view: config panel, force-directed doc graph, per-card wiki dialog. |
-| [shared](shared/AGENTS.md) | Small cross-cutting UI primitives reused across domains (currently just the error alert banner). |
+| [shared](shared/AGENTS.md) | Small cross-cutting UI primitives reused across domains (error alert banner, main tab strip). |
 
 ## For AI Agents
 ### Working In This Directory
-- **MUST READ before adding or changing any UI: [`docs/design-system.md`](../../../docs/design-system.md).** Board cards and the Card Detail dialog define the look; every screen reuses the kv2 primitives (`kv2-btn`, `kv2-input`, `kv2-badge`, …) and `Card/DialogSkeleton.tsx` for modals. No new `.neo-*` usage, no local overrides of `kv2-*` primitives, no hand-rolled modal overlays.
+- **MUST READ before adding or changing any UI: [`docs/design-system.md`](../../../docs/design-system.md).** Board cards and the Card Detail dialog define the look; every screen reuses the kv2 primitives (`kv2-btn`, `kv2-input`, `kv2-badge`, …) and `Card/DialogSkeleton.tsx` for modals. No local overrides of `kv2-*` primitives, no hand-rolled modal overlays.
 - Never fork DTOs — all shared types come from `src/core/types.ts` (imported via the `../../../../src/core/types` relative path from most component files).
 - `fetch()` calls belong in `web/src/hooks/*`, not in components. Components receive data/handlers as props or call hook-exported functions (e.g. `useScopeInventory`, `useSkillsApi`).
-- Each domain directory owns at most one `.css` file containing **layout only** (grid/flex/gap); colors, typography, and control looks come from kv2 tokens/primitives. Legacy `.neo-*`/domain-prefixed looks are being migrated out. No CSS-in-JS, no Tailwind.
+- Each domain directory owns at most one `.css` file containing **layout only** (grid/flex/gap) plus domain badge/status variants; colors, typography, and control looks come from kv2 tokens/primitives. No CSS-in-JS, no Tailwind.
 - Modals use `Card/DialogSkeleton.tsx` (overlay/backdrop/dialog structure, `useModalAccessibility` focus trap + Escape, optional size persistence). Do not build a bespoke overlay.
 - Resizable dialogs use `usePersistedDialogSize(storageKey, ref, defaultSize)` to remember width/height in localStorage.
 

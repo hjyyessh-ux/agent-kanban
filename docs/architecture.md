@@ -58,7 +58,7 @@ src/
 │   ├── telegram-state-store.ts # Telegram selected session / sticky defaults
 │   ├── filelock.ts          # cross-process file lock
 │   └── cron-parser.ts       # 자연어 cron 변환, 검증, 설명 생성
-├── plugin/                  # opencode 플러그인 레이어
+├── plugin/                  # 백엔드 런타임 (공유 부트스트랩 + opencode 플러그인 레이어)
 │   ├── index.ts             # store → runtime registry → tools → hooks → monitors
 │   ├── server.ts            # ServerMonitor — 자동 복구 서버
 │   ├── scheduler-engine.ts  # scheduler runtime

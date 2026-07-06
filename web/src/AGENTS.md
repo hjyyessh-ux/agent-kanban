@@ -25,7 +25,7 @@ web/src/
 ├── hooks/AGENTS.md         # API wrappers, reducers, polling, accessibility utilities
 ├── api/AGENTS.md           # Same-origin auth-token bootstrap wrapping window.fetch
 ├── constants/AGENTS.md     # Agent/command display metadata derived from src/core/
-├── styles/AGENTS.md        # Global CSS tokens + .neo-* (v1) / .kv2-* (v2 board) systems
+├── styles/AGENTS.md        # Global kv2 tokens + kv2/* component slices
 ├── utils/AGENTS.md         # Pure formatting/label/stale-state helper functions
 └── assets/                 # Static assets (images/icons)
 ```
@@ -45,7 +45,7 @@ web/src/
 | Change fetch/state/polling logic | `hooks/AGENTS.md` | Domain hook guide |
 | Change same-origin auth bootstrap | `api/AGENTS.md` | Wraps `window.fetch` with the install token |
 | Change agent/command display metadata | `constants/AGENTS.md` | Labels, colors, emoji sourced from `src/core/` |
-| Change global styling tokens | `styles/AGENTS.md` | `.neo-*` (v1, global) and `.kv2-*` (v2, board-only) |
+| Change global styling tokens | `styles/AGENTS.md` | kv2 tokens (`--kv2-*`) + `kv2/*` slices, global |
 | Change shared formatting/label helpers | `utils/AGENTS.md` | Pure functions, no fetch/state |
 
 ## CONVENTIONS
@@ -53,7 +53,7 @@ web/src/
 - Shared backend types are imported by relative path from `src/core/types.ts`.
 - Components stay mostly prop-driven; network/state logic belongs in hooks.
 - Board and questions poll every 3 seconds; scheduler, scripts, and settings poll every 10 seconds when their tab is active.
-- Styling stays in plain CSS; `.neo-*` primitives and local component CSS files are the norm.
+- Styling stays in plain CSS; kv2 primitives and layout-only local component CSS files are the norm.
 - No router: tab state in `App.tsx` drives all navigation.
 
 ## ANTI-PATTERNS

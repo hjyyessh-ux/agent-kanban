@@ -204,13 +204,15 @@ http://localhost:5173
 
 개발 서버는 API 요청을 24680번 포트의 백엔드 서버로 프록시합니다. 웹 UI와 백엔드 서버를 별도 터미널에서 동시에 실행해야 합니다.
 
-### 플러그인 직접 실행
+### 백엔드 직접 실행
 
-빌드 없이 플러그인을 직접 실행하여 백엔드 서버만 띄울 수 있습니다.
+빌드 없이 standalone daemon(기본 진입점)을 직접 실행하여 백엔드 서버만 띄울 수 있습니다.
 
 ```bash
-bun run dev:plugin
+bun start
 ```
+
+opencode plugin runtime이 필요하면 `bun run dev:plugin`을 사용합니다.
 
 ---
 

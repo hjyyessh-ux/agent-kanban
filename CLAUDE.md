@@ -23,7 +23,7 @@ bun run test:e2e           # Playwright e2e (sequential, port 24681)
 Bun plugin backend + React/Vite SPA. JSON file persistence under `~/.agent-kanban/`, resolved by `resolveKanbanDataDir()` in `src/core/data-dir.ts` (overridable via `KANBAN_DATA_DIR`).
 
 - **`src/core/`** — Shared types (`types.ts`), stores, file locking, agent config
-- **`src/plugin/`** — @opencode-ai/plugin runtime: tools, hooks, dispatch, Telegram, schedulers
+- **`src/plugin/`** — Backend runtime: shared boot wiring (`bootstrap.ts`), opencode plugin entrypoint, tools, hooks, dispatch, Telegram, schedulers
 - **`src/server/`** — `Bun.serve()` HTTP + REST routes (`routes.ts`) + static SPA serving
 - **`web/src/`** — React SPA: `App.tsx` owns tabs/modals; hooks do fetching/polling; plain CSS
 - **`e2e/`** — Playwright specs with API seed helpers, `.e2e-data/` isolation
@@ -38,7 +38,7 @@ Bun plugin backend + React/Vite SPA. JSON file persistence under `~/.agent-kanba
 - **Tools**: use `tool.schema` for validation, always return `string`.
 - **Server**: `Bun.serve()` only. All responses include CORS headers. Errors return `{ error: string }`.
 - **UI hooks**: `fetch()` lives in hooks, not components. Polling is the sync model (board 3s, others 10s).
-- **Styling**: plain CSS on the kv2 design system — read `docs/design-system.md` before any UI work. kv2 primitives (`kv2-btn`, `kv2-input`, …) + `DialogSkeleton` for modals; `.neo-*` is legacy under retirement. No CSS-in-JS or utility frameworks.
+- **Styling**: plain CSS on the kv2 design system — read `docs/design-system.md` before any UI work. kv2 primitives (`kv2-btn`, `kv2-input`, …) + `DialogSkeleton` for modals; the legacy `.neo-*` system is fully retired. No CSS-in-JS or utility frameworks.
 - **Persistence**: each domain has its own JSON store with temp-file atomic writes and dual locking.
 
 ## Workflow Invariants

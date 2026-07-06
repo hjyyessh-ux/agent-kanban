@@ -9,8 +9,7 @@ CRUD and execution UI for user-defined operational scripts (bash/other languages
 ## Key Files
 | File | Description |
 |------|-------------|
-| `ScriptsView.tsx` | Standalone tab container for scripts: list, create, edit, delete, run, and sync entries. |
-| `ScriptEditModal.tsx` | Create/edit form for a `ScriptEntry` — name, description, language, content, optional project directory. Reused by both this directory's `ScriptsView` and `Capabilities/CapabilitiesView.tsx`. |
+| `ScriptEditModal.tsx` | Create/edit form for a `ScriptEntry` — name, description, language, content, optional project directory. Rendered from `Capabilities/CapabilitiesView.tsx` (there is no standalone Scripts tab). |
 | `ScriptHistoryPanel.tsx` | Modal showing a script's past `ScriptRun`s, fetched via `fetchScriptHistory`. Reused by `Capabilities/CapabilitiesView.tsx` as well. |
 | `Scripts.css` | `.scripts-*` styling; also imported by `Capabilities.css`'s consumers since scripts render inside the Capabilities list view. |
 

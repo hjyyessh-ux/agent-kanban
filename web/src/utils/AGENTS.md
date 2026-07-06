@@ -14,6 +14,8 @@ Small, pure, stateless helper functions shared across components — label forma
 | `stale-visibility.ts` | `shouldShowStaleStatus(card)` and `staleCardVisualState(card)` decide whether/how a card's stale badge (`orphan` \| `stuck`) should render, based on `status === 'in_progress'` plus `staleStatus`/`staleDetectedAt` presence. |
 | `resume-command.ts` | `buildResumeCommand(runtime, sessionId, projectDir)` builds the shell-quoted CLI command to resume a session for a given `AgentRuntime` (`codex resume`, `claude --resume`, or `opencode session`), prefixed with `cd <projectDir> &&` when a project directory is set. |
 | `resume-command.test.ts` | Unit tests for `buildResumeCommand()` across runtimes and quoting edge cases. |
+| `cardUpdate.ts` | `applyCardUpdates(card, updates)` merges an `UpdateCardInput` into a `KanbanCard` with the API's semantics: `undefined` keeps, `null` deletes the optional field, values replace. Used by `App.tsx`'s detail-dialog `onUpdate`. |
+| `cardUpdate.test.ts` | Unit tests for the keep/delete/replace contract and non-mutation of the input card. |
 | `stale-visibility.test.ts` | Unit tests for `shouldShowStaleStatus()`/`staleCardVisualState()`. |
 
 ## For AI Agents

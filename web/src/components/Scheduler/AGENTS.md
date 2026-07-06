@@ -24,7 +24,7 @@ Cron-style scheduled job management tab: list existing schedules, create/edit a 
 - No colocated tests currently. Cron parsing edge cases and action-type validation are good candidates for extraction + unit testing if added.
 
 ### Common Patterns
-- List + modal + history-panel is the same three-part shape as `Scripts/` (`ScriptsView` / `ScriptEditModal` / `ScriptHistoryPanel`) — check that directory for a consistent implementation when changing shared UX (e.g. relative-time formatting, run-status badges).
+- List + modal + history-panel mirrors `Scripts/` (`ScriptEditModal` / `ScriptHistoryPanel`, driven from the Capabilities tab) — check that directory for a consistent implementation when changing shared UX (e.g. relative-time formatting, run-status badges).
 
 ## Dependencies
 ### Internal

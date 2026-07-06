@@ -88,7 +88,7 @@ opencode plugin으로 로드되면 서버가 자동으로 시작됩니다. Codex
 
 ```bash
 # Terminal 1
-bun run dev:daemon
+bun start       # standalone daemon (기본 진입점)
 
 # Terminal 2
 bun run dev
@@ -207,10 +207,10 @@ Capabilities는 기존 Skills 중심 화면을 확장한 통합 실행 자산 �
 ## 개발
 
 ```bash
-bun run build       # plugin과 web UI build
+bun run build       # backend(daemon+plugin)와 web UI build
+bun start           # standalone daemon 실행 (기본 진입점)
 bun run dev         # Vite dev server on 5173
-bun run dev:plugin  # plugin/server runtime 직접 실행
-bun run dev:daemon  # Codex/Claude hook flow용 standalone daemon
+bun run dev:plugin  # opencode plugin runtime 직접 실행
 bunx tsc --noEmit   # typecheck
 bun test            # unit/integration tests
 bun run test:e2e    # Playwright specs

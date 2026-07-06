@@ -75,7 +75,7 @@ DialogSkeleton이 제공하는 계약:
 
 ## 금지 패턴
 
-- ❌ 신규 `.neo-*` 사용 (레거시 — 폐기 진행 중)
+- ❌ `.neo-*` 재도입 (레거시 시스템은 완전히 폐기됨)
 - ❌ 프리미티브 클래스의 로컬 재정의 (`.my-screen .kv2-btn { … }`)
 - ❌ 자체 모달 오버레이/백드롭 구현
 - ❌ `kanban-v2.components.css` 배럴 밖에서 kv2 파일 직접 import
