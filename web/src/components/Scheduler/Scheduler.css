@@ -5,40 +5,6 @@
    specific variants. See docs/design-system.md.
    ============================================================= */
 
-/* ── Tab Navigation ──────────────────────────────────────────
-   App-wide tab strip; lives here for legacy reasons (markup is in
-   shared/AppTabs). */
-.app-tabs {
-  display: flex;
-  gap: 0;
-  margin-left: 24px;
-}
-
-.app-tab {
-  font-family: var(--kv2-font-heading);
-  font-weight: 800;
-  font-size: 1.125rem;
-  padding: 12px 20px;
-  background: transparent;
-  border: none;
-  color: var(--kv2-text-primary);
-  cursor: pointer;
-  opacity: 0.65;
-  border-bottom: 4px solid transparent;
-  transition: opacity 0.15s, border-color 0.15s;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.app-tab:hover {
-  opacity: 0.7;
-}
-
-.app-tab--active {
-  opacity: 1;
-  border-bottom-color: var(--kv2-status-todo-accent);
-}
-
 /* ── Scheduler View ──────────────────────────────────────────── */
 .scheduler-view {
   max-width: 960px;

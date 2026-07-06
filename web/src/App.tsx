@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { BoardFilterBar } from './components/Board/BoardFilterBar';
 import { BoardProjectSwitcher } from './components/Board/BoardProjectSwitcher';
 import { BoardScreen } from './components/Board/BoardScreen';
@@ -10,6 +10,8 @@ import { CreateCardDialog } from './components/Card/CreateCardDialog';
 import { SchedulerView } from './components/Scheduler/SchedulerView';
 import { SettingsView } from './components/Settings/SettingsView';
 import { ErrorAlert } from './components/shared/ErrorAlert';
+import { AppTabs, PANEL_IDS, TAB_IDS, type MainTab } from './components/shared/AppTabs';
+import { applyCardUpdates } from './utils/cardUpdate';
 import { useSettings } from './hooks/useSettings';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { useScheduler } from './hooks/useScheduler';
@@ -61,9 +63,6 @@ function extractFeedbackBase(rawTitle: string | undefined): { base: string; leve
 const BOARD_VIEW_MODE_STORAGE_KEY = 'kanban-board-view-mode';
 const COMPLETE_SESSION_VIEW_STORAGE_KEY = 'kanban-complete-session-view';
 
-type MainTab = 'board' | 'wiki' | 'scheduler' | 'capabilities' | 'settings';
-const MAIN_TABS: MainTab[] = ['board', 'wiki', 'capabilities', 'scheduler', 'settings'];
-
 function getStoredBoardViewMode(): 'board' | 'list' {
   if (typeof localStorage === 'undefined') return 'board';
 
@@ -83,13 +82,6 @@ export default function App() {
   const [boardViewMode, setBoardViewMode] = useState<'board' | 'list'>(getStoredBoardViewMode);
   const [groupCompleteSessions, setGroupCompleteSessions] = useState(getStoredCompleteSessionView);
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
-  const tabRefs = useRef<Record<MainTab, HTMLButtonElement | null>>({
-    board: null,
-    wiki: null,
-    scheduler: null,
-    capabilities: null,
-    settings: null,
-  });
   const scheduler = useScheduler(activeTab === 'scheduler');
   const scripts = useScripts(activeTab === 'capabilities');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
@@ -101,22 +93,6 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const tabIds = {
-    board: 'app-tab-board',
-    wiki: 'app-tab-wiki',
-    scheduler: 'app-tab-scheduler',
-    capabilities: 'app-tab-capabilities',
-    settings: 'app-tab-settings',
-  } as const;
-
-  const panelIds = {
-    board: 'app-panel-board',
-    wiki: 'app-panel-wiki',
-    scheduler: 'app-panel-scheduler',
-    capabilities: 'app-panel-capabilities',
-    settings: 'app-panel-settings',
-  } as const;
-
   useEffect(() => {
     setSelectedCard((prev) => {
       if (!prev) return prev;
@@ -148,46 +124,6 @@ export default function App() {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(COMPLETE_SESSION_VIEW_STORAGE_KEY, String(groupCompleteSessions));
   }, [groupCompleteSessions]);
-
-  const activateTab = (tab: MainTab, shouldFocus = false) => {
-    setActiveTab(tab);
-
-    if (shouldFocus) {
-      requestAnimationFrame(() => {
-        tabRefs.current[tab]?.focus();
-      });
-    }
-  };
-
-  const handleTabKeyDown = (
-    event: React.KeyboardEvent<HTMLButtonElement>,
-    currentTab: MainTab,
-  ) => {
-    const currentIndex = MAIN_TABS.indexOf(currentTab);
-
-    if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      activateTab(MAIN_TABS[(currentIndex + 1) % MAIN_TABS.length], true);
-      return;
-    }
-
-    if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      activateTab(MAIN_TABS[(currentIndex - 1 + MAIN_TABS.length) % MAIN_TABS.length], true);
-      return;
-    }
-
-    if (event.key === 'Home') {
-      event.preventDefault();
-      activateTab('board', true);
-      return;
-    }
-
-    if (event.key === 'End') {
-      event.preventDefault();
-      activateTab('settings', true);
-    }
-  };
 
   const answerQuestionAndRefresh = async (questionId: string, answers: string[][]) => {
     await replyQuestion(questionId, answers);
@@ -294,88 +230,7 @@ export default function App() {
       <header className="app-header">
         <div className="app-header-inner">
           <h1 className="app-title">Agent Kanban</h1>
-          <div className="app-tabs" role="tablist" aria-label="Main sections">
-            <button
-              type="button"
-              ref={(element) => {
-                tabRefs.current.board = element;
-              }}
-              id={tabIds.board}
-              role="tab"
-              aria-selected={activeTab === 'board'}
-              aria-controls={panelIds.board}
-              tabIndex={activeTab === 'board' ? 0 : -1}
-              className={`app-tab${activeTab === 'board' ? ' app-tab--active' : ''}`}
-              onClick={() => activateTab('board')}
-              onKeyDown={(event) => handleTabKeyDown(event, 'board')}
-            >
-              Board
-            </button>
-            <button
-              type="button"
-              ref={(element) => {
-                tabRefs.current.wiki = element;
-              }}
-              id={tabIds.wiki}
-              role="tab"
-              aria-selected={activeTab === 'wiki'}
-              aria-controls={panelIds.wiki}
-              tabIndex={activeTab === 'wiki' ? 0 : -1}
-              className={`app-tab${activeTab === 'wiki' ? ' app-tab--active' : ''}`}
-              onClick={() => activateTab('wiki')}
-              onKeyDown={(event) => handleTabKeyDown(event, 'wiki')}
-            >
-              Wiki
-            </button>
-            <button
-              type="button"
-              ref={(element) => {
-                tabRefs.current.capabilities = element;
-              }}
-              id={tabIds.capabilities}
-              role="tab"
-              aria-selected={activeTab === 'capabilities'}
-              aria-controls={panelIds.capabilities}
-              tabIndex={activeTab === 'capabilities' ? 0 : -1}
-              className={`app-tab${activeTab === 'capabilities' ? ' app-tab--active' : ''}`}
-              onClick={() => activateTab('capabilities')}
-              onKeyDown={(event) => handleTabKeyDown(event, 'capabilities')}
-            >
-              Capabilities
-            </button>
-            <button
-              type="button"
-              ref={(element) => {
-                tabRefs.current.scheduler = element;
-              }}
-              id={tabIds.scheduler}
-              role="tab"
-              aria-selected={activeTab === 'scheduler'}
-              aria-controls={panelIds.scheduler}
-              tabIndex={activeTab === 'scheduler' ? 0 : -1}
-              className={`app-tab${activeTab === 'scheduler' ? ' app-tab--active' : ''}`}
-              onClick={() => activateTab('scheduler')}
-              onKeyDown={(event) => handleTabKeyDown(event, 'scheduler')}
-            >
-              Scheduler
-            </button>
-            <button
-              type="button"
-              ref={(element) => {
-                tabRefs.current.settings = element;
-              }}
-              id={tabIds.settings}
-              role="tab"
-              aria-selected={activeTab === 'settings'}
-              aria-controls={panelIds.settings}
-              tabIndex={activeTab === 'settings' ? 0 : -1}
-              className={`app-tab${activeTab === 'settings' ? ' app-tab--active' : ''}`}
-              onClick={() => activateTab('settings')}
-              onKeyDown={(event) => handleTabKeyDown(event, 'settings')}
-            >
-              Settings
-            </button>
-          </div>
+          <AppTabs activeTab={activeTab} onActivate={setActiveTab} />
           {activeTab === 'board' && (
             <div className="app-board-view-controls">
               <BoardFilterBar
@@ -432,9 +287,9 @@ export default function App() {
 
       <main
         className="app-main"
-        id={panelIds[activeTab]}
+        id={PANEL_IDS[activeTab]}
         role="tabpanel"
-        aria-labelledby={tabIds[activeTab]}
+        aria-labelledby={TAB_IDS[activeTab]}
       >
         {activeTab === 'board' ? (
           <>
@@ -590,58 +445,7 @@ export default function App() {
           }}
            onUpdate={(id, updates) => {
              updateCard(id, updates);
-              const {
-                title,
-                description,
-                projectDir,
-                model,
-                agentRuntime,
-                agentType,
-                codexOptions,
-                claudeOptions,
-                queueSessionMode,
-                resumeSessionId,
-                command,
-                arguments: commandArguments,
-                favorite,
-              } = updates;
-              setSelectedCard(prev => {
-                if (!prev) return null;
-                const nextCard: KanbanCard = {
-                 ...prev,
-                 ...(title !== undefined && { title }),
-                  ...(description !== undefined && { description }),
-                  ...(projectDir !== undefined && { projectDir }),
-                  ...(agentRuntime !== undefined && { agentRuntime }),
-                  ...(favorite !== undefined && { favorite }),
-                };
-
-                  if (model === null) delete nextCard.model;
-                  else if (model !== undefined) nextCard.model = model;
-
-                  if (agentType === null) delete nextCard.agentType;
-                  else if (agentType !== undefined) nextCard.agentType = agentType;
-
-                  if (codexOptions === null) delete nextCard.codexOptions;
-                  else if (codexOptions !== undefined) nextCard.codexOptions = codexOptions;
-
-                  if (claudeOptions === null) delete nextCard.claudeOptions;
-                  else if (claudeOptions !== undefined) nextCard.claudeOptions = claudeOptions;
-
-                  if (queueSessionMode === null) delete nextCard.queueSessionMode;
-                  else if (queueSessionMode !== undefined) nextCard.queueSessionMode = queueSessionMode;
-
-                  if (resumeSessionId === null) delete nextCard.resumeSessionId;
-                  else if (resumeSessionId !== undefined) nextCard.resumeSessionId = resumeSessionId;
-
-                if (command === null) delete nextCard.command;
-                else if (command !== undefined) nextCard.command = command;
-
-               if (commandArguments === null) delete nextCard.arguments;
-               else if (commandArguments !== undefined) nextCard.arguments = commandArguments;
-
-               return nextCard;
-             });
+             setSelectedCard(prev => (prev ? applyCardUpdates(prev, updates) : null));
            }}
           onCreateFeedback={handleCreateFeedback}
           question={selectedCard?.sessionId ? questions.find(q => q.sessionID === selectedCard.sessionId) : undefined}

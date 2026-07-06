@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import type { ScriptEntry, ScriptSyncResult, CreateScriptInput, UpdateScriptInput } from '../../../src/core/types';
 import {
   fetchScripts,
@@ -8,49 +8,7 @@ import {
   runScript as apiRunScript,
   syncScripts as apiSyncScripts,
 } from './useScriptsApi';
-import { usePolling } from './usePolling';
-
-interface ScriptsState {
-  entries: ScriptEntry[];
-  loading: boolean;
-  error: string | null;
-}
-
-type ScriptsAction =
-  | { type: 'LOAD'; entries: ScriptEntry[] }
-  | { type: 'CREATE'; entry: ScriptEntry }
-  | { type: 'UPDATE'; entry: ScriptEntry }
-  | { type: 'DELETE'; id: string }
-  | { type: 'SET_ERROR'; error: string }
-  | { type: 'SET_LOADING'; loading: boolean };
-
-function scriptsReducer(state: ScriptsState, action: ScriptsAction): ScriptsState {
-  switch (action.type) {
-    case 'LOAD':
-      return { ...state, entries: action.entries, loading: false, error: null };
-    case 'CREATE':
-      return { ...state, entries: [...state.entries, action.entry] };
-    case 'UPDATE':
-      return {
-        ...state,
-        entries: state.entries.map((e) => (e.id === action.entry.id ? action.entry : e)),
-      };
-    case 'DELETE':
-      return { ...state, entries: state.entries.filter((e) => e.id !== action.id) };
-    case 'SET_ERROR':
-      return { ...state, error: action.error, loading: false };
-    case 'SET_LOADING':
-      return { ...state, loading: action.loading };
-    default:
-      return state;
-  }
-}
-
-const initialState: ScriptsState = {
-  entries: [],
-  loading: true,
-  error: null,
-};
+import { useCrudResource } from './useCrudResource';
 
 export function useScripts(enabled: boolean): {
   entries: ScriptEntry[];
@@ -63,70 +21,32 @@ export function useScripts(enabled: boolean): {
   refreshEntries: () => Promise<void>;
   syncEntries: () => Promise<ScriptSyncResult>;
 } {
-  const [state, dispatch] = useReducer(scriptsReducer, initialState);
+  const resource = useCrudResource<ScriptEntry, CreateScriptInput, UpdateScriptInput, string>({
+    enabled,
+    fetchAll: fetchScripts,
+    create: apiCreateScript,
+    update: apiUpdateScript,
+    remove: apiDeleteScript,
+    fallbackMessages: {
+      fetch: 'Failed to fetch scripts',
+      create: 'Failed to create script',
+      update: 'Failed to update script',
+      delete: 'Failed to delete script',
+    },
+    makeError: (_action, message) => message,
+  });
 
-  const refreshEntries = useCallback(async () => {
-    try {
-      const entries = await fetchScripts();
-      dispatch({ type: 'LOAD', entries });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch scripts';
-      dispatch({ type: 'SET_ERROR', error: message });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (enabled) {
-      void refreshEntries();
-    }
-  }, [enabled, refreshEntries]);
-
-  usePolling(refreshEntries, 10000, enabled);
-
-  const createEntry = useCallback(async (input: CreateScriptInput): Promise<ScriptEntry> => {
-    try {
-      const entry = await apiCreateScript(input);
-      dispatch({ type: 'CREATE', entry });
-      return entry;
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create script';
-      dispatch({ type: 'SET_ERROR', error: message });
-      throw err;
-    }
-  }, []);
-
-  const updateEntry = useCallback(async (id: string, input: UpdateScriptInput) => {
-    try {
-      const entry = await apiUpdateScript(id, input);
-      dispatch({ type: 'UPDATE', entry });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to update script';
-      dispatch({ type: 'SET_ERROR', error: message });
-      throw err;
-    }
-  }, []);
-
-  const deleteEntry = useCallback(async (id: string) => {
-    try {
-      await apiDeleteScript(id);
-      dispatch({ type: 'DELETE', id });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to delete script';
-      dispatch({ type: 'SET_ERROR', error: message });
-      throw err;
-    }
-  }, []);
+  const { reportError, refreshEntries } = resource;
 
   const runEntry = useCallback(async (id: string) => {
     try {
       await apiRunScript(id);
       await refreshEntries();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to run script';
-      dispatch({ type: 'SET_ERROR', error: message });
+      reportError('run', err, 'Failed to run script');
       throw err;
     }
-  }, [refreshEntries]);
+  }, [refreshEntries, reportError]);
 
   const syncEntries = useCallback(async (): Promise<ScriptSyncResult> => {
     try {
@@ -134,21 +54,20 @@ export function useScripts(enabled: boolean): {
       await refreshEntries();
       return result;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to sync scripts';
-      dispatch({ type: 'SET_ERROR', error: message });
+      reportError('sync', err, 'Failed to sync scripts');
       throw err;
     }
-  }, [refreshEntries]);
+  }, [refreshEntries, reportError]);
 
   return {
-    entries: state.entries,
-    loading: state.loading,
-    error: state.error,
-    createEntry,
-    updateEntry,
-    deleteEntry,
+    entries: resource.entries,
+    loading: resource.loading,
+    error: resource.error,
+    createEntry: resource.createEntry,
+    updateEntry: resource.updateEntry,
+    deleteEntry: resource.deleteEntry,
     runEntry,
-    refreshEntries,
+    refreshEntries: resource.refreshEntries,
     syncEntries,
   };
 }

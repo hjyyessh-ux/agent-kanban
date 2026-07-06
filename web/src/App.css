@@ -15,6 +15,38 @@
   z-index: 100;
 }
 
+/* ── Tab Navigation (markup in shared/AppTabs) ─────────────── */
+.app-tabs {
+  display: flex;
+  gap: 0;
+  margin-left: 24px;
+}
+
+.app-tab {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: 1.125rem;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  color: var(--kv2-text-primary);
+  cursor: pointer;
+  opacity: 0.65;
+  border-bottom: 4px solid transparent;
+  transition: opacity 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-tab:hover {
+  opacity: 0.7;
+}
+
+.app-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--kv2-status-todo-accent);
+}
+
 .app-header-inner {
   padding: 0 calc(5% + 30px);
   display: flex;
@@ -224,7 +256,39 @@
 }
 
 @media (max-width: 900px) {
-  .app-header-inner {
+  /* ── Tab Navigation (markup in shared/AppTabs) ─────────────── */
+.app-tabs {
+  display: flex;
+  gap: 0;
+  margin-left: 24px;
+}
+
+.app-tab {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: 1.125rem;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  color: var(--kv2-text-primary);
+  cursor: pointer;
+  opacity: 0.65;
+  border-bottom: 4px solid transparent;
+  transition: opacity 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-tab:hover {
+  opacity: 0.7;
+}
+
+.app-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--kv2-status-todo-accent);
+}
+
+.app-header-inner {
     align-items: flex-start;
   }
 
@@ -251,7 +315,39 @@
 }
 
 @media (max-width: 520px) {
-  .app-header-inner {
+  /* ── Tab Navigation (markup in shared/AppTabs) ─────────────── */
+.app-tabs {
+  display: flex;
+  gap: 0;
+  margin-left: 24px;
+}
+
+.app-tab {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: 1.125rem;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  color: var(--kv2-text-primary);
+  cursor: pointer;
+  opacity: 0.65;
+  border-bottom: 4px solid transparent;
+  transition: opacity 0.15s, border-color 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.app-tab:hover {
+  opacity: 0.7;
+}
+
+.app-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--kv2-status-todo-accent);
+}
+
+.app-header-inner {
     padding: 0 calc(5% + 30px);
     gap: 12px;
   }
