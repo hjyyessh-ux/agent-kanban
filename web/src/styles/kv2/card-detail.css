@@ -10,17 +10,6 @@
   gap: 0;
 }
 
-.kv2-detail-accent-bar {
-  position: absolute;
-  left: -2px;
-  top: -2px;
-  width: 16px;
-  height: calc(100% + 4px);
-  background: var(--kv2-dialog-accent, #3b82f6);
-  border-radius: 12px 0 0 12px;
-  z-index: 1;
-}
-
 .kv2-detail-divider {
   height: 1px;
   background: #cbd5e1;
@@ -84,13 +73,6 @@
 .kv2-title-block {
   flex: 1;
   min-width: 0;
-}
-
-.kv2-title-row-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-left: auto;
 }
 
 .kv2-status-row-meta {
@@ -198,17 +180,6 @@
   color: #fff;
 }
 
-.kv2-status-inline-note {
-  font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-muted);
-  font-style: italic;
-}
-
-.kv2-detail-hero-supporting {
-  font-size: var(--kv2-text-sm);
-  color: var(--kv2-text-secondary);
-}
-
 .kv2-detail-layout {
   display: flex;
   flex-direction: column;
@@ -246,22 +217,6 @@
   gap: 16px;
 }
 
-.kv2-detail-primary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 48px;
-  gap: 8px;
-}
-
-.kv2-detail-primary-copy {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: var(--kv2-text-2xl);
-  color: #6b7280;
-}
-
 .kv2-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
@@ -283,31 +238,6 @@
 .kv2-panel-subtitle {
   font-size: var(--kv2-text-md-plus);
   color: #94a3b8;
-}
-
-.kv2-id-copyable {
-  cursor: pointer;
-  font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-2xl);
-  color: #94a3b8;
-  background: #ffffff;
-  border: 1px solid #1f2233;
-  border-radius: 999px;
-  padding: 0 16px;
-  height: 44px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.kv2-id-copyable:hover {
-  color: var(--kv2-text-primary);
-}
-
-.kv2-id-copied {
-  color: var(--kv2-status-done-accent);
-}
-
-.kv2-detail-card-id {
 }
 
 /* ── Create Dialog Layout (Penpot single-column) ─────────── */
@@ -467,20 +397,6 @@
 
 .kv2-create-input-row .kv2-create-input {
   flex: 1;
-}
-
-.kv2-create-aux-btn {
-  height: 42px;
-  padding: 0 16px;
-  border: 2px solid #1f2233;
-  border-radius: 6px;
-  background: #f8fafc;
-  font-size: var(--kv2-text-base);
-  font-weight: 700;
-  color: #1f2233;
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: var(--kv2-font-sans);
 }
 
 .kv2-directory-picker {
@@ -1231,28 +1147,6 @@
   flex-shrink: 0;
 }
 
-.kv2-create-field-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.kv2-create-attach-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 34px;
-  padding: 0 14px;
-  border: 2px solid #1f2233;
-  border-radius: 6px;
-  background: #facc15;
-  font-size: var(--kv2-text-sm);
-  font-weight: 700;
-  color: #1f2233;
-  cursor: pointer;
-  font-family: var(--kv2-font-sans);
-}
-
 .kv2-create-drop-zone {
   position: relative;
   display: flex;
@@ -1327,39 +1221,6 @@
   }
 }
 
-.kv2-create-session-mode {
-  background: #fff6e1;
-  border: 1.5px dashed #3b82f6;
-  border-radius: 6px;
-  padding: 0;
-  overflow: hidden;
-}
-
-.kv2-create-session-mode-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 16px;
-  background: #facc15;
-}
-
-.kv2-create-session-mode-label {
-  font-size: var(--kv2-text-xs);
-  font-weight: 700;
-  color: #1f2233;
-  text-transform: uppercase;
-}
-
-.kv2-create-session-mode-badge {
-  font-size: var(--kv2-text-xs);
-  font-weight: 700;
-  color: #1f2233;
-  background: #ffffff;
-  border: 1px solid #1f2233;
-  border-radius: 4px;
-  padding: 2px 6px;
-}
-
 .kv2-create-radio-label {
   display: flex;
   gap: 10px;
@@ -1374,11 +1235,6 @@
   color: #1f2233;
 }
 
-.kv2-create-radio-desc {
-  font-size: var(--kv2-text-xs);
-  color: #94a3b8;
-}
-
 .kv2-form-group {
   display: flex;
   flex-direction: column;
@@ -1386,96 +1242,6 @@
 }
 
 .kv2-form-group--embedded {
-}
-
-/* ── Agent Selector ───────────────────────────────────────── */
-.kv2-agent-selector {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.kv2-agent-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
-  background: var(--kv2-surface);
-  cursor: pointer;
-  font-size: var(--kv2-text-xs);
-  transition: all var(--kv2-transition-fast);
-}
-
-.kv2-agent-btn:hover {
-  border-color: var(--kv2-border-strong);
-}
-
-.kv2-agent-btn--stacked {
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 10px;
-  min-width: 72px;
-  text-align: center;
-}
-
-.kv2-agent-btn--active {
-  border-color: var(--kv2-border-strong);
-  background: var(--kv2-bg);
-  box-shadow: 2px 2px 0 var(--kv2-border-strong);
-}
-
-.kv2-agent-btn-emoji {
-  font-size: 1.2em;
-}
-
-.kv2-agent-btn-label {
-  font-weight: 600;
-}
-
-.kv2-agent-btn-subtitle {
-  font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-muted);
-}
-
-.kv2-agent-selector-compact {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  background: #ffffff;
-  border: 1px solid #1f2233;
-  border-radius: 6px;
-  padding: 6px;
-  box-shadow: var(--kv2-shadow-sm);
-  z-index: 20;
-  margin-top: 4px;
-}
-
-.kv2-agent-btn-compact {
-  padding: 3px 8px;
-  border: 1px solid var(--kv2-border);
-  font-size: var(--kv2-text-xs);
-  cursor: pointer;
-  background: var(--kv2-surface);
-}
-
-.kv2-agent-btn-compact--selected {
-  border-color: var(--kv2-border-strong);
-  background: var(--kv2-bg);
-  font-weight: 700;
-}
-
-.kv2-agent-emoji {
-  font-size: 1em;
-}
-
-.kv2-agent-label {
-  font-weight: 600;
-  font-size: var(--kv2-text-xs);
 }
 
 /* ── Radio Group ──────────────────────────────────────────── */

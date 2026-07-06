@@ -267,15 +267,7 @@
   gap: 8px;
 }
 
-.kv2-dialog-actions--sticky {
-  position: sticky;
-  bottom: 0;
-  background: var(--kv2-surface);
-  z-index: 2;
-}
-
-.kv2-dialog-actions--detail,
-.kv2-dialog-actions--create {
+.kv2-dialog-actions--detail {
 }
 
 .kv2-dialog-footer-session {
@@ -373,8 +365,7 @@
   align-items: center;
 }
 
-.kv2-dialog-actions-group--detail-priority,
-.kv2-dialog-actions-group--create {
+.kv2-dialog-actions-group--detail-priority {
   margin-left: auto;
 }
 
@@ -388,17 +379,6 @@
 
 .kv2-dialog-actions--detail .kv2-dialog-danger-row {
   margin-left: auto;
-}
-
-.kv2-dialog-actions-copy {
-  font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-muted);
-}
-
-.kv2-inline-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
 }
 
 /* ── Alert (ErrorAlert component) ─────────────────────────── */

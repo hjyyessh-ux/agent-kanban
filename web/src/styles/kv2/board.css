@@ -29,12 +29,6 @@
   padding: 12px;
 }
 
-.kv2-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .kv2-filter-field {
   display: flex;
   flex-direction: column;
@@ -1189,16 +1183,7 @@
   }
 }
 
-@media (max-width: 1200px) {
-  .kv2-filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 700px) {
-  .kv2-filter-grid {
-    grid-template-columns: 1fr;
-  }
 
   .kv2-filter-actions {
     flex-direction: column;
@@ -1347,43 +1332,12 @@
   gap: 4px;
 }
 
-.kv2-session-summary-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--kv2-text-lg);
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.kv2-session-target-label {
-  font-size: var(--kv2-text-lg);
-  font-weight: 600;
-  color: var(--kv2-text-secondary);
-}
-
 .kv2-session-meta-row {
   display: flex;
   gap: 8px;
   align-items: center;
   font-size: var(--kv2-text-md);
   color: var(--kv2-text-secondary);
-}
-
-.kv2-session-model {
-  font-size: var(--kv2-text-sm);
-  color: #64748b;
-  background: #f1f5f9;
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-
-.kv2-session-status-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .kv2-btn--session-remove {
@@ -1587,28 +1541,6 @@
   gap: 10px;
   flex-shrink: 0;
   min-width: 0;
-}
-
-.kv2-session-runtime {
-  align-self: flex-start;
-  display: inline-flex;
-}
-
-.kv2-session-runtime .kv2-runtime-badge {
-  min-height: 18px;
-  padding: 1px 6px 1px 4px;
-  font-size: 0.58rem;
-}
-
-.kv2-session-runtime .kv2-runtime-badge-icon {
-  width: 13px;
-  height: 13px;
-  flex-basis: 13px;
-}
-
-.kv2-session-peer-text {
-  font-size: var(--kv2-text-xs);
-  color: #64748b;
 }
 
 .kv2-btn--session-select {
@@ -2125,28 +2057,6 @@
   color: var(--kv2-accent, var(--kv2-card-date-color));
 }
 
-.kv2-card-footer-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-height: var(--kv2-card-footer-status-min-height);
-}
-
-/* ── Agent badge ──────────────────────────────────────────── */
-.kv2-agent-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--kv2-radius-pill);
-  flex-shrink: 0;
-}
-
-.kv2-agent-label {
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-xs);
-  font-weight: 600;
-}
-
 /* ── Column header layout ─────────────────────────────────── */
 .kv2-column-header-left {
   display: flex;
@@ -2353,34 +2263,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.1;
-}
-
-.kv2-card-flags {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.kv2-card-flag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 700;
-  line-height: 1;
-  color: #8a92a1;
-}
-
-.kv2-card-flag--question {
-  color: #8b5cf6;
-}
-
-.kv2-card-flag--children {
-  color: #64748b;
-  gap: 6px;
 }
 
 /* ── Nested child accordion (board card) ───────────────── */
@@ -2619,13 +2501,6 @@
   color: #FF0000;
   border-color: #FF0000;
   margin-left: auto;
-}
-
-.kv2-card-completed-label {
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-xs);
-  font-weight: 600;
-  color: var(--kv2-status-done-accent);
 }
 
 /* ── Container queries (card-width-based responsiveness) ── */

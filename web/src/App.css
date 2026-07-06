@@ -63,13 +63,6 @@
   font-weight: 800;
 }
 
-.app-subtitle {
-  color: var(--kv2-text-primary);
-  opacity: 0.6;
-  font-size: 0.875rem;
-  font-family: var(--kv2-font-sans);
-}
-
 .app-main {
   flex: 1;
   padding: 24px;
@@ -79,16 +72,6 @@
 .error-banner {
   max-width: min(100%, 1100px);
   margin: 0 auto 20px;
-}
-
-.board-placeholder {
-  padding: 32px;
-  border: 3px dashed var(--kv2-frame);
-  text-align: center;
-  color: var(--kv2-text-primary);
-  opacity: 0.5;
-  background-color: rgba(255, 255, 255, 0.5);
-  border-radius: 8px;
 }
 
 .app-footer {
