@@ -3,6 +3,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$PROJECT_DIR"
+
+# bun은 보통 ~/.bun/bin에 설치되므로 비로그인 셸에서도 찾을 수 있게 PATH에 추가
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 PLUGIN_DIR="$HOME/.config/opencode/plugins/agent-kanban"
 GLOBAL_OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
@@ -68,6 +72,29 @@ if [ "${1:-}" = "--uninstall" ]; then
   echo "✅ Claude Code and Codex hooks uninstalled."
   echo "   Restart Claude Code and Codex to apply changes."
   exit 0
+fi
+
+# ── Prerequisites ──────────────────────────────────────────────────────────────
+if ! command -v bun &>/dev/null; then
+  echo "❌ bun not found. agent-kanban requires Bun (runtime + package manager)."
+  echo ""
+  echo "   Install bun first:"
+  echo "     curl -fsSL https://bun.sh/install | bash"
+  echo ""
+  echo "   Then restart your shell (or run: export PATH=\"\$HOME/.bun/bin:\$PATH\")"
+  echo "   and re-run this script:"
+  echo "     bun install && ./scripts/install.sh"
+  exit 1
+fi
+
+if ! command -v jq &>/dev/null; then
+  echo "⚠️  jq not found — Claude Code / Codex hook registration will be skipped."
+  echo "   Install jq (e.g. 'brew install jq') and re-run for full setup."
+fi
+
+if [ ! -d "$PROJECT_DIR/node_modules" ]; then
+  echo "Installing dependencies (bun install)..."
+  bun install
 fi
 
 # ── Build ──────────────────────────────────────────────────────────────────────
@@ -148,12 +175,12 @@ else
   tmp=$(mktemp)
   jq \
     --arg hook_pattern "agent-kanban/hooks" \
-    --arg session_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-session-start.sh" \
-    --arg prompt_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-prompt.sh" \
-    --arg stop_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-stop.sh" \
-    --arg subagent_start_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-start.sh" \
-    --arg subagent_stop_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-stop.sh" \
-    --arg subagent_realstop_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-realstop.sh" '
+    --arg session_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-session-start.sh" \
+    --arg prompt_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-prompt.sh" \
+    --arg stop_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-stop.sh" \
+    --arg subagent_start_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-start.sh" \
+    --arg subagent_stop_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-stop.sh" \
+    --arg subagent_realstop_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $HOOKS_INSTALL_DIR/on-subagent-realstop.sh" '
     def remove_matching_hooks($pattern):
       .hooks = (.hooks // {}) |
       .hooks |= with_entries(
@@ -187,9 +214,9 @@ else
   tmp=$(mktemp)
   jq \
     --arg hook_pattern "agent-kanban/codex-hooks" \
-    --arg session_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-session-start.sh" \
-    --arg prompt_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-prompt.sh" \
-    --arg stop_cmd "export PATH=\"/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-stop.sh" '
+    --arg session_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-session-start.sh" \
+    --arg prompt_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-prompt.sh" \
+    --arg stop_cmd "export PATH=\"\$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:\$PATH\"; $CODEX_HOOKS_INSTALL_DIR/on-stop.sh" '
     def as_array:
       if type == "array" then . else [.] end;
     def command_matches($pattern):
@@ -226,3 +253,13 @@ echo "✅ agent-kanban installed successfully!"
 echo "   • opencode: restart opencode to activate the plugin"
 echo "   • Claude Code: restart Claude Code to activate hooks"
 echo "   • Codex: restart Codex to activate hooks"
+echo ""
+echo "▶ Open the kanban board:"
+echo "   1. Start the server (pick one):"
+echo "      - Run 'bun start' in $PROJECT_DIR (standalone daemon), or"
+echo "      - Just start a new opencode / Claude Code / Codex session —"
+echo "        the plugin/hooks launch the daemon automatically."
+echo "   2. Open http://localhost:24680 in your browser."
+echo ""
+echo "   If the port is busy the server tries 24681, 24682 next."
+echo "   Set KANBAN_PORT to use a fixed different port."

@@ -2,7 +2,7 @@
 # Codex Hook: SessionStart
 # Ensures the kanban daemon is running. Starts it in the background if needed.
 
-export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 KANBAN_API="${KANBAN_API_URL:-http://localhost:24680}"
 
@@ -46,7 +46,17 @@ fi
 
 echo "$$" > "$STARTER_PID_FILE"
 
-BUN_BIN="$(which bun 2>/dev/null || echo '/opt/homebrew/bin/bun')"
+BUN_BIN="$(command -v bun 2>/dev/null || true)"
+if [ -z "$BUN_BIN" ]; then
+  for cand in "$HOME/.bun/bin/bun" /opt/homebrew/bin/bun /usr/local/bin/bun; do
+    if [ -x "$cand" ]; then BUN_BIN="$cand"; break; fi
+  done
+fi
+if [ -z "$BUN_BIN" ]; then
+  echo "[agent-kanban] bun not found; cannot start daemon. Install: curl -fsSL https://bun.sh/install | bash" >> "$LOG_FILE"
+  rm -f "$STARTER_PID_FILE"
+  exit 0
+fi
 
 nohup "$BUN_BIN" run "${PROJECT_DIR}/src/daemon/index.ts" \
   >> "$LOG_FILE" 2>&1 &

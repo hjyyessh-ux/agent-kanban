@@ -152,6 +152,30 @@ AI 작업 카드들을 칸반 보드 형식으로 표시합니다. 카드는 다
 
 ---
 
+## Telegram 연동
+
+Telegram 봇을 연결하면 채팅으로 새 작업을 시작하고, 선택한 세션에 후속 메시지를 보낼 수 있습니다.
+
+### 봇 만들기와 토큰 등록
+
+1. Telegram에서 [@BotFather](https://t.me/BotFather)를 열고 `/newbot`을 보내 봇 이름과 username을 정합니다.
+2. BotFather가 알려주는 bot token(`123456:ABC-...` 형태)을 복사합니다.
+3. 웹 UI **Settings 탭 → Add entry**에서 key를 `TELEGRAM_BOT_TOKEN`, value를 복사한 토큰으로 저장합니다.
+
+별도 재시작은 필요 없습니다. 백그라운드 poller가 5초마다 설정에서 토큰을 다시 읽으므로, 저장 직후부터 봇이 메시지를 수신합니다. 토큰이 처음 감지되면 봇의 명령 메뉴(`/sessions`, `/codex`, `/claude`, 모델 설정 명령 등)도 자동으로 등록됩니다.
+
+### 사용 방법
+
+- 봇에게 일반 텍스트를 보내면 새 카드가 생성되어 기본 런타임으로 즉시 실행됩니다.
+- `/sessions`로 세션 목록을 보고 `/switch_session <번호>`로 선택하면, 이후 일반 텍스트는 해당 세션의 후속 메시지로 전달됩니다.
+- `/runtime`, `/codex_model`, `/claude_model`, `/directory` 등으로 채팅별 기본값을 바꿀 수 있습니다. 전체 목록은 `/help`로 확인합니다.
+
+### 접근 제한 (선택)
+
+Settings에 `TELEGRAM_CHANNEL_IDS` key를 추가하고 허용할 chat id를 쉼표로 나열하면, 그 외 채팅의 메시지는 무시됩니다. 설정하지 않으면 봇 토큰을 아는 모든 채팅이 사용할 수 있으므로, 토큰을 노출하지 않도록 주의하세요.
+
+---
+
 ## 데이터 저장 위치
 
 모든 데이터는 로컬 파일 시스템의 JSON 파일로 저장됩니다.

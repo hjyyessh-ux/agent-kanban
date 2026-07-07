@@ -12,7 +12,7 @@ interface DialogSkeletonProps {
   defaultSize?: { width: number; height: number };
 }
 
-const DEFAULT_DIALOG_SIZE = { width: 900, height: 600 };
+const DEFAULT_DIALOG_SIZE = { width: 1200, height: 850 };
 
 export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
   title,
