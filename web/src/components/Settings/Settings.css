@@ -43,9 +43,9 @@
 
 .settings-item {
   background: var(--kv2-card-bg);
-  border: 1px solid var(--kv2-border);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   border-radius: var(--kv2-card-radius);
-  box-shadow: var(--kv2-shadow-sm);
+  box-shadow: var(--kv2-shadow-md);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -199,9 +199,9 @@
 /* ── Network Toggle ─────────────────────────────────────────── */
 .settings-network-toggle {
   background: var(--kv2-card-bg);
-  border: 1px solid var(--kv2-border);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   border-radius: var(--kv2-card-radius);
-  box-shadow: var(--kv2-shadow-sm);
+  box-shadow: var(--kv2-shadow-md);
   padding: 16px;
   margin-bottom: 16px;
   display: flex;
@@ -283,9 +283,9 @@
 /* ── Maintenance ────────────────────────────────────────────── */
 .settings-maintenance {
   background: var(--kv2-card-bg);
-  border: 1px solid var(--kv2-border);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   border-radius: var(--kv2-card-radius);
-  box-shadow: var(--kv2-shadow-sm);
+  box-shadow: var(--kv2-shadow-md);
   padding: 16px;
   margin-bottom: 16px;
   display: flex;
@@ -413,9 +413,9 @@
 /* ── Model Visibility Filter ────────────────────────────────── */
 .settings-model-filter {
   background: var(--kv2-card-bg);
-  border: 1px solid var(--kv2-border);
+  border: var(--kv2-card-border-width) solid var(--kv2-frame);
   border-radius: var(--kv2-card-radius);
-  box-shadow: var(--kv2-shadow-sm);
+  box-shadow: var(--kv2-shadow-md);
   padding: 16px;
   margin-bottom: 16px;
   display: flex;
@@ -450,22 +450,24 @@
 
 .settings-model-group-title {
   margin: 8px 0 0;
+  padding: 4px 10px;
   font-size: var(--kv2-text-xs);
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--kv2-text-secondary);
+  color: #fff;
+  background: var(--kv2-frame);
+  border-radius: 2px;
 }
 
 .settings-model-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
   max-height: 300px;
   overflow-y: auto;
   border: 1px solid var(--kv2-border);
   border-radius: 2px;
-  padding: 8px;
+  padding: 0 8px;
   background: var(--kv2-bg);
 }
 
@@ -473,13 +475,24 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
+  padding: 6px 8px;
   cursor: pointer;
   font-size: var(--kv2-text-sm);
+  border-top: 2px solid var(--kv2-border);
+}
+
+.settings-model-item:first-child {
+  border-top: none;
 }
 
 .settings-model-item:hover {
   background: var(--kv2-surface);
+}
+
+.settings-model-item:focus-within {
+  background: var(--kv2-surface);
+  outline: 2px solid var(--kv2-status-todo-accent);
+  outline-offset: -2px;
 }
 
 .settings-model-checkbox {
@@ -492,8 +505,8 @@
 
 .settings-model-name {
   font-weight: 600;
-  flex: 1;
   min-width: 0;
+  max-width: 70%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -501,8 +514,15 @@
 
 .settings-model-provider {
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface);
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-pill);
+  padding: 2px 8px;
   flex-shrink: 0;
 }
 
