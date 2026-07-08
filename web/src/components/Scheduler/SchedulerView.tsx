@@ -121,7 +121,12 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
             >
               <div className="scheduler-item-header">
                 <div className="scheduler-item-info">
-                  <h3 className="scheduler-item-name">{entry.name}</h3>
+                  <div className="scheduler-item-title-row">
+                    <h3 className="scheduler-item-name">{entry.name}</h3>
+                    <span className={`kv2-badge scheduler-badge--${entry.status}`}>
+                      {entry.status}
+                    </span>
+                  </div>
                   {entry.description && (
                     <p className="scheduler-item-desc">{entry.description}</p>
                   )}
@@ -143,24 +148,24 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               </div>
 
               <div className="scheduler-item-meta">
-                <span 
-                  className={`kv2-badge scheduler-badge--${entry.action.type}`}
-                  aria-label={entry.action.type === 'shell' ? 'Action type: shell' : 'Action type: skill'}
-                >
-                  {entry.action.type === 'shell' ? '🖥 shell' : '🧩 skill'}
-                </span>
-                <span className={`kv2-badge scheduler-badge--${entry.status}`}>
-                  {entry.status}
-                </span>
                 <span title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
                   ⏰ {entry.cronDescription ?? entry.cron}
                 </span>
                 {entry.timezone && (
                   <span aria-label={`Timezone: ${entry.timezone}`}>🌐 {entry.timezone}</span>
                 )}
+                {entry.nextRunAt && (
+                  <span>Next: {new Date(entry.nextRunAt).toLocaleString()}</span>
+                )}
               </div>
 
-              <div className="scheduler-item-meta">
+              <div className="scheduler-item-meta scheduler-item-command">
+                <span
+                  className={`kv2-badge scheduler-badge--${entry.action.type}`}
+                  aria-label={entry.action.type === 'shell' ? 'Action type: shell' : 'Action type: skill'}
+                >
+                  {entry.action.type === 'shell' ? '🖥 shell' : '🧩 skill'}
+                </span>
                 {entry.action.type === 'shell' && entry.action.command && (
                   <span title={entry.action.command}>
                     $ {entry.action.command.length > 50 ? entry.action.command.substring(0, 50) + '...' : entry.action.command}
@@ -179,9 +184,6 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                       <> — <span className={`kv2-badge scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
                     )}
                   </span>
-                )}
-                {entry.nextRunAt && (
-                  <span>Next: {new Date(entry.nextRunAt).toLocaleString()}</span>
                 )}
               </div>
 
