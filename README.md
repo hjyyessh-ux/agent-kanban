@@ -18,7 +18,7 @@ AI CLI 작업은 터미널 출력, 세션 히스토리, 후속 메시지, 결과
 - **Queueing**: TODO 카드를 순차 실행하고, 필요하면 이전 카드 세션을 이어받습니다.
 - **Capabilities**: Codex, Claude, opencode skills와 로컬 scripts를 한 탭에서 검색, 동기화, 생성, 실행합니다.
 - **Scheduler**: 반복 작업을 cron 또는 자연어 일정으로 등록해 실행합니다.
-- **Telegram follow-up**: Telegram 메시지를 선택된 세션으로 다시 라우팅합니다.
+- **Telegram follow-up**: Telegram 메시지를 선택된 세션으로 다시 라우팅합니다. 봇 생성과 토큰 등록 절차는 [Getting started의 Telegram 연동](./docs/getting-started.md#telegram-연동)을 참고하세요.
 - **LLM Wiki**: 아카이브된 DONE 카드를 재사용 가능한 Markdown 지식으로 요약합니다.
 - **Neo-brutalism UI**: 굵은 테두리, 강한 그림자, 선명한 상태 색상을 유지합니다.
 
@@ -42,7 +42,7 @@ Capabilities 탭은 user-authored skills와 로컬 scripts를 같은 실행 자�
 
 ## 요구사항
 
-- **Bun**: package manager와 runtime입니다.
+- **Bun**: package manager와 runtime입니다. 미설치 시 `curl -fsSL https://bun.sh/install | bash`로 설치한 뒤 셸을 재시작하세요. `scripts/install.sh`는 bun이 없으면 설치 안내와 함께 중단됩니다.
 - **Node.js 18+**: Playwright와 일부 개발 도구에서 필요합니다.
 - **Git**: 저장소 clone과 업데이트에 필요합니다.
 - **opencode CLI**: opencode plugin/runtime으로 사용할 때 필요합니다.
@@ -67,6 +67,8 @@ bun install
 - daemon project pointer: `~/.agent-kanban/daemon-project-path`
 
 설치 후 opencode, Claude Code, Codex를 재시작해야 plugin/hook 설정이 다시 로드됩니다.
+
+설치가 끝나면 `bun start`로 데몬을 직접 실행하거나, 새 opencode/Claude Code/Codex 세션을 시작해 데몬을 자동 기동시킨 뒤 브라우저에서 `http://localhost:24680`을 엽니다. 설치 스크립트 완료 메시지에도 동일한 안내가 출력됩니다.
 
 설치된 hook과 plugin 참조를 제거하려면 다음 명령을 실행합니다.
 

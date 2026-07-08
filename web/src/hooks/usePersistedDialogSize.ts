@@ -47,9 +47,11 @@ export function usePersistedDialogSize(
   dialogRef: RefObject<HTMLElement | null>,
   defaultSize: PersistedSize,
 ): PersistedSize {
-  const [size, setSize] = useState<PersistedSize>(
-    () => storageKey ? readSize(storageKey, defaultSize) : defaultSize,
-  );
+  const [size, setSize] = useState<PersistedSize>(() => {
+    if (typeof window === 'undefined') return defaultSize;
+    const fallback = clampSize(defaultSize.width, defaultSize.height);
+    return storageKey ? readSize(storageKey, fallback) : fallback;
+  });
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const storageKeyRef = useRef(storageKey);
