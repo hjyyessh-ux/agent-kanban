@@ -160,6 +160,51 @@ describe('ClaudeCodexWatchdog', () => {
     });
   });
 
+  test('does not touch organic codex hook card with no run', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const watchdog = new ClaudeCodexWatchdog(store, runStore);
+
+      // Organic prompt-hook card: codex runtime, sourceContext 'codex', no run.
+      const card = await store.createCard({
+        title: 'Codex prompt',
+        description: 'organic CLI use',
+        agentRuntime: 'codex',
+        sourceContext: 'codex',
+        projectDir: dir,
+      });
+      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'sess-hook' });
+
+      await watchdog.check();
+
+      const updated = await store.getCard(card.id);
+      expect(updated?.status).toBe('in_progress');
+    });
+  });
+
+  test('does not touch organic claude-code hook card with no run', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const watchdog = new ClaudeCodexWatchdog(store, runStore);
+
+      const card = await store.createCard({
+        title: 'Claude prompt',
+        description: 'organic CLI use',
+        agentRuntime: 'claude',
+        sourceContext: 'claude-code',
+        projectDir: dir,
+      });
+      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'sess-hook-cc' });
+
+      await watchdog.check();
+
+      const updated = await store.getCard(card.id);
+      expect(updated?.status).toBe('in_progress');
+    });
+  });
+
   test('does not touch opencode in_progress cards', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
