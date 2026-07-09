@@ -1,0 +1,12 @@
+{
+  "pkg": "agent-kanban",
+  "globalName": "AgentKanban",
+  "projectId": "6ead71da-1ab2-4ee0-be10-80b9bc61ed92",
+  "shape": "package",
+  "srcDir": "web/src",
+  "tsconfig": "tsconfig.json",
+  "cssEntry": "web/dist/assets/index-D3fnE_EO.css",
+  "tokensGlob": "web/src/styles/kanban-v2.tokens.css",
+  "runtimeFontPrefixes": ["Work Sans", "Source Sans", "Source Code Pro"],
+  "readmeHeader": ".design-sync/conventions.md"
+}
