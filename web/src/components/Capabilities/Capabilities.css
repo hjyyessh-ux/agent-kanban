@@ -116,7 +116,7 @@
   font-family: var(--kv2-font-sans);
   font-weight: 500;
   font-size: var(--kv2-text-xs);
-  opacity: 0.65;
+  color: var(--kv2-text-secondary);
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -127,7 +127,7 @@
 }
 
 .cap-viewnav-btn--active .cap-viewnav-caption {
-  opacity: 0.75;
+  color: #fffdf7;
 }
 
 .cap-viewnav-btn:hover:not(.cap-viewnav-btn--active) {
@@ -424,6 +424,7 @@
   gap: var(--kv2-sp-3);
   padding: var(--kv2-sp-2) var(--kv2-sp-3);
   border: 1.5px solid var(--kv2-border);
+  border-left: 3px solid var(--kv2-border-strong);
   border-radius: var(--kv2-radius-md);
   background: var(--kv2-surface);
   min-height: 38px;
@@ -441,7 +442,7 @@
   flex: 1;
   min-width: 0;
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
+  font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -676,7 +677,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--kv2-sp-2);
-  border-top: 1.5px dashed var(--kv2-border);
+  border-top: 2px solid var(--kv2-border-strong);
   padding-top: var(--kv2-sp-3);
 }
 
@@ -686,6 +687,7 @@
   gap: var(--kv2-sp-3);
   padding: var(--kv2-sp-2) var(--kv2-sp-3);
   border: 1.5px solid var(--kv2-border);
+  border-left: 3px solid var(--kv2-border-strong);
   border-radius: var(--kv2-radius-md);
   background: #fbfcfe;
   min-height: 36px;
@@ -701,8 +703,8 @@
 
 .inv-placement-loc {
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-2xs);
-  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -710,7 +712,7 @@
 
 .inv-placement-dir {
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
+  font-size: var(--kv2-text-ui-sm);
   font-weight: 600;
   color: var(--kv2-text-primary);
   white-space: nowrap;
@@ -1849,4 +1851,49 @@
   border-color: #3b5066 !important;
 }
 
+/* =============================================================
+   Mobile (<=520px)
+   ============================================================= */
+
+@media (max-width: 520px) {
+  /* Header: view tabs / primary actions / gear each get their own line
+     instead of being forced onto one row that clips at narrow widths. */
+  .cap-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cap-title-group {
+    width: 100%;
+  }
+
+  .cap-viewnav {
+    flex-direction: column;
+  }
+
+  .cap-viewnav-btn {
+    border-right: none;
+    border-bottom: 2px solid var(--kv2-btn-stroke-color);
+  }
+
+  .cap-viewnav-btn:last-child {
+    border-bottom: none;
+  }
+
+  .cap-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .cap-header-actions .cap-gear-btn {
+    flex-basis: 100%;
+  }
+
+  /* Diagnostics: let pills wrap onto multiple lines instead of clipping
+     via horizontal scroll. */
+  .diag-bar-inner {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
 
