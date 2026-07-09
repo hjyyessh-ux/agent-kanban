@@ -242,6 +242,70 @@ are already dark.
 
 ---
 
+## Resolved in card 2 (primitives.css / board.css / conversation.css / App.css)
+
+Card 2 was the first real application of this map. Every literal in those four
+files now resolves to a token; the tables above used "add `--kv2-*` step per
+Rule A" placeholders for several of them — here is what they actually became,
+so cards 3–4 reuse rather than re-derive:
+
+| literal | token | value |
+|---------|-------|-------|
+| `#000000` (generic neo stroke on buttons/badges/pills, not the card/pill-specific tokens) | `--kv2-ink-pure` | `#000000` |
+| `#111827` (opaque base for `rgba(17, 24, 39, α)` family) | `--kv2-ink-ambient` | `#111827` |
+| `#fbfcfe` (list-row gradient stop) | `--kv2-surface-tint` | `#fbfcfe` |
+| `#f5f8fc` (list-row hover gradient stop) | `--kv2-surface-tint-hover` | `#f5f8fc` |
+| `#fafbff` (session timeline strip bg) | `--kv2-surface-tint-cool` | `#fafbff` |
+| `#fffdfa` (create-column button bg) | `--kv2-surface-warm` | `#fffdfa` |
+| `#2c3338` / `#262c31` (dark filter-card gradient) | `--kv2-surface-inverse-card-from` / `-to` | as listed |
+| `#1f2428` (dark filter-empty bg) | `--kv2-surface-inverse-deep` | `#1f2428` |
+| `#4b5563` (dashed border / scrollbar-thumb on inverse) | `--kv2-border-inverse` | `#4b5563` |
+| `#f3f4f6` (input text on inverse bg) | `--kv2-text-on-inverse-soft` | `#f3f4f6` |
+| `#d1d5db` (filter-option text on inverse) | `--kv2-text-on-inverse-secondary` | `#d1d5db` |
+| `#d3d9e4` (`.kv2-empty` border) | `--kv2-border-soft` | `#d3d9e4` |
+| `#1f2937` (session-card-id text) | `--kv2-neutral-800` | `#1f2937` |
+| `#2e3a47` (card body copy ink) | `--kv2-neutral-ink-soft` | `#2e3a47` |
+| `#293241` (directory/session-command name ink) | `--kv2-neutral-ink-strong` | `#293241` |
+| `#999` (dialog-footer-session text) | `--kv2-neutral-450` | `#999999` |
+| `#bfdbfe` (codex badge gradient mid-stop) | `--kv2-info-border-soft` | `#bfdbfe` |
+| `#1e3a8a` (codex badge text) | `--kv2-info-text-strong` | `#1e3a8a` |
+| `#f0fdff` (session "result" row bg) | `--kv2-cyan-surface-soft` | `#f0fdff` |
+| `#14532d` (session "result" row text) | `--kv2-success-text-strong` | `#14532d` |
+| `#d9f99d` (board-session-toggle active bg) | `--kv2-success-surface-vivid` | `#d9f99d` |
+| `#fff8f0` (session "prompt" row bg) | `--kv2-warn-surface-soft` | `#fff8f0` |
+| `#f8f1d4` (filter-trigger open-state bg) | `--kv2-warn-surface-tint` | `#f8f1d4` |
+| `#3f2f00` (text on selected/yellow filter option) | `--kv2-warn-text-strong` | `#3f2f00` |
+| `#92400e` (wip--warning text) | `--kv2-warn-text-deep` | `#92400e` |
+| `#991b1b` (wip--over text) | `--kv2-danger-text-strong` | `#991b1b` |
+| `#7f1d1d` (alert title / dismiss text) | `--kv2-danger-text-deep` | `#7f1d1d` |
+| `#3f1d27` (alert message text) | `--kv2-danger-text-deepest` | `#3f1d27` |
+| `#e11d48` (subtle-danger button text) | `--kv2-danger-accent-strong` | `#e11d48` |
+| `#ff0000` (card-icon-action--danger) | `--kv2-danger-accent-vivid` | `#ff0000` |
+| `#fff4f6` / `#ffe4e6` (ErrorAlert gradient) | `--kv2-pink-surface` / `--kv2-pink-surface-strong` | as listed |
+| `#f9c2d6` (session-unread badge bg) | `--kv2-pink-surface-deep` | `#f9c2d6` |
+| `#be185d` (session-unread badge border/shadow) | `--kv2-pink-accent` | `#be185d` |
+| `#9d174d` (session-unread badge text) | `--kv2-pink-text` | `#9d174d` |
+| `#ffedd5` / `#fdba74` (session tone-c chip) | `--kv2-orange-surface` / `--kv2-orange-border` | as listed |
+| `#d8b4fe` (card-queue-target bg) | `--kv2-purple-surface-vivid` | `#d8b4fe` |
+| `#fffdf7` (primary button text) | `--kv2-btn-primary-fg` | `#fffdf7` |
+| `#6b5342` (favorite star, idle) | `--kv2-favorite-icon-idle` | `#6b5342` |
+| `#f59e0b` (favorite star, active) | `--kv2-favorite-icon-active` | `#f59e0b` |
+| `#f59e0b` (has-question card border — kept distinct from the star token per Rule B, same value today) | `--kv2-question-indicator` | `#f59e0b` |
+| `#121212` / `#5b5b5b` (OpenCode logo icon detail) | `--kv2-runtime-opencode-icon-a` / `-b` (layer ①, brand) | as listed |
+| `rgba(251, 113, 133, 0.92)` / `rgba(250, 204, 21, 0.88)` (decorative list-row accent bar, one-off gradient not decomposed via color-mix) | `--kv2-list-row-accent-from` / `-to` | kept as full rgba literals |
+
+Session-item tone chips (`--tone-a/b/d/e`) turned out to be **exact reuses** of
+existing families — no new tokens needed: tone-a/b/d/e = info/success/purple/warn
+`surface-strong`/`border` pairs. Only tone-c (orange) needed a new family.
+
+Dead `var(--token, #fallback)` defaults were dropped (not replaced) in
+`conversation.css`: the fallback literals (`#5a5f72`, `#8a8fa3`, and the
+`rgba(17, 24, 39, …)` forms of `--kv2-border`) never actually rendered because
+the referenced tokens are always defined at `:root` — removing the dead
+fallback is value-neutral, not a Rule A/B substitution.
+
+---
+
 ## Allowlist — do NOT tokenise into semantic tokens
 
 These are not part of the theme surface. Leave them hard-coded (or move to a

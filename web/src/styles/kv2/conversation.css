@@ -10,15 +10,15 @@
   font-size: var(--kv2-text-2xs);
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
 }
 
 .session-conversation-subagents {
   margin: 4px 16px 18px;
   padding: 12px;
-  border: 1.5px dashed var(--kv2-border, rgba(17, 24, 39, 0.18));
+  border: 1.5px dashed var(--kv2-border);
   border-radius: 10px;
-  background: rgba(17, 24, 39, 0.02);
+  background: color-mix(in srgb, var(--kv2-ink-ambient) 2%, transparent);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -28,13 +28,13 @@
   font-family: var(--kv2-font-heading);
   font-weight: 800;
   font-size: var(--kv2-text-sm);
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
 }
 
 .session-conversation-subagent {
-  border: 1px solid var(--kv2-border, rgba(17, 24, 39, 0.14));
+  border: 1px solid var(--kv2-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--kv2-surface);
   overflow: hidden;
 }
 
@@ -59,7 +59,7 @@
 .session-conversation-subagent-flow {
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-2xs);
-  color: var(--kv2-text-muted, #8a8fa3);
+  color: var(--kv2-text-muted);
 }
 
 .session-conversation-subagent-toggle {
@@ -98,6 +98,6 @@
 .session-conversation-feedbackDisabled {
   margin: 0;
   font-size: var(--kv2-text-sm);
-  color: var(--kv2-text-muted, #8a8fa3);
+  color: var(--kv2-text-muted);
   text-align: center;
 }

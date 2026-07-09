@@ -16,7 +16,7 @@
 .kv2-dialog-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--kv2-scrim);
   border: none;
   cursor: default;
 }
@@ -24,9 +24,9 @@
 .kv2-dialog {
   position: relative;
   background: var(--kv2-surface);
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 12px;
-  box-shadow: 8px 12px 0 #1f2233;
+  box-shadow: 8px 12px 0 var(--kv2-border-strong);
   width: 90vw;
   max-height: 90vh;
   overflow: hidden;
@@ -72,7 +72,7 @@
   background: transparent;
   font-size: var(--kv2-text-display);
   font-weight: 700;
-  color: #1f2233;
+  color: var(--kv2-border-strong);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -109,7 +109,7 @@
 /* ── Dialog Modifiers ─────────────────────────────────────── */
 .kv2-dialog--detail,
 .kv2-dialog--create {
-  box-shadow: -7px 0 0 var(--kv2-dialog-accent, #3b82f6), 8px 12px 0 #1f2233;
+  box-shadow: -7px 0 0 var(--kv2-dialog-accent, var(--kv2-status-todo-accent)), 8px 12px 0 var(--kv2-border-strong);
 }
 
 .kv2-dialog--status-todo {
@@ -175,7 +175,7 @@
   gap: 8px;
   height: 42px;
   padding: 0 20px;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-btn-stroke-color);
   border-radius: 8px;
   box-shadow: var(--kv2-shadow-sm);
   font-family: var(--kv2-font-sans);
@@ -191,8 +191,8 @@
 }
 
 .kv2-btn--primary {
-  background: #1668e8;
-  color: #fffdf7;
+  background: var(--kv2-btn-primary-bg);
+  color: var(--kv2-btn-primary-fg);
 }
 
 .kv2-btn--primary:hover {
@@ -200,8 +200,8 @@
 }
 
 .kv2-btn--primary-strong {
-  background: #1668e8;
-  color: #fffdf7;
+  background: var(--kv2-btn-primary-bg);
+  color: var(--kv2-btn-primary-fg);
 }
 
 .kv2-btn--outline {
@@ -216,13 +216,13 @@
 
 .kv2-btn--danger {
   background: var(--kv2-text-danger);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .kv2-btn--subtle-danger {
-  background: #ffffff;
-  color: #e11d48;
-  border-color: #1f2233;
+  background: var(--kv2-surface);
+  color: var(--kv2-danger-accent-strong);
+  border-color: var(--kv2-btn-stroke-color);
 }
 
 .kv2-btn--ghost {
@@ -242,7 +242,7 @@
 
 .kv2-btn--success {
   background: var(--kv2-status-done-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .kv2-btn--full {
@@ -256,7 +256,7 @@
 
 .kv2-btn--question {
   background: var(--kv2-btn-start-bg);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 /* ── Dialog Footer/Actions ────────────────────────────────── */
@@ -276,7 +276,7 @@
   gap: 8px;
   padding: 4px 0;
   font-size: var(--kv2-text-sm);
-  color: #999;
+  color: var(--kv2-neutral-450);
   align-items: flex-end;
 }
 
@@ -303,14 +303,14 @@
 }
 
 .kv2-dialog-footer-session-copy span {
-  color: #64748b;
+  color: var(--kv2-neutral-500);
   text-decoration: underline;
   text-decoration-style: dotted;
   text-underline-offset: 3px;
 }
 
 .kv2-dialog-footer-session-copy:hover span {
-  color: #2563eb;
+  color: var(--kv2-text-link);
 }
 
 .kv2-dialog-footer-telegram {
@@ -319,7 +319,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 2px 0 0;
-  color: #94a3b8;
+  color: var(--kv2-neutral-400);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-xs);
   font-weight: 500;
@@ -341,7 +341,7 @@
   justify-content: space-between;
   padding: 4px 0 0;
   font-size: var(--kv2-text-xs);
-  color: #94a3b8;
+  color: var(--kv2-neutral-400);
 }
 
 .kv2-dialog-actions-rail {
@@ -391,7 +391,7 @@
   margin-bottom: 16px;
   border: 3px solid var(--kv2-text-danger);
   box-shadow: 4px 4px 0 var(--kv2-text-danger);
-  background: linear-gradient(135deg, #fff4f6 0%, #ffe4e6 100%);
+  background: linear-gradient(135deg, var(--kv2-pink-surface) 0%, var(--kv2-pink-surface-strong) 100%);
   color: var(--kv2-text-primary);
 }
 
@@ -408,7 +408,7 @@
   width: 32px;
   height: 32px;
   border: 2px solid var(--kv2-text-danger);
-  background: #fff;
+  background: var(--kv2-surface);
   font-weight: 800;
   font-size: 1rem;
   line-height: 1;
@@ -425,14 +425,14 @@
   font-size: var(--kv2-text-md);
   font-weight: 800;
   line-height: 1.2;
-  color: #7f1d1d;
+  color: var(--kv2-danger-text-deep);
 }
 
 .kv2-alert__message {
   margin: 6px 0 0;
   font-size: var(--kv2-text-base);
   line-height: 1.5;
-  color: #3f1d27;
+  color: var(--kv2-danger-text-deepest);
 }
 
 .kv2-alert__actions {
@@ -445,7 +445,7 @@
 .kv2-alert__action {
   min-width: 154px;
   justify-content: center;
-  background: #fff;
+  background: var(--kv2-surface);
 }
 
 .kv2-alert__dismiss {
@@ -456,14 +456,14 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #7f1d1d;
+  color: var(--kv2-danger-text-deep);
   background: transparent;
   cursor: pointer;
 }
 
 .kv2-alert__dismiss:hover {
-  border-color: rgba(127, 29, 29, 0.28);
-  background: rgba(255, 255, 255, 0.65);
+  border-color: color-mix(in srgb, var(--kv2-danger-text-deep) 28%, transparent);
+  background: color-mix(in srgb, var(--kv2-surface) 65%, transparent);
 }
 
 @media (max-width: 720px) {

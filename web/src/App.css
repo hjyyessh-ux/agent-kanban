@@ -92,7 +92,7 @@
   flex: 0 0 auto;
   padding: 4px;
   border: 2px solid var(--kv2-frame);
-  background: #ffffff;
+  background: var(--kv2-surface);
   box-shadow: 4px 4px 0 var(--kv2-frame);
 }
 
@@ -155,7 +155,7 @@
   min-height: 34px;
   padding: 0 12px;
   border: 2px solid var(--kv2-frame);
-  background: #ffffff;
+  background: var(--kv2-surface);
   color: var(--kv2-text-primary);
   box-shadow: 2px 2px 0 var(--kv2-frame);
   cursor: pointer;
@@ -170,7 +170,7 @@
 
 .app-project-chip.is-active {
   background: var(--kv2-text-primary);
-  color: #ffffff;
+  color: var(--kv2-text-inverse);
 }
 
 .app-project-chip-label {
@@ -200,7 +200,7 @@
   min-height: 32px;
   padding: 0 12px;
   border: 2px solid transparent;
-  background: #ffffff;
+  background: var(--kv2-surface);
   color: var(--kv2-text-primary);
   cursor: pointer;
   font-family: var(--kv2-font-heading);
@@ -212,7 +212,7 @@
 
 .app-board-view-toggle-btn.is-active {
   border-color: var(--kv2-frame);
-  background: #facc15;
+  background: var(--kv2-status-in-progress-accent);
   box-shadow: 2px 2px 0 var(--kv2-frame);
 }
 
@@ -221,7 +221,7 @@
   min-height: 40px;
   padding: 0 14px;
   border: 2px solid var(--kv2-frame);
-  background: #ffffff;
+  background: var(--kv2-surface);
   color: var(--kv2-text-primary);
   box-shadow: 4px 4px 0 var(--kv2-frame);
   cursor: pointer;
@@ -233,7 +233,7 @@
 }
 
 .app-board-session-toggle.is-active {
-  background: #d9f99d;
+  background: var(--kv2-success-surface-vivid);
   box-shadow: 5px 5px 0 var(--kv2-frame);
   transform: translate(-1px, -1px);
 }

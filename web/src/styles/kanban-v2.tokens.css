@@ -64,6 +64,8 @@
      so they stay put in dark mode (only surrounding chrome shifts). */
   --kv2-runtime-claude: #d97757;
   --kv2-runtime-opencode: #111111;
+  --kv2-runtime-opencode-icon-a: #121212;
+  --kv2-runtime-opencode-icon-b: #5b5b5b;
   --kv2-runtime-codex-accent: #2563eb;
 }
 
@@ -85,6 +87,10 @@
   --kv2-card-bg: #ffffff;
   --kv2-input-bg: #ffffff;
   --kv2-code-bg: #f1f5f9;           /* light inline code / pre fill */
+  --kv2-surface-tint: #fbfcfe;      /* subtle blue-white gradient stop */
+  --kv2-surface-tint-hover: #f5f8fc; /* gradient stop, hover state */
+  --kv2-surface-tint-cool: #fafbff; /* session timeline strip bg */
+  --kv2-surface-warm: #fffdfa;      /* warm off-white (create-column btn) */
 
   /* ── Inverse surfaces (intentionally dark chrome) ─────────── */
   /* Filter popover, log console, opencode panel — dark even in
@@ -92,9 +98,16 @@
      contrast if needed. */
   --kv2-surface-inverse: #22272b;
   --kv2-surface-inverse-sunken: #1a1d21;
+  --kv2-surface-inverse-deep: #1f2428;
+  --kv2-surface-inverse-card-from: #2c3338;
+  --kv2-surface-inverse-card-to: #262c31;
   --kv2-surface-inverse-border: #384148;
+  --kv2-border-inverse: #4b5563;   /* lighter border on inverse surfaces */
   --kv2-ink-black: #090a0c;         /* deepest border/shadow ink */
+  --kv2-ink-pure: #000000;          /* pure-black neo stroke/ink (buttons, pills) */
   --kv2-text-on-inverse: #f9fafb;
+  --kv2-text-on-inverse-soft: #f3f4f6;
+  --kv2-text-on-inverse-secondary: #d1d5db;
   --kv2-text-on-inverse-muted: #9ca3af;
   --kv2-console-bg: #1e1e1e;        /* wiki log console surface */
 
@@ -115,15 +128,20 @@
   --kv2-card-border-color: #000000; /* neo card stroke (light: pure black) */
   --kv2-btn-stroke-color: #1f2233;
   --kv2-pill-stroke-color: #000000;
+  --kv2-border-soft: #d3d9e4;
 
   /* ── Neutral ramp (cool grey / slate text & borders) ──────── */
   /* Value-exact homes for the ad-hoc slate scale sprinkled across
      components. Remapped wholesale in dark mode. */
   --kv2-neutral-900: #0f172a;
+  --kv2-neutral-800: #1f2937;
   --kv2-neutral-700: #334155;
   --kv2-neutral-600: #475569;
   --kv2-neutral-500: #64748b;
+  --kv2-neutral-450: #999999;
   --kv2-neutral-400: #94a3b8;
+  --kv2-neutral-ink-soft: #2e3a47;  /* card body copy ink */
+  --kv2-neutral-ink-strong: #293241; /* directory/session-command names */
 
   /* ── Interactive / focus ──────────────────────────────────── */
   --kv2-focus-ring: #2563eb;        /* focus-visible outline */
@@ -133,44 +151,71 @@
 
   /* ── Shadow color (factored out of the shadow tokens) ─────── */
   --kv2-shadow-color: rgba(31, 34, 51, 0.85);      /* neo drop shadow ink */
-  --kv2-shadow-color-ambient: rgba(17, 24, 39, 0.18); /* soft row shadow */
+  --kv2-ink-ambient: #111827;       /* opaque base for ambient tint/shadow alphas */
+  --kv2-shadow-color-ambient: rgba(17, 24, 39, 0.18); /* soft row shadow — == color-mix(in srgb, var(--kv2-ink-ambient) 18%, transparent) */
+  --kv2-list-row-accent-from: rgba(251, 113, 133, 0.92); /* decorative row accent gradient */
+  --kv2-list-row-accent-to: rgba(250, 204, 21, 0.88);
 
   /* ── Status-soft families (tinted surfaces/badges/alerts) ─── */
   /* surface = pale fill · border = pastel stroke · text = readable ink */
   --kv2-info-surface: #eff6ff;
   --kv2-info-surface-strong: #dbeafe;
   --kv2-info-border: #93c5fd;
+  --kv2-info-border-soft: #bfdbfe;
   --kv2-info-text: #1d4ed8;
+  --kv2-info-text-strong: #1e3a8a;
   --kv2-info-accent: #2563eb;
 
   --kv2-cyan-surface: #e0f2fe;
+  --kv2-cyan-surface-soft: #f0fdff;
   --kv2-cyan-border: #bae6fd;
   --kv2-cyan-text: #0369a1;
   --kv2-cyan-accent: #0ea5e9;
 
   --kv2-success-surface: #f0fdf4;
   --kv2-success-surface-strong: #dcfce7;
+  --kv2-success-surface-vivid: #d9f99d;
   --kv2-success-border: #86efac;
   --kv2-success-text: #166534;
+  --kv2-success-text-strong: #14532d;
   --kv2-success-accent: #16a34a;
 
   --kv2-warn-surface: #fef3c7;
   --kv2-warn-surface-strong: #fde68a;
+  --kv2-warn-surface-soft: #fff8f0;
+  --kv2-warn-surface-tint: #f8f1d4;
   --kv2-warn-border: #fcd34d;
   --kv2-warn-text: #b45309;
+  --kv2-warn-text-strong: #3f2f00;
+  --kv2-warn-text-deep: #92400e;
   --kv2-warn-accent: #d97706;
 
   --kv2-danger-surface: #fef2f2;
   --kv2-danger-surface-strong: #fee2e2;
   --kv2-danger-border: #fca5a5;
   --kv2-danger-text: #b91c1c;
+  --kv2-danger-text-strong: #991b1b;
+  --kv2-danger-text-deep: #7f1d1d;
+  --kv2-danger-text-deepest: #3f1d27;
   --kv2-danger-accent: #dc2626;
+  --kv2-danger-accent-strong: #e11d48;
+  --kv2-danger-accent-vivid: #ff0000;
 
   --kv2-purple-surface: #f5f3ff;
   --kv2-purple-surface-strong: #f3e8ff;
+  --kv2-purple-surface-vivid: #d8b4fe;
   --kv2-purple-border: #c4b5fd;
   --kv2-purple-text: #4c1d95;
   --kv2-purple-accent: #7c3aed;
+
+  --kv2-pink-surface: #fff4f6;
+  --kv2-pink-surface-strong: #ffe4e6;
+  --kv2-pink-surface-deep: #f9c2d6;
+  --kv2-pink-accent: #be185d;
+  --kv2-pink-text: #9d174d;
+
+  --kv2-orange-surface: #ffedd5;
+  --kv2-orange-border: #fdba74;
 
   /* ── Prompt section colours ───────────────────────────────── */
   --kv2-prompt-accent-color: #1668e8;
@@ -184,11 +229,17 @@
 
   /* ── Button colours ───────────────────────────────────────── */
   --kv2-btn-primary-bg: #1668e8;   /* primary CTA fill */
+  --kv2-btn-primary-fg: #fffdf7;
   --kv2-btn-start-bg: #0d5fd9;
   --kv2-btn-queue-bg: #f0b800;
   --kv2-btn-queue-fg: #1f1f1f;
   --kv2-btn-delete-bg: #ffffff;
   --kv2-btn-delete-fg: #ff4d6d;
+
+  /* ── Icon accents (favorite star / question indicator) ────── */
+  --kv2-favorite-icon-idle: #6b5342;
+  --kv2-favorite-icon-active: #f59e0b;
+  --kv2-question-indicator: #f59e0b;
 
   /* ── Shadows (composed from the shadow color above) ───────── */
   --kv2-shadow-sm: 3px 3px 0 var(--kv2-shadow-color);
