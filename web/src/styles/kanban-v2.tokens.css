@@ -3,12 +3,33 @@
    Penpot Page 2 source of truth.
    Global (:root) — every token carries the --kv2- prefix, so there
    is no collision with the legacy v1 tokens.
+
+   ── Token layering (dark-mode foundation) ───────────────────
+   Tokens are organised into three bands so that a future dark
+   theme can override *only* what must change:
+
+     LAYER ①  BRAND (INVARIANT)   — status, agent, runtime brand
+              colours. Identical in every theme. A dark theme
+              MUST NOT override these.
+     LAYER ②  SEMANTIC (THEME-VARIABLE) — surface / text / border /
+              interactive / shadow / status-soft / inverse. These
+              are the *only* tokens a `[data-theme="dark"]` block
+              (card 5) overrides. Light values below are the
+              pixel-exact status quo.
+     LAYER ③  STRUCTURAL (THEME-AGNOSTIC) — typography, scale,
+              spacing, radius, geometry, transitions. No colour,
+              so theme-invariant by definition.
+
+   The literal → token contract for migrating hard-coded colours
+   lives in docs/dark-mode-token-map.md. Add a token here before
+   referencing it there.
    ============================================================= */
 
-/* ── Status color map ─────────────────────────────────────── */
+/* =============================================================
+   LAYER ①  BRAND — INVARIANT ACROSS THEMES
+   ============================================================= */
 :root {
-  --kv2-app-bg: #FFF8E7;
-  --kv2-frame: #1A1A2E;
+  /* ── Status color map ─────────────────────────────────────── */
   --kv2-status-todo-bg: #1e66f5;
   --kv2-status-todo-fg: #111827;
   --kv2-status-todo-accent: #3b82f6;
@@ -38,17 +59,147 @@
   --kv2-agent-momus: #CC2244;
   --kv2-agent-default: #6B7280;
 
-  /* ── Surface ──────────────────────────────────────────────── */
+  /* ── Runtime brand map ────────────────────────────────────── */
+  /* Vendor brand colours for runtime badges — fixed like a logo,
+     so they stay put in dark mode (only surrounding chrome shifts). */
+  --kv2-runtime-claude: #d97757;
+  --kv2-runtime-opencode: #111111;
+  --kv2-runtime-codex-accent: #2563eb;
+}
+
+/* =============================================================
+   LAYER ②  SEMANTIC — THEME-VARIABLE
+   Light values = current status quo (pixel-identical).
+   A dark theme overrides this band only.
+   ============================================================= */
+:root {
+  /* ── Base surfaces ────────────────────────────────────────── */
+  --kv2-app-bg: #FFF8E7;
   --kv2-bg: #FFF8E7;
-  --kv2-surface: #FFFFFF;
-  --kv2-surface-raised: #FFFFFF;
+  --kv2-frame: #1A1A2E;             /* app frame / structural ink */
+  --kv2-surface: #FFFFFF;           /* default card / dialog surface */
+  --kv2-surface-raised: #FFFFFF;    /* elevated surface */
+  --kv2-surface-sunken: #f8fafc;    /* recessed panels, table bodies */
+  --kv2-surface-hover: #f3f4f6;     /* neutral hover fill */
+  --kv2-surface-active: #e0e7ff;    /* selected / pressed subtle fill */
+  --kv2-card-bg: #ffffff;
+  --kv2-input-bg: #ffffff;
+  --kv2-code-bg: #f1f5f9;           /* light inline code / pre fill */
+
+  /* ── Inverse surfaces (intentionally dark chrome) ─────────── */
+  /* Filter popover, log console, opencode panel — dark even in
+     light mode. Kept in layer ② so a dark theme can flatten the
+     contrast if needed. */
+  --kv2-surface-inverse: #22272b;
+  --kv2-surface-inverse-sunken: #1a1d21;
+  --kv2-surface-inverse-border: #384148;
+  --kv2-ink-black: #090a0c;         /* deepest border/shadow ink */
+  --kv2-text-on-inverse: #f9fafb;
+  --kv2-text-on-inverse-muted: #9ca3af;
+  --kv2-console-bg: #1e1e1e;        /* wiki log console surface */
+
+  /* ── Text ─────────────────────────────────────────────────── */
   --kv2-text-primary: #1A1A2E;
   --kv2-text-secondary: #536074;
   --kv2-text-muted: #8190a8;
   --kv2-text-danger: #ff4d6d;
+  --kv2-text-inverse: #ffffff;      /* text on accent / dark fill */
+  --kv2-text-link: #2563eb;         /* interactive link / hover text */
+
+  /* ── Borders ──────────────────────────────────────────────── */
   --kv2-border: #D7DCE6;
   --kv2-border-strong: #1f2233;
+  --kv2-border-muted: #cbd5e1;
+  --kv2-border-subtle: #e2e8f0;
+  --kv2-divider-color: #bcc6d7;
+  --kv2-card-border-color: #000000; /* neo card stroke (light: pure black) */
+  --kv2-btn-stroke-color: #1f2233;
+  --kv2-pill-stroke-color: #000000;
 
+  /* ── Neutral ramp (cool grey / slate text & borders) ──────── */
+  /* Value-exact homes for the ad-hoc slate scale sprinkled across
+     components. Remapped wholesale in dark mode. */
+  --kv2-neutral-900: #0f172a;
+  --kv2-neutral-700: #334155;
+  --kv2-neutral-600: #475569;
+  --kv2-neutral-500: #64748b;
+  --kv2-neutral-400: #94a3b8;
+
+  /* ── Interactive / focus ──────────────────────────────────── */
+  --kv2-focus-ring: #2563eb;        /* focus-visible outline */
+
+  /* ── Overlay / scrim ──────────────────────────────────────── */
+  --kv2-scrim: rgba(0, 0, 0, 0.5);  /* dialog backdrop */
+
+  /* ── Shadow color (factored out of the shadow tokens) ─────── */
+  --kv2-shadow-color: rgba(31, 34, 51, 0.85);      /* neo drop shadow ink */
+  --kv2-shadow-color-ambient: rgba(17, 24, 39, 0.18); /* soft row shadow */
+
+  /* ── Status-soft families (tinted surfaces/badges/alerts) ─── */
+  /* surface = pale fill · border = pastel stroke · text = readable ink */
+  --kv2-info-surface: #eff6ff;
+  --kv2-info-surface-strong: #dbeafe;
+  --kv2-info-border: #93c5fd;
+  --kv2-info-text: #1d4ed8;
+  --kv2-info-accent: #2563eb;
+
+  --kv2-cyan-surface: #e0f2fe;
+  --kv2-cyan-border: #bae6fd;
+  --kv2-cyan-text: #0369a1;
+  --kv2-cyan-accent: #0ea5e9;
+
+  --kv2-success-surface: #f0fdf4;
+  --kv2-success-surface-strong: #dcfce7;
+  --kv2-success-border: #86efac;
+  --kv2-success-text: #166534;
+  --kv2-success-accent: #16a34a;
+
+  --kv2-warn-surface: #fef3c7;
+  --kv2-warn-surface-strong: #fde68a;
+  --kv2-warn-border: #fcd34d;
+  --kv2-warn-text: #b45309;
+  --kv2-warn-accent: #d97706;
+
+  --kv2-danger-surface: #fef2f2;
+  --kv2-danger-surface-strong: #fee2e2;
+  --kv2-danger-border: #fca5a5;
+  --kv2-danger-text: #b91c1c;
+  --kv2-danger-accent: #dc2626;
+
+  --kv2-purple-surface: #f5f3ff;
+  --kv2-purple-surface-strong: #f3e8ff;
+  --kv2-purple-border: #c4b5fd;
+  --kv2-purple-text: #4c1d95;
+  --kv2-purple-accent: #7c3aed;
+
+  /* ── Prompt section colours ───────────────────────────────── */
+  --kv2-prompt-accent-color: #1668e8;
+  --kv2-prompt-label-color: #2b3443;
+  --kv2-prompt-text-color: #1f2735;
+
+  /* ── Card text colours ────────────────────────────────────── */
+  --kv2-card-title-color: #1A1A2E;
+  --kv2-card-id-color: #46505e;
+  --kv2-card-date-color: #46505e;
+
+  /* ── Button colours ───────────────────────────────────────── */
+  --kv2-btn-primary-bg: #1668e8;   /* primary CTA fill */
+  --kv2-btn-start-bg: #0d5fd9;
+  --kv2-btn-queue-bg: #f0b800;
+  --kv2-btn-queue-fg: #1f1f1f;
+  --kv2-btn-delete-bg: #ffffff;
+  --kv2-btn-delete-fg: #ff4d6d;
+
+  /* ── Shadows (composed from the shadow color above) ───────── */
+  --kv2-shadow-sm: 3px 3px 0 var(--kv2-shadow-color);
+  --kv2-shadow-md: 4px 4px 0 var(--kv2-shadow-color);
+  --kv2-shadow-lg: 4px 4px 0 var(--kv2-shadow-color);
+}
+
+/* =============================================================
+   LAYER ③  STRUCTURAL — THEME-AGNOSTIC (no colour)
+   ============================================================= */
+:root {
   /* ── Typography ───────────────────────────────────────────── */
   --kv2-font-sans: 'Work Sans', system-ui, sans-serif;
   --kv2-font-mono: 'Source Code Pro', ui-monospace, monospace;
@@ -76,52 +227,34 @@
 
   /* ── Card structure tokens ────────────────────────────────── */
   --kv2-card-border-width: 3px;
-  --kv2-card-border-color: #000000;
   --kv2-card-radius: 2px;
   --kv2-card-accent-width: 8px;
-  --kv2-card-bg: #ffffff;
   --kv2-card-title-gap: 10px;
   --kv2-card-footer-gap: 8px;
   --kv2-card-footer-status-min-height: 12px;
   --kv2-card-footer-breakpoint: 360px;
+  --kv2-card-title-size: 18px;
+  --kv2-card-meta-size: 12px;
 
-  /* ── Prompt section tokens ────────────────────────────────── */
-  --kv2-prompt-accent-color: #1668e8;
+  /* ── Prompt section geometry ──────────────────────────────── */
   --kv2-prompt-accent-width: 3px;
-  --kv2-prompt-label-color: #2b3443;
-  --kv2-prompt-text-color: #1f2735;
   --kv2-prompt-min-height: 38px;
   --kv2-prompt-column-gap: 5px;
   --kv2-prompt-padding-y: 5px;
   --kv2-prompt-padding-right: 8px;
-  --kv2-divider-color: #bcc6d7;
   --kv2-divider-dash: 8px;
   --kv2-divider-gap: 4px;
 
-  /* ── Card text tokens ─────────────────────────────────────── */
-  --kv2-card-title-color: #1A1A2E;
-  --kv2-card-title-size: 18px;
-  --kv2-card-id-color: #46505e;
-  --kv2-card-date-color: #46505e;
-  --kv2-card-meta-size: 12px;
-
-  /* ── Button tokens ────────────────────────────────────────── */
+  /* ── Button geometry ──────────────────────────────────────── */
   --kv2-btn-stroke-width: 2px;
-  --kv2-btn-stroke-color: #1f2233;
-  --kv2-btn-start-bg: #0d5fd9;
-  --kv2-btn-queue-bg: #f0b800;
-  --kv2-btn-queue-fg: #1f1f1f;
-  --kv2-btn-delete-bg: #ffffff;
-  --kv2-btn-delete-fg: #ff4d6d;
   --kv2-btn-height: 32px;
   --kv2-btn-primary-width: 72px;
   --kv2-btn-queue-target-width: 168px;
   --kv2-btn-delete-size: 28px;
   --kv2-btn-delete-radius: 3px;
 
-  /* ── Pill tokens ──────────────────────────────────────────── */
+  /* ── Pill geometry ────────────────────────────────────────── */
   --kv2-pill-stroke-width: 2px;
-  --kv2-pill-stroke-color: #000000;
   --kv2-pill-max-width: 152px;
   --kv2-pill-height: 32px;
   --kv2-pill-padding-x: 12px;
@@ -145,11 +278,6 @@
   --kv2-radius-md: 6px;
   --kv2-radius-lg: 8px;
   --kv2-radius-pill: 9999px;
-
-  /* ── Shadow (Penpot-extracted) ─────────────────────────────── */
-  --kv2-shadow-sm: 3px 3px 0 rgba(31, 34, 51, 0.85);
-  --kv2-shadow-md: 4px 4px 0 rgba(31, 34, 51, 0.85);
-  --kv2-shadow-lg: 4px 4px 0 rgba(31, 34, 51, 0.85);
 
   /* ── Transition ───────────────────────────────────────────── */
   --kv2-transition-fast: 120ms ease;

@@ -23,15 +23,24 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 
 ## 토큰 레퍼런스 (`kanban-v2.tokens.css`)
 
-| 그룹 | 예시 | 용도 |
-|------|------|------|
-| Status 색 | `--kv2-status-todo-accent`, `--kv2-status-done-bg` | 컬럼/카드/다이얼로그의 상태 색 |
-| Agent 색 | `--kv2-agent-sisyphus` … | 에이전트 pill/칩 |
-| Surface | `--kv2-app-bg`, `--kv2-frame` | 배경/프레임 |
-| Typography | `--kv2-font-sans/mono/heading` | 글꼴 스택 |
-| Text scale | `--kv2-text-3xs` ~ `--kv2-text-lg` | 크기 — 전부 `--kv2-font-scale` 배율 적용(JS로 설정) |
+토큰은 **3계층**으로 나뉩니다. 다크 테마(카드 5)는 **계층 ②만** 덮어씁니다.
+자세한 리터럴→토큰 계약은 `docs/dark-mode-token-map.md` 참고.
 
-규칙: 컴포넌트 CSS에 hex를 하드코딩하지 말 것 — 대응 토큰이 있으면 `var(--kv2-…)`.
+| 계층 | 그룹 | 예시 | 다크에서 override? |
+|------|------|------|--------------------|
+| ① 브랜드 (불변) | Status 4종 · Agent 11종 · Runtime 브랜드 | `--kv2-status-todo-accent`, `--kv2-agent-sisyphus`, `--kv2-runtime-claude` | ❌ 절대 안 바꿈 |
+| ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-focus-ring`, `--kv2-scrim`, `--kv2-info-surface`, `--kv2-surface-inverse` | ✅ 이 계층만 |
+| ③ 구조 (테마 무관) | Typography · Text scale · Spacing · Radius · Geometry · Transition | `--kv2-font-sans`, `--kv2-text-lg`, `--kv2-sp-4`, `--kv2-radius-md` | — (색 아님) |
+
+Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
+배율이 적용됩니다(JS로 설정 — `useFontScale`).
+
+규칙:
+- 컴포넌트 CSS에 hex/rgba를 하드코딩하지 말 것 — 대응 토큰이 있으면 `var(--kv2-…)`.
+- 새 색은 **역할(role)** 기준으로 계층 ②에 토큰을 신설한다(값이 아니라 쓰임새로 고른다).
+- 알파 색은 `color-mix(in srgb, var(--kv2-…) N%, transparent)` 형태로. 단
+  `--kv2-shadow-color`, `--kv2-shadow-color-ambient`, `--kv2-scrim`는 전용 토큰.
+- 계층 ①(브랜드)와 allowlist(syntax·data-viz 색)는 시맨틱 토큰으로 바꾸지 않는다.
 
 ## 프리미티브
 
