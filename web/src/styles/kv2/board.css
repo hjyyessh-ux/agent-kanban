@@ -688,7 +688,7 @@
   min-height: 30px;
   padding: 0 10px;
   font-size: var(--kv2-text-xs);
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.85);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 85%, transparent);
 }
 
 .kv2-list-action-btn:disabled {
@@ -1760,7 +1760,7 @@
   line-height: 1.1;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 45%, transparent);
 }
 
 .kv2-runtime-badge--codex {
@@ -2233,7 +2233,7 @@
   line-height: 1.1;
   white-space: nowrap;
   flex-shrink: 0;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.45);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 45%, transparent);
 }
 
 .kv2-agent-pill-emoji {
@@ -2341,7 +2341,7 @@
   font-size: var(--kv2-text-xs);
   font-weight: 700;
   line-height: 1;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.35);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 35%, transparent);
   cursor: pointer;
   text-align: left;
 }
@@ -2394,7 +2394,7 @@
   text-transform: uppercase;
   border: 2px solid var(--kv2-ink-pure);
   border-radius: 2px;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.85);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 85%, transparent);
   background: var(--kv2-surface);
   color: var(--kv2-frame);
   cursor: pointer;
@@ -2403,13 +2403,13 @@
 
 .kv2-card-action:active {
   transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.85);
+  box-shadow: 1px 1px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 85%, transparent);
 }
 
 .kv2-card-action:hover {
   opacity: 0.88;
   transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.85);
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 85%, transparent);
 }
 
 .kv2-card-action:disabled {
@@ -2421,7 +2421,7 @@
 .kv2-card-action:disabled:active {
   opacity: 0.7;
   transform: none;
-  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.85);
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 85%, transparent);
 }
 
 .kv2-action-spinner {
@@ -2490,7 +2490,7 @@
   background: var(--kv2-surface);
   color: var(--kv2-ink-pure);
   cursor: pointer;
-  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 40%, transparent);
   font-size: var(--kv2-text-lg);
   font-weight: 700;
   line-height: 1;

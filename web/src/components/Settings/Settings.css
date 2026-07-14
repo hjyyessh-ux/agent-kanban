@@ -527,6 +527,12 @@
 }
 
 /* ── Font Scale Slider ──────────────────────────────────────── */
+.settings-theme-control {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .settings-font-scale-control {
   display: flex;
   align-items: center;

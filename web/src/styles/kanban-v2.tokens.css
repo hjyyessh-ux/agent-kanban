@@ -98,6 +98,10 @@
    A dark theme overrides this band only.
    ============================================================= */
 :root {
+  /* Native form controls / scrollbars follow the theme (flipped to
+     `dark` in the data-theme="dark" block below). */
+  color-scheme: light;
+
   /* ── Base surfaces ────────────────────────────────────────── */
   --kv2-app-bg: #FFF8E7;
   --kv2-bg: #FFF8E7;
@@ -184,9 +188,11 @@
 
   /* ── Overlay / scrim ──────────────────────────────────────── */
   --kv2-scrim: rgba(0, 0, 0, 0.5);  /* dialog backdrop */
+  --kv2-scrim-strong: rgba(0, 0, 0, 0.85); /* opaque media / lightbox backdrop */
 
   /* ── Shadow color (factored out of the shadow tokens) ─────── */
   --kv2-shadow-color: rgba(31, 34, 51, 0.85);      /* neo drop shadow ink */
+  --kv2-shadow-hard-color: #000000; /* base ink for pure-black neo offset shadows (via color-mix) */
   --kv2-ink-ambient: #111827;       /* opaque base for ambient tint/shadow alphas */
   --kv2-shadow-color-ambient: rgba(17, 24, 39, 0.18); /* soft row shadow — == color-mix(in srgb, var(--kv2-ink-ambient) 18%, transparent) */
   --kv2-list-row-accent-from: rgba(251, 113, 133, 0.92); /* decorative row accent gradient */
@@ -408,4 +414,205 @@
   /* ── Transition ───────────────────────────────────────────── */
   --kv2-transition-fast: 120ms ease;
   --kv2-transition-base: 200ms ease;
+}
+
+/* =============================================================
+   DARK THEME — overrides LAYER ② ONLY (card 5)
+   Activated by `data-theme="dark"` on <html> (pre-painted by the
+   inline FOUC script in index.html, then owned by useTheme).
+   Layer ① (brand) and layer ③ (structural) are inherited
+   unchanged. Status-soft families are re-anchored on their
+   *invariant* accent via color-mix, so every tinted surface /
+   border / text step follows the hue down into dark mode from a
+   single knob instead of ~90 hand-picked hexes. `var(--kv2-surface)`
+   / `var(--kv2-text-primary)` inside those mixes resolve to the
+   dark values redefined in this same block.
+   ============================================================= */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ── Base surfaces ────────────────────────────────────────── */
+  --kv2-app-bg: #131319;
+  --kv2-bg: #131319;
+  --kv2-frame: #0e0e15;
+  --kv2-surface: #1e1e26;
+  --kv2-surface-raised: #24242e;
+  --kv2-surface-sunken: #17171d;
+  --kv2-surface-hover: #2a2a34;
+  --kv2-surface-active: #2d2d4a;
+  --kv2-card-bg: #1e1e26;
+  --kv2-input-bg: #191920;
+  --kv2-code-bg: #202028;
+  --kv2-surface-tint: #1f1f27;
+  --kv2-surface-tint-hover: #24242d;
+  --kv2-surface-tint-cool: #1c1c26;
+  --kv2-surface-warm: #211f26;
+  --kv2-surface-warm-soft: #211f26;
+  --kv2-surface-warm-cream: #26221c;
+  --kv2-surface-sunken-soft: #191920;
+  --kv2-surface-faint: #1b1b22;
+
+  /* ── Inverse surfaces (already dark; lifted for separation) ── */
+  --kv2-surface-inverse: #2a2a34;
+  --kv2-surface-inverse-sunken: #202028;
+  --kv2-surface-inverse-deep: #202028;
+  --kv2-surface-inverse-card-from: #33333f;
+  --kv2-surface-inverse-card-to: #2b2b35;
+  --kv2-surface-inverse-border: #44444f;
+  --kv2-border-inverse: #55556a;
+  --kv2-ink-black: #4a4a5c;          /* neo ink flips light so it reads on dark */
+  --kv2-ink-pure: #565669;
+
+  /* ── Text ─────────────────────────────────────────────────── */
+  --kv2-text-primary: #e8e8ef;
+  --kv2-text-secondary: #a6adbd;
+  --kv2-text-muted: #7f8698;
+  --kv2-text-danger: #ff6b85;
+  --kv2-text-link: #6ea8ff;
+  --kv2-text-meta: #9a9aa8;
+  --kv2-text-meta-hover: #b4b4c0;
+
+  /* ── Borders (lightened; they carry structure now that the
+        neo hard-shadow is muted on a dark ground) ───────────── */
+  --kv2-border: #33333f;
+  --kv2-border-strong: #5c5c70;
+  --kv2-border-muted: #2c2c37;
+  --kv2-border-subtle: #2a2a34;
+  --kv2-divider-color: #33333f;
+  --kv2-card-border-color: #4a4a5c;  /* was pure #000 — invisible on dark */
+  --kv2-btn-stroke-color: #5c5c70;
+  --kv2-pill-stroke-color: #4a4a5c;
+  --kv2-border-soft: #2e2e3a;
+
+  /* ── Neutral ramp (lightness inverted for on-dark legibility) ─ */
+  --kv2-neutral-900: #f2f2f7;
+  --kv2-neutral-800: #e6e6ee;
+  --kv2-neutral-700: #d0d0da;
+  --kv2-neutral-650: #c6c6d2;
+  --kv2-neutral-600: #b6b6c4;
+  --kv2-neutral-575: #adadbb;
+  --kv2-neutral-510: #9d9dab;
+  --kv2-neutral-500: #9494a2;
+  --kv2-neutral-480: #8a8a97;
+  --kv2-neutral-465: #868692;
+  --kv2-neutral-450: #83838f;
+  --kv2-neutral-400: #75757f;
+  --kv2-neutral-300: #34343f;        /* was a light border — flips dark */
+  --kv2-neutral-ink-soft: #d2d2da;
+  --kv2-neutral-ink-strong: #dcdce4;
+
+  /* ── Interactive / focus ──────────────────────────────────── */
+  --kv2-focus-ring: #6ea8ff;
+
+  /* ── Overlay / scrim (deepened over the darker page) ──────── */
+  --kv2-scrim: rgba(0, 0, 0, 0.65);
+  --kv2-scrim-strong: rgba(0, 0, 0, 0.9);
+
+  /* ── Shadows — the neobrutalist hard offset flips to a light
+        translucent so the offset block stays visible on a dark
+        ground (a black offset would vanish into the page). ───── */
+  --kv2-shadow-color: rgba(150, 152, 170, 0.5);
+  --kv2-shadow-color-ambient: rgba(0, 0, 0, 0.45);
+  --kv2-shadow-hard-color: #8a8a9c;
+
+  /* ── Prompt / card / button surfaces ──────────────────────── */
+  --kv2-prompt-accent-color: #4b8bff;
+  --kv2-prompt-label-color: #c6c6d2;
+  --kv2-prompt-text-color: #d2d2da;
+  --kv2-card-title-color: #e8e8ef;
+  --kv2-card-id-color: #9494a2;
+  --kv2-card-date-color: #9494a2;
+  --kv2-btn-primary-bg: #2b6ff0;
+  --kv2-btn-start-bg: #2f6fe0;
+  --kv2-btn-delete-bg: #1e1e26;      /* was #fff — matches dark surface */
+  --kv2-favorite-icon-idle: #9a8570;
+
+  /* ── Status-soft families — re-anchored on the invariant accent
+        so tinted fills / borders / text track the hue in dark. ── */
+  /* Info (blue) */
+  --kv2-info-surface: color-mix(in srgb, var(--kv2-info-accent) 16%, var(--kv2-surface));
+  --kv2-info-surface-strong: color-mix(in srgb, var(--kv2-info-accent) 24%, var(--kv2-surface));
+  --kv2-info-surface-pale: color-mix(in srgb, var(--kv2-info-accent) 10%, var(--kv2-surface));
+  --kv2-info-border: color-mix(in srgb, var(--kv2-info-accent) 42%, var(--kv2-surface));
+  --kv2-info-border-soft: color-mix(in srgb, var(--kv2-info-accent) 32%, var(--kv2-surface));
+  --kv2-info-border-pale: color-mix(in srgb, var(--kv2-info-accent) 26%, var(--kv2-surface));
+  --kv2-info-border-strong: color-mix(in srgb, var(--kv2-info-accent) 58%, var(--kv2-surface));
+  --kv2-info-text: color-mix(in srgb, var(--kv2-info-accent) 52%, var(--kv2-text-primary));
+  --kv2-info-text-strong: color-mix(in srgb, var(--kv2-info-accent) 64%, var(--kv2-text-primary));
+
+  /* Cyan / sky */
+  --kv2-cyan-surface: color-mix(in srgb, var(--kv2-cyan-accent) 16%, var(--kv2-surface));
+  --kv2-cyan-surface-soft: color-mix(in srgb, var(--kv2-cyan-accent) 10%, var(--kv2-surface));
+  --kv2-cyan-surface-pale: color-mix(in srgb, var(--kv2-cyan-accent) 10%, var(--kv2-surface));
+  --kv2-cyan-border: color-mix(in srgb, var(--kv2-cyan-accent) 42%, var(--kv2-surface));
+  --kv2-cyan-text: color-mix(in srgb, var(--kv2-cyan-accent) 52%, var(--kv2-text-primary));
+  --kv2-cyan-text-deep: color-mix(in srgb, var(--kv2-cyan-accent) 62%, var(--kv2-text-primary));
+
+  /* Teal */
+  --kv2-teal-surface: color-mix(in srgb, var(--kv2-teal-accent) 16%, var(--kv2-surface));
+  --kv2-teal-text-deep: color-mix(in srgb, var(--kv2-teal-accent) 60%, var(--kv2-text-primary));
+
+  /* Success (green) */
+  --kv2-success-surface: color-mix(in srgb, var(--kv2-success-accent) 16%, var(--kv2-surface));
+  --kv2-success-surface-strong: color-mix(in srgb, var(--kv2-success-accent) 24%, var(--kv2-surface));
+  --kv2-success-surface-pale: color-mix(in srgb, var(--kv2-success-accent) 10%, var(--kv2-surface));
+  --kv2-success-surface-vivid: color-mix(in srgb, var(--kv2-success-accent) 30%, var(--kv2-surface));
+  --kv2-success-surface-deep: color-mix(in srgb, var(--kv2-success-accent) 26%, var(--kv2-surface));
+  --kv2-success-surface-faint: color-mix(in srgb, var(--kv2-success-accent) 10%, var(--kv2-surface));
+  --kv2-success-border: color-mix(in srgb, var(--kv2-success-accent) 42%, var(--kv2-surface));
+  --kv2-success-text: color-mix(in srgb, var(--kv2-success-accent) 52%, var(--kv2-text-primary));
+  --kv2-success-text-strong: color-mix(in srgb, var(--kv2-success-accent) 60%, var(--kv2-text-primary));
+  --kv2-success-text-deep: color-mix(in srgb, var(--kv2-success-accent) 58%, var(--kv2-text-primary));
+  --kv2-success-text-deepest: color-mix(in srgb, var(--kv2-success-accent) 66%, var(--kv2-text-primary));
+
+  /* Warn (amber) */
+  --kv2-warn-surface: color-mix(in srgb, var(--kv2-warn-accent) 18%, var(--kv2-surface));
+  --kv2-warn-surface-strong: color-mix(in srgb, var(--kv2-warn-accent) 26%, var(--kv2-surface));
+  --kv2-warn-surface-soft: color-mix(in srgb, var(--kv2-warn-accent) 12%, var(--kv2-surface));
+  --kv2-warn-surface-tint: color-mix(in srgb, var(--kv2-warn-accent) 14%, var(--kv2-surface));
+  --kv2-warn-surface-pale: color-mix(in srgb, var(--kv2-warn-accent) 12%, var(--kv2-surface));
+  --kv2-warn-surface-vivid: color-mix(in srgb, var(--kv2-warn-accent) 32%, var(--kv2-surface));
+  --kv2-warn-border: color-mix(in srgb, var(--kv2-warn-accent) 44%, var(--kv2-surface));
+  --kv2-warn-text: color-mix(in srgb, var(--kv2-warn-accent) 56%, var(--kv2-text-primary));
+  --kv2-warn-text-strong: color-mix(in srgb, var(--kv2-warn-accent) 64%, var(--kv2-text-primary));
+  --kv2-warn-text-deep: color-mix(in srgb, var(--kv2-warn-accent) 62%, var(--kv2-text-primary));
+  --kv2-warn-text-deepest: color-mix(in srgb, var(--kv2-warn-accent) 68%, var(--kv2-text-primary));
+
+  /* Danger (red) */
+  --kv2-danger-surface: color-mix(in srgb, var(--kv2-danger-accent) 16%, var(--kv2-surface));
+  --kv2-danger-surface-strong: color-mix(in srgb, var(--kv2-danger-accent) 24%, var(--kv2-surface));
+  --kv2-danger-surface-soft: color-mix(in srgb, var(--kv2-danger-accent) 12%, var(--kv2-surface));
+  --kv2-danger-surface-pale: color-mix(in srgb, var(--kv2-danger-accent) 10%, var(--kv2-surface));
+  --kv2-danger-surface-faint: color-mix(in srgb, var(--kv2-danger-accent) 10%, var(--kv2-surface));
+  --kv2-danger-border: color-mix(in srgb, var(--kv2-danger-accent) 42%, var(--kv2-surface));
+  --kv2-danger-text: color-mix(in srgb, var(--kv2-danger-accent) 54%, var(--kv2-text-primary));
+  --kv2-danger-text-strong: color-mix(in srgb, var(--kv2-danger-accent) 62%, var(--kv2-text-primary));
+  --kv2-danger-text-deep: color-mix(in srgb, var(--kv2-danger-accent) 60%, var(--kv2-text-primary));
+  --kv2-danger-text-deepest: color-mix(in srgb, var(--kv2-danger-accent) 66%, var(--kv2-text-primary));
+
+  /* Purple */
+  --kv2-purple-surface: color-mix(in srgb, var(--kv2-purple-accent) 16%, var(--kv2-surface));
+  --kv2-purple-surface-strong: color-mix(in srgb, var(--kv2-purple-accent) 24%, var(--kv2-surface));
+  --kv2-purple-surface-vivid: color-mix(in srgb, var(--kv2-purple-accent) 30%, var(--kv2-surface));
+  --kv2-purple-surface-faint: color-mix(in srgb, var(--kv2-purple-accent) 10%, var(--kv2-surface));
+  --kv2-purple-border: color-mix(in srgb, var(--kv2-purple-accent) 42%, var(--kv2-surface));
+  --kv2-purple-border-soft: color-mix(in srgb, var(--kv2-purple-accent) 32%, var(--kv2-surface));
+  --kv2-purple-border-deep: color-mix(in srgb, var(--kv2-purple-accent) 56%, var(--kv2-surface));
+  --kv2-purple-text: color-mix(in srgb, var(--kv2-purple-accent) 54%, var(--kv2-text-primary));
+
+  /* Slate (cold-storage / freeze chrome) */
+  --kv2-slate-surface: color-mix(in srgb, var(--kv2-slate-accent) 22%, var(--kv2-surface));
+
+  /* Pink */
+  --kv2-pink-surface: color-mix(in srgb, var(--kv2-pink-accent) 16%, var(--kv2-surface));
+  --kv2-pink-surface-strong: color-mix(in srgb, var(--kv2-pink-accent) 24%, var(--kv2-surface));
+  --kv2-pink-surface-pale: color-mix(in srgb, var(--kv2-pink-accent) 12%, var(--kv2-surface));
+  --kv2-pink-surface-deep: color-mix(in srgb, var(--kv2-pink-accent) 30%, var(--kv2-surface));
+  --kv2-pink-border: color-mix(in srgb, var(--kv2-pink-accent) 42%, var(--kv2-surface));
+  --kv2-pink-text: color-mix(in srgb, var(--kv2-pink-accent) 54%, var(--kv2-text-primary));
+
+  /* Orange */
+  --kv2-orange-surface: color-mix(in srgb, var(--kv2-orange-accent) 18%, var(--kv2-surface));
+  --kv2-orange-surface-soft: color-mix(in srgb, var(--kv2-orange-accent) 12%, var(--kv2-surface));
+  --kv2-orange-border: color-mix(in srgb, var(--kv2-orange-accent) 44%, var(--kv2-surface));
 }

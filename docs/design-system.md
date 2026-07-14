@@ -35,6 +35,49 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
 배율이 적용됩니다(JS로 설정 — `useFontScale`).
 
+## 다크 테마 (`:root[data-theme="dark"]`)
+
+다크 모드는 `tokens.css` 끝의 `:root[data-theme="dark"]` 블록으로 **계층 ②만**
+덮어써 구현됩니다. 계층 ①(브랜드)·③(구조)는 그대로 상속됩니다.
+
+- **토글/상태**: `web/src/hooks/useTheme.ts` — `localStorage 'kanban-theme'`에
+  `light`/`dark`/`system` 저장, `system`은 `prefers-color-scheme` 추종,
+  `<html>`의 `data-theme`를 `light`/`dark`로 반영. `useFontScale`과 동일한
+  패턴(전역 1회 `App.tsx`에서, Settings 탭에 3-way 토글). 테마가 바뀔 때마다
+  `window`에 `kanban-theme-change` 커스텀 이벤트를 쏴 캔버스 등 non-CSS
+  소비자를 다시 그리게 한다.
+- **FOUC 방지**: `web/index.html` `<head>`의 인라인 스크립트가 첫 페인트 전에
+  같은 규칙으로 `data-theme`를 선적용한다(훅과 localStorage 키·해석을 미러링).
+- **`color-scheme`**: 라이트 `:root`는 `light`, 다크 블록은 `dark` — 네이티브
+  스크롤바/체크박스/폼 컨트롤이 테마를 따른다.
+
+### 다크 보정 규칙
+
+- **네오브루탈리즘 하드 섀도**: 다크 배경에서 검정 오프셋 블록은 소실되므로,
+  하드 섀도 잉크(`--kv2-shadow-color`, `--kv2-shadow-hard-color`)를 **밝은
+  반투명/회색으로 뒤집어** 오프셋 블록이 보이게 한다. 동시에 보더 계열
+  (`--kv2-card-border-color`, `--kv2-border-strong`, `--kv2-*-stroke-color`,
+  `--kv2-ink-*`)을 라이트로 올려 **보더가 구조를 담당**하게 한다. `#000` 하드
+  섀도는 `color-mix(in srgb, var(--kv2-shadow-hard-color) N%, transparent)`로
+  치환되어 있어 라이트에서는 값-동일, 다크에서는 한 토큰으로 함께 바뀐다.
+- **Status-soft 패밀리**: 다크 블록에서 각 패밀리를 **불변 accent에 color-mix로
+  재앵커**한다 — `surface`는 accent를 dark surface에 소량 섞고, `text`는 accent를
+  `--kv2-text-primary`(밝음)에 섞는다. accent 자체는 상속(밝은 마크). 이 방식으로
+  ~90개 step을 손으로 고르지 않고 색조를 다크로 끌어내린다.
+- **다이얼로그 scrim**: `--kv2-scrim`(백드롭)은 어두운 페이지 위에서 더 진하게,
+  라이트박스 배경은 `--kv2-scrim-strong`(전용 토큰).
+
+### WikiGraph 캔버스 (`WikiGraph.tsx`)
+
+캔버스는 CSS가 아니라 draw 시점 문자열을 쓰므로, 테마 가변 색(배경·노드
+보더/그림자/라벨 잉크)은 config에서 빼고 **draw 시점에 `getComputedStyle`로
+`--kv2-app-bg`/`--kv2-text-primary`를 읽는다**(`readThemeColors`). 링크 rgba도
+그 잉크에서 파생해 라이트에선 기존 리터럴과 값-동일하고 다크에선 함께 밝아진다.
+`kanban-theme-change` 이벤트로 재-read → `backgroundColor` prop·`paintNode`가
+갱신되며 force-graph가 캔버스를 다시 칠한다. 카테고리 색(type/project/topic)은
+브랜드/데이터-viz라 config에 남아 사용자 조정 가능(테마 무관). 이에 따라 기어
+패널의 "배경"·"테두리/글자" 컬러 피커 2종은 제거됨(토큰이 소스).
+
 규칙:
 - 컴포넌트 CSS에 hex/rgba를 하드코딩하지 말 것 — 대응 토큰이 있으면 `var(--kv2-…)`.
 - 새 색은 **역할(role)** 기준으로 계층 ②에 토큰을 신설한다(값이 아니라 쓰임새로 고른다).

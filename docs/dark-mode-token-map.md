@@ -514,3 +514,56 @@ The dark palette and the toggle are **out of scope** for this card. Card 5 adds 
 on the existing **`web/src/hooks/useFontScale.ts`** — it already owns the pattern
 of writing a `:root` custom property (`--kv2-font-scale`) from React state and
 persisting the choice. `useTheme` should set `data-theme` on `<html>` the same way.
+
+---
+
+## Resolved in card 5 (dark palette + toggle + canvas theming)
+
+Card 5 shipped the actual dark theme on top of the token-complete base. It only
+touched layer ②: the new `:root[data-theme="dark"]` block at the end of
+`kanban-v2.tokens.css` overrides surfaces, text, borders, the neutral ramp,
+interactive/focus, scrim, shadows and the status-soft families. Layers ① and ③
+are inherited unchanged.
+
+### New layer-② tokens added (light values value-exact)
+
+Two literals that cards 2–4 deferred as "pure-black, normalise in card 5" were
+finally tokenised — value-exact in light, theme-responsive in dark:
+
+| literal | token | light value | why |
+|---------|-------|-------------|-----|
+| `rgba(0, 0, 0, α)` neo hard shadows (`board.css`) | `--kv2-shadow-hard-color` (`#000000`) via `color-mix(in srgb, var(--kv2-shadow-hard-color) (α×100)%, transparent)` | `#000000` | dark flips the base to `#8a8a9c` so the offset block stays visible; `color-mix(black N%, transparent)` == `rgba(0,0,0,α)` exactly, so light is pixel-identical |
+| `rgba(0,0,0,0.85)` screenshot lightbox bg (`panels.css`) | `--kv2-scrim-strong` | `rgba(0, 0, 0, 0.85)` | media/lightbox backdrop; dark deepens to `0.9` |
+
+### Dark strategy (layer ② only)
+
+- **Neobrutalist hard shadow → light offset.** On a dark ground a black offset
+  block vanishes, so `--kv2-shadow-color` and `--kv2-shadow-hard-color` flip to a
+  light translucent/grey; the border tokens (`--kv2-card-border-color`,
+  `--kv2-border-strong`, `--kv2-*-stroke-color`, `--kv2-ink-black/-pure`) are
+  lightened so borders carry the structure.
+- **Neutral ramp lightness-inverted.** `--kv2-neutral-900` (darkest text in light)
+  → lightest; `--kv2-neutral-300` (light border in light) → dark. Roles preserved.
+- **Status-soft re-anchored on the invariant accent via `color-mix`.** Instead of
+  ~90 hand-picked dark hexes, each family's `surface*`/`border*`/`text*` steps are
+  `color-mix(in srgb, var(--kv2-<family>-accent) N%, var(--kv2-surface | --kv2-text-primary))`
+  (surfaces mix the accent into the dark surface; text into the light
+  `text-primary`). The `*-accent` tokens themselves are inherited (saturated marks
+  read fine on dark). `var(--kv2-surface)`/`var(--kv2-text-primary)` resolve to the
+  dark values redefined in the same block.
+- **`color-scheme`** is `light` on `:root`, `dark` in the dark block, so native
+  scrollbars/checkboxes/form controls follow.
+
+### Canvas (`WikiGraph.tsx`) — the deferred allowlist item
+
+The canvas draw config's theme-variable colours (`background` `#FFF8E7` →
+`--kv2-app-bg`; `borderColor` `#1A1A2E` → `--kv2-text-primary`) are now read live
+via `getComputedStyle` at draw time (`readThemeColors`), re-read on the
+`kanban-theme-change` event, and flow into `paintNode`/`backgroundColor` so
+force-graph repaints. Link `rgba()` strings are derived from the same ink (+ the
+topic swatch), so **light stays pixel-identical** (`#1A1A2E`→`26,26,46`,
+`#8d8da3`→`141,141,163`) while dark follows. The categorical
+`typeColors`/`projectColor`/`topicColor` stay literal in config (layer-① data-viz,
+theme-invariant, still user-tunable). The two now-redundant gear-panel colour
+pickers ("배경", "테두리/글자") were removed. The remaining canvas-only allowlist
+literals (`#8d8da3`, `#999`) are theme-invariant neutrals and stay as-is.
