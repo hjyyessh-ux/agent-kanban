@@ -306,6 +306,69 @@ fallback is value-neutral, not a Rule A/B substitution.
 
 ---
 
+## Resolved in card 3 (card-detail.css / panels.css)
+
+Card 3 applied the map to the detail/create dialog and its sidebar panels.
+Every literal in those two files now resolves to a token. The tables above
+used "add `--kv2-*` step per Rule A" placeholders for several of them — here
+is what they actually became, so card 4 reuses rather than re-derives:
+
+| literal | token | value |
+|---------|-------|-------|
+| `#555555` (card-id-meta copy button ink) | `--kv2-text-meta` | `#555555` |
+| `#666666` (card-id-meta hover) | `--kv2-text-meta-hover` | `#666666` |
+| `#27ae60` (card-id-meta "copied" confirmation ink) | `--kv2-success-accent-vivid` | `#27ae60` |
+| `#fffdf5` (directory/runtime/meta-dropdown popover bg — distinct shade from `--kv2-surface-warm`) | `--kv2-surface-warm-soft` | `#fffdf5` |
+| `#fff6e1` (queue summary card bg) | `--kv2-surface-warm-cream` | `#fff6e1` |
+| `#f9fafb` (dropzone / screenshot-grid empty-state bg — distinct shade from `--kv2-surface-sunken`) | `--kv2-surface-sunken-soft` | `#f9fafb` |
+| `#bbf7d0` (directory-action bg / command-option hover / progress-step--command border) | `--kv2-success-surface-deep` | `#bbf7d0` |
+| `#9a3412` (create-helper--warning text) | `--kv2-warn-text-deepest` | `#9a3412` |
+| `#fbbf24` (queue-mode-header bg) | `--kv2-warn-surface-vivid` | `#fbbf24` |
+| `#fffbeb` (progress-step--mcp bg) | `--kv2-warn-surface-pale` | `#fffbeb` |
+| `#e88764` (claude runtime chip hover fill — brand-adjacent, layer ①) | `--kv2-runtime-claude-hover` | `#e88764` |
+| `#fff7ed` (claude icon chip pale bg) | `--kv2-orange-surface-soft` | `#fff7ed` |
+| `#e5e7eb` (opencode chip bg, agent selector) | `--kv2-neutral-300` | `#e5e7eb` |
+| `#6b7280` (detail-agent-selector-label text — value-coincident with `--kv2-agent-default`, but a different, theme-variable role) | `--kv2-neutral-510` | `#6b7280` |
+| `#4b5563` (queue-mode-help text — value-coincident with `--kv2-border-inverse`, but a different, theme-variable role) | `--kv2-neutral-575` | `#4b5563` |
+| `#8a8fa3` (session "done" accent — `rgba(138,143,163,…)` base) | `--kv2-neutral-480` | `#8a8fa3` |
+| `#eef2ff` (meta-dropdown-option hover bg) | `--kv2-info-surface-pale` | `#eef2ff` |
+| `#c7d2fe` (meta-dropdown-option hover border) | `--kv2-info-border-pale` | `#c7d2fe` |
+| `#f0f9ff` (progress-step--agent bg) | `--kv2-cyan-surface-pale` | `#f0f9ff` |
+| `#ddd6fe` (progress-step--skill border) | `--kv2-purple-border-soft` | `#ddd6fe` |
+| `#fbcfe8` (progress-step--memory border) | `--kv2-pink-border` | `#fbcfe8` |
+| `#fdf2f8` (progress-step--memory bg) | `--kv2-pink-surface-pale` | `#fdf2f8` |
+| `#14b8a6` (phase--meta accent — new Teal family) | `--kv2-teal-accent` | `#14b8a6` |
+
+Role notes:
+- `#1f2233` was used uniformly for borders, hard box-shadow ink, *and* text/icon
+  colour throughout both files (no `.kv2-btn` primitive in this scope) — all
+  resolved to `--kv2-border-strong`, matching the precedent already set in
+  `primitives.css`/`board.css` (a text-colour use of the same exact literal
+  also resolves to `--kv2-border-strong` there).
+- `#ffffff`/`#fff`: `background`/`background-color` uses → `--kv2-surface`;
+  `color`/`border`/`border-color` uses → `--kv2-text-inverse` (text/icon/stroke
+  on an accent or dark fill), matching Rule B.
+- `#2563eb`: `color:` (link/hover text) → `--kv2-text-link`; `border-color:`
+  and `accent-color:` (codex icon chrome, checkbox tint) → `--kv2-info-accent`.
+  The codex runtime chip/icon reuses the **info** family end-to-end (not
+  `--kv2-runtime-codex-accent`), matching the precedent already set by
+  `.kv2-runtime-badge--codex` in `board.css`.
+- `#111111` (create-agent-chip--runtime-claude border, and the opencode icon
+  chip bg/border) all resolve to `--kv2-runtime-opencode` — value-exact reuse
+  of the existing brand token rather than a new one-off.
+- Dead `var(--token, #fallback)` defaults were dropped (not replaced), same
+  as the `conversation.css` precedent from card 2: `--kv2-text-secondary`,
+  `--kv2-text-muted`, `--kv2-bg`, `--kv2-status-done-accent` are always
+  defined at `:root`, so their raw-hex fallbacks (which don't even match the
+  tokens' real values) were dead code. `--session-accent-wash`/`-soft` are
+  genuinely conditional (only set by the `--complete`/`--done` dialog
+  variants), so their fallbacks are live and were tokenised instead of
+  dropped.
+- `rgba(0, 0, 0, 0.85)` (screenshot lightbox scrim) was left untouched per
+  the pure-black-shadow rule above — normalise in card 5.
+
+---
+
 ## Allowlist — do NOT tokenise into semantic tokens
 
 These are not part of the theme surface. Leave them hard-coded (or move to a

@@ -63,6 +63,7 @@
   /* Vendor brand colours for runtime badges — fixed like a logo,
      so they stay put in dark mode (only surrounding chrome shifts). */
   --kv2-runtime-claude: #d97757;
+  --kv2-runtime-claude-hover: #e88764;
   --kv2-runtime-opencode: #111111;
   --kv2-runtime-opencode-icon-a: #121212;
   --kv2-runtime-opencode-icon-b: #5b5b5b;
@@ -91,6 +92,9 @@
   --kv2-surface-tint-hover: #f5f8fc; /* gradient stop, hover state */
   --kv2-surface-tint-cool: #fafbff; /* session timeline strip bg */
   --kv2-surface-warm: #fffdfa;      /* warm off-white (create-column btn) */
+  --kv2-surface-warm-soft: #fffdf5; /* warm popover bg (directory/runtime/meta dropdown) */
+  --kv2-surface-warm-cream: #fff6e1; /* queue summary card bg */
+  --kv2-surface-sunken-soft: #f9fafb; /* dropzone / empty-state bg, near surface-sunken */
 
   /* ── Inverse surfaces (intentionally dark chrome) ─────────── */
   /* Filter popover, log console, opencode panel — dark even in
@@ -118,6 +122,8 @@
   --kv2-text-danger: #ff4d6d;
   --kv2-text-inverse: #ffffff;      /* text on accent / dark fill */
   --kv2-text-link: #2563eb;         /* interactive link / hover text */
+  --kv2-text-meta: #555555;         /* card-id meta copy button ink */
+  --kv2-text-meta-hover: #666666;   /* card-id meta hover */
 
   /* ── Borders ──────────────────────────────────────────────── */
   --kv2-border: #D7DCE6;
@@ -137,9 +143,13 @@
   --kv2-neutral-800: #1f2937;
   --kv2-neutral-700: #334155;
   --kv2-neutral-600: #475569;
+  --kv2-neutral-575: #4b5563;
+  --kv2-neutral-510: #6b7280;
   --kv2-neutral-500: #64748b;
+  --kv2-neutral-480: #8a8fa3;
   --kv2-neutral-450: #999999;
   --kv2-neutral-400: #94a3b8;
+  --kv2-neutral-300: #e5e7eb;
   --kv2-neutral-ink-soft: #2e3a47;  /* card body copy ink */
   --kv2-neutral-ink-strong: #293241; /* directory/session-command names */
 
@@ -165,29 +175,39 @@
   --kv2-info-text: #1d4ed8;
   --kv2-info-text-strong: #1e3a8a;
   --kv2-info-accent: #2563eb;
+  --kv2-info-surface-pale: #eef2ff;
+  --kv2-info-border-pale: #c7d2fe;
 
   --kv2-cyan-surface: #e0f2fe;
   --kv2-cyan-surface-soft: #f0fdff;
+  --kv2-cyan-surface-pale: #f0f9ff;
   --kv2-cyan-border: #bae6fd;
   --kv2-cyan-text: #0369a1;
   --kv2-cyan-accent: #0ea5e9;
 
+  --kv2-teal-accent: #14b8a6;
+
   --kv2-success-surface: #f0fdf4;
   --kv2-success-surface-strong: #dcfce7;
   --kv2-success-surface-vivid: #d9f99d;
+  --kv2-success-surface-deep: #bbf7d0;
   --kv2-success-border: #86efac;
   --kv2-success-text: #166534;
   --kv2-success-text-strong: #14532d;
   --kv2-success-accent: #16a34a;
+  --kv2-success-accent-vivid: #27ae60;
 
   --kv2-warn-surface: #fef3c7;
   --kv2-warn-surface-strong: #fde68a;
   --kv2-warn-surface-soft: #fff8f0;
   --kv2-warn-surface-tint: #f8f1d4;
+  --kv2-warn-surface-pale: #fffbeb;
+  --kv2-warn-surface-vivid: #fbbf24;
   --kv2-warn-border: #fcd34d;
   --kv2-warn-text: #b45309;
   --kv2-warn-text-strong: #3f2f00;
   --kv2-warn-text-deep: #92400e;
+  --kv2-warn-text-deepest: #9a3412;
   --kv2-warn-accent: #d97706;
 
   --kv2-danger-surface: #fef2f2;
