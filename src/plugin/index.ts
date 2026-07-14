@@ -13,7 +13,7 @@ import type { FollowUpFn } from './telegram-poller';
 import { getPrimaryAgentDispatchLabel } from '../core/agent-config';
 import { getBuiltinCommandDefinition, normalizeBuiltinCommandId } from '../core/commands';
 import type { DispatchResult, KanbanCard } from '../core/types';
-import { resolveAgentRuntime } from '../core/runtime-config';
+import { RUNTIME_CATALOG, resolveAgentRuntime } from '../core/runtime-config';
 import type { NativeSessionInfo } from './peer-session-coordinator';
 import { appendRuntimeDebugLog, getRuntimeDebugLogPath } from './debug-log';
 import { createRuntimeRegistry } from './runtimes/runtime-registry';
@@ -28,6 +28,7 @@ import { captureGitStart } from './runtimes/git-capture';
 import { isRecentlyFailed } from './hooks/event-handler';
 import { buildDispatchPromptText } from './dispatch-prompt';
 import { createKanbanApp } from './bootstrap';
+import { mergeCodexCliModelsIntoCatalog } from './runtimes/codex-model-catalog';
 
 function resolveDispatchAgent(agentType?: string): string | undefined {
   return getPrimaryAgentDispatchLabel(agentType);
@@ -347,6 +348,7 @@ const plugin: Plugin = async (input) => {
       return {
         dispatchCard,
         runStore: runtimeRunStore,
+        runtimeCatalogFn: () => mergeCodexCliModelsIntoCatalog(RUNTIME_CATALOG),
         singletonServices: [staleChecker, claudeCodexWatchdog],
       };
     },

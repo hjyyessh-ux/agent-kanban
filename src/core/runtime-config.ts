@@ -19,14 +19,16 @@ export type ClaudeModelId = typeof CLAUDE_MODELS[number]['id'];
 export const DEFAULT_CLAUDE_MODEL: ClaudeModelId = 'claude-sonnet-5';
 
 export const CODEX_MODELS = [
-  { id: 'gpt-5.3-codex', label: 'GPT-5.3 Codex', tier: 'codex' },
+  { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol', tier: 'frontier' },
+  { id: 'gpt-5.6-terra', label: 'GPT-5.6-Terra', tier: 'frontier' },
+  { id: 'gpt-5.6-luna', label: 'GPT-5.6-Luna', tier: 'frontier' },
   { id: 'gpt-5.5', label: 'GPT-5.5', tier: 'general' },
   { id: 'gpt-5.4', label: 'GPT-5.4', tier: 'general' },
   { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini', tier: 'mini' },
 ] as const;
 
 export type CodexModelId = typeof CODEX_MODELS[number]['id'];
-export const DEFAULT_CODEX_MODEL: CodexModelId = 'gpt-5.3-codex';
+export const DEFAULT_CODEX_MODEL: CodexModelId = 'gpt-5.6-sol';
 export const CODEX_REASONING_EFFORT_VALUES: CodexReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
 export const CODEX_SANDBOX_VALUES: CodexSandboxMode[] = ['read-only', 'workspace-write', 'danger-full-access'];
 export const DEFAULT_CODEX_REASONING_EFFORT: CodexReasoningEffort = 'medium';

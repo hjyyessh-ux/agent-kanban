@@ -12,7 +12,6 @@ import {
   DEFAULT_CODEX_MODEL,
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_SANDBOX,
-  isCodexModelValid,
 } from '../../core/runtime-config';
 import { dispatchNextQueuedTodoCard } from '../hooks/event-handler';
 import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle } from './types';
@@ -77,9 +76,7 @@ async function startCodexRun(
     }
   }
 
-  const model = input.card.model && isCodexModelValid(input.card.model)
-    ? input.card.model
-    : DEFAULT_CODEX_MODEL;
+  const model = input.card.model?.trim() || DEFAULT_CODEX_MODEL;
   const run = await deps.runStore.createRun({
     cardId: input.card.id,
     runtime: 'codex',

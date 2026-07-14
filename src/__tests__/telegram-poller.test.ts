@@ -455,7 +455,7 @@ describe('TelegramPoller', () => {
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
     expect(codexResult?.type).toBe('reply');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.5');
-    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.3-codex');
+    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.6-sol');
   });
 
   test('model commands reject unknown ids instead of saving fallback-prone defaults', () => {
@@ -1146,7 +1146,7 @@ describe('TelegramPoller', () => {
           sessionId: 'thread-codex-1',
           telegramChatId: 24680,
           agentRuntime: 'codex',
-          model: 'gpt-5.3-codex',
+          model: 'gpt-5.6-sol',
         });
         await store.createCard({
           title: 'Claude task',
@@ -2027,7 +2027,7 @@ describe('TelegramPoller', () => {
         const board = await store.load();
         expect(board.cards).toHaveLength(1);
         expect(board.cards[0].agentRuntime).toBe('codex');
-        expect(board.cards[0].model).toBe('gpt-5.3-codex');
+        expect(board.cards[0].model).toBe('gpt-5.6-sol');
 
         const state = await telegramStateStore.getChatState(12345);
         expect(state?.defaultAgentRuntime).toBe('codex');

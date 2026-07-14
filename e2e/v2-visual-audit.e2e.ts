@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/kanban';
 
 const VIEWPORTS = {
@@ -5,6 +6,16 @@ const VIEWPORTS = {
   tablet: { width: 1024, height: 1366 },
   mobile: { width: 390, height: 844 },
 } as const;
+
+// Flips the already-rendered page to dark (so this pass reuses the light
+// pass's seeded state) and persists the choice so later `page.goto()` calls
+// in the same test resolve dark via the FOUC script too.
+async function setDarkTheme(page: Page) {
+  await page.evaluate(() => {
+    localStorage.setItem('kanban-theme', 'dark');
+    document.documentElement.dataset.theme = 'dark';
+  });
+}
 
 test.describe('v2 visual audit', () => {
   test('captures board parity states on desktop', async ({ page, seedCardWithStatus }) => {
@@ -92,6 +103,12 @@ test.describe('v2 visual audit', () => {
     expect(metrics.promptColumns).toContain('3px');
 
     await page.screenshot({ path: 'e2e/results/v2-visual-board-desktop.png', fullPage: true });
+
+    // Dark variant reuses the same seeded board; light assertions above
+    // already ran unaffected, confirming no light-mode regression.
+    await setDarkTheme(page);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.screenshot({ path: 'e2e/results/v2-visual-board-desktop-dark.png', fullPage: true });
   });
 
   test('captures detail modals for in_progress, complete, and done', async ({ page, seedCardWithStatus }) => {
@@ -138,10 +155,14 @@ test.describe('v2 visual audit', () => {
 
     const openAndCapture = async (title: string, screenshotPath: string, expectedAction: string, fromDoneGroup = false) => {
       if (fromDoneGroup) {
-        // Done cards render inside collapsed session groups.
+        // Done cards render inside collapsed session groups. Only expand if
+        // a prior call (e.g. the light pass) hasn't already left it open.
         const doneColumn = page.locator('.kv2-column[data-status="done"]');
-        await doneColumn.locator('.kv2-complete-session-toggle').first().click();
-        await doneColumn.locator('.kv2-complete-session-card-title', { hasText: title }).click();
+        const groupTitle = doneColumn.locator('.kv2-complete-session-card-title', { hasText: title });
+        if (!(await groupTitle.isVisible())) {
+          await doneColumn.locator('.kv2-complete-session-toggle').first().click();
+        }
+        await groupTitle.click();
       } else {
         await page.locator('.kv2-card', { hasText: title }).click();
       }
@@ -174,6 +195,12 @@ test.describe('v2 visual audit', () => {
     await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress.png', 'REOPEN');
     await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete.png', 'DONE');
     await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done.png', 'REOPEN', true);
+
+    // Dark variant: same cards, same assertions inside openAndCapture, just re-themed.
+    await setDarkTheme(page);
+    await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress-dark.png', 'REOPEN');
+    await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete-dark.png', 'DONE');
+    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done-dark.png', 'REOPEN', true);
   });
 
   test('captures create modal and responsive board states', async ({ page }) => {
@@ -209,5 +236,28 @@ test.describe('v2 visual audit', () => {
     );
     expect(new Set(mobileColumns).size).toBe(1);
     await page.screenshot({ path: 'e2e/results/v2-visual-board-mobile.png', fullPage: true });
+
+    // Dark variant pass: all light assertions above already ran unaffected.
+    // localStorage persists the dark choice, so the FOUC script applies it
+    // before first paint on each fresh navigation below.
+    await setDarkTheme(page);
+
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.locator('.kv2-create-btn').click();
+    await expect(page.locator('.kv2-dialog--create')).toBeVisible();
+    await page.screenshot({ path: 'e2e/results/v2-visual-create-modal-dark.png', fullPage: true });
+    await page.keyboard.press('Escape');
+
+    await page.setViewportSize(VIEWPORTS.tablet);
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.screenshot({ path: 'e2e/results/v2-visual-board-tablet-dark.png', fullPage: true });
+
+    await page.setViewportSize(VIEWPORTS.mobile);
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.screenshot({ path: 'e2e/results/v2-visual-board-mobile-dark.png', fullPage: true });
   });
 });

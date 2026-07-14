@@ -47,7 +47,7 @@ export interface KanbanAppStores {
 export interface DispatchEngine {
   dispatchCard: (cardId: string) => Promise<DispatchResult>;
   runStore?: RuntimeRunStore;
-  runtimeCatalogFn?: () => RuntimeCatalogEntry[];
+  runtimeCatalogFn?: () => RuntimeCatalogEntry[] | Promise<RuntimeCatalogEntry[]>;
   /**
    * Extra owner-gated services (watchdogs, stale checkers). Started right
    * after the scheduler engine, stopped in reverse order.

@@ -23,7 +23,7 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 
 ## 토큰 레퍼런스 (`kanban-v2.tokens.css`)
 
-토큰은 **3계층**으로 나뉩니다. 다크 테마(카드 5)는 **계층 ②만** 덮어씁니다.
+토큰은 **3계층**으로 나뉩니다. 다크 테마는 **계층 ②만** 덮어씁니다.
 자세한 리터럴→토큰 계약은 `docs/dark-mode-token-map.md` 참고.
 
 | 계층 | 그룹 | 예시 | 다크에서 override? |
@@ -84,6 +84,16 @@ Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
 - 알파 색은 `color-mix(in srgb, var(--kv2-…) N%, transparent)` 형태로. 단
   `--kv2-shadow-color`, `--kv2-shadow-color-ambient`, `--kv2-scrim`는 전용 토큰.
 - 계층 ①(브랜드)와 allowlist(syntax·data-viz 색)는 시맨틱 토큰으로 바꾸지 않는다.
+
+### 재유입 방지
+
+- `web/src/styles/no-hardcoded-colors.test.ts`(`bun test`)가 `kanban-v2.tokens.css`와
+  `docs/dark-mode-token-map.md`의 allowlist를 제외한 모든 `*.css`를 검사해 새
+  hex/rgba 리터럴이 들어오면 실패한다.
+- `e2e/theme.e2e.ts`가 토글(light/dark/system) 전환, `data-theme` 반영,
+  localStorage 영속, `prefers-color-scheme` 추종을 검증한다.
+- `e2e/v2-visual-audit.e2e.ts`는 라이트 스크린샷마다 대응하는 `-dark` variant를
+  같이 캡처해 라이트 무회귀와 다크 렌더를 함께 감시한다.
 
 ### Agent 브랜드 색 — 단일 소스는 `kanban-v2.tokens.css`
 

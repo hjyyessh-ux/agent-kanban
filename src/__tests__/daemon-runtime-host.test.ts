@@ -64,7 +64,7 @@ describe('standalone daemon runtime host', () => {
       expect(availability.find((entry) => entry.runtime === 'claude')?.available).toBe(true);
       expect(availability.find((entry) => entry.runtime === 'opencode')?.available).toBe(false);
 
-      const catalog = host.getRuntimeCatalog();
+      const catalog = await host.getRuntimeCatalog();
       const opencode = catalog.find((entry) => entry.runtime === 'opencode');
       const codex = catalog.find((entry) => entry.runtime === 'codex');
       expect(opencode?.disabled).toBe(true);

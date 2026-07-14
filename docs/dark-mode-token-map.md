@@ -567,3 +567,29 @@ topic swatch), so **light stays pixel-identical** (`#1A1A2E`→`26,26,46`,
 theme-invariant, still user-tunable). The two now-redundant gear-panel colour
 pickers ("배경", "테두리/글자") were removed. The remaining canvas-only allowlist
 literals (`#8d8da3`, `#999`) are theme-invariant neutrals and stay as-is.
+
+---
+
+## Card 6 (final verification, migration closed)
+
+Card 6 re-audited the whole migration with fresh eyes instead of inheriting
+card 5's assumptions, and closed the loop with regression guards:
+
+- Re-ran `grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(' web/src --include='*.css'`
+  outside `kanban-v2.tokens.css`: still only the two documented allowlist
+  exceptions (Wiki console syntax colours; `WikiGraph.tsx` is `.tsx`, not
+  `.css`, and out of this grep's scope). No new literals to map.
+- Added `web/src/styles/no-hardcoded-colors.test.ts` (`bun test`) as a
+  permanent guard so a future PR can't reintroduce a hex/rgba literal into
+  `*.css` without either using a token or extending the allowlist here.
+- Added `e2e/theme.e2e.ts` (toggle → `data-theme`, localStorage persistence
+  across reload, `prefers-color-scheme` → `system` resolution) and a `-dark`
+  screenshot variant next to every existing light capture in
+  `e2e/v2-visual-audit.e2e.ts`.
+- Spot-checked all 5 tabs (board/wiki/capabilities/scheduler/settings) plus
+  the create-modal agent/runtime chips in dark — contrast held up on status
+  colours, agent brand colours, hard-shadow borders and the segmented theme
+  toggle; no further correction was needed.
+- The migration (cards 2–6) is considered closed: light mode is pixel-
+  identical to the pre-migration baseline, dark mode is fully themed, and the
+  guard test + e2e specs prevent silent regressions on either side.
