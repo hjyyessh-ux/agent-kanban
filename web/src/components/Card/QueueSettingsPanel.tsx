@@ -45,7 +45,7 @@ export const QueueTargetList: React.FC<QueueTargetListProps> = ({
     </div>
 
     {options.length === 0 ? (
-      <span style={{ color: '#94a3b8', fontSize: 'var(--kv2-text-md)' }}>
+      <span style={{ color: 'var(--kv2-neutral-400)', fontSize: 'var(--kv2-text-md)' }}>
         No queue targets available
       </span>
     ) : (

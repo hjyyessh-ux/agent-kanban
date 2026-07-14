@@ -56,7 +56,7 @@
 
 .scheduler-item:hover {
   transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 rgba(31, 34, 51, 0.85);
+  box-shadow: 6px 6px 0 var(--kv2-shadow-color);
 }
 
 .scheduler-item:focus-visible {
@@ -174,7 +174,7 @@
 .scheduler-badge--active,
 .scheduler-badge--success {
   background: var(--kv2-status-done-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
@@ -185,7 +185,7 @@
 
 .scheduler-badge--fail {
   background: var(--kv2-status-complete-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
@@ -197,13 +197,13 @@
 
 .scheduler-badge--shell {
   background: var(--kv2-frame);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
 .scheduler-badge--skill {
   background: var(--kv2-status-todo-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
@@ -307,7 +307,7 @@
 
 .scheduler-action-type-btn--active {
   background: var(--kv2-status-todo-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .scheduler-skill-warning {
@@ -315,7 +315,7 @@
   font-size: var(--kv2-text-caption);
   padding: 8px 12px;
   border: 2px solid var(--kv2-status-in-progress-accent);
-  background: rgba(250, 204, 21, 0.12);
+  background: color-mix(in srgb, var(--kv2-status-in-progress-accent) 12%, transparent);
 }
 
 .scheduler-modal-actions {

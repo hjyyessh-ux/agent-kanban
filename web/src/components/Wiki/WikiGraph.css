@@ -225,7 +225,7 @@
 
 .wgs-reset:hover {
   background: var(--kv2-status-complete-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .wgs-section {

@@ -57,17 +57,39 @@
   --kv2-agent-sisyphus-junior: #2563EB;
   --kv2-agent-metis: #F59E0B;
   --kv2-agent-momus: #CC2244;
+  --kv2-agent-plan: #14B8A6;
+  --kv2-agent-multimodal-looker: #0F766E;
   --kv2-agent-default: #6B7280;
+
+  /* Text on an agent-brand fill — invariant, same reasoning as the agent
+     colours themselves (see web/src/constants/agents.ts). */
+  --kv2-agent-text-on-fill: #ffffff;
+  --kv2-agent-text-on-fill-dark: #1a1a2e;
 
   /* ── Runtime brand map ────────────────────────────────────── */
   /* Vendor brand colours for runtime badges — fixed like a logo,
      so they stay put in dark mode (only surrounding chrome shifts). */
   --kv2-runtime-claude: #d97757;
   --kv2-runtime-claude-hover: #e88764;
+  --kv2-runtime-claude-border: #b35f42;
   --kv2-runtime-opencode: #111111;
   --kv2-runtime-opencode-icon-a: #121212;
   --kv2-runtime-opencode-icon-b: #5b5b5b;
   --kv2-runtime-codex-accent: #2563eb;
+  --kv2-runtime-telegram: #2aabee;
+
+  /* ── Wiki data-viz categorical map ────────────────────────── */
+  /* Shared with the WikiGraph canvas config (WikiGraph.tsx) — categorical
+     series colours, not part of the theme surface. Never overridden. */
+  --kv2-dataviz-project: #0066ff;
+  --kv2-dataviz-troubleshooting: #e74c3c;
+  --kv2-dataviz-howto: #3498db;
+  --kv2-dataviz-decision: #9b59b6;
+  --kv2-dataviz-concept: #16a085;
+  --kv2-dataviz-reference: #e67e22;
+  --kv2-dataviz-pending: #f1c40f;
+  --kv2-dataviz-skipped: #95a5a6;
+  --kv2-dataviz-unprocessed: #34495e;
 }
 
 /* =============================================================
@@ -95,6 +117,7 @@
   --kv2-surface-warm-soft: #fffdf5; /* warm popover bg (directory/runtime/meta dropdown) */
   --kv2-surface-warm-cream: #fff6e1; /* queue summary card bg */
   --kv2-surface-sunken-soft: #f9fafb; /* dropzone / empty-state bg, near surface-sunken */
+  --kv2-surface-faint: #fafafa;      /* near-white code/diff block bg */
 
   /* ── Inverse surfaces (intentionally dark chrome) ─────────── */
   /* Filter popover, log console, opencode panel — dark even in
@@ -124,6 +147,7 @@
   --kv2-text-link: #2563eb;         /* interactive link / hover text */
   --kv2-text-meta: #555555;         /* card-id meta copy button ink */
   --kv2-text-meta-hover: #666666;   /* card-id meta hover */
+  --kv2-tab-active-fg: #fffdf7;     /* text on active segmented-control / tab (dark fill) */
 
   /* ── Borders ──────────────────────────────────────────────── */
   --kv2-border: #D7DCE6;
@@ -142,11 +166,13 @@
   --kv2-neutral-900: #0f172a;
   --kv2-neutral-800: #1f2937;
   --kv2-neutral-700: #334155;
+  --kv2-neutral-650: #374151;
   --kv2-neutral-600: #475569;
   --kv2-neutral-575: #4b5563;
   --kv2-neutral-510: #6b7280;
   --kv2-neutral-500: #64748b;
   --kv2-neutral-480: #8a8fa3;
+  --kv2-neutral-465: #888888;
   --kv2-neutral-450: #999999;
   --kv2-neutral-400: #94a3b8;
   --kv2-neutral-300: #e5e7eb;
@@ -177,24 +203,34 @@
   --kv2-info-accent: #2563eb;
   --kv2-info-surface-pale: #eef2ff;
   --kv2-info-border-pale: #c7d2fe;
+  --kv2-info-border-strong: #1e40af;
 
   --kv2-cyan-surface: #e0f2fe;
   --kv2-cyan-surface-soft: #f0fdff;
   --kv2-cyan-surface-pale: #f0f9ff;
   --kv2-cyan-border: #bae6fd;
   --kv2-cyan-text: #0369a1;
+  --kv2-cyan-text-deep: #0c4a6e;
   --kv2-cyan-accent: #0ea5e9;
 
   --kv2-teal-accent: #14b8a6;
+  --kv2-teal-accent-deep: #0d9488;
+  --kv2-teal-surface: #f0fdfa;
+  --kv2-teal-text-deep: #0f766e;
 
   --kv2-success-surface: #f0fdf4;
   --kv2-success-surface-strong: #dcfce7;
+  --kv2-success-surface-pale: #f0fff4;
   --kv2-success-surface-vivid: #d9f99d;
   --kv2-success-surface-deep: #bbf7d0;
   --kv2-success-border: #86efac;
   --kv2-success-text: #166534;
   --kv2-success-text-strong: #14532d;
+  --kv2-success-text-deep: #15803d;
+  --kv2-success-text-deepest: #06280f;
+  --kv2-success-surface-faint: #ecfdf5;
   --kv2-success-accent: #16a34a;
+  --kv2-success-accent-deep: #059669;
   --kv2-success-accent-vivid: #27ae60;
 
   --kv2-warn-surface: #fef3c7;
@@ -212,6 +248,9 @@
 
   --kv2-danger-surface: #fef2f2;
   --kv2-danger-surface-strong: #fee2e2;
+  --kv2-danger-surface-soft: #fff0f3;
+  --kv2-danger-surface-pale: #fff1f2;
+  --kv2-danger-surface-faint: #fff0f0;
   --kv2-danger-border: #fca5a5;
   --kv2-danger-text: #b91c1c;
   --kv2-danger-text-strong: #991b1b;
@@ -219,23 +258,39 @@
   --kv2-danger-text-deepest: #3f1d27;
   --kv2-danger-accent: #dc2626;
   --kv2-danger-accent-strong: #e11d48;
+  --kv2-danger-accent-bright: #ff3366;
+  --kv2-danger-accent-deep: #cc1a47;
   --kv2-danger-accent-vivid: #ff0000;
 
   --kv2-purple-surface: #f5f3ff;
   --kv2-purple-surface-strong: #f3e8ff;
   --kv2-purple-surface-vivid: #d8b4fe;
   --kv2-purple-border: #c4b5fd;
+  --kv2-purple-border-soft: #ddd6fe;
+  --kv2-purple-border-deep: #7d459e;
+  --kv2-purple-surface-faint: #faf5ff;
   --kv2-purple-text: #4c1d95;
   --kv2-purple-accent: #7c3aed;
+  --kv2-purple-accent-deep: #9b59b6;
+
+  /* ── Slate accent (cold-storage / freeze feature chrome) ──── */
+  --kv2-slate-accent: #536074;
+  --kv2-slate-accent-hover: #3b5066;
+  --kv2-slate-surface: #f0f4f8;
 
   --kv2-pink-surface: #fff4f6;
   --kv2-pink-surface-strong: #ffe4e6;
+  --kv2-pink-surface-pale: #fdf2f8;
   --kv2-pink-surface-deep: #f9c2d6;
+  --kv2-pink-border: #fbcfe8;
   --kv2-pink-accent: #be185d;
+  --kv2-pink-accent-bright: #db2777;
   --kv2-pink-text: #9d174d;
 
   --kv2-orange-surface: #ffedd5;
+  --kv2-orange-surface-soft: #fff7ed;
   --kv2-orange-border: #fdba74;
+  --kv2-orange-accent: #ea580c;
 
   /* ── Prompt section colours ───────────────────────────────── */
   --kv2-prompt-accent-color: #1668e8;

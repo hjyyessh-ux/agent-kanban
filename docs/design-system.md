@@ -28,7 +28,7 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 
 | 계층 | 그룹 | 예시 | 다크에서 override? |
 |------|------|------|--------------------|
-| ① 브랜드 (불변) | Status 4종 · Agent 11종 · Runtime 브랜드 | `--kv2-status-todo-accent`, `--kv2-agent-sisyphus`, `--kv2-runtime-claude` | ❌ 절대 안 바꿈 |
+| ① 브랜드 (불변) | Status 4종 · Agent 13종 · Runtime 브랜드 · Wiki data-viz | `--kv2-status-todo-accent`, `--kv2-agent-sisyphus`, `--kv2-runtime-claude`, `--kv2-dataviz-troubleshooting` | ❌ 절대 안 바꿈 |
 | ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-focus-ring`, `--kv2-scrim`, `--kv2-info-surface`, `--kv2-surface-inverse` | ✅ 이 계층만 |
 | ③ 구조 (테마 무관) | Typography · Text scale · Spacing · Radius · Geometry · Transition | `--kv2-font-sans`, `--kv2-text-lg`, `--kv2-sp-4`, `--kv2-radius-md` | — (색 아님) |
 
@@ -41,6 +41,21 @@ Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
 - 알파 색은 `color-mix(in srgb, var(--kv2-…) N%, transparent)` 형태로. 단
   `--kv2-shadow-color`, `--kv2-shadow-color-ambient`, `--kv2-scrim`는 전용 토큰.
 - 계층 ①(브랜드)와 allowlist(syntax·data-viz 색)는 시맨틱 토큰으로 바꾸지 않는다.
+
+### Agent 브랜드 색 — 단일 소스는 `kanban-v2.tokens.css`
+
+에이전트별 브랜드 색은 `web/src/constants/agents.ts`와
+`kanban-v2.tokens.css`(`--kv2-agent-*`) 두 곳에서 쓰이지만, **값의 단일
+소스는 tokens.css**다. `agents.ts`의 `PRIMARY_AGENT_VISUALS` /
+`AGENT_DISPLAY_OVERRIDES`는 리터럴 hex를 갖지 않고 `var(--kv2-agent-*)`
+문자열을 담아, `getAgentConfig().color`를 소비하는 인라인 스타일이
+CSS 값 그대로 넘겨받아 렌더링한다(문자열 자체가 CSS 값이므로 색상
+연산·파싱 용도로는 쓰지 않는다). 텍스트 색은 브랜드 필 위에서 항상
+동일해야 하므로 `--kv2-agent-text-on-fill`(밝은 텍스트) /
+`--kv2-agent-text-on-fill-dark`(어두운 텍스트, metis 전용)를 쓴다 —
+둘 다 계층 ①이라 카드 5의 다크 테마 오버라이드 대상이 아니다.
+새 에이전트를 추가할 때는 반드시 tokens.css에 `--kv2-agent-<key>`를
+먼저 추가한 뒤 `agents.ts`에서 참조한다.
 
 ## 프리미티브
 

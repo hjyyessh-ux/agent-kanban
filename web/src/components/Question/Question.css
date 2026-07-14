@@ -10,7 +10,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: color-mix(in srgb, var(--kv2-ink-pure) 45%, transparent);
   z-index: 2000;
   display: flex;
   align-items: flex-start;
@@ -150,7 +150,7 @@
 }
 
 .question-option--selected .question-option-desc {
-  color: rgba(255, 255, 255, 0.8);
+  color: color-mix(in srgb, var(--kv2-text-inverse) 80%, transparent);
   opacity: 1;
 }
 

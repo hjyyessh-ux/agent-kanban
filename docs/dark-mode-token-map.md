@@ -367,6 +367,102 @@ Role notes:
 - `rgba(0, 0, 0, 0.85)` (screenshot lightbox scrim) was left untouched per
   the pure-black-shadow rule above — normalise in card 5.
 
+**Bugfix carried into card 4:** `--kv2-orange-surface-soft`, `--kv2-purple-border-soft`,
+`--kv2-pink-surface-pale` and `--kv2-pink-border` were referenced by
+`card-detail.css`/`panels.css` (per the table above) but never actually
+declared in `kanban-v2.tokens.css` — a light-mode regression (the `var()`
+resolved to nothing). Card 4 added the missing declarations with the values
+already documented above; no CSS files changed, only `tokens.css`.
+
+---
+
+## Resolved in card 4 (Capabilities.css / Wiki.css / Settings·Scheduler·Scripts·Question.css / TSX inline / agents.ts)
+
+| literal | token | value |
+|---------|-------|-------|
+| `#fffdf7` (active segmented-control/tab text, dark fill) | `--kv2-tab-active-fg` | `#fffdf7` |
+| `#9b59b6` (skill chip / scope-chip--local / cap-badge--skill — distinct role from `--kv2-agent-librarian`) | `--kv2-purple-accent-deep` | `#9b59b6` |
+| `#7d459e` (border paired with the above) | `--kv2-purple-border-deep` | `#7d459e` |
+| `#0c4a6e` (cyan family deep text) | `--kv2-cyan-text-deep` | `#0c4a6e` |
+| `#06280f` (success family deepest text — cap-badge--success / scope-chip--project) | `--kv2-success-text-deepest` | `#06280f` |
+| `#15803d` | `--kv2-success-text-deep` | `#15803d` |
+| `#f0fff4` | `--kv2-success-surface-pale` | `#f0fff4` |
+| `#ecfdf5` (CardDetailDialog agent-row bg, atlas) | `--kv2-success-surface-faint` | `#ecfdf5` |
+| `#059669` (CardDetailDialog agent-row border, atlas) | `--kv2-success-accent-deep` | `#059669` |
+| `#536074` used as border/background/accent (cold-storage & freeze-action chrome — distinct role from `--kv2-text-secondary`, which keeps the plain-text mapping) | `--kv2-slate-accent` | `#536074` |
+| `#3b5066` (hover/deeper variant + mcp kind-badge) | `--kv2-slate-accent-hover` | `#3b5066` |
+| `#f0f4f8` (cold-drawer hint bg) | `--kv2-slate-surface` | `#f0f4f8` |
+| `#374151` | `--kv2-neutral-650` | `#374151` |
+| `#888888` (wiki-log-empty text) | `--kv2-neutral-465` | `#888888` |
+| `#b35f42` (claude badge border, brand-adjacent) | `--kv2-runtime-claude-border` | `#b35f42` |
+| `#1e40af` (info family, codex badge border) | `--kv2-info-border-strong` | `#1e40af` |
+| `#ff3366` (cap-badge--error bg) | `--kv2-danger-accent-bright` | `#ff3366` |
+| `#cc1a47` (cap-badge--error border) | `--kv2-danger-accent-deep` | `#cc1a47` |
+| `#fff0f3` | `--kv2-danger-surface-soft` | `#fff0f3` |
+| `#fff1f2` | `--kv2-danger-surface-pale` | `#fff1f2` |
+| `#fff0f0` (diff-line--removed bg) | `--kv2-danger-surface-faint` | `#fff0f0` |
+| `#fafafa` (diff-preview-code bg) | `--kv2-surface-faint` | `#fafafa` |
+| `#faf5ff` (CardDetailDialog agent-row bg, librarian) | `--kv2-purple-surface-faint` | `#faf5ff` |
+| `#0d9488` (CardDetailDialog agent-row border, plan) | `--kv2-teal-accent-deep` | `#0d9488` |
+| `#f0fdfa` (CardDetailDialog agent-row bg, plan / multimodal-looker) | `--kv2-teal-surface` | `#f0fdfa` |
+| `#0f766e` (CardDetailDialog agent-row border, multimodal-looker) | `--kv2-teal-text-deep` | `#0f766e` |
+| `#ea580c` (CardDetailDialog agent-row border, hephaestus) | `--kv2-orange-accent` | `#ea580c` |
+| `#db2777` (CardDetailDialog agent-row border, prometheus) | `--kv2-pink-accent-bright` | `#db2777` |
+| `#0066ff` (wiki hero accent bar / options-trigger bg / wiki-stat--archive — same literal as WikiGraph.tsx's `projectColor`) | `--kv2-dataviz-project` | `#0066ff` |
+| `#2aabee` (Telegram logo brand) | `--kv2-runtime-telegram` | `#2aabee` |
+
+Role notes:
+- `#fff`/`#ffffff` continued to follow Rule B from card 3: `background` uses →
+  `--kv2-surface`; `color`/text-on-fill uses → `--kv2-text-inverse`. The bulk
+  regex pass in Capabilities/Settings/Scheduler/Scripts initially mapped every
+  bare `#fff` to one token per file and was hand-corrected afterward for the
+  handful of `color:` (text) cases in `Wiki.css` (col-header, list badge,
+  state badges, reprocess tooltip) that a blind regex would have mis-mapped
+  to `--kv2-surface`.
+- `#1e66f5` (scope-chip--user) and `#22c55e` (scope-chip--project) are
+  value-exact reuses of the existing **status brand** tokens
+  (`--kv2-status-todo-bg`, `--kv2-status-done-accent`) rather than new
+  semantic tokens — scope-chip identity colours are themselves brand-like
+  (invariant category badges), so they borrow layer ① directly instead of
+  forking a layer ② duplicate.
+- **Wiki data-viz categorical family** (`--kv2-dataviz-*`): `Wiki.css` reuses
+  the exact same 7 hex values as `WikiGraph.tsx`'s `typeColors`/`projectColor`
+  config for column headers, type badges and the detail-dialog accent
+  (`troubleshooting` `howto` `decision` `concept` `reference` `pending`
+  `skipped` `unprocessed`). These are now real layer-① tokens
+  (`--kv2-dataviz-troubleshooting` … `--kv2-dataviz-unprocessed`) so
+  `Wiki.css` has no hard-coded hex left. **`WikiGraph.tsx`'s own canvas
+  config keeps its literal hex values, unchanged** — it's excluded from this
+  card by design (canvas drawing code, not CSS; theming it is card 5's job).
+  If a future card wires the canvas up to the tokens, these are the values
+  to read from.
+- Two wiki "state" badges reuse plain neutral-ramp steps instead of the
+  dataviz family because their literals don't match it exactly:
+  `#94a3b8`/`#64748b` (wiki-state-badge skipped/unprocessed) →
+  `--kv2-neutral-400`/`--kv2-neutral-500`.
+- **Agent brand set grew from 11 to 13**: `--kv2-agent-plan` (`#14B8A6`) and
+  `--kv2-agent-multimodal-looker` (`#0F766E`) were missing from tokens.css
+  even though `web/src/constants/agents.ts` already carried those two agents.
+  Card 4 added them so the brand map is complete, and added
+  `--kv2-agent-text-on-fill` (`#ffffff`) / `--kv2-agent-text-on-fill-dark`
+  (`#1a1a2e`, metis only) as the invariant text-on-brand-fill pair. See
+  `docs/design-system.md` § Agent 브랜드 색 for the single-source rule:
+  `agents.ts` now holds `var(--kv2-agent-*)` strings, never literal hex —
+  tokens.css is the only place the values live.
+- `web/src/components/Card/CardDetailDialog.tsx`'s `AGENT_ROW_COLORS` (queue
+  child-row border/bg per agent) is a **separate, deliberately pastel**
+  palette from the agent brand map — most of its literals don't match the
+  brand hex (e.g. oracle row border `#7C3AED` vs. brand `--kv2-agent-oracle`
+  `#1A1A2E`), so each was mapped to its own value-exact token above rather
+  than reused from `--kv2-agent-*`. Where a literal *did* happen to be
+  brand-exact (explore, sisyphus/-junior, librarian, metis, momus), the
+  existing agent/status-soft token was reused.
+- SVG `fill`/`stroke` attributes in JSX (`CardMetaPanel.tsx`,
+  `DirectoryPicker.tsx`, `BoardCardSections.tsx`) now hold `var(--kv2-…)`
+  strings — modern browsers resolve CSS custom properties in SVG
+  presentation attributes the same as in `style`, so this is value-exact
+  and needs no `style` prop wrapper.
+
 ---
 
 ## Allowlist — do NOT tokenise into semantic tokens
@@ -375,10 +471,10 @@ These are not part of the theme surface. Leave them hard-coded (or move to a
 dedicated brand/data token), and do **not** override them in dark mode:
 
 - **Status brand:** `#1e66f5` `#facc15` `#ff3b6b` `#22c55e` and their `fg`/`accent` → `--kv2-status-*`.
-- **Agent brand (11):** `#0066FF` `#FF6B35` `#FF3366` `#00CC66` `#6366F1` `#9B59B6` `#1A1A2E` `#2563EB` `#F59E0B` `#CC2244` `#6B7280` → `--kv2-agent-*`.
-- **Runtime brand:** `#d97757` (Claude → `--kv2-runtime-claude`), `#111111`/`#121212` (opencode → `--kv2-runtime-opencode`), the codex blue gradient (`--kv2-runtime-codex-accent`). Fixed like a logo.
-- **Log-level / syntax (Wiki console):** `#569cd6` `#6a9955` `#d7ba7d` `#c586c0` `#d4d4d4` — VS Code palette; keep, or introduce `--kv2-log-*` in card 4 if needed.
-- **Data-viz categorical (WikiGraph):** `#3498db` `#e74c3c` `#f1c40f` `#16a085` `#e67e22` `#95a5a6` `#34495e` — categorical series colours; governed by the dataviz palette rules, not the theme.
+- **Agent brand (13):** `#0066FF` `#FF6B35` `#FF3366` `#00CC66` `#6366F1` `#9B59B6` `#1A1A2E` `#2563EB` `#F59E0B` `#CC2244` `#14B8A6` `#0F766E` `#6B7280` → `--kv2-agent-*`. Plus the invariant text-on-fill pair `--kv2-agent-text-on-fill` (`#ffffff`) / `--kv2-agent-text-on-fill-dark` (`#1a1a2e`). Single source is `kanban-v2.tokens.css`; `web/src/constants/agents.ts` only references these via `var(--kv2-agent-*)` — see `docs/design-system.md`.
+- **Runtime brand:** `#d97757` (Claude → `--kv2-runtime-claude`), `#111111`/`#121212` (opencode → `--kv2-runtime-opencode`), the codex blue gradient (`--kv2-runtime-codex-accent`), `#2AABEE` (Telegram → `--kv2-runtime-telegram`). Fixed like a logo.
+- **Log-level / syntax (Wiki console):** `#569cd6` `#6a9955` `#d7ba7d` `#c586c0` `#d4d4d4` `#f48771` — VS Code palette; kept hard-coded in `Wiki.css` (never themed, exact fidelity to the VS Code color scheme is the point).
+- **Data-viz categorical — canvas only (`WikiGraph.tsx`):** `#FFF8E7` `#1A1A2E` `#8d8da3` `#999` and the `rgba(26,26,46,…)` / `rgba(141,141,163,…)` link-highlight alphas — these live inside the canvas draw config object (not CSS) and are explicitly out of scope for card 4 (see card 5 pointer). The 8 categorical type/state colours from that same config (`troubleshooting` `howto` `decision` `concept` `reference` `pending` `skipped` `unprocessed` / `projectColor`) now also exist as `--kv2-dataviz-*` tokens (added in card 4) because `Wiki.css` needed them; `WikiGraph.tsx` itself keeps its own literal copies unchanged.
 
 ---
 
@@ -395,7 +491,19 @@ dedicated brand/data token), and do **not** override them in dark mode:
 
 Suggested card split follows the audit distribution: board.css (~205) ·
 card-detail.css (~175) · panels.css (~165) · Capabilities.css + Wiki.css +
-Settings/Scheduler/Scripts/App (~230).
+Settings/Scheduler/Scripts/Question.css + TSX inline + agents.ts (~230, card 4).
+
+Card 4 additionally covered what the earlier suggested split left out:
+`WikiGraph.css`'s one non-canvas literal (in scope; only `WikiGraph.tsx`'s
+canvas config is excluded), ~50 lines of TSX inline `style`/SVG-attribute
+colour across `Card/` and `Board/`, and `constants/agents.ts`'s brand map
+(value-preserving — converted to `var(--kv2-agent-*)` references rather than
+new literals). As of the end of card 4, `web/src` is **token-complete**:
+`grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(' web/src --include='*.css'` outside
+`kanban-v2.tokens.css` returns only the two documented allowlist exceptions
+(Wiki console syntax colours, and the pure-black `rgba(0,0,0,α)` shadows in
+`board.css`/`panels.css` explicitly deferred to card 5), and the same grep
+over `*.tsx`/`*.ts` returns only `WikiGraph.tsx`.
 
 ---
 
