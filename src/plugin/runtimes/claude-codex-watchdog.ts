@@ -40,6 +40,13 @@ export class ClaudeCodexWatchdog {
       const runtime = resolveAgentRuntime(card);
       if (runtime !== 'claude' && runtime !== 'codex') continue;
 
+      // Organic CLI cards (created by codex/claude prompt hooks) share the same
+      // agentRuntime as daemon dispatches but never open a run in the run store —
+      // their lifecycle is owned by the prompt/stop hooks. Skip them so the
+      // watchdog doesn't mistake them for orphaned dispatch runs and yank them
+      // back to todo. Only 'codex' / 'claude-code' sourceContext is hook-set.
+      if (card.sourceContext === 'codex' || card.sourceContext === 'claude-code') continue;
+
       const activeRun = await this.runStore.findActiveRunByCard(card.id);
       if (!activeRun) {
         if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) {

@@ -201,7 +201,6 @@ describe('ClaudeCodexWatchdog', () => {
         projectDir: dir,
       });
       await store.updateCard(card.id, { status: 'in_progress', sessionId: 'codex-dispatch-session' });
-
       await watchdog.check();
 
       const updated = await store.getCard(card.id);
