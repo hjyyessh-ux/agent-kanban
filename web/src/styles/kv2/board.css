@@ -84,17 +84,22 @@
   height: 32px;
   min-height: 32px;
   padding: 0 12px;
-  border: 2px solid var(--kv2-frame);
-  background: var(--kv2-surface);
-  color: var(--kv2-frame);
+  border: 2px solid var(--kv2-ink-black);
+  background: var(--kv2-status-todo-accent);
+  color: var(--kv2-status-todo-fg);
   font-family: var(--kv2-font-heading);
   font-size: var(--kv2-text-sm);
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  box-shadow: 3px 3px 0 var(--kv2-frame);
+  box-shadow: 4px 4px 0 var(--kv2-ink-black);
   cursor: pointer;
   transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.kv2-filter-trigger:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0 var(--kv2-ink-black);
 }
 
 .kv2-filter-trigger.is-active {
@@ -1628,7 +1633,7 @@
 
 .kv2-card {
   position: relative;
-  background: var(--kv2-card-bg);
+  background: color-mix(in srgb, var(--kv2-card-status-accent, var(--kv2-border)) 6%, var(--kv2-card-bg));
   border: var(--kv2-card-border-width) solid var(--kv2-card-border-color);
   border-radius: var(--kv2-card-radius);
   padding: 12px 14px 8px 16px;

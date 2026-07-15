@@ -422,11 +422,11 @@
   box-shadow: 0 0 0 3px var(--wiki-accent);
 }
 
-/* Selected filter: invert to a solid dark card. The accent bar stays on top so
-   the category is still identifiable, and the value inherits the light text. */
+/* Selected filters share the global selected-control palette. The category
+   accent bar stays on top so the data role remains identifiable. */
 .wiki-stat.is-active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-surface);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
 }
 
 /* The number and label always inherit the card's text color, so they stay
@@ -544,7 +544,7 @@
 }
 
 .wiki-viewbtn + .wiki-viewbtn { border-left: var(--kv2-card-border-width) solid var(--kv2-frame); }
-.wiki-viewbtn.is-active { background: var(--kv2-text-primary); color: var(--kv2-surface); }
+.wiki-viewbtn.is-active { background: var(--kv2-control-selected-bg); color: var(--kv2-control-selected-fg); }
 
 .wiki-error {
   font-family: var(--kv2-font-mono);

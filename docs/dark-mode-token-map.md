@@ -560,17 +560,23 @@ finally tokenised — value-exact in light, theme-responsive in dark:
   read fine on dark). `var(--kv2-surface)`/`var(--kv2-text-primary)` resolve to the
   dark values redefined in the same block.
 - **Repeated brand chrome uses Graphite display tokens.** The invariant status
-  and runtime colours remain unchanged, but the board/detail surfaces use
-  `--kv2-status-*-display`: neutral `#25282c` column headers with a 4px status
-  line, 3px card/session accents, neutral runtime pills, and subdued action
-  fills. Create/detail runtime cards and phase chrome use the same display
-  layer; full brand colour remains on small identity icons.
+  and runtime colours remain unchanged. The board uses status-tinted graphite
+  column headers with a 6px status line, 8px card accents, and the original
+  blue/yellow/pink/green display hues. Card surfaces carry a restrained status
+  tint so TODO and IN PROGRESS remain as distinct as completed session groups.
+  Runtime pills and action fills stay neutral; create/detail runtime cards and
+  phase chrome continue to use the quieter Graphite display layer.
 - **Legacy controls use role-specific Graphite tokens.** Column bulk actions,
   session counts/toggles/unread markers, feedback navigation, session
   conversation rails, and Wiki's large project/status/type surfaces no longer
   reuse `--kv2-frame` as text or raw brand/data-viz colours as fills. Their
   `--kv2-*-display` roles preserve the original light aliases and switch only
   the dark theme to muted, contrast-safe values.
+- **Selected controls share one palette.** Project chips, Board/List mode,
+  Capabilities tabs and filters, and Wiki filters/view modes all consume
+  `--kv2-control-selected-bg` / `-fg` / `-border`. Dark mode uses a muted blue
+  graphite fill with light text instead of deriving the fill from the inverted
+  `text-primary` value, which previously produced a glaring near-white control.
 - **Strong text roles are split from strong borders.** Light mode aliases
   `--kv2-strong-title-color`, `--kv2-strong-label-color`, and
   `--kv2-control-text-color` to the prior border value for pixel parity. Dark

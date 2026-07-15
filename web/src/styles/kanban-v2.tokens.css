@@ -152,6 +152,9 @@
   --kv2-text-meta: #555555;         /* card-id meta copy button ink */
   --kv2-text-meta-hover: #666666;   /* card-id meta hover */
   --kv2-tab-active-fg: #fffdf7;     /* text on active segmented-control / tab (dark fill) */
+  --kv2-control-selected-bg: var(--kv2-frame);
+  --kv2-control-selected-fg: var(--kv2-tab-active-fg);
+  --kv2-control-selected-border: var(--kv2-frame);
 
   /* ── Borders ──────────────────────────────────────────────── */
   --kv2-border: #D7DCE6;
@@ -615,6 +618,9 @@
   --kv2-text-link: #79a7dc;
   --kv2-text-meta: #929aa1;
   --kv2-text-meta-hover: #b1b8be;
+  --kv2-control-selected-bg: #303a46;
+  --kv2-control-selected-fg: var(--kv2-text-primary);
+  --kv2-control-selected-border: #6f89ad;
 
   /* ── Borders — neutral graphite; text roles are split below ── */
   --kv2-border: #34383d;
@@ -668,23 +674,23 @@
   --kv2-btn-delete-bg: #272a2e;
   --kv2-favorite-icon-idle: #897a68;
 
-  /* ── Quiet large-surface chrome; brand accents stay invariant ─ */
-  --kv2-column-header-todo-bg: #25282c;
-  --kv2-column-header-in-progress-bg: #25282c;
-  --kv2-column-header-complete-bg: #25282c;
-  --kv2-column-header-done-bg: #25282c;
+  /* ── Dark board chrome; status remains scannable, runtime stays quiet ─ */
+  --kv2-column-header-todo-bg: color-mix(in srgb, var(--kv2-status-todo-accent) 24%, #25282c);
+  --kv2-column-header-in-progress-bg: color-mix(in srgb, var(--kv2-status-in-progress-accent) 22%, #25282c);
+  --kv2-column-header-complete-bg: color-mix(in srgb, var(--kv2-status-complete-accent) 20%, #25282c);
+  --kv2-column-header-done-bg: color-mix(in srgb, var(--kv2-status-done-accent) 20%, #25282c);
   --kv2-column-header-fg: var(--kv2-text-primary);
   --kv2-column-header-stroke-color: #3a3f44;
   --kv2-column-header-shadow-color: #0d0f10;
-  --kv2-column-header-shadow: inset 0 4px 0 var(--kv2-column-status-accent), 3px 3px 0 var(--kv2-column-header-shadow-color);
+  --kv2-column-header-shadow: inset 0 6px 0 var(--kv2-column-status-accent), 3px 3px 0 var(--kv2-column-header-shadow-color);
   --kv2-column-surface: #202327;
   --kv2-column-surface-border: #2f3439;
-  --kv2-card-display-accent-width: 3px;
+  --kv2-card-display-accent-width: var(--kv2-card-accent-width);
   --kv2-session-header-accent-width: 3px;
-  --kv2-status-todo-display: #6f89ad;
-  --kv2-status-progress-display: #a28d56;
-  --kv2-status-complete-display: #a66b7b;
-  --kv2-status-done-display: #5f8f72;
+  --kv2-status-todo-display: var(--kv2-status-todo-accent);
+  --kv2-status-progress-display: var(--kv2-status-in-progress-accent);
+  --kv2-status-complete-display: var(--kv2-status-complete-accent);
+  --kv2-status-done-display: var(--kv2-status-done-accent);
   --kv2-create-column-fg: var(--kv2-text-primary);
   --kv2-create-column-stroke-color: var(--kv2-border-strong);
   --kv2-dialog-shadow-color: #0d0f10;
@@ -728,8 +734,8 @@
   --kv2-session-prompt-label: #b4a276;
   --kv2-session-result-label: #8da9b4;
   --kv2-session-result-text: #9bb9a6;
-  --kv2-board-mode-active-bg: #303a46;
-  --kv2-board-mode-active-border: #53647a;
+  --kv2-board-mode-active-bg: var(--kv2-control-selected-bg);
+  --kv2-board-mode-active-border: var(--kv2-control-selected-border);
   --kv2-board-session-active-bg: #35483d;
   --kv2-board-session-active-border: #5f8f72;
   --kv2-directory-accent-bg: #30343a;

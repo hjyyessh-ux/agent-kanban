@@ -169,8 +169,9 @@
 }
 
 .app-project-chip.is-active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
+  border-color: var(--kv2-control-selected-border);
 }
 
 .app-project-chip-label {
@@ -213,6 +214,7 @@
 .app-board-view-toggle-btn.is-active {
   border-color: var(--kv2-board-mode-active-border);
   background: var(--kv2-board-mode-active-bg);
+  color: var(--kv2-control-selected-fg);
   box-shadow: 2px 2px 0 var(--kv2-frame);
 }
 
