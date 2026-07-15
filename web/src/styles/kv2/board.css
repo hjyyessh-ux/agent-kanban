@@ -1296,7 +1296,7 @@
   font-size: var(--kv2-text-base);
   font-weight: 700;
   color: var(--kv2-strong-label-color);
-  opacity: 0.85;
+  opacity: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1321,7 +1321,7 @@
 
 .kv2-session-helper {
   font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-muted);
+  color: var(--kv2-text-secondary);
 }
 
 .kv2-badge--session {

@@ -695,7 +695,7 @@
   --kv2-create-column-stroke-color: var(--kv2-border-strong);
   --kv2-dialog-shadow-color: #0d0f10;
   --kv2-strong-title-color: var(--kv2-text-primary);
-  --kv2-strong-label-color: var(--kv2-text-secondary);
+  --kv2-strong-label-color: var(--kv2-text-primary);
   --kv2-control-text-color: var(--kv2-text-primary);
   --kv2-panel-subtitle-color: var(--kv2-text-secondary);
   --kv2-runtime-claude-surface: #292d31;

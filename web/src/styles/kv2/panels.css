@@ -171,6 +171,8 @@
 .kv2-runtime-picker {
   position: relative;
   width: 100%;
+  flex: 1;
+  display: flex;
   z-index: 1;
 }
 
@@ -179,31 +181,26 @@
 }
 
 .kv2-runtime-trigger {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 12px;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
-  min-height: 34px;
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: 8px;
-  background: var(--kv2-surface);
-  color: var(--kv2-selection-option-secondary-fg);
+  min-height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-sm);
-  font-weight: 900;
-  padding: 4px 8px 4px 5px;
-  box-shadow: 3px 3px 0 var(--kv2-border-strong);
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+  padding: 0;
   text-align: left;
 }
 
 .kv2-runtime-trigger:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--kv2-border-strong);
+  color: var(--kv2-text-link);
 }
 
-.kv2-runtime-trigger-icon,
 .kv2-runtime-option-icon {
   display: inline-flex;
   align-items: center;
@@ -213,48 +210,38 @@
   background: var(--kv2-surface);
 }
 
-.kv2-runtime-trigger-icon {
-  width: 22px;
-  height: 22px;
-}
-
-.kv2-runtime-trigger-icon .kv2-runtime-badge-icon,
 .kv2-runtime-option-icon .kv2-runtime-badge-icon {
   width: 15px;
   height: 15px;
   flex-basis: 15px;
 }
 
-.kv2-runtime-trigger-icon--codex,
 .kv2-runtime-option-icon--codex {
   background: var(--kv2-info-surface-strong);
   border-color: var(--kv2-text-link);
 }
 
-.kv2-runtime-trigger-icon--claude,
 .kv2-runtime-option-icon--claude {
   background: var(--kv2-orange-surface-soft);
   border-color: var(--kv2-runtime-claude);
 }
 
-.kv2-runtime-trigger-icon--claude .kv2-runtime-badge-icon--claude svg path,
 .kv2-runtime-option-icon--claude .kv2-runtime-badge-icon--claude svg path {
   fill: var(--kv2-runtime-claude);
 }
 
-.kv2-runtime-trigger-icon--opencode,
 .kv2-runtime-option-icon--opencode {
   background: var(--kv2-runtime-opencode);
   border-color: var(--kv2-runtime-opencode);
 }
 
-.kv2-runtime-trigger-icon--opencode .kv2-runtime-badge-icon--opencode,
 .kv2-runtime-option-icon--opencode .kv2-runtime-badge-icon--opencode {
   background: transparent;
   border-color: var(--kv2-text-inverse);
 }
 
 .kv2-runtime-trigger-label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,9 +249,11 @@
 }
 
 .kv2-runtime-trigger-arrow {
+  flex: 0 0 auto;
   text-align: right;
-  font-size: var(--kv2-text-lg);
+  font-size: var(--kv2-text-sm);
   line-height: 1;
+  color: var(--kv2-text-secondary);
 }
 
 .kv2-runtime-popover {
@@ -299,7 +288,7 @@
 .kv2-runtime-popover-head {
   position: relative;
   z-index: 1;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   font-size: var(--kv2-text-xs);
   font-weight: 900;
   text-transform: uppercase;
@@ -323,7 +312,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
   background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   padding: 6px 8px;
   text-align: left;
@@ -400,6 +389,8 @@
 .kv2-meta-dropdown {
   position: relative;
   width: 100%;
+  flex: 1;
+  display: flex;
 }
 
 .kv2-meta-dropdown-trigger {
@@ -407,6 +398,7 @@
   align-items: center;
   gap: 6px;
   width: 100%;
+  min-height: 30px;
   border: none;
   background: transparent;
   padding: 0;
@@ -541,18 +533,17 @@
 
 .kv2-meta-label {
   font-size: var(--kv2-text-caption);
-  font-weight: 700;
-  color: var(--kv2-neutral-500);
+  font-weight: 800;
+  color: var(--kv2-strong-label-color);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.2;
-  opacity: 0.85;
 }
 
 .kv2-meta-value {
   font-size: var(--kv2-text-md-plus);
   font-weight: 600;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   line-height: 1.2;
   word-break: break-word;
   overflow: hidden;
@@ -725,8 +716,7 @@
 .kv2-phase-header--outer span {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-phase-header--question {
@@ -1324,8 +1314,7 @@
   font-family: var(--kv2-font-sans);
   font-weight: 700;
   font-size: var(--kv2-text-base);
-  color: var(--kv2-border-strong);
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-feedback-textarea {
@@ -1370,8 +1359,7 @@
 .kv2-screenshot-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-screenshot-error {
@@ -1739,8 +1727,8 @@
     flex-wrap: wrap;
   }
 
-  .kv2-command-control {
-    grid-template-columns: 36px minmax(0, 1fr) 40px;
+  .kv2-command-picker:not(.kv2-command-picker--meta) .kv2-command-trigger {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
   }
 
   .kv2-command-popover {

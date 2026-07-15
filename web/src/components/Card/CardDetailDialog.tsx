@@ -269,10 +269,11 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
       }));
 
     if (card.model && !mappedModels.some((modelEntry) => modelEntry.id === card.model)) {
+      const currentCatalogModel = runtimeEntry?.models?.find((modelEntry) => modelEntry.id === card.model);
       return [
         {
           id: card.model,
-          name: card.model,
+          name: currentCatalogModel?.label ?? card.model,
           providerID: cardRuntime,
           providerName: "Current",
         },

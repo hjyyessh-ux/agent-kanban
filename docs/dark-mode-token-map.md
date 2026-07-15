@@ -580,7 +580,7 @@ finally tokenised — value-exact in light, theme-responsive in dark:
 - **Strong text roles are split from strong borders.** Light mode aliases
   `--kv2-strong-title-color`, `--kv2-strong-label-color`, and
   `--kv2-control-text-color` to the prior border value for pixel parity. Dark
-  mode maps them to primary/secondary text while keeping
+  mode maps titles, labels, and selected control values to primary text while keeping
   `--kv2-border-strong` at subdued graphite.
 - **`color-scheme`** is `light` on `:root`, `dark` in the dark block, so native
   scrollbars/checkboxes/form controls follow.

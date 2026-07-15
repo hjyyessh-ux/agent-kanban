@@ -4,7 +4,21 @@ import { RUNTIME_CATALOG } from "../../../src/core/runtime-config";
 import { fetchRuntimes } from "./useKanbanApi";
 import { mergeSyncedModels } from "./useModelCatalog";
 
-function mergeRuntimeCatalog(remote: RuntimeCatalogEntry[] | undefined): RuntimeCatalogEntry[] {
+function mergeModels(
+  fallback: RuntimeCatalogEntry["models"],
+  remote: RuntimeCatalogEntry["models"],
+): RuntimeCatalogEntry["models"] {
+  const merged = [...(fallback ?? [])];
+  const seen = new Set(merged.map((model) => model.id));
+  for (const model of remote ?? []) {
+    if (seen.has(model.id)) continue;
+    merged.push(model);
+    seen.add(model.id);
+  }
+  return merged;
+}
+
+export function mergeRuntimeCatalog(remote: RuntimeCatalogEntry[] | undefined): RuntimeCatalogEntry[] {
   if (!remote || remote.length === 0) return [...RUNTIME_CATALOG];
   const remoteByRuntime = new Map(remote.map((entry) => [entry.runtime, entry]));
 
@@ -16,7 +30,7 @@ function mergeRuntimeCatalog(remote: RuntimeCatalogEntry[] | undefined): Runtime
       ...fallback,
       ...entry,
       presets: entry.presets && entry.presets.length > 0 ? entry.presets : fallback.presets,
-      models: entry.models && entry.models.length > 0 ? entry.models : fallback.models,
+      models: mergeModels(fallback.models, entry.models),
       disabled: entry.disabled || entry.available === false,
     };
   });

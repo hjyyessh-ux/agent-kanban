@@ -9,7 +9,7 @@ import { fetchModels, fetchRuntimes, type ModelInfo } from "./useKanbanApi";
 // localStorage keys. Everything here is browser-local by design.
 export const ENABLED_MODELS_KEY = "kanban-enabled-models";
 export const SYNCED_MODELS_KEY = "kanban-synced-models";
-const MIGRATION_KEY = "kanban-enabled-models-migrated-v2";
+const MIGRATION_KEY = "kanban-enabled-models-migrated-v3";
 
 export interface SyncedCatalog {
   claude: RuntimeCatalogModel[];
