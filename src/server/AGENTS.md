@@ -12,14 +12,14 @@ Thin Bun server layer. `index.ts` owns `Bun.serve()` and SPA/static serving; `ro
 | File | Description |
 |------|-------------|
 | `index.ts` | `createServer()` wraps `Bun.serve()`, port-retry (configured port + 3), SPA static/HTML-fallback serving, API-first routing before static lookup |
-| `routes.ts` | All REST endpoints — cards/archive/dispatch, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and `/api/scope/*` (targets, inventory, cold freeze/restore) |
+| `routes.ts` | All REST endpoints — cards/archive/dispatch, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and runtime-aware `/api/scope/*` (targets, MCP inventory/write, cold freeze/restore) |
 | `maintenance-runner.ts` | Update/restart maintenance flow backing `/api/maintenance/*` routes |
 
 ## For AI Agents
 
 ### Working In This Directory
 
-- `createServer()` in `index.ts` takes a long positional-argument list of optional stores/fns (dispatch, scheduler, settings, script, models, question-monitor, aggregate/local-peer session fns, peer-token fn, runtime-catalog fn, wiki-worker, skill store, skill-roots store, placement-targets store) — when adding a new store dependency, extend this list and thread it through `createRouteHandler()` in `routes.ts` rather than reaching for a global.
+- `createServer()` in `index.ts` takes a long positional-argument list of optional stores/fns (dispatch, scheduler, settings, script, models, question-monitor, aggregate/local-peer session fns, peer-token fn, runtime-catalog fn, wiki-worker, skill store, skill-roots store, placement-targets store, scope-MCP inventory fn) — when adding a new store dependency, extend this list and thread it through `createRouteHandler()` in `routes.ts` rather than reaching for a global.
 - `/api/*` routes are handled before any static asset lookup (see `index.ts` `fetchHandler`).
 - Parameterized routes use manual regex/string matching (`path.startsWith(...)`, `path.endsWith(...)`) — there is no router library.
 - Success responses are JSON; failures always use `{ error: string }`.
@@ -36,7 +36,9 @@ Thin Bun server layer. `index.ts` owns `Bun.serve()` and SPA/static serving; `ro
 
 - Classify every new route in `requiresLocalAuth(method, path)`: mutating methods plus secret/script/scope reads must require the bearer token; read-only, non-secret routes may skip it.
 - Never echo unmasked secret values from list/bulk responses — only single-entry, token-protected reads may return plaintext (see `GET /api/settings/:id`).
-- Reuse `plugin/wiki/wiki-worker.ts`, `core/cold-storage-store.ts`, `core/mcp-config-store.ts`, `core/placement-targets-store.ts` for scope/wiki business logic instead of inlining it in `routes.ts`.
+- Reuse `plugin/wiki/wiki-worker.ts`, `core/cold-storage-store.ts`, `core/mcp-runtime-adapter.ts`, `core/mcp-config-store.ts`, `core/codex-mcp-config.ts`, and `core/placement-targets-store.ts` for scope/wiki business logic instead of inlining it in `routes.ts`.
+- Missing MCP `runtime` in legacy request bodies means `claude`; validate explicit values as `claude | codex`, use runtime + name for inventory identity, and placement identity for exact writes. Preview requests must not mutate files.
+- `/api/scope/inventory` keeps the legacy Claude `ContextDiagnostics` counts Claude-only and adds Codex scan/trust diagnostics under `diagnostics.mcpDiscovery`.
 
 ## Dependencies
 

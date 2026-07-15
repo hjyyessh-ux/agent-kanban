@@ -19,11 +19,21 @@ import { buildDispatchPromptText } from '../src/plugin/dispatch-prompt';
 
 const port = Number.parseInt(process.env.E2E_PORT ?? '24681', 10);
 const dataDir = resolve(process.cwd(), '.e2e-data');
+const e2eHome = resolve(process.env.E2E_HOME ?? join(process.cwd(), '.e2e-home'));
 const staticDir = resolve(process.cwd(), 'web/dist');
+
+if (resolve(process.env.HOME ?? '') !== e2eHome) {
+  throw new Error(
+    `Refusing to start E2E server without isolated HOME=${e2eHome}. ` +
+      'Use Playwright via bun run test:e2e.',
+  );
+}
 
 if (process.env.E2E_KEEP_DATA !== 'true') {
   rmSync(dataDir, { recursive: true, force: true });
+  rmSync(e2eHome, { recursive: true, force: true });
 }
+mkdirSync(e2eHome, { recursive: true });
 
 if (!existsSync(join(staticDir, 'index.html'))) {
   const build = Bun.spawnSync(['bun', 'run', 'build:web'], {
@@ -45,17 +55,90 @@ const scriptStore = new ScriptStore(dataDir);
 const runtimeRunStore = new RuntimeRunStore(dataDir);
 const wikiWorker = new WikiWorker(store, settingsStore);
 
+// Capabilities MCP and Skill discovery are wired against isolated HOME/data fixtures.
+// The Playwright webServer sets HOME=.e2e-home before this module is loaded, so
+// CLAUDE_JSON_PATH/CODEX_CONFIG_PATH never resolve to the developer's real files.
+const claudeProjectDir = join(e2eHome, 'workspace', 'claude-project');
+const codexProjectDir = join(e2eHome, 'workspace', 'codex-project');
+const codexSubdir = join(codexProjectDir, 'packages', 'app');
+const codexDestinationDir = join(e2eHome, 'workspace', 'codex-destination');
+const codexUiTargetDir = join(e2eHome, 'workspace', 'codex-ui-target');
+mkdirSync(join(e2eHome, '.codex'), { recursive: true });
+mkdirSync(claudeProjectDir, { recursive: true });
+mkdirSync(join(codexProjectDir, '.git'), { recursive: true });
+mkdirSync(join(codexProjectDir, '.codex'), { recursive: true });
+mkdirSync(join(codexSubdir, '.codex'), { recursive: true });
+mkdirSync(join(codexDestinationDir, '.codex'), { recursive: true });
+mkdirSync(codexUiTargetDir, { recursive: true });
+await Bun.write(join(e2eHome, '.claude.json'), JSON.stringify({
+  mcpServers: {
+    shared: { command: 'claude-shared', alwaysLoad: true },
+    'claude-only': { command: 'claude-only', args: ['--fixture'], alwaysLoad: false },
+  },
+  projects: {},
+}, null, 2) + '\n');
+await Bun.write(join(claudeProjectDir, '.mcp.json'), JSON.stringify({
+  mcpServers: { 'claude-project': { command: 'claude-project-server' } },
+  fixtureMetadata: { preserve: true },
+}, null, 2) + '\n');
+await Bun.write(join(e2eHome, '.codex', 'config.toml'), [
+  '# e2e user config',
+  'model = "gpt-5.4"',
+  '',
+  '[features]',
+  'apps = true',
+  '',
+  '[mcp_servers.shared]',
+  'command = "codex-user-shared"',
+  '',
+  '[mcp_servers.codex_user]',
+  'url = "https://user.example.test/mcp"',
+  '',
+].join('\n'));
+await Bun.write(join(codexProjectDir, '.codex', 'config.toml'), [
+  '# project comment must survive mutations',
+  '[hooks]',
+  'enabled = true',
+  '',
+  '[mcp_servers.shared]',
+  'command = "codex-project-shared"',
+  '',
+  '[mcp_servers.secret_team]',
+  'command = "secret-server"',
+  '',
+  '[mcp_servers.secret_team.env]',
+  'TOKEN = "sk-abcdefghijklmnopqrstuvwxyz1234567890abcdefgh"',
+  '',
+].join('\n'));
+await Bun.write(join(codexSubdir, '.codex', 'config.toml'), [
+  '[mcp_servers.shared]',
+  'command = "codex-nearest-shared"',
+  '',
+  '[mcp_servers.subdirectory_only]',
+  'command = "subdirectory-server"',
+  '',
+].join('\n'));
+await Bun.write(join(codexDestinationDir, '.codex', 'config.toml'), [
+  'model = "gpt-5.4-mini" # preserve destination',
+  '',
+  '[features]',
+  'apps = false',
+  '',
+].join('\n'));
+
 // Skill discovery is wired against an ISOLATED fixture tree under .e2e-data so the
 // Capabilities tab is exercisable end-to-end without scanning the developer's real
 // ~/.claude / ~/.codex skill directories (which would break test isolation and
 // determinism). We seed one claude skill and point skill-roots.json at the fixture.
 const skillFixtureRoot = join(dataDir, 'skills-fixtures', 'claude');
 const codexFixtureRoot = join(dataDir, 'skills-fixtures', 'codex');
+const opencodeFixtureRoot = join(dataDir, 'skills-fixtures', 'opencode');
 const sampleSkillDir = join(skillFixtureRoot, 'e2e-sample-skill');
+const codexSkillDir = join(codexFixtureRoot, 'e2e-codex-skill');
+const opencodeSkillDir = join(opencodeFixtureRoot, 'e2e-opencode-skill');
 mkdirSync(sampleSkillDir, { recursive: true });
-// Empty codex root: gives a second enabled root so Duplicate/Port targets exist
-// and the agent filter is meaningful, without seeding a codex skill.
-mkdirSync(codexFixtureRoot, { recursive: true });
+mkdirSync(codexSkillDir, { recursive: true });
+mkdirSync(opencodeSkillDir, { recursive: true });
 await Bun.write(
   join(sampleSkillDir, 'SKILL.md'),
   [
@@ -71,6 +154,8 @@ await Bun.write(
     '',
   ].join('\n'),
 );
+await Bun.write(join(codexSkillDir, 'SKILL.md'), '---\nname: e2e-codex-skill\ndescription: Isolated Codex skill.\n---\n\n# Codex fixture\n');
+await Bun.write(join(opencodeSkillDir, 'SKILL.md'), '---\nname: e2e-opencode-skill\ndescription: Isolated OpenCode skill.\n---\n\n# OpenCode fixture\n');
 await Bun.write(
   join(dataDir, 'skill-roots.json'),
   JSON.stringify(
@@ -91,6 +176,13 @@ await Bun.write(
           source: 'codex-user',
           enabled: true,
         },
+        {
+          id: 'e2e-opencode',
+          dir: opencodeFixtureRoot,
+          agent: 'opencode',
+          source: 'opencode-user',
+          enabled: true,
+        },
       ],
       lastModified: new Date().toISOString(),
     },
@@ -102,6 +194,15 @@ await Bun.write(
 const skillStore = new SkillStore(dataDir);
 const skillRootsStore = new SkillRootsStore(dataDir);
 const placementTargetsStore = new PlacementTargetsStore(dataDir);
+await placementTargetsStore.addTarget({
+  label: 'E2E Claude project', dir: claudeProjectDir, kind: 'project', runtime: 'claude', teamShared: true,
+});
+await placementTargetsStore.addTarget({
+  label: 'E2E Codex subdirectory', dir: codexSubdir, kind: 'local', runtime: 'codex', teamShared: false,
+});
+await placementTargetsStore.addTarget({
+  label: 'E2E Codex destination', dir: codexDestinationDir, kind: 'project', runtime: 'codex', teamShared: true,
+});
 // Best-effort initial scan so GET /api/skills returns the fixture skill on boot.
 try {
   await skillStore.sync(await skillRootsStore.getRoots());

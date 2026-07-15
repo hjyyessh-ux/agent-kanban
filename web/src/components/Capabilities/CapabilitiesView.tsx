@@ -3,7 +3,6 @@ import type {
   CapabilityItem,
   DiscoveredSkill,
   SkillRoot,
-  SkillRuntime,
   SkillSyncResult,
   ScriptEntry,
   ScriptSyncResult,
@@ -26,8 +25,16 @@ import { useScopeInventory } from '../../hooks/useScopeInventory';
 import { SkillDetailModal } from './SkillDetailModal';
 import { NewSkillModal } from './NewSkillModal';
 import { ImportSkillModal } from './ImportSkillModal';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import { InventoryView } from './InventoryView';
 import { StorageDrawer } from './StorageDrawer';
+import {
+  CAPABILITY_RUNTIME_FILTERS,
+  listRuntimeCounts,
+  matchesRuntime,
+  runtimeLabel,
+  type CapabilityRuntimeFilter,
+} from './capability-filters';
 import '../Scripts/Scripts.css';
 import './Capabilities.css';
 
@@ -55,7 +62,6 @@ const VIEW_TABS: Array<{ mode: CapViewMode; label: string; caption: string; titl
 ];
 
 type TypeFilter = 'all' | 'skill' | 'script';
-type AgentFilter = 'all' | SkillRuntime;
 
 export interface CapabilitiesViewProps {
   skills: DiscoveredSkill[];
@@ -152,7 +158,7 @@ export function CapabilitiesView({
   const [viewMode, setViewMode] = useState<CapViewMode>('inventory');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
+  const [runtimeFilter, setRuntimeFilter] = useState<CapabilityRuntimeFilter>('all');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [showRootsModal, setShowRootsModal] = useState(false);
@@ -205,10 +211,13 @@ export function CapabilitiesView({
   const filteredItems = useMemo(() => {
     return allItems.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
-      if (agentFilter !== 'all' && item.agent !== agentFilter) return false;
+      if (!matchesRuntime(item.agent, runtimeFilter)) return false;
       return matchesSearch(item, search);
     });
-  }, [allItems, typeFilter, agentFilter, search]);
+  }, [allItems, typeFilter, runtimeFilter, search]);
+  const runtimeCounts = useMemo(() => listRuntimeCounts(
+    typeFilter === 'all' ? allItems : allItems.filter((item) => item.type === typeFilter),
+  ), [allItems, typeFilter]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -349,6 +358,8 @@ export function CapabilitiesView({
               onAddTarget={scopeTargets.addTarget}
               onRemoveTarget={scopeTargets.removeTarget}
               onRefreshSkills={refreshSkillsAndInventory}
+              runtimeFilter={runtimeFilter}
+              onRuntimeFilterChange={setRuntimeFilter}
             />
           )}
         </>
@@ -387,15 +398,16 @@ export function CapabilitiesView({
             </button>
           ))}
         </div>
-        <div className="cap-filter-group" role="group" aria-label="Filter by agent">
-          {(['all', 'claude', 'codex', 'opencode'] as const).map((a) => (
+        <div className="cap-filter-group" role="group" aria-label="Filter by runtime">
+          {CAPABILITY_RUNTIME_FILTERS.map((runtime) => (
             <button
-              key={a}
+              key={runtime}
               type="button"
-              className={`cap-filter-btn${agentFilter === a ? ' cap-filter-btn--active' : ''}`}
-              onClick={() => setAgentFilter(a)}
+              className={`cap-filter-btn${runtimeFilter === runtime ? ' cap-filter-btn--active' : ''}`}
+              onClick={() => setRuntimeFilter(runtime)}
+              aria-pressed={runtimeFilter === runtime}
             >
-              {a === 'all' ? 'All' : a}
+              {runtimeLabel(runtime)} ({runtimeCounts[runtime]})
             </button>
           ))}
         </div>
@@ -414,7 +426,7 @@ export function CapabilitiesView({
         {filteredItems.length === 0 ? (
           <div className="cap-empty">
             <p>
-              {search || typeFilter !== 'all' || agentFilter !== 'all'
+              {search || typeFilter !== 'all' || runtimeFilter !== 'all'
                 ? 'No capabilities match your filters.'
                 : 'No capabilities found. Run Sync to discover skills, or create one with + New Skill.'}
             </p>
@@ -452,8 +464,8 @@ export function CapabilitiesView({
                     <div className="cap-badges">
                       <span className={`kv2-badge cap-badge--${item.type}`}>{item.type}</span>
                       {item.agent && (
-                        <span className={`kv2-badge cap-badge--${item.agent}`}>
-                          {item.agent}
+                        <span className={`cap-runtime-badge cap-badge--${item.agent}`}>
+                          <RuntimeBadge runtime={item.agent} />
                         </span>
                       )}
                       {item.type === 'script' && scriptEntry?.language && (

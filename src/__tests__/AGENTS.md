@@ -20,7 +20,11 @@ All Bun-based test coverage lives here as `*.test.ts` files (60+ suites). The su
 | `cc-settings-store.test.ts` | Vertex/proxy detection, tool-search effective-state, skill-visibility override logic for `core/cc-settings-store.ts` |
 | `cold-storage-store.test.ts` | Freeze/restore/move/copy + content hashing for skills and MCP entries in `core/cold-storage-store.ts` |
 | `mcp-config-store.test.ts` | MCP inventory reads, plaintext-secret detection, safe `.claude.json` mutation, copy/move/remove for `core/mcp-config-store.ts` |
-| `placement-targets-store.test.ts` | Builtin target seeding (`user`, `cold`) and custom target CRUD for `core/placement-targets-store.ts` |
+| `codex-mcp-config.test.ts` | Codex TOML stdio/http parsing, surgical round-trip preservation, quoted names, tool policy, CAS conflict/backup, runtime identity |
+| `scope-inventory-route.test.ts` | Runtime-aware `/api/scope/inventory` merge, Codex chain/trust diagnostics, Skill/Claude fail-open regression |
+| `capabilities-runtime-integration.test.ts` | Isolated temporary HOME/data fixture combining Claude/Codex MCP chains and Claude/Codex/OpenCode Skill discovery without touching real user files |
+| `placement-targets-store.test.ts` | Runtime-aware builtin target seeding (`claude user`, `codex user`, `cold`), legacy migration, and custom target CRUD |
+| `skill-store.test.ts` | Existing persisted Claude/Codex/Opencode skill inventory compatibility |
 | `skill-frontmatter.test.ts` | `disable-model-invocation` frontmatter add/update/preserve-body logic for `core/skill-frontmatter.ts` |
 | `dispatch-tracker.test.ts`, `integration.test.ts` | Cross-module dispatch flows |
 | `question-monitor.test.ts`, `question-routes.test.ts` | SSE/poll proxy behavior |

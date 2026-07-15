@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { McpInventoryItem, DiscoveredSkill, SkillVisibility, ContextDiagnostics, ColdManifestEntry } from '../../../src/core/types';
+import type {
+  McpAlwaysLoadRequest,
+  McpCopyRequest,
+  McpDeleteRequest,
+  McpInventoryItem,
+  McpMoveRequest,
+  McpRuntime,
+  DiscoveredSkill,
+  SkillVisibility,
+  ContextDiagnostics,
+  ColdManifestEntry,
+} from '../../../src/core/types';
 
 export type { ColdManifestEntry };
 
@@ -16,11 +27,7 @@ export interface SkillVisibilityPatch {
   disableModelInvocation?: boolean;
 }
 
-export interface McpAlwaysLoadPatch {
-  location: string;
-  scope: 'user' | 'project';
-  alwaysLoad: boolean;
-}
+export type McpAlwaysLoadPatch = McpAlwaysLoadRequest;
 
 export interface VisibilityChange {
   filePath: string;
@@ -34,27 +41,11 @@ export interface VisibilityPreviewResult {
   changes: VisibilityChange[];
 }
 
-export interface McpCopyBody {
-  toScope: 'user' | 'local' | 'project';
-  targetDir?: string;
-  projectDir?: string;
-  forceSecret?: boolean;
-}
+export type McpCopyBody = McpCopyRequest;
 
-export interface McpMoveBody {
-  fromScope: 'user' | 'local' | 'project';
-  fromDir?: string;
-  toScope: 'user' | 'local' | 'project';
-  targetDir?: string;
-  projectDir?: string;
-  forceSecret?: boolean;
-}
+export type McpMoveBody = McpMoveRequest;
 
-export interface McpDeleteBody {
-  scope: 'user' | 'local' | 'project';
-  targetDir?: string;
-  projectDir?: string;
-}
+export type McpDeleteBody = McpDeleteRequest;
 
 export interface McpWriteResult {
   ok: boolean;
@@ -63,6 +54,11 @@ export interface McpWriteResult {
   secretWarning?: boolean;
   message?: string;
 }
+
+export type McpMutationPreviewResult = VisibilityPreviewResult & {
+  secretWarning?: boolean;
+  message?: string;
+};
 
 async function apiPost(url: string, body: unknown): Promise<Response> {
   const res = await fetch(url, {
@@ -95,14 +91,29 @@ export async function copyMcpServer(name: string, body: McpCopyBody): Promise<Mc
   return handleWriteResponse(res);
 }
 
+export async function previewCopyMcpServer(name: string, body: McpCopyBody): Promise<McpMutationPreviewResult> {
+  const res = await apiPost(`${BASE_URL}/scope/mcp/${encodeURIComponent(name)}/copy?preview=1`, body);
+  return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
+}
+
 export async function moveMcpServer(name: string, body: McpMoveBody): Promise<McpWriteResult> {
   const res = await apiPost(`${BASE_URL}/scope/mcp/${encodeURIComponent(name)}/move`, body);
   return handleWriteResponse(res);
 }
 
+export async function previewMoveMcpServer(name: string, body: McpMoveBody): Promise<McpMutationPreviewResult> {
+  const res = await apiPost(`${BASE_URL}/scope/mcp/${encodeURIComponent(name)}/move?preview=1`, body);
+  return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
+}
+
 export async function removeMcpServer(name: string, body: McpDeleteBody): Promise<McpWriteResult> {
   const res = await apiDelete(`${BASE_URL}/scope/mcp/${encodeURIComponent(name)}`, body);
   return handleWriteResponse(res);
+}
+
+export async function previewRemoveMcpServer(name: string, body: McpDeleteBody): Promise<McpMutationPreviewResult> {
+  const res = await apiDelete(`${BASE_URL}/scope/mcp/${encodeURIComponent(name)}?preview=1`, body);
+  return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
 }
 
 async function apiPatch(url: string, body: unknown): Promise<Response> {
@@ -248,15 +259,30 @@ export async function freezeMcpApi(
   mcpName: string,
   scope: string,
   fromDir?: string,
+  runtime: McpRuntime = 'claude',
+  placementIdentity?: string,
 ): Promise<ColdManifestEntry> {
   const res = await fetch(`${BASE_URL}/scope/cold/freeze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 'mcp', mcpName, scope, fromDir }),
+    body: JSON.stringify({ kind: 'mcp', mcpName, scope, fromDir, runtime, placementIdentity }),
   });
   const data = (await res.json()) as { error?: string; entry?: ColdManifestEntry };
   if (!res.ok) throw new Error(data.error ?? res.statusText);
   return data.entry!;
+}
+
+export async function previewFreezeMcpApi(
+  mcpName: string,
+  scope: string,
+  fromDir: string | undefined,
+  runtime: McpRuntime,
+  placementIdentity: string,
+): Promise<McpMutationPreviewResult> {
+  const res = await apiPost(`${BASE_URL}/scope/cold/freeze?preview=1`, {
+    kind: 'mcp', mcpName, scope, fromDir, runtime, placementIdentity,
+  });
+  return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
 }
 
 export async function restoreSkillColdApi(ref: string, targetRootId: string): Promise<void> {
@@ -276,16 +302,30 @@ export async function restoreMcpColdApi(
   toScope: string,
   targetDir?: string,
   projectDir?: string,
+  runtime?: McpRuntime,
 ): Promise<void> {
   const res = await fetch(`${BASE_URL}/scope/cold/restore`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 'mcp', ref, toScope, targetDir, projectDir }),
+    body: JSON.stringify({ kind: 'mcp', ref, toScope, targetDir, projectDir, runtime }),
   });
   if (!res.ok) {
     const data = (await res.json()) as { error?: string };
     throw new Error(data.error ?? res.statusText);
   }
+}
+
+export async function previewRestoreMcpColdApi(
+  ref: string,
+  toScope: string,
+  targetDir?: string,
+  projectDir?: string,
+  runtime?: McpRuntime,
+): Promise<McpMutationPreviewResult> {
+  const res = await apiPost(`${BASE_URL}/scope/cold/restore?preview=1`, {
+    kind: 'mcp', ref, toScope, targetDir, projectDir, runtime,
+  });
+  return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
 }
 
 export async function deleteColdApi(kind: 'skill' | 'mcp', ref: string): Promise<void> {

@@ -59,6 +59,7 @@ test-results/
 .omc/
 .omx/
 .e2e-data/
+.e2e-home/
 screenshots/
 todo/
 kanban-*.png

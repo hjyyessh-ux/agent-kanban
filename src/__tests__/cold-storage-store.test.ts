@@ -20,6 +20,7 @@ import {
   freezeSkill,
   restoreSkill,
   freezeMcp,
+  restoreMcp,
   deleteColdEntry,
   getColdManifest,
   resolveColdStorageDir,
@@ -459,6 +460,40 @@ describe('freezeMcp (project scope)', () => {
       rmSync(base, { recursive: true, force: true });
     }
   });
+
+  test('freezes Codex MCP without colliding with the legacy Claude ref format', async () => {
+    const base = tmpDir();
+    try {
+      const codexDir = join(base, '.codex');
+      const configPath = join(codexDir, 'config.toml');
+      mkdirSync(codexDir, { recursive: true });
+      writeFileSync(
+        configPath,
+        'model = "gpt-5.4"\n\n[mcp_servers.shared]\ncommand = "codex-server"\n',
+      );
+      const def = { command: 'codex-server', type: 'stdio' as const };
+
+      const entry = await freezeMcp('shared', def, 'project', base, {
+        ts: 'codex-freeze',
+        runtime: 'codex',
+      });
+
+      expect(entry.ref).toBe('codex/shared');
+      expect(entry.runtime).toBe('codex');
+      expect(entry.sourcePlacement).toMatchObject({
+        runtime: 'codex', scope: 'project', dir: base, location: configPath,
+      });
+      expect(readFileSync(configPath, 'utf8')).toBe('model = "gpt-5.4"\n\n');
+
+      await restoreMcp(entry.ref, undefined, { ts: 'codex-restore' });
+      const restored = readFileSync(configPath, 'utf8');
+      expect(restored).toContain('model = "gpt-5.4"');
+      expect(restored).toContain('[mcp_servers."shared"]');
+      expect(getColdManifest().find((item) => item.ref === entry.ref)).toBeUndefined();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
 });
 
 // ── deleteColdEntry ───────────────────────────────────────────────────────────
@@ -517,6 +552,24 @@ describe('getColdManifest', () => {
 
   test('returns empty array when no entries', () => {
     expect(getColdManifest()).toEqual([]);
+  });
+
+  test('loads legacy MCP entries as Claude without dropping them', () => {
+    const coldDir = resolveColdStorageDir();
+    const legacy = [{
+      kind: 'mcp',
+      ref: 'legacy-server',
+      sourceScope: 'user',
+      sourcePath: '/tmp/.claude.json',
+      hash: 'abc',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      restorePolicy: 'any',
+    }];
+    writeFileSync(join(coldDir, 'manifest.json'), JSON.stringify(legacy));
+
+    const entries = getColdManifest();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ ref: 'legacy-server', runtime: 'claude' });
   });
 
   test('returns all entries after multiple freezes', async () => {

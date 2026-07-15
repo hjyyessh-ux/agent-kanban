@@ -3,11 +3,17 @@ import type { McpInventoryItem, McpPlacement, PlacementTarget } from '../../../.
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { ScopeChip } from './ScopeChip';
 import { DiffPreview } from './DiffPreview';
+import { McpAlwaysLoadControl } from './VisibilityControl';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import {
   copyMcpServer,
   moveMcpServer,
+  previewCopyMcpServer,
+  previewMoveMcpServer,
   removeMcpServer,
+  previewRemoveMcpServer,
   freezeMcpApi,
+  previewFreezeMcpApi,
   type McpCopyBody,
   type McpMoveBody,
   type VisibilityChange,
@@ -67,6 +73,7 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
   const [actionError, setActionError] = useState<string | null>(null);
   const [secretWarning, setSecretWarning] = useState<string | null>(null);
   const [secretPendingBody, setSecretPendingBody] = useState<McpCopyBody | McpMoveBody | null>(null);
+  const [pendingBody, setPendingBody] = useState<McpCopyBody | McpMoveBody | null>(null);
 
   // For remove per placement
   const [removingPlacement, setRemovingPlacement] = useState<McpPlacement | null>(null);
@@ -77,6 +84,9 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
   // Freeze state — tracks which placement row is currently being frozen.
   const [freezingIdx, setFreezingIdx] = useState<number | null>(null);
   const [freezeError, setFreezeError] = useState<string | null>(null);
+  const [placementPreview, setPlacementPreview] = useState<{
+    kind: 'remove' | 'freeze'; placement: McpPlacement; idx: number; changes: VisibilityChange[];
+  } | null>(null);
 
   const resetAction = () => {
     setActionMode('none');
@@ -86,10 +96,12 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     setActionError(null);
     setSecretWarning(null);
     setSecretPendingBody(null);
+    setPendingBody(null);
   };
 
   const eligibleTargets = placementTargets.filter(
-    (t) => t.kind === 'user' || t.kind === 'local' || t.kind === 'project',
+    (t) => t.runtime === item.runtime &&
+      (t.kind === 'user' || t.kind === 'local' || t.kind === 'project'),
   );
 
   function buildBody(mode: ActionMode, targetId: string, force = false): McpCopyBody | McpMoveBody | null {
@@ -98,6 +110,10 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     const toScope = target.kind as CapScope;
     if (mode === 'copy') {
       return {
+        runtime: item.runtime,
+        inventoryIdentity: item.identity,
+        sourcePlacementIdentity: item.placements[moveSourceIdx]?.identity ?? item.placements[0]?.identity,
+        targetId: target.id,
         toScope,
         targetDir: toScope === 'local' ? target.dir : undefined,
         projectDir: toScope === 'project' ? target.dir : undefined,
@@ -107,6 +123,10 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     // move — remove from the user-selected source placement
     const srcPlacement = item.placements[moveSourceIdx] ?? item.placements[0];
     return {
+      runtime: item.runtime,
+      inventoryIdentity: item.identity,
+      sourcePlacementIdentity: srcPlacement.identity,
+      targetId: target.id,
       fromScope: srcPlacement.scope as CapScope,
       // local: projects[dir] key inside ~/.claude.json; project: repo dir holding .mcp.json.
       fromDir: srcPlacement.dir,
@@ -122,14 +142,6 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     const body = buildBody(actionMode, selectedPlacementId);
     if (!body) return;
 
-    // copy/move write the target config immediately (the API returns the
-    // before/after of the applied change), so confirm before executing.
-    const target = eligibleTargets.find((t) => t.id === selectedPlacementId);
-    const summary = actionMode === 'copy'
-      ? `"${item.name}"을(를) [${target?.kind}] ${target?.label}에 복사합니다.`
-      : `"${item.name}"을(를) ${item.placements[moveSourceIdx]?.scope ?? '?'} scope에서 제거하고 [${target?.kind}] ${target?.label}(으)로 이동합니다.`;
-    if (!window.confirm(`${summary}\n설정 파일이 즉시 수정됩니다. 계속하시겠습니까?`)) return;
-
     setApplying(false);
     setActionError(null);
     setSecretWarning(null);
@@ -137,8 +149,8 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     try {
       const result =
         actionMode === 'copy'
-          ? await copyMcpServer(item.name, body as McpCopyBody)
-          : await moveMcpServer(item.name, body as McpMoveBody);
+          ? await previewCopyMcpServer(item.name, body as McpCopyBody)
+          : await previewMoveMcpServer(item.name, body as McpMoveBody);
 
       if (result.secretWarning) {
         setSecretWarning(result.message ?? 'Plaintext secret detected in MCP definition.');
@@ -146,18 +158,8 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
         return;
       }
 
-      const target = eligibleTargets.find((t) => t.id === selectedPlacementId);
-      const fileLabel = target?.dir ?? '';
-      setPendingChanges([
-        {
-          filePath: fileLabel,
-          isProjectFile: target?.kind === 'project',
-          before: result.before,
-          after: result.after,
-        },
-      ]);
-      setSuccessMsg(`${actionMode === 'copy' ? 'Copied' : 'Moved'} successfully. New session required.`);
-      await onRefresh();
+      setPendingChanges(result.changes);
+      setPendingBody(body);
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Operation failed');
     }
@@ -171,21 +173,30 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     try {
       const result =
         actionMode === 'copy'
-          ? await copyMcpServer(item.name, body as McpCopyBody)
-          : await moveMcpServer(item.name, body as McpMoveBody);
-
-      const target = eligibleTargets.find((t) => t.id === selectedPlacementId);
-      setPendingChanges([
-        {
-          filePath: target?.dir ?? '',
-          isProjectFile: target?.kind === 'project',
-          before: result.before,
-          after: result.after,
-        },
-      ]);
+          ? await previewCopyMcpServer(item.name, body as McpCopyBody)
+          : await previewMoveMcpServer(item.name, body as McpMoveBody);
+      setPendingChanges(result.changes);
+      setPendingBody(body);
       setSecretWarning(null);
       setSecretPendingBody(null);
-      setSuccessMsg(`${actionMode === 'copy' ? 'Copied' : 'Moved'} successfully (secret confirmed). New session required.`);
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : 'Operation failed');
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!pendingBody || actionMode === 'none') return;
+    if (actionMode === 'move' && pendingChanges?.some((change) => change.isProjectFile) &&
+      !window.confirm('project 설정 파일이 변경됩니다. 미리 본 diff를 적용하시겠습니까?')) return;
+    setApplying(true);
+    setActionError(null);
+    try {
+      if (actionMode === 'copy') await copyMcpServer(item.name, pendingBody as McpCopyBody);
+      else await moveMcpServer(item.name, pendingBody as McpMoveBody);
+      setSuccessMsg(`${actionMode === 'copy' ? 'Copied' : 'Moved'} successfully. New session required.`);
+      resetAction();
       await onRefresh();
     } catch (e: unknown) {
       setActionError(e instanceof Error ? e.message : 'Operation failed');
@@ -195,18 +206,18 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
   };
 
   const handleRemovePlacement = async (placement: McpPlacement) => {
-    if (!window.confirm(`${scopeLabel(placement.scope as CapScope)}에서 이 MCP 설정을 제거합니다. 계속하시겠습니까?`)) return;
     setRemovingPlacement(placement);
     setRemoveError(null);
     try {
-      await removeMcpServer(item.name, {
+      const result = await previewRemoveMcpServer(item.name, {
+        runtime: item.runtime,
+        inventoryIdentity: item.identity,
+        placementIdentity: placement.identity,
         scope: placement.scope as CapScope,
         targetDir: placement.scope === 'local' ? placement.dir : undefined,
         projectDir: placement.scope === 'project' ? placement.dir : undefined,
       });
-      setRemovingPlacement(null);
-      setSuccessMsg('Removed. New session required.');
-      await onRefresh();
+      setPlacementPreview({ kind: 'remove', placement, idx: item.placements.indexOf(placement), changes: result.changes });
     } catch (e: unknown) {
       setRemoveError(e instanceof Error ? e.message : 'Remove failed');
     } finally {
@@ -215,9 +226,6 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
   };
 
   const handleFreeze = async (placement: McpPlacement, idx: number) => {
-    if (placement.scope === 'project') {
-      if (!window.confirm('project 항목: git 관리 파일(.mcp.json)이므로 변경이 발생합니다. 계속하시겠습니까?')) return;
-    }
     // freezeMcp removes from projects[fromDir] (local) or <fromDir>/.mcp.json (project).
     // Same-name entries in Cold Storage are overwritten with the latest def (see freezeMcp).
     const fromDir = placement.scope === 'local' || placement.scope === 'project'
@@ -226,12 +234,43 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
     setFreezingIdx(idx);
     setFreezeError(null);
     try {
-      await freezeMcpApi(item.name, placement.scope, fromDir);
-      setSuccessMsg(`Frozen from ${placement.scope} scope. Cold Storage에서 restore 가능합니다.`);
-      await onRefresh();
+      const result = await previewFreezeMcpApi(item.name, placement.scope, fromDir, item.runtime, placement.identity);
+      setPlacementPreview({ kind: 'freeze', placement, idx, changes: result.changes });
     } catch (e: unknown) {
       setFreezeError(e instanceof Error ? e.message : 'Freeze failed');
     } finally {
+      setFreezingIdx(null);
+    }
+  };
+
+  const applyPlacementPreview = async () => {
+    if (!placementPreview) return;
+    const { kind, placement, idx } = placementPreview;
+    if (placement.scope === 'project' &&
+      !window.confirm(`project 설정 파일에서 MCP를 ${kind === 'freeze' ? 'freeze' : 'remove'}합니다. 미리 본 diff를 적용하시겠습니까?`)) return;
+    setApplying(true);
+    try {
+      if (kind === 'remove') {
+        await removeMcpServer(item.name, {
+          runtime: item.runtime, inventoryIdentity: item.identity, placementIdentity: placement.identity,
+          scope: placement.scope as CapScope,
+          targetDir: placement.scope === 'local' ? placement.dir : undefined,
+          projectDir: placement.scope === 'project' ? placement.dir : undefined,
+        });
+        setSuccessMsg('Removed. New session required.');
+      } else {
+        const fromDir = placement.scope === 'local' || placement.scope === 'project' ? placement.dir : undefined;
+        setFreezingIdx(idx);
+        await freezeMcpApi(item.name, placement.scope, fromDir, item.runtime, placement.identity);
+        setSuccessMsg(`Frozen from ${placement.scope} scope. Cold Storage에서 restore 가능합니다.`);
+      }
+      setPlacementPreview(null);
+      await onRefresh();
+    } catch (e: unknown) {
+      if (kind === 'remove') setRemoveError(e instanceof Error ? e.message : 'Remove failed');
+      else setFreezeError(e instanceof Error ? e.message : 'Freeze failed');
+    } finally {
+      setApplying(false);
       setFreezingIdx(null);
     }
   };
@@ -254,6 +293,7 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
         <div className="cap-detail-meta">
           <div className="cap-detail-badges">
             <span className="cap-chip cap-chip--mcp">MCP</span>
+            <RuntimeBadge runtime={item.runtime} />
             {item.def.type && (
               <span className="cap-chip cap-chip--plain">{String(item.def.type)}</span>
             )}
@@ -288,12 +328,19 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
           <p className="cap-detail-section-hint">새 세션에서만 변경이 반영됩니다.</p>
           <div className="mcp-detail-placements">
             {item.placements.map((p, i) => (
-              <div key={i} className="inv-placement-row">
+              <div key={p.identity}>
+              <div className="inv-placement-row">
                 <ScopeChip scope={p.scope} alwaysLoad={p.alwaysLoad} managed={p.managed} />
                 <div className="inv-placement-where">
                   <span className="inv-placement-loc" title={p.location}>{p.location}</span>
                   {p.dir && (
                     <span className="inv-placement-dir" title={p.dir}>{p.dir}</span>
+                  )}
+                  {item.runtime === 'codex' && (
+                    <span className="inv-placement-dir">
+                      {p.configLayer ?? p.scope}{p.effective ? ' · effective' : p.overriddenBy ? ` · overridden by ${p.overriddenBy}` : ''}
+                      {p.appliesToDir ? ` · applies to ${p.appliesToDir}` : ''}
+                    </span>
                   )}
                 </div>
                 {!p.managed && (
@@ -319,10 +366,25 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
                   </div>
                 )}
               </div>
+              <McpAlwaysLoadControl
+                mcpName={item.name}
+                placement={p}
+                onApplied={() => void onRefresh()}
+              />
+              </div>
             ))}
           </div>
           {removeError && <p className="cap-detail-error">{removeError}</p>}
           {freezeError && <p className="cap-detail-error">{freezeError}</p>}
+          {placementPreview && (
+            <DiffPreview
+              changes={placementPreview.changes}
+              applying={applying}
+              error={placementPreview.kind === 'remove' ? removeError : freezeError}
+              onApply={() => void applyPlacementPreview()}
+              onCancel={() => setPlacementPreview(null)}
+            />
+          )}
         </div>
 
         {/* Copy / Move section */}
@@ -389,7 +451,7 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
                 disabled={!selectedPlacementId || actionMode === 'none' || applying}
                 onClick={() => void handlePreview()}
               >
-                Apply
+                Preview
               </button>
               {actionMode !== 'none' && (
                 <button
@@ -431,14 +493,13 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
               </div>
             )}
 
-            {/* Applied-change diff (copy/move already wrote the file) */}
+            {/* Previewed change; Apply performs the mutation. */}
             {pendingChanges && !secretWarning && (
               <DiffPreview
                 changes={pendingChanges}
-                applying={false}
-                error={null}
-                resultMode
-                onApply={() => { setPendingChanges(null); }}
+                applying={applying}
+                error={actionError}
+                onApply={() => void handleApply()}
                 onCancel={() => setPendingChanges(null)}
               />
             )}

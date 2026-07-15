@@ -19,6 +19,7 @@ import {
   type AggregateSessionsFn,
   type LocalPeerSessionsFn,
   type PeerTokenFn,
+  type ScopeMcpInventoryFn,
 } from './routes';
 export type {
   DispatchFn,
@@ -27,6 +28,7 @@ export type {
   AggregateSessionsFn,
   LocalPeerSessionsFn,
   PeerTokenFn,
+  ScopeMcpInventoryFn,
 } from './routes';
 
 export interface ServerInstance {
@@ -76,6 +78,7 @@ export function createServer(
   skillRootsStore?: SkillRootsStore,
   placementTargetsStore?: PlacementTargetsStore,
   runtimeRunStore?: RuntimeRunStore,
+  scopeMcpInventoryFn?: ScopeMcpInventoryFn,
 ): ServerInstance {
   const { handleRequest } = createRouteHandler(
     store,
@@ -96,6 +99,7 @@ export function createServer(
     skillRootsStore,
     placementTargetsStore,
     runtimeRunStore,
+    scopeMcpInventoryFn,
   );
 
   const fetchHandler = async (req: Request, server: ReturnType<typeof Bun.serve>) => {

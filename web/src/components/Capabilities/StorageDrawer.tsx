@@ -5,8 +5,11 @@ import {
   useColdStorage,
   restoreSkillColdApi,
   restoreMcpColdApi,
+  previewRestoreMcpColdApi,
   deleteColdApi,
+  type VisibilityChange,
 } from '../../hooks/useScopeInventory';
+import { DiffPreview } from './DiffPreview';
 
 interface StorageDrawerProps {
   skillRoots: SkillRoot[];
@@ -37,6 +40,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
   const [restoring, setRestoring] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restoreChanges, setRestoreChanges] = useState<VisibilityChange[] | null>(null);
 
   const handleRestore = async () => {
     if (!restoreTarget) return;
@@ -48,11 +52,20 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
       } else {
         const target = placementTargets.find((t) => t.id === restoreTarget);
         if (!target) throw new Error('Target not found');
-        await restoreMcpColdApi(
+        const args = [
           entry.ref,
           target.kind === 'project' ? 'project' : target.kind === 'local' ? 'local' : 'user',
           target.kind === 'local' ? target.dir : undefined,
           target.kind === 'project' ? target.dir : undefined,
+          entry.runtime === 'codex' ? 'codex' : 'claude',
+        ] as const;
+        if (!restoreChanges) {
+          const preview = await previewRestoreMcpColdApi(...args);
+          setRestoreChanges(preview.changes);
+          return;
+        }
+        await restoreMcpColdApi(
+          ...args,
         );
       }
       await onRestored();
@@ -79,7 +92,8 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
 
   const skillTargets = skillRoots.filter((r) => r.enabled);
   const mcpTargets = placementTargets.filter(
-    (t) => t.kind === 'user' || t.kind === 'local' || t.kind === 'project',
+    (t) => (t.kind === 'user' || t.kind === 'local' || t.kind === 'project') &&
+      t.runtime === (entry.runtime === 'codex' ? 'codex' : 'claude'),
   );
 
   return (
@@ -102,7 +116,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
         <select
           className="kv2-select cold-item__select"
           value={restoreTarget}
-          onChange={(e) => { setRestoreTarget(e.target.value); setError(null); }}
+          onChange={(e) => { setRestoreTarget(e.target.value); setRestoreChanges(null); setError(null); }}
         >
           <option value="">— restore to... —</option>
           {entry.kind === 'skill'
@@ -123,7 +137,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
           disabled={!restoreTarget || restoring}
           onClick={() => void handleRestore()}
         >
-          {restoring ? '…' : 'Restore'}
+          {restoring ? '…' : entry.kind === 'mcp' && restoreChanges ? 'Apply' : entry.kind === 'mcp' ? 'Preview' : 'Restore'}
         </button>
         <button
           type="button"
@@ -136,6 +150,15 @@ function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted 
       </div>
 
       {error && <p className="cap-roots-error cold-item__error">{error}</p>}
+      {restoreChanges && (
+        <DiffPreview
+          changes={restoreChanges}
+          applying={restoring}
+          error={error}
+          onApply={() => void handleRestore()}
+          onCancel={() => setRestoreChanges(null)}
+        />
+      )}
     </div>
   );
 }

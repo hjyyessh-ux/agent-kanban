@@ -25,6 +25,12 @@ agent-kanban은 세 개의 레이어와 runtime adapter 하위 시스템으로 �
 
 카드 실행 runtime은 `agentRuntime`으로 구분한다. 값이 없는 legacy card는 `opencode`로 해석한다.
 
+Capabilities의 MCP 설정 runtime은 별도 `McpRuntime`(`claude` | `codex`)으로 구분한다. Claude adapter는 기존 JSON parser/writer와 CLI fallback을 그대로 사용하고, Codex adapter는 `config.toml`의 선택된 `[mcp_servers.*]` table만 수정한다. runtime이 없던 persisted placement target과 MCP API 요청은 Claude로 해석하며, inventory key는 `runtime:name`이다. Skill scanner의 Claude/Codex/Opencode 식별과 scan/dedup 계약은 이 경계와 독립적으로 유지된다.
+
+Mutation route는 runtime과 exact placement identity를 확인한 뒤 Claude 기존 writer 또는 Codex TOML writer 중 하나만 호출한다. Preview는 순수 변환으로 diff를 계산하고 apply에서만 lock/backup/atomic write를 수행한다. Codex cross-file move는 원본 제거 실패 시 동시 변경이 없는 대상만 rollback한다. Cold storage는 runtime과 원 placement를 manifest/registry에 보존한다.
+
+Codex inventory reader는 등록 target마다 git/project root → target directory의 config chain을 만들고 가까운 layer를 effective definition으로 표시한다. Project trust는 required/status unknown 진단으로만 노출하며 실제 신뢰 상태를 추론하지 않는다. Runtime discovery는 fail-open으로 합쳐져 malformed Codex TOML이 Claude MCP나 기존 Skill inventory 응답을 차단하지 않는다.
+
 ---
 
 ## 기술 스택
@@ -57,6 +63,9 @@ src/
 │   ├── script-store.ts      # synced scripts + run history
 │   ├── telegram-state-store.ts # Telegram selected session / sticky defaults
 │   ├── filelock.ts          # cross-process file lock
+│   ├── mcp-config-store.ts  # 기존 Claude JSON/.mcp.json parser/writer + CLI fallback
+│   ├── codex-mcp-config.ts  # Codex config.toml MCP 전용 surgical writer
+│   ├── mcp-runtime-adapter.ts # Claude/Codex MCP inventory/write strategy
 │   └── cron-parser.ts       # 자연어 cron 변환, 검증, 설명 생성
 ├── plugin/                  # 백엔드 런타임 (공유 부트스트랩 + opencode 플러그인 레이어)
 │   ├── index.ts             # store → runtime registry → tools → hooks → monitors

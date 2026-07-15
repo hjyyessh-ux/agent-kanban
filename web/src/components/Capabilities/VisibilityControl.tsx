@@ -191,6 +191,14 @@ export function McpAlwaysLoadControl({ mcpName, placement, onApplied }: McpAlway
     );
   }
 
+  if (placement.runtime !== 'claude') {
+    return (
+      <div className="vis-control vis-control--disabled">
+        <span className="vis-control-hint">Codex는 enabled / tool allow·deny 설정을 사용합니다.</span>
+      </div>
+    );
+  }
+
   if (placement.scope === 'local') {
     return (
       <div className="vis-control vis-control--disabled">
@@ -207,6 +215,8 @@ export function McpAlwaysLoadControl({ mcpName, placement, onApplied }: McpAlway
         location: placement.location,
         scope: placement.scope as 'user' | 'project',
         alwaysLoad: value,
+        runtime: placement.runtime,
+        placementIdentity: placement.identity,
       });
       setPreviewChanges(result.changes);
     } catch (err) {
@@ -232,6 +242,8 @@ export function McpAlwaysLoadControl({ mcpName, placement, onApplied }: McpAlway
         location: placement.location,
         scope: placement.scope as 'user' | 'project',
         alwaysLoad: pendingValue,
+        runtime: placement.runtime,
+        placementIdentity: placement.identity,
       });
       setPreviewChanges(null);
       setPendingValue(undefined);

@@ -15,6 +15,7 @@ function expandHome(p: string): string {
 }
 
 const BUILTIN_USER_ID = 'builtin-user';
+const BUILTIN_CODEX_USER_ID = 'builtin-codex-user';
 const BUILTIN_COLD_ID = 'builtin-cold';
 
 function builtinTargets(): PlacementTarget[] {
@@ -25,6 +26,18 @@ function builtinTargets(): PlacementTarget[] {
       label: 'Global (user)',
       dir: expandHome('~/.claude/skills'),
       kind: 'user',
+      runtime: 'claude',
+      teamShared: false,
+      builtin: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    {
+      id: BUILTIN_CODEX_USER_ID,
+      label: 'Codex Global (user)',
+      dir: expandHome('~/.codex/skills'),
+      kind: 'user',
+      runtime: 'codex',
       teamShared: false,
       builtin: true,
       createdAt: now,
@@ -35,6 +48,7 @@ function builtinTargets(): PlacementTarget[] {
       label: 'Cold Storage',
       dir: expandHome('~/.agent-kanban/cold-storage'),
       kind: 'cold',
+      runtime: 'claude',
       teamShared: false,
       builtin: true,
       createdAt: now,
@@ -79,6 +93,12 @@ export class PlacementTargetsStore {
       try {
         const content = await Bun.file(this.targetsPath).text();
         const state = JSON.parse(content) as PlacementTargetsStoreState;
+        // Backward-compatible migration: placement targets predate MCP runtime.
+        // Preserve ids/dirs and interpret all missing values as Claude.
+        state.targets = state.targets.map((target) => ({
+          ...target,
+          runtime: target.runtime ?? 'claude',
+        }));
         // Ensure builtins are always present (idempotent seed)
         state.targets = this.ensureBuiltins(state.targets);
         return state;
@@ -120,6 +140,7 @@ export class PlacementTargetsStore {
       label: input.label,
       dir: input.dir,
       kind: input.kind,
+      runtime: input.runtime ?? 'claude',
       teamShared: input.teamShared,
       createdAt: now,
       updatedAt: now,
@@ -127,9 +148,11 @@ export class PlacementTargetsStore {
 
     await this.withDualLock(async () => {
       const state = await this.load();
-      // Deduplicate by dir
-      if (state.targets.find((t) => t.dir === input.dir)) {
-        throw new Error(`A placement target with dir "${input.dir}" already exists`);
+      // The same directory may intentionally hold both .claude and .codex config.
+      if (state.targets.find((t) => t.dir === input.dir && t.runtime === target.runtime)) {
+        throw new Error(
+          `A ${target.runtime} placement target with dir "${input.dir}" already exists`,
+        );
       }
       state.targets.push(target);
       state.lastModified = new Date().toISOString();

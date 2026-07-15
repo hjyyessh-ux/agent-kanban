@@ -16,6 +16,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `board.e2e.ts` | Core board rendering/layout |
 | `board-detail-actions.e2e.ts` | Bulk board actions and card detail interactions |
 | `capabilities.e2e.ts` | Capabilities tab: skills, MCP config, scope inventory/targets, storage drawer |
+| `capabilities-runtime.e2e.ts` | Isolated HOME/KANBAN_DATA_DIR user flow: runtime filters/badges, same-name MCP identity, Codex target + copy/move/remove/secret/freeze/restore, Claude alwaysLoad/mutation regression |
 | `card-button-visibility.e2e.ts` | Conditional button visibility on cards by state |
 | `card-creation.e2e.ts` | New card creation form flow |
 | `card-detail-modal.e2e.ts` | Card detail modal interactions |
@@ -69,7 +70,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 ## Dependencies
 
 ### Internal
-- `scripts/test-server.ts` (server under test)
+- `scripts/test-server.ts` (server under test; seeds `.e2e-home` Claude/Codex MCP configs and `.e2e-data` Skill roots)
 - `web/dist` (built SPA served by the test server)
 
 ### External

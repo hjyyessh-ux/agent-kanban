@@ -67,7 +67,7 @@ test.describe('Capabilities tab — navigation', () => {
     await expect(panel).toBeVisible();
     await expect(panel.locator('.ptp-title')).toHaveText('Placement Targets');
     // Builtin user/cold targets are always present and cannot be removed
-    await expect(panel.locator('.ptp-item .scope-chip--user')).toBeVisible();
+    await expect(panel.locator('.ptp-item .scope-chip--user')).toHaveCount(2);
     await expect(panel.locator('.ptp-item .scope-chip--cold')).toBeVisible();
     await expect(panel.locator('.ptp-builtin').first()).toBeVisible();
     // Add form is collapsed behind the + Add Target toggle
@@ -84,10 +84,10 @@ test.describe('Capabilities tab — navigation', () => {
     await expect(typeGroup.locator('.cap-filter-btn', { hasText: 'All' })).toBeVisible();
     await expect(typeGroup.locator('.cap-filter-btn', { hasText: 'Skills' })).toBeVisible();
     await expect(typeGroup.locator('.cap-filter-btn', { hasText: 'Scripts' })).toBeVisible();
-    const agentGroup = page.locator('[aria-label="Filter by agent"]');
-    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'claude' })).toBeVisible();
-    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'codex' })).toBeVisible();
-    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'opencode' })).toBeVisible();
+    const agentGroup = page.locator('[aria-label="Filter by runtime"]');
+    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'Claude' })).toBeVisible();
+    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'Codex' })).toBeVisible();
+    await expect(agentGroup.locator('.cap-filter-btn', { hasText: 'OpenCode' })).toBeVisible();
   });
 });
 
@@ -436,13 +436,13 @@ test.describe('Capabilities tab — skills (fixture)', () => {
 
   test('agent filter claude shows the fixture skill', async ({ page }) => {
     await goToListView(page);
-    await page.locator('[aria-label="Filter by agent"] .cap-filter-btn', { hasText: 'claude' }).click();
+    await page.locator('[aria-label="Filter by runtime"] .cap-filter-btn', { hasText: 'Claude' }).click();
     await expect(page.locator('.cap-item', { hasText: 'e2e-sample-skill' })).toBeVisible();
   });
 
   test('agent filter codex hides the claude fixture skill', async ({ page }) => {
     await goToListView(page);
-    await page.locator('[aria-label="Filter by agent"] .cap-filter-btn', { hasText: 'codex' }).click();
+    await page.locator('[aria-label="Filter by runtime"] .cap-filter-btn', { hasText: 'Codex' }).click();
     await expect(page.locator('.cap-item', { hasText: 'e2e-sample-skill' })).not.toBeVisible();
   });
 

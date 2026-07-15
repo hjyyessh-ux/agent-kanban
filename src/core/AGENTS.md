@@ -24,6 +24,8 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 | Change lock or retry behavior | `filelock.ts`, `retry.ts` | Reused by multiple stores |
 | Change `~/.claude/settings.json` skill overrides / MCP toggles / diagnostics | `cc-settings-store.ts` | Merges user/project/local scope; `ContextDiagnostics` (tool-search effective, Vertex/proxy detection) |
 | Change `~/.claude.json` MCP server placement (copy/move/remove across user/local/project) | `mcp-config-store.ts` | CAS engine `safeMutateClaudeJson` (etag compare-and-swap, backup, post-write verify, rollback); also drives `.mcp.json` for project scope |
+| Change Codex MCP config (`~/.codex/config.toml`, `<dir>/.codex/config.toml`) | `codex-mcp-config.ts` | Surgical TOML table edits preserve unrelated config/comments; CAS + lock + backup + verify |
+| Change Claude/Codex MCP routing or inventory aggregation | `mcp-runtime-adapter.ts` | Runtime strategy boundary; legacy requests default to Claude |
 | Change cold-storage freeze/restore for skills and MCP servers | `cold-storage-store.ts` | `manifest.json` + MCP `registry.json` under `<dataDir>/cold-storage/`; same-volume rename vs cross-volume copy+hash-verify+unlink |
 | Change plaintext-secret heuristics for MCP defs | `secret-detect.ts` | Checks env values, URL credentials, auth headers; used before writing to team-shared (project) scope |
 | Change user-defined placement targets (custom directories skills/MCP can be filed under) | `placement-targets-store.ts` | Persists `placement-targets.json`; seeds builtin `Global (user)` / `Cold Storage` targets, dedupes by `dir` |
@@ -49,7 +51,15 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - Any MCP definition written into a `project` (team-shared) scope must pass through `detectPlaintextSecret()` first; callers surface `{ secretWarning: true }` instead of silently persisting a secret.
 - `CapScope` (`'user' | 'project' | 'local' | 'cold'`) is the shared vocabulary for where a skill/MCP server lives; don't invent parallel scope strings.
 - Cold storage entries are keyed by `kind:ref` (`skill:<runtime>/<name>` or `mcp:<name>`) inside `manifest.json`; MCP defs additionally live in their own `registry.json` since the original `~/.claude.json` entry is deleted on freeze.
-- `placement-targets-store.ts` seeds two non-deletable builtins (`builtin-user`, `builtin-cold`); `removeTarget()` must reject `builtin: true` targets.
+- `placement-targets-store.ts` seeds three non-deletable builtins (`builtin-user`, `builtin-codex-user`, `builtin-cold`); `removeTarget()` must reject `builtin: true` targets.
+- Missing persisted placement-target `runtime` migrates to `claude`; target dedupe uses `runtime + dir`.
+- MCP inventory identity is `${runtime}:${name}`. Same-name Claude/Codex servers must never merge; same-runtime placements may merge.
+- Claude MCP JSON/parser/writer/CLI fallback stays in `mcp-config-store.ts`. Codex support remains additive through `mcp-runtime-adapter.ts`.
+- Codex TOML writes may replace only the selected `[mcp_servers.*]` table family; non-MCP tables/comments/order stay untouched.
+- MCP write previews are read-only; apply routes explicitly call the existing Claude writer or the Codex writer. `alwaysLoad` is a Claude-only adapter capability.
+- Cold MCP entries preserve their runtime and exact source placement; missing legacy metadata defaults to Claude/sourceScope.
+- Codex inventory evaluates each registered directory from its git/project root down to the target directory; nearer `.codex/config.toml` definitions win for that target. Project trust is reported as required with status unknown, never inferred.
+- MCP discovery is fail-open across runtimes and config layers: malformed Codex TOML becomes diagnostics and must not hide Claude MCP or persisted Skill inventory.
 
 ## ANTI-PATTERNS
 
@@ -59,6 +69,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - Hardcoding agent labels/models outside `agent-config.ts`
 - Hardcoding a per-runtime model list outside `runtime-config.ts`
 - Mutating `~/.claude.json` without going through the CAS engine in `mcp-config-store.ts`
+- Re-serializing all of Codex `config.toml` to modify one MCP server
 - Skipping `detectPlaintextSecret()` before writing an MCP def into project/team-shared scope
 
 ## NOTES
