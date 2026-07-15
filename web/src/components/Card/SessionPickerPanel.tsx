@@ -153,16 +153,16 @@ export const SessionPickerPanel: React.FC<SessionPickerPanelProps> = (props) => 
         </div>
       ) : currentResumeSessionId && !selectedSession && loading ? (
         <div className="kv2-session-config-card">
-          <span style={{ color: '#94a3b8', fontSize: 'var(--kv2-text-md)' }}>Loading session...</span>
+          <span style={{ color: 'var(--kv2-neutral-400)', fontSize: 'var(--kv2-text-md)' }}>Loading session...</span>
         </div>
       ) : null}
 
       {(expanded || currentResumeSessionId) && !currentResumeSessionId ? (
         <div className="kv2-session-config-card">
           {loading ? (
-            <span style={{ color: '#94a3b8', fontSize: 'var(--kv2-text-md)' }}>Loading sessions...</span>
+            <span style={{ color: 'var(--kv2-neutral-400)', fontSize: 'var(--kv2-text-md)' }}>Loading sessions...</span>
           ) : availableSessions.length === 0 ? (
-            <span style={{ color: '#94a3b8', fontSize: 'var(--kv2-text-md)' }}>No sessions available</span>
+            <span style={{ color: 'var(--kv2-neutral-400)', fontSize: 'var(--kv2-text-md)' }}>No sessions available</span>
           ) : (
             <div className="kv2-session-list">
               {availableSessions.slice(0, 15).map(session => (

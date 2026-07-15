@@ -4,12 +4,12 @@ import type {
   RuntimeCatalogModel,
 } from "../../../src/core/runtime-config";
 import { CLAUDE_MODELS, CODEX_MODELS } from "../../../src/core/runtime-config";
-import { fetchModels } from "./useKanbanApi";
+import { fetchModels, fetchRuntimes, type ModelInfo } from "./useKanbanApi";
 
 // localStorage keys. Everything here is browser-local by design.
 export const ENABLED_MODELS_KEY = "kanban-enabled-models";
 export const SYNCED_MODELS_KEY = "kanban-synced-models";
-const MIGRATION_KEY = "kanban-enabled-models-migrated-v2";
+const MIGRATION_KEY = "kanban-enabled-models-migrated-v3";
 
 export interface SyncedCatalog {
   claude: RuntimeCatalogModel[];
@@ -133,12 +133,75 @@ export interface SyncOutcome {
   error?: string;
 }
 
+function addCatalogModel(
+  map: Map<string, RuntimeCatalogModel>,
+  hardcoded: Set<string>,
+  model: RuntimeCatalogModel,
+): boolean {
+  if (hardcoded.has(model.id) || map.has(model.id)) return false;
+  map.set(model.id, model);
+  return true;
+}
+
+export function deriveSyncedCatalog(input: {
+  models: ModelInfo[];
+  runtimes: RuntimeCatalogEntry[];
+  previous: SyncedCatalog;
+}): { catalog: SyncedCatalog; added: number } {
+  const hardClaude = new Set<string>(CLAUDE_MODELS.map((m) => m.id));
+  const hardCodex = new Set<string>(CODEX_MODELS.map((m) => m.id));
+  const claudeMap = new Map(input.previous.claude.map((m) => [m.id, m]));
+  const codexMap = new Map(input.previous.codex.map((m) => [m.id, m]));
+  let added = 0;
+
+  for (const entry of input.runtimes) {
+    if (entry.runtime !== "claude" && entry.runtime !== "codex") continue;
+    for (const model of entry.models ?? []) {
+      const targetMap = entry.runtime === "claude" ? claudeMap : codexMap;
+      const hardcoded = entry.runtime === "claude" ? hardClaude : hardCodex;
+      if (addCatalogModel(targetMap, hardcoded, model)) added += 1;
+    }
+  }
+
+  for (const info of input.models) {
+    const bare = bareModelId(info.id);
+    if (info.providerID === "anthropic" && bare.startsWith("claude-")) {
+      if (addCatalogModel(claudeMap, hardClaude, {
+        id: bare,
+        label: info.name || bare,
+        tier: claudeTier(bare),
+      })) {
+        added += 1;
+      }
+    } else if (
+      (info.providerID === "openai" || info.providerID.includes("openai") || info.providerID === "codex") &&
+      (bare.startsWith("gpt") || bare.startsWith("o"))
+    ) {
+      if (addCatalogModel(codexMap, hardCodex, {
+        id: bare,
+        label: info.name || bare,
+        tier: "general",
+      })) {
+        added += 1;
+      }
+    }
+  }
+
+  return {
+    added,
+    catalog: {
+      claude: [...claudeMap.values()],
+      codex: [...codexMap.values()],
+      syncedAt: new Date().toISOString(),
+    },
+  };
+}
+
 /**
  * Pull the live provider/model list from the backend (`/api/models`) and derive
- * any new Claude/Codex runtime models from it. Only the `anthropic` provider maps
- * to the Claude runtime and `openai`-family providers to Codex, because their bare
- * model ids match the CLI runtime id format; other providers (e.g. github-copilot)
- * use a different id shape and are left to the Opencode runtime.
+ * any new Claude/Codex runtime models from it, then augment that with the runtime
+ * catalog (`/api/runtimes`). Opencode-only providers keep their provider/model id
+ * shape and are left to the Opencode runtime.
  */
 export function useModelSync() {
   const [syncing, setSyncing] = useState(false);
@@ -147,58 +210,20 @@ export function useModelSync() {
   const sync = useCallback(async (): Promise<SyncOutcome> => {
     setSyncing(true);
     try {
-      const models = await fetchModels();
-      const hardClaude = new Set<string>(CLAUDE_MODELS.map((m) => m.id));
-      const hardCodex = new Set<string>(CODEX_MODELS.map((m) => m.id));
-      const prev = readSyncedCatalog();
-      const claudeMap = new Map(prev.claude.map((m) => [m.id, m]));
-      const codexMap = new Map(prev.codex.map((m) => [m.id, m]));
-      let added = 0;
-
-      for (const info of models) {
-        const bare = bareModelId(info.id);
-        if (info.providerID === "anthropic" && bare.startsWith("claude-")) {
-          if (!hardClaude.has(bare) && !claudeMap.has(bare)) {
-            claudeMap.set(bare, {
-              id: bare,
-              label: info.name || bare,
-              tier: claudeTier(bare),
-            });
-            added += 1;
-          }
-        } else if (
-          (info.providerID === "openai" || info.providerID.includes("openai")) &&
-          (bare.startsWith("gpt") || bare.startsWith("o"))
-        ) {
-          if (!hardCodex.has(bare) && !codexMap.has(bare)) {
-            codexMap.set(bare, { id: bare, label: info.name || bare, tier: "general" });
-            added += 1;
-          }
-        }
+      const [modelsResult, runtimesResult] = await Promise.allSettled([
+        fetchModels(),
+        fetchRuntimes(),
+      ]);
+      const models = modelsResult.status === "fulfilled" ? modelsResult.value : [];
+      const runtimes = runtimesResult.status === "fulfilled" ? runtimesResult.value : [];
+      if (modelsResult.status === "rejected" && runtimesResult.status === "rejected") {
+        throw modelsResult.reason;
       }
-
-      const syncedAt = new Date().toISOString();
-      const next: SyncedCatalog = {
-        claude: [...claudeMap.values()],
-        codex: [...codexMap.values()],
-        syncedAt,
-      };
+      const prev = readSyncedCatalog();
+      const { catalog: next, added } = deriveSyncedCatalog({ models, runtimes, previous: prev });
       writeSyncedCatalog(next);
 
-      // Keep newly-synced models visible by default when a preference exists.
-      try {
-        const rawEnabled = localStorage.getItem(ENABLED_MODELS_KEY);
-        if (rawEnabled) {
-          const set = new Set<string>(JSON.parse(rawEnabled));
-          for (const m of next.claude) set.add(m.id);
-          for (const m of next.codex) set.add(m.id);
-          localStorage.setItem(ENABLED_MODELS_KEY, JSON.stringify([...set]));
-        }
-      } catch {
-        // ignore
-      }
-
-      const result: SyncOutcome = { added, syncedAt };
+      const result: SyncOutcome = { added, syncedAt: next.syncedAt ?? undefined };
       setOutcome(result);
       return result;
     } catch (e) {

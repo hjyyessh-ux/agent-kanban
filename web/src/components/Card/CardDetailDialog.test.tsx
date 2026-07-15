@@ -34,4 +34,24 @@ describe("CardDetailDialog", () => {
       expect(html).toContain("hide ▴");
     }
   });
+
+  test("shows the selected GPT-5.6 model in an editable Codex detail card", () => {
+    const html = renderToStaticMarkup(
+      <CardDetailDialog
+        card={{
+          ...makeCard("todo"),
+          agentRuntime: "codex",
+          model: "gpt-5.6-sol",
+        }}
+        onClose={mock(() => undefined)}
+        onStatusChange={mock(() => true)}
+        onDelete={mock(() => true)}
+        onUpdate={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).toContain("GPT-5.6-Sol");
+    expect(html).toContain("kv2-runtime-trigger");
+    expect(html).not.toContain("kv2-runtime-trigger-icon");
+  });
 });

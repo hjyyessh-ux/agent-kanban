@@ -22,17 +22,17 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px 16px 16px;
-  background: #FFF8E7;
-  border: 2px solid #1f2233;
+  background: var(--kv2-bg);
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 12px;
-  box-shadow: 4px 4px 0 rgba(31, 34, 51, 0.85);
+  box-shadow: 4px 4px 0 var(--kv2-shadow-color);
   z-index: 20;
 }
 
 .kv2-detail-agent-selector-label {
   font-size: var(--kv2-text-md);
   font-weight: 700;
-  color: #6b7280;
+  color: var(--kv2-neutral-510);
 }
 
 .kv2-detail-agent-selector-chips {
@@ -62,8 +62,8 @@
 
 .kv2-meta-card {
   min-width: 0;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
+  background: var(--kv2-surface);
+  border: 1px solid var(--kv2-border-muted);
   border-radius: 8px;
   padding: 12px 16px;
   display: flex;
@@ -80,7 +80,7 @@
   height: auto;
   overflow: visible;
   z-index: 10;
-  border-color: #1f2233;
+  border-color: var(--kv2-border-strong);
 }
 
 .kv2-meta-card--agent {
@@ -95,18 +95,18 @@
 }
 
 .kv2-meta-card--runtime-codex {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--kv2-runtime-meta-codex-border);
+  background: var(--kv2-runtime-meta-codex-bg);
 }
 
 .kv2-meta-card--runtime-claude {
-  border-color: #fdba74;
-  background: #fff7ed;
+  border-color: var(--kv2-runtime-meta-claude-border);
+  background: var(--kv2-runtime-meta-claude-bg);
 }
 
 .kv2-meta-card--runtime-opencode {
-  border-color: #93c5fd;
-  background: #eff6ff;
+  border-color: var(--kv2-runtime-meta-opencode-border);
+  background: var(--kv2-runtime-meta-opencode-bg);
 }
 
 .kv2-meta-value--claude {
@@ -136,13 +136,13 @@
 }
 
 .kv2-meta-card--codex-options {
-  border-color: #93c5fd;
-  background: #ffffff;
+  border-color: var(--kv2-info-border);
+  background: var(--kv2-surface);
 }
 
 .kv2-meta-card--claude-options {
-  border-color: #fdba74;
-  background: #ffffff;
+  border-color: var(--kv2-orange-border);
+  background: var(--kv2-surface);
 }
 
 .kv2-meta-checkbox-row {
@@ -150,7 +150,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  color: #1f2233;
+  color: var(--kv2-control-text-color);
   font-size: var(--kv2-text-xs);
   font-weight: 800;
   line-height: 1.2;
@@ -160,17 +160,19 @@
 .kv2-meta-checkbox-row input {
   width: 15px;
   height: 15px;
-  accent-color: #2563eb;
+  accent-color: var(--kv2-text-link);
   flex: 0 0 auto;
 }
 
 .kv2-meta-value--danger {
-  color: #b91c1c;
+  color: var(--kv2-danger-text);
 }
 
 .kv2-runtime-picker {
   position: relative;
   width: 100%;
+  flex: 1;
+  display: flex;
   z-index: 1;
 }
 
@@ -179,82 +181,67 @@
 }
 
 .kv2-runtime-trigger {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 12px;
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   width: 100%;
-  min-height: 34px;
-  border: 2px solid #1f2233;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1f2233;
+  min-height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-sm);
-  font-weight: 900;
-  padding: 4px 8px 4px 5px;
-  box-shadow: 3px 3px 0 #1f2233;
+  font-size: var(--kv2-text-base);
+  font-weight: 700;
+  padding: 0;
   text-align: left;
 }
 
 .kv2-runtime-trigger:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 #1f2233;
+  color: var(--kv2-text-link);
 }
 
-.kv2-runtime-trigger-icon,
 .kv2-runtime-option-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--kv2-surface);
 }
 
-.kv2-runtime-trigger-icon {
-  width: 22px;
-  height: 22px;
-}
-
-.kv2-runtime-trigger-icon .kv2-runtime-badge-icon,
 .kv2-runtime-option-icon .kv2-runtime-badge-icon {
   width: 15px;
   height: 15px;
   flex-basis: 15px;
 }
 
-.kv2-runtime-trigger-icon--codex,
 .kv2-runtime-option-icon--codex {
-  background: #dbeafe;
-  border-color: #2563eb;
+  background: var(--kv2-info-surface-strong);
+  border-color: var(--kv2-text-link);
 }
 
-.kv2-runtime-trigger-icon--claude,
 .kv2-runtime-option-icon--claude {
-  background: #fff7ed;
-  border-color: #d97757;
+  background: var(--kv2-orange-surface-soft);
+  border-color: var(--kv2-runtime-claude);
 }
 
-.kv2-runtime-trigger-icon--claude .kv2-runtime-badge-icon--claude svg path,
 .kv2-runtime-option-icon--claude .kv2-runtime-badge-icon--claude svg path {
-  fill: #d97757;
+  fill: var(--kv2-runtime-claude);
 }
 
-.kv2-runtime-trigger-icon--opencode,
 .kv2-runtime-option-icon--opencode {
-  background: #111111;
-  border-color: #111111;
+  background: var(--kv2-runtime-opencode);
+  border-color: var(--kv2-runtime-opencode);
 }
 
-.kv2-runtime-trigger-icon--opencode .kv2-runtime-badge-icon--opencode,
 .kv2-runtime-option-icon--opencode .kv2-runtime-badge-icon--opencode {
   background: transparent;
-  border-color: #ffffff;
+  border-color: var(--kv2-text-inverse);
 }
 
 .kv2-runtime-trigger-label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,9 +249,11 @@
 }
 
 .kv2-runtime-trigger-arrow {
+  flex: 0 0 auto;
   text-align: right;
-  font-size: var(--kv2-text-lg);
+  font-size: var(--kv2-text-sm);
   line-height: 1;
+  color: var(--kv2-text-secondary);
 }
 
 .kv2-runtime-popover {
@@ -275,10 +264,10 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: #fffdf5;
-  box-shadow: 6px 6px 0 #1f2233;
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
   padding: 10px;
   z-index: 80;
 }
@@ -290,16 +279,16 @@
   left: 22px;
   width: 16px;
   height: 16px;
-  border-left: 2px solid #1f2233;
-  border-top: 2px solid #1f2233;
-  background: #fffdf5;
+  border-left: 2px solid var(--kv2-border-strong);
+  border-top: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-surface-warm-soft);
   transform: rotate(45deg);
 }
 
 .kv2-runtime-popover-head {
   position: relative;
   z-index: 1;
-  color: #1f2233;
+  color: var(--kv2-strong-label-color);
   font-size: var(--kv2-text-xs);
   font-weight: 900;
   text-transform: uppercase;
@@ -320,10 +309,10 @@
   gap: 8px;
   width: 100%;
   min-height: 46px;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1f2233;
+  background: var(--kv2-surface);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   padding: 6px 8px;
   text-align: left;
@@ -332,9 +321,9 @@
 
 .kv2-runtime-option:hover,
 .kv2-runtime-option.is-selected {
-  background: #bfdbfe;
+  background: var(--kv2-info-border-soft);
   transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 #1f2233;
+  box-shadow: 3px 3px 0 var(--kv2-border-strong);
 }
 
 .kv2-runtime-option:disabled {
@@ -365,7 +354,7 @@
 }
 
 .kv2-runtime-option-note {
-  color: #b91c1c;
+  color: var(--kv2-danger-text);
   font-size: var(--kv2-text-xs);
   font-weight: 800;
 }
@@ -400,6 +389,8 @@
 .kv2-meta-dropdown {
   position: relative;
   width: 100%;
+  flex: 1;
+  display: flex;
 }
 
 .kv2-meta-dropdown-trigger {
@@ -407,13 +398,14 @@
   align-items: center;
   gap: 6px;
   width: 100%;
+  min-height: 30px;
   border: none;
   background: transparent;
   padding: 0;
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-base);
   font-weight: 600;
-  color: #1f2233;
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   text-align: left;
   outline: none;
@@ -436,7 +428,7 @@
   flex: 0 0 auto;
   font-size: var(--kv2-text-sm);
   line-height: 1;
-  color: #1f2233;
+  color: var(--kv2-selection-option-secondary-fg);
 }
 
 .kv2-meta-dropdown-popover {
@@ -447,10 +439,10 @@
   max-height: 320px;
   overflow-y: auto;
   min-width: 200px;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: #fffdf5;
-  box-shadow: 6px 6px 0 #1f2233;
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
   padding: 6px;
 }
 
@@ -461,8 +453,8 @@
   width: 100%;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: transparent;
-  color: #1f2233;
+  background: var(--kv2-selection-option-bg);
+  color: var(--kv2-selection-option-fg);
   cursor: pointer;
   padding: 8px 10px;
   text-align: left;
@@ -472,13 +464,13 @@
 }
 
 .kv2-meta-dropdown-option:hover:not(:disabled) {
-  background: #eef2ff;
-  border-color: #c7d2fe;
+  background: var(--kv2-selection-option-hover-bg);
+  border-color: var(--kv2-selection-option-hover-border);
 }
 
 .kv2-meta-dropdown-option.is-selected {
-  background: #bfdbfe;
-  border-color: #1f2233;
+  background: var(--kv2-selection-option-selected-bg);
+  border-color: var(--kv2-selection-option-selected-border);
 }
 
 .kv2-meta-dropdown-option:disabled {
@@ -498,7 +490,7 @@
   flex: 0 0 auto;
   font-size: var(--kv2-text-xs);
   font-weight: 600;
-  color: #64748b;
+  color: var(--kv2-selection-option-secondary-fg);
 }
 
 .kv2-meta-dropdown-option-check {
@@ -541,18 +533,17 @@
 
 .kv2-meta-label {
   font-size: var(--kv2-text-caption);
-  font-weight: 700;
-  color: #64748b;
+  font-weight: 800;
+  color: var(--kv2-strong-label-color);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   line-height: 1.2;
-  opacity: 0.85;
 }
 
 .kv2-meta-value {
   font-size: var(--kv2-text-md-plus);
   font-weight: 600;
-  color: #1f2233;
+  color: var(--kv2-control-text-color);
   line-height: 1.2;
   word-break: break-word;
   overflow: hidden;
@@ -606,7 +597,7 @@
 }
 
 .kv2-meta-editable:hover {
-  background: #f8fafc;
+  background: var(--kv2-surface-sunken);
 }
 
 .kv2-meta-card--arguments:disabled {
@@ -631,9 +622,9 @@
   padding: 0 16px;
   height: 44px;
   font-size: var(--kv2-text-xl2);
-  color: #94a3b8;
-  background: #ffffff;
-  border: 1px solid #1f2233;
+  color: var(--kv2-neutral-400);
+  background: var(--kv2-surface);
+  border: 1px solid var(--kv2-border-strong);
   border-radius: 999px;
 }
 
@@ -641,8 +632,8 @@
    Phases (.kv2-phase-*)
    ============================================================= */
 .kv2-phase {
-  background: rgba(22, 104, 232, 0.09);
-  border: 1px solid #1f2233;
+  background: var(--kv2-phase-prompt-bg);
+  border: 1px solid var(--kv2-border-strong);
   border-radius: 8px;
   margin: 0 48px;
   display: flex;
@@ -662,43 +653,43 @@
 }
 
 .kv2-phase--prompt {
-  background: rgba(22, 104, 232, 0.09);
+  background: var(--kv2-phase-prompt-bg);
 }
 
 .kv2-phase--prompt::before {
-  background-color: #1668e8;
+  background-color: var(--kv2-phase-prompt-accent);
 }
 
 .kv2-phase--progress {
-  background: rgba(250, 204, 21, 0.09);
+  background: var(--kv2-phase-progress-bg);
 }
 
 .kv2-phase--progress::before {
-  background-color: #facc15;
+  background-color: var(--kv2-phase-progress-accent);
 }
 
 .kv2-phase--result {
-  background: rgba(255, 59, 107, 0.09);
+  background: var(--kv2-phase-result-bg);
 }
 
 .kv2-phase--result::before {
-  background-color: #ff3b6b;
+  background-color: var(--kv2-phase-result-accent);
 }
 
 .kv2-phase--question {
-  background: rgba(255, 59, 107, 0.09);
+  background: var(--kv2-phase-result-bg);
 }
 
 .kv2-phase--question::before {
-  background-color: var(--kv2-status-complete-accent);
+  background-color: var(--kv2-phase-result-accent);
 }
 
 .kv2-phase--meta {
-  background: rgba(20, 184, 166, 0.08);
+  background: var(--kv2-phase-meta-bg);
 }
 
 .kv2-phase--meta::before {
-  background-color: #14b8a6;
+  background-color: var(--kv2-phase-meta-accent);
 }
 
 .kv2-phase-card-wrapper {
@@ -725,8 +716,7 @@
 .kv2-phase-header--outer span {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: #1f2233;
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-phase-header--question {
@@ -746,7 +736,7 @@
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-caption);
   font-weight: 400;
-  color: #64748b;
+  color: var(--kv2-neutral-500);
   cursor: pointer;
   transition: color 0.12s, opacity 0.12s;
   line-height: 1.4;
@@ -754,18 +744,18 @@
 }
 
 .kv2-phase-action:hover {
-  color: #475569;
+  color: var(--kv2-neutral-600);
   opacity: 0.8;
 }
 
 .kv2-phase-action[aria-expanded] {
   font-size: var(--kv2-text-caption);
   font-weight: 400;
-  color: #64748b;
+  color: var(--kv2-neutral-500);
 }
 
 .kv2-phase-action[aria-expanded]:hover {
-  color: #475569;
+  color: var(--kv2-neutral-600);
 }
 
 .kv2-phase-action--edit {
@@ -773,7 +763,7 @@
 
 .kv2-phase-action--save {
   background: var(--kv2-btn-start-bg);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-btn-stroke-color);
 }
 
@@ -792,7 +782,7 @@
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-md);
   line-height: 1.6;
-  color: #334155;
+  color: var(--kv2-neutral-700);
   resize: vertical;
   outline: none;
 }
@@ -802,7 +792,7 @@
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-md);
   line-height: 1.6;
-  color: #334155;
+  color: var(--kv2-neutral-700);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -826,7 +816,7 @@
 }
 
 .kv2-markdown-heading {
-  color: #0f172a;
+  color: var(--kv2-neutral-900);
   font-weight: 800;
   line-height: 1.25;
 }
@@ -860,15 +850,15 @@
 }
 
 .kv2-markdown-quote {
-  border-left: 3px solid #94a3b8;
-  color: #475569;
+  border-left: 3px solid var(--kv2-neutral-400);
+  color: var(--kv2-neutral-600);
   padding: 2px 0 2px 14px;
 }
 
 .kv2-markdown-code {
-  background: #0f172a;
+  background: var(--kv2-neutral-900);
   border-radius: 6px;
-  color: #e2e8f0;
+  color: var(--kv2-border-subtle);
   overflow-x: auto;
   padding: 14px 16px;
   white-space: pre;
@@ -880,15 +870,15 @@
 }
 
 .kv2-markdown-inline-code {
-  background: #e2e8f0;
+  background: var(--kv2-border-subtle);
   border-radius: 4px;
-  color: #0f172a;
+  color: var(--kv2-neutral-900);
   font-size: 0.92em;
   padding: 0.1em 0.35em;
 }
 
 .kv2-markdown a {
-  color: #2563eb;
+  color: var(--kv2-text-link);
   font-weight: 650;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -906,20 +896,20 @@
 
 .kv2-markdown-table th,
 .kv2-markdown-table td {
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--kv2-border-muted);
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
 }
 
 .kv2-markdown-table th {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--kv2-code-bg);
+  color: var(--kv2-neutral-900);
   font-weight: 700;
 }
 
 .kv2-markdown-table tbody tr:nth-child(even) {
-  background: #f8fafc;
+  background: var(--kv2-surface-sunken);
 }
 
 .kv2-markdown-table input[type='checkbox'] {
@@ -1056,7 +1046,7 @@
   align-self: flex-start;
   border: 1px solid var(--kv2-border);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--kv2-surface);
   color: var(--kv2-text-secondary);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
@@ -1108,7 +1098,7 @@
 }
 
 .kv2-progress-step--expandable .kv2-progress-step-row:hover {
-  background: rgba(15, 23, 42, 0.04);
+  background: color-mix(in srgb, var(--kv2-neutral-900) 4%, transparent);
   border-radius: 4px;
 }
 
@@ -1134,33 +1124,33 @@
 }
 
 .kv2-progress-step--skill .kv2-progress-kind {
-  color: #7c3aed;
-  border-color: #ddd6fe;
-  background: #f5f3ff;
+  color: var(--kv2-purple-accent);
+  border-color: var(--kv2-purple-border-soft);
+  background: var(--kv2-purple-surface);
 }
 
 .kv2-progress-step--agent .kv2-progress-kind {
-  color: #0369a1;
-  border-color: #bae6fd;
-  background: #f0f9ff;
+  color: var(--kv2-cyan-text);
+  border-color: var(--kv2-cyan-border);
+  background: var(--kv2-cyan-surface-pale);
 }
 
 .kv2-progress-step--mcp .kv2-progress-kind {
-  color: #b45309;
-  border-color: #fde68a;
-  background: #fffbeb;
+  color: var(--kv2-warn-text);
+  border-color: var(--kv2-warn-surface-strong);
+  background: var(--kv2-warn-surface-pale);
 }
 
 .kv2-progress-step--memory .kv2-progress-kind {
-  color: #be185d;
-  border-color: #fbcfe8;
-  background: #fdf2f8;
+  color: var(--kv2-pink-accent);
+  border-color: var(--kv2-pink-border);
+  background: var(--kv2-pink-surface-pale);
 }
 
 .kv2-progress-step--command .kv2-progress-kind {
-  color: #166534;
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  color: var(--kv2-success-text);
+  border-color: var(--kv2-success-surface-deep);
+  background: var(--kv2-success-surface);
 }
 
 .kv2-progress-label {
@@ -1191,7 +1181,7 @@
   padding: 8px 10px;
   border-left: 3px solid var(--kv2-border-strong);
   border-radius: 4px;
-  background: rgba(15, 23, 42, 0.04);
+  background: color-mix(in srgb, var(--kv2-neutral-900) 4%, transparent);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-xs);
   line-height: 1.5;
@@ -1216,7 +1206,7 @@
 .kv2-progress-live {
   font-size: var(--kv2-text-xs);
   font-weight: 700;
-  color: #16a34a;
+  color: var(--kv2-success-accent);
   animation: kv2-progress-pulse 1.6s ease-in-out infinite;
 }
 
@@ -1324,8 +1314,7 @@
   font-family: var(--kv2-font-sans);
   font-weight: 700;
   font-size: var(--kv2-text-base);
-  color: #1f2233;
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-feedback-textarea {
@@ -1370,8 +1359,7 @@
 .kv2-screenshot-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: #1f2233;
-  opacity: 0.85;
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-screenshot-error {
@@ -1399,28 +1387,28 @@
   align-items: center;
   justify-content: center;
   min-height: 96px;
-  background: #f9fafb;
-  border: 1.5px dashed #cbd5e1;
+  background: var(--kv2-surface-sunken-soft);
+  border: 1.5px dashed var(--kv2-border-muted);
   border-radius: 6px;
-  color: #64748b;
+  color: var(--kv2-neutral-500);
   font-size: var(--kv2-text-sm);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .kv2-screenshot-grid--dragging {
-  background: #e0f2fe;
-  border-color: #0ea5e9;
-  color: #0ea5e9;
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+  background: var(--kv2-cyan-surface);
+  border-color: var(--kv2-cyan-accent);
+  color: var(--kv2-cyan-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--kv2-cyan-accent) 20%, transparent);
 }
 
 .kv2-screenshot-grid--dragging::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(14, 165, 233, 0.14);
-  border: 2px dashed #0ea5e9;
+  background: color-mix(in srgb, var(--kv2-cyan-accent) 14%, transparent);
+  border: 2px dashed var(--kv2-cyan-accent);
   pointer-events: none;
 }
 
@@ -1431,10 +1419,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1.5px solid #0ea5e9;
+  background: color-mix(in srgb, var(--kv2-surface) 82%, transparent);
+  border: 1.5px solid var(--kv2-cyan-accent);
   border-radius: 6px;
-  color: #0369a1;
+  color: var(--kv2-cyan-text);
   font-size: var(--kv2-text-sm);
   font-weight: 800;
   pointer-events: none;
@@ -1515,7 +1503,7 @@
   position: fixed;
   inset: 0;
   z-index: 2000;
-  background: rgba(0,0,0,0.85);
+  background: var(--kv2-scrim-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1534,9 +1522,9 @@
   right: 16px;
   width: 36px;
   height: 40px;
-  border: 2px solid #fff;
+  border: 2px solid var(--kv2-text-inverse);
   background: transparent;
-  color: #fff;
+  color: var(--kv2-text-inverse);
   font-size: var(--kv2-text-xl);
   cursor: pointer;
   display: flex;
@@ -1545,7 +1533,7 @@
 }
 
 .kv2-screenshot-lightbox-close:hover {
-  background: rgba(255,255,255,0.1);
+  background: color-mix(in srgb, var(--kv2-text-inverse) 10%, transparent);
 }
 
 /* =============================================================
@@ -1569,8 +1557,8 @@
 }
 
 .kv2-queue-summary-card {
-  background: #fff6e1;
-  border: 1.5px dashed #3b82f6;
+  background: var(--kv2-surface-warm-cream);
+  border: 1.5px dashed var(--kv2-status-todo-accent);
   border-radius: 6px;
   padding: 14px 16px;
   display: flex;
@@ -1583,9 +1571,9 @@
   padding: 0 12px;
   font-size: var(--kv2-text-ui-sm);
   font-weight: 700;
-  background: #ffffff;
-  color: #b45309;
-  border: 1.5px solid #d97706;
+  background: var(--kv2-surface);
+  color: var(--kv2-warn-text);
+  border: 1.5px solid var(--kv2-warn-accent);
   border-radius: 6px;
 }
 
@@ -1629,11 +1617,11 @@
   justify-content: space-between;
   gap: 10px;
   padding: 0 0 0 12px;
-  border: 2px solid #1f2233;
+  border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: #ffffff;
-  color: #1f2233;
-  box-shadow: 3px 3px 0 #1f2233;
+  background: var(--kv2-surface);
+  color: var(--kv2-border-strong);
+  box-shadow: 3px 3px 0 var(--kv2-border-strong);
   cursor: pointer;
   font-size: var(--kv2-text-md);
   font-weight: 800;
@@ -1678,7 +1666,7 @@
 
   .kv2-dialog--create,
   .kv2-dialog--detail {
-    box-shadow: -4px 0 0 var(--kv2-dialog-accent, #3b82f6), 4px 6px 0 #1f2233;
+    box-shadow: -4px 0 0 var(--kv2-dialog-accent, var(--kv2-status-todo-accent)), 4px 6px 0 var(--kv2-border-strong);
   }
 
   .kv2-create-header,
@@ -1739,8 +1727,8 @@
     flex-wrap: wrap;
   }
 
-  .kv2-command-control {
-    grid-template-columns: 36px minmax(0, 1fr) 40px;
+  .kv2-command-picker:not(.kv2-command-picker--meta) .kv2-command-trigger {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
   }
 
   .kv2-command-popover {
@@ -1820,19 +1808,19 @@
   resize: both;
 }
 
-/* 좌측 accent stripe + rail/node 색 토큰(--session-accent): complete=핫핑크, done=회색 */
+/* 좌측 accent stripe + rail/node 색 토큰(--session-accent): Graphite display status */
 .session-conversation-dialog--complete.kv2-dialog {
-  --session-accent: var(--kv2-status-complete-accent);
-  --session-accent-soft: rgba(255, 59, 107, 0.09);
-  --session-accent-wash: rgba(255, 59, 107, 0.045);
-  box-shadow: -8px 0 0 var(--kv2-status-complete-accent), var(--kv2-shadow-lg);
+  --session-accent: var(--kv2-status-complete-display);
+  --session-accent-soft: color-mix(in srgb, var(--kv2-status-complete-display) 12%, transparent);
+  --session-accent-wash: color-mix(in srgb, var(--kv2-status-complete-display) 7%, transparent);
+  box-shadow: -8px 0 0 var(--kv2-status-complete-display), var(--kv2-shadow-lg);
 }
 
 .session-conversation-dialog--done.kv2-dialog {
-  --session-accent: var(--kv2-status-done-accent, #8a8fa3);
-  --session-accent-soft: rgba(138, 143, 163, 0.14);
-  --session-accent-wash: rgba(138, 143, 163, 0.07);
-  box-shadow: -8px 0 0 var(--kv2-status-done-accent, #8a8fa3), var(--kv2-shadow-lg);
+  --session-accent: var(--kv2-status-done-display);
+  --session-accent-soft: color-mix(in srgb, var(--kv2-status-done-display) 12%, transparent);
+  --session-accent-wash: color-mix(in srgb, var(--kv2-status-done-display) 7%, transparent);
+  box-shadow: -8px 0 0 var(--kv2-status-done-display), var(--kv2-shadow-lg);
 }
 
 /* DialogSkeleton 기본 헤더(닫기 X만)는 빈 공간이 되므로, 닫기 버튼만 우상단에 오버레이 */
@@ -1873,7 +1861,7 @@
 .session-conversation-turnCount {
   font-size: var(--kv2-text-sm);
   font-weight: 700;
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
 }
 
 .session-conversation-resumeChip {
@@ -1894,8 +1882,8 @@
 }
 
 .session-conversation-resumeChip.is-copied {
-  background: var(--kv2-status-complete-accent);
-  color: #fff;
+  background: var(--kv2-status-complete-display);
+  color: var(--kv2-text-inverse);
 }
 
 .session-conversation-stickyTitle {
@@ -1913,7 +1901,7 @@
   gap: 12px;
   flex-wrap: wrap;
   font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
 }
 
 .session-conversation-stickyProject {
@@ -1961,7 +1949,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--kv2-text-muted, #8a8fa3);
+  color: var(--kv2-text-muted);
 }
 
 .session-conversation-turnNavChip {
@@ -1971,25 +1959,25 @@
   padding: 0 8px;
   border: 1.5px solid var(--kv2-border-strong);
   border-radius: 999px;
-  background: var(--kv2-bg, #fff);
+  background: var(--kv2-bg);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-2xs);
   font-weight: 700;
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
   cursor: pointer;
   transition: background var(--kv2-transition-fast), color var(--kv2-transition-fast),
     border-color var(--kv2-transition-fast);
 }
 
 .session-conversation-turnNavChip:hover {
-  border-color: var(--session-accent, var(--kv2-status-complete-accent));
+  border-color: var(--session-accent, var(--kv2-status-complete-display));
   color: var(--kv2-text-primary);
 }
 
 .session-conversation-turnNavChip.is-active {
-  background: var(--session-accent, var(--kv2-status-complete-accent));
-  border-color: var(--session-accent, var(--kv2-status-complete-accent));
-  color: #fff;
+  background: var(--session-accent, var(--kv2-status-complete-display));
+  border-color: var(--session-accent, var(--kv2-status-complete-display));
+  color: var(--kv2-text-inverse);
 }
 
 .session-conversation-scroll {
@@ -2015,19 +2003,19 @@
 .session-conversation-dialog .kv2-complete-session-turn-body {
   border-width: 2px;
   border-radius: 10px;
-  background: var(--session-accent-wash, #fafbff);
-  box-shadow: 2px 2px 0 rgba(17, 24, 39, 0.05);
+  background: var(--session-accent-wash, var(--kv2-surface-tint-cool));
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-ink-ambient) 5%, transparent);
 }
 
 .session-conversation-dialog .kv2-complete-session-turn--current .kv2-complete-session-turn-body {
-  box-shadow: 2px 2px 0 rgba(17, 24, 39, 0.05);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-ink-ambient) 5%, transparent);
 }
 
 /* 헤더 바: 액센트 워시로 turn 칸을 구분 + 여유 패딩 */
 .session-conversation-dialog .kv2-complete-session-turn-header {
   padding: 12px 16px;
   gap: 10px;
-  background: var(--session-accent-soft, rgba(255, 59, 107, 0.09));
+  background: var(--session-accent-soft, color-mix(in srgb, var(--kv2-status-complete-display) 9%, transparent));
   border-bottom: 2px solid var(--kv2-border-strong);
 }
 
@@ -2038,11 +2026,11 @@
   font-weight: 800;
   font-size: var(--kv2-text-md);
   letter-spacing: 0.01em;
-  color: #fff;
-  background: var(--session-accent, var(--kv2-status-complete-accent));
+  color: var(--kv2-text-inverse);
+  background: var(--session-accent, var(--kv2-status-complete-display));
   padding: 4px 14px;
   border-radius: 999px;
-  box-shadow: 1px 1px 0 rgba(17, 24, 39, 0.14);
+  box-shadow: 1px 1px 0 color-mix(in srgb, var(--kv2-ink-ambient) 14%, transparent);
 }
 
 .session-conversation-turnLatestTag {
@@ -2053,9 +2041,9 @@
   letter-spacing: 0.04em;
   padding: 2px 7px;
   border-radius: 3px;
-  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-accent));
-  background: #fff;
-  color: var(--session-accent, var(--kv2-status-complete-accent));
+  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-display));
+  background: var(--kv2-surface);
+  color: var(--session-accent, var(--kv2-status-complete-display));
 }
 
 /* Started/Completed/duration: 기존 title 자리(헤더 우측)로 이동 */
@@ -2068,7 +2056,7 @@
   padding: 0;
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-2xs);
-  color: var(--kv2-text-secondary, #5a5f72);
+  color: var(--kv2-text-secondary);
 }
 
 .session-conversation-turnDuration {

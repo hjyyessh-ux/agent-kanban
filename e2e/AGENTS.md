@@ -32,7 +32,8 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `runtime-integration.e2e.ts` | Cross-runtime (opencode/Codex/Claude) integration behavior |
 | `screenshot.e2e.ts` | Screenshot upload/attachment UI |
 | `sorting.e2e.ts` | Card ordering/sorting behavior |
-| `v2-visual-audit.e2e.ts` | V2 design-system compliance checks |
+| `theme.e2e.ts` | Light/dark/system theme toggle, `data-theme` + localStorage persistence |
+| `v2-visual-audit.e2e.ts` | V2 design-system compliance checks (light + dark screenshot variants) |
 | `wiki-archive-cards.e2e.ts` | LLM wiki processing triggered by card archival, excluding child cards |
 | `tsconfig.json` | TypeScript config scoped to the e2e test tree |
 

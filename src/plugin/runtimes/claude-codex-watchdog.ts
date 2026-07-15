@@ -4,6 +4,7 @@ import type { RuntimeRunStore } from './runtime-run-store';
 
 const CHECK_INTERVAL = 30_000;
 const STUCK_THRESHOLD_MS = 30 * 60 * 1000;
+const ORGANIC_CLI_SOURCE_CONTEXTS = new Set(['claude-code', 'codex']);
 
 export class ClaudeCodexWatchdog {
   private intervalId: ReturnType<typeof setInterval> | null = null;
@@ -48,6 +49,10 @@ export class ClaudeCodexWatchdog {
 
       const activeRun = await this.runStore.findActiveRunByCard(card.id);
       if (!activeRun) {
+        if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) {
+          continue;
+        }
+
         // Orphaned: in_progress with no active run → move back to todo
         await this.store.updateCard(card.id, {
           status: 'todo',

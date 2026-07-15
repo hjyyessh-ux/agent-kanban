@@ -26,6 +26,7 @@ import './App.css';
 import { QuestionBanner } from './components/Question/QuestionBanner';
 import { useQuestions } from './hooks/useQuestions';
 import { useFontScale } from './hooks/useFontScale';
+import { useTheme } from './hooks/useTheme';
 import './components/Question/Question.css';
 import type { QueueSessionMode } from '../../src/core/types';
 import { createUiAlert } from './hooks/uiAlert';
@@ -90,6 +91,7 @@ export default function App() {
   const skills = useSkills();
   const { questions, reply: replyQuestion, reject: rejectQuestion, refreshQuestions } = useQuestions();
   useFontScale();
+  useTheme();
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);

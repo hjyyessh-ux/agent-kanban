@@ -91,7 +91,6 @@ export const CommandPicker: React.FC<CommandPickerProps> = ({
       className={`kv2-command-picker kv2-command-picker--${variant}${isOpen ? " is-open" : ""}`}
     >
       <div className="kv2-command-control">
-        <span className="kv2-command-icon" aria-hidden="true">/</span>
         <button
           id={id}
           type="button"
@@ -102,20 +101,11 @@ export const CommandPicker: React.FC<CommandPickerProps> = ({
           aria-expanded={isOpen}
           aria-controls={popoverId}
         >
+          <span className="kv2-command-icon" aria-hidden="true">/</span>
           <span className="kv2-command-trigger-main">
             {selectedCommand ? selectedCommand.displayName : `${RUNTIME_LABELS[runtime]} command 선택`}
           </span>
-        </button>
-        <button
-          type="button"
-          className="kv2-command-toggle"
-          onClick={() => setIsOpen((current) => !current)}
-          disabled={disabled}
-          aria-label={isOpen ? "Command 목록 닫기" : "Command 목록 열기"}
-          aria-expanded={isOpen}
-          aria-controls={popoverId}
-        >
-          ▾
+          <span className="kv2-command-trigger-arrow" aria-hidden="true">▾</span>
         </button>
       </div>
 

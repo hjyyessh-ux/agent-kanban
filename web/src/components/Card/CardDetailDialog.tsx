@@ -34,29 +34,29 @@ import { FavoriteToggleButton, formatRuntimeLabel, TelegramBadge } from "../Boar
 import { buildResumeCommand } from "../../utils/resume-command";
 
 const AGENT_ROW_COLORS: Record<string, { border: string; bg: string }> = {
-  explore:              { border: "#6366F1", bg: "#EEF2FF" },
-  sisyphus:             { border: "#2563EB", bg: "#EFF6FF" },
-  "sisyphus-junior":    { border: "#2563EB", bg: "#EFF6FF" },
-  oracle:               { border: "#7C3AED", bg: "#F5F3FF" },
-  librarian:            { border: "#9B59B6", bg: "#FAF5FF" },
-  atlas:                { border: "#059669", bg: "#ECFDF5" },
-  plan:                 { border: "#0D9488", bg: "#F0FDFA" },
-  metis:                { border: "#D97706", bg: "#FFFBEB" },
-  momus:                { border: "#DC2626", bg: "#FEF2F2" },
-  "multimodal-looker":  { border: "#0F766E", bg: "#F0FDFA" },
-  hephaestus:           { border: "#EA580C", bg: "#FFF7ED" },
-  prometheus:           { border: "#DB2777", bg: "#FDF2F8" },
+  explore:              { border: "var(--kv2-agent-explore)", bg: "var(--kv2-info-surface-pale)" },
+  sisyphus:             { border: "var(--kv2-agent-sisyphus-junior)", bg: "var(--kv2-info-surface)" },
+  "sisyphus-junior":    { border: "var(--kv2-agent-sisyphus-junior)", bg: "var(--kv2-info-surface)" },
+  oracle:               { border: "var(--kv2-purple-accent)", bg: "var(--kv2-purple-surface)" },
+  librarian:            { border: "var(--kv2-agent-librarian)", bg: "var(--kv2-purple-surface-faint)" },
+  atlas:                { border: "var(--kv2-success-accent-deep)", bg: "var(--kv2-success-surface-faint)" },
+  plan:                 { border: "var(--kv2-teal-accent-deep)", bg: "var(--kv2-teal-surface)" },
+  metis:                { border: "var(--kv2-warn-accent)", bg: "var(--kv2-warn-surface-pale)" },
+  momus:                { border: "var(--kv2-danger-accent)", bg: "var(--kv2-danger-surface)" },
+  "multimodal-looker":  { border: "var(--kv2-teal-text-deep)", bg: "var(--kv2-teal-surface)" },
+  hephaestus:           { border: "var(--kv2-orange-accent)", bg: "var(--kv2-orange-surface-soft)" },
+  prometheus:           { border: "var(--kv2-pink-accent-bright)", bg: "var(--kv2-pink-surface-pale)" },
 };
 
 function getChildRowStyle(agentType?: string): { border: string; bg: string } {
-  if (!agentType) return { border: "#94a3b8", bg: "#F8FAFC" };
+  if (!agentType) return { border: "var(--kv2-neutral-400)", bg: "var(--kv2-surface-sunken)" };
   const key = agentType.trim().toLowerCase().replace(/\s*\(.*\)/, "");
   const match = AGENT_ROW_COLORS[key];
   if (match) return match;
   // fallback: use getAgentConfig color with fixed tint
   const cfg = getAgentConfig(agentType);
-  if (cfg?.color) return { border: cfg.color, bg: "#F8FAFC" };
-  return { border: "#94a3b8", bg: "#F8FAFC" };
+  if (cfg?.color) return { border: cfg.color, bg: "var(--kv2-surface-sunken)" };
+  return { border: "var(--kv2-neutral-400)", bg: "var(--kv2-surface-sunken)" };
 }
 
 const AGENT_MODEL_PREFERENCE_KEY = "kanban-agent-model-preference";
@@ -269,10 +269,11 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
       }));
 
     if (card.model && !mappedModels.some((modelEntry) => modelEntry.id === card.model)) {
+      const currentCatalogModel = runtimeEntry?.models?.find((modelEntry) => modelEntry.id === card.model);
       return [
         {
           id: card.model,
-          name: card.model,
+          name: currentCatalogModel?.label ?? card.model,
           providerID: cardRuntime,
           providerName: "Current",
         },

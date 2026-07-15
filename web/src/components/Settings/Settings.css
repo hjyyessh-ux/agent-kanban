@@ -135,13 +135,13 @@
 /* ── Badge Variants ─────────────────────────────────────────── */
 .settings-badge--category {
   background: var(--kv2-status-todo-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
 .settings-badge--masked {
   background: var(--kv2-frame);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
@@ -255,7 +255,7 @@
   height: 28px;
   border: 2px solid var(--kv2-border-strong);
   background: var(--kv2-surface);
-  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
   transition: left 0.15s ease;
 }
 
@@ -277,7 +277,7 @@
 .settings-toggle-switch--on .settings-toggle-label {
   right: auto;
   left: 8px;
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 /* ── Maintenance ────────────────────────────────────────────── */
@@ -319,12 +319,12 @@
 
 .settings-maintenance-status--success {
   background: var(--kv2-status-done-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .settings-maintenance-status--fail {
   background: var(--kv2-status-complete-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
 }
 
 .settings-maintenance-message {
@@ -358,7 +358,7 @@
   border: 1px solid var(--kv2-border-strong);
   border-radius: 2px;
   background: var(--kv2-status-complete-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   padding: 8px 12px;
   font-family: var(--kv2-font-heading);
   font-size: var(--kv2-text-xs);
@@ -455,7 +455,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #fff;
+  color: var(--kv2-text-inverse);
   background: var(--kv2-frame);
   border-radius: 2px;
 }
@@ -527,6 +527,12 @@
 }
 
 /* ── Font Scale Slider ──────────────────────────────────────── */
+.settings-theme-control {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .settings-font-scale-control {
   display: flex;
   align-items: center;
@@ -568,7 +574,7 @@
   height: 22px;
   border: 2px solid var(--kv2-border-strong);
   background: var(--kv2-surface);
-  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
   cursor: grab;
 }
 
@@ -578,7 +584,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 0;
   background: var(--kv2-surface);
-  box-shadow: 2px 2px 0 rgba(31, 34, 51, 0.85);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
   cursor: grab;
 }
 

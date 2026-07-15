@@ -69,7 +69,7 @@ const STATUS_LABELS: Record<KanbanStatus, string> = {
   done: 'Done',
 };
 
-const DEFAULT_AGENT_COLOR = '#6B7280';
+const DEFAULT_AGENT_COLOR = 'var(--kv2-agent-default)';
 
 function normalizeBoardText(value: string | undefined): string {
   return value?.replace(/\s+/g, ' ').trim() ?? '';

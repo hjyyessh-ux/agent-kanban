@@ -35,11 +35,38 @@ interface GraphConfig {
   docShape: DocShape;      // document node shape
   showProjects: boolean;   // render project hubs + their links
   showTopics: boolean;     // render topic hubs + their links
-  background: string;      // canvas background color
-  borderColor: string;     // node borders, shadows, label text
   projectColor: string;
   topicColor: string;
   typeColors: Record<WikiDocType, string>;
+}
+
+/**
+ * Theme-driven canvas colours. The page background + structural ink (node
+ * borders/shadows/label text) must follow light/dark mode, so they are read
+ * live from the kv2 tokens at draw time rather than persisted in GraphConfig
+ * (the categorical type/project/topic colours below stay user-tunable —
+ * they are brand/data-viz, invariant across themes).
+ */
+interface ThemeColors {
+  background: string;
+  borderColor: string;
+}
+
+function readThemeColors(): ThemeColors {
+  const cs = getComputedStyle(document.documentElement);
+  const get = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+  return {
+    background: get('--kv2-app-bg', '#FFF8E7'),
+    borderColor: get('--kv2-text-primary', '#1A1A2E'),
+  };
+}
+
+/** Parse a `#rgb`/`#rrggbb` token value into [r, g, b] for building rgba links. */
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.trim().replace(/^#/, '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const n = parseInt(full.slice(0, 6), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 /** Defaults mirror styles/tokens.css + Wiki.css and reproduce the original look. */
@@ -55,8 +82,6 @@ const DEFAULT_CONFIG: GraphConfig = {
   docShape: 'square',
   showProjects: true,
   showTopics: true,
-  background: '#FFF8E7',
-  borderColor: '#1A1A2E',
   projectColor: '#0066FF',
   topicColor: '#8d8da3',
   typeColors: {
@@ -173,8 +198,18 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [hidden, setHidden] = useState<Set<WikiDocType>>(new Set());
   const [config, setConfig] = useState<GraphConfig>(loadConfig);
+  const [themeColors, setThemeColors] = useState<ThemeColors>(readThemeColors);
   const [showSettings, setShowSettings] = useState(false);
   const didFit = useRef(false);
+
+  // Re-read the theme-driven canvas colours whenever the theme changes; the new
+  // `themeColors` object flows into paintNode/linkColor + the backgroundColor
+  // prop, so react-force-graph repaints the canvas with the dark/light palette.
+  useEffect(() => {
+    const onThemeChange = () => setThemeColors(readThemeColors());
+    window.addEventListener('kanban-theme-change', onThemeChange);
+    return () => window.removeEventListener('kanban-theme-change', onThemeChange);
+  }, []);
 
   const update = useCallback((patch: Partial<GraphConfig>) => setConfig((c) => ({ ...c, ...patch })), []);
   const updateType = useCallback(
@@ -353,23 +388,23 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
       if (shape === 'circle') {
         ctx.beginPath();
         ctx.arc(x + sh * 0.7, y + sh * 0.7, r, 0, Math.PI * 2);
-        ctx.fillStyle = config.borderColor;
+        ctx.fillStyle = themeColors.borderColor;
         ctx.fill();
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fillStyle = fill;
         ctx.fill();
         ctx.lineWidth = strokeW;
-        ctx.strokeStyle = config.borderColor;
+        ctx.strokeStyle = themeColors.borderColor;
         ctx.stroke();
       } else {
         const s = r * 2;
-        ctx.fillStyle = config.borderColor;
+        ctx.fillStyle = themeColors.borderColor;
         ctx.fillRect(x - r + sh, y - r + sh, s, s);
         ctx.fillStyle = fill;
         ctx.fillRect(x - r, y - r, s, s);
         ctx.lineWidth = strokeW;
-        ctx.strokeStyle = config.borderColor;
+        ctx.strokeStyle = themeColors.borderColor;
         ctx.strokeRect(x - r, y - r, s, s);
       }
 
@@ -389,17 +424,17 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
         const cx = x;
         const cy = y + r + 2 / scale + boxH / 2;
         // Opaque neobrutalism pill keeps text readable over dense nodes/links.
-        ctx.fillStyle = config.background;
+        ctx.fillStyle = themeColors.background;
         ctx.fillRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
         ctx.lineWidth = Math.max(0.5, fontSize * 0.09);
-        ctx.strokeStyle = config.borderColor;
+        ctx.strokeStyle = themeColors.borderColor;
         ctx.strokeRect(cx - boxW / 2, cy - boxH / 2, boxW, boxH);
-        ctx.fillStyle = config.borderColor;
+        ctx.fillStyle = themeColors.borderColor;
         ctx.fillText(text, cx, cy);
       }
       ctx.restore();
     },
-    [hoverId, highlight, nodeColor, config],
+    [hoverId, highlight, nodeColor, config, themeColors],
   );
 
   // Pointer hit-area matches the painted shape so clicks/hover line up.
@@ -422,16 +457,24 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
     [config.nodeScale, config.docShape],
   );
 
+  // Link rgba built from the theme ink (borderColor) + topic swatch so links
+  // track light/dark. In light mode these resolve to the original literals
+  // (ink #1A1A2E = 26,26,46 · topic #8d8da3 = 141,141,163) — pixel-identical.
+  const inkRgb = useMemo(() => hexToRgb(themeColors.borderColor), [themeColors.borderColor]);
+  const topicRgb = useMemo(() => hexToRgb(config.topicColor), [config.topicColor]);
+
   const linkColor = useCallback(
     (link: LinkObject<GraphNode, GraphLink>): string => {
+      const [ir, ig, ib] = inkRgb;
+      const [tr, tg, tb] = topicRgb;
       if (hoverId) {
         const on = endId(link.source) === hoverId || endId(link.target) === hoverId;
-        if (on) return link.kind === 'topic' ? 'rgba(141,141,163,0.95)' : 'rgba(26,26,46,0.85)';
-        return 'rgba(26,26,46,0.04)';
+        if (on) return link.kind === 'topic' ? `rgba(${tr},${tg},${tb},0.95)` : `rgba(${ir},${ig},${ib},0.85)`;
+        return `rgba(${ir},${ig},${ib},0.04)`;
       }
-      return link.kind === 'topic' ? 'rgba(141,141,163,0.35)' : 'rgba(26,26,46,0.18)';
+      return link.kind === 'topic' ? `rgba(${tr},${tg},${tb},0.35)` : `rgba(${ir},${ig},${ib},0.18)`;
     },
-    [hoverId],
+    [hoverId, inkRgb, topicRgb],
   );
 
   const linkWidth = useCallback(
@@ -497,7 +540,7 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
             width={size.width}
             height={size.height}
             graphData={graphData}
-            backgroundColor={config.background}
+            backgroundColor={themeColors.background}
             nodeId="id"
             nodeRelSize={config.nodeScale}
             nodeVal="val"
@@ -602,8 +645,6 @@ export function WikiGraph({ tiles, onSelect }: WikiGraphProps) {
               ))}
               <ColorRow label="프로젝트" value={config.projectColor} onChange={(v) => update({ projectColor: v })} />
               <ColorRow label="토픽" value={config.topicColor} onChange={(v) => update({ topicColor: v })} />
-              <ColorRow label="테두리/글자" value={config.borderColor} onChange={(v) => update({ borderColor: v })} />
-              <ColorRow label="배경" value={config.background} onChange={(v) => update({ background: v })} />
             </div>
           )}
 

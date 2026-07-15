@@ -2,10 +2,10 @@ import { normalizeAgentType } from '../../../src/core/agent-type';
 import { PRIMARY_AGENT_CONFIGS } from '../../../src/core/agent-config';
 
 const PRIMARY_AGENT_VISUALS = {
-  sisyphus: { emoji: '🪨', color: '#0066FF', textColor: '#FFFFFF' },
-  hephaestus: { emoji: '🔨', color: '#FF6B35', textColor: '#FFFFFF' },
-  prometheus: { emoji: '🔥', color: '#FF3366', textColor: '#FFFFFF' },
-  atlas: { emoji: '🌍', color: '#00CC66', textColor: '#FFFFFF' },
+  sisyphus: { emoji: '🪨', color: 'var(--kv2-agent-sisyphus)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  hephaestus: { emoji: '🔨', color: 'var(--kv2-agent-hephaestus)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  prometheus: { emoji: '🔥', color: 'var(--kv2-agent-prometheus)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  atlas: { emoji: '🌍', color: 'var(--kv2-agent-atlas)', textColor: 'var(--kv2-agent-text-on-fill)' },
 } as const;
 
 export const AGENT_CONFIGS = PRIMARY_AGENT_CONFIGS.map((agent) => ({
@@ -17,14 +17,14 @@ export const AGENT_CONFIGS = PRIMARY_AGENT_CONFIGS.map((agent) => ({
 }));
 
 const AGENT_DISPLAY_OVERRIDES = {
-  explore: { label: 'Explore', subtitle: 'Codebase Search', emoji: '🔎', color: '#6366F1', textColor: '#FFFFFF' },
-  librarian: { label: 'Librarian', subtitle: 'Reference Search', emoji: '📚', color: '#9B59B6', textColor: '#FFFFFF' },
-  oracle: { label: 'Oracle', subtitle: 'Deep Review', emoji: '🔮', color: '#1A1A2E', textColor: '#FFFFFF' },
-  plan: { label: 'Plan', subtitle: 'Planning Agent', emoji: '📝', color: '#14B8A6', textColor: '#FFFFFF' },
-  metis: { label: 'Metis', subtitle: 'Pre-Planning', emoji: '🧠', color: '#F59E0B', textColor: '#1A1A2E' },
-  momus: { label: 'Momus', subtitle: 'Quality Review', emoji: '🧐', color: '#CC2244', textColor: '#FFFFFF' },
-  'multimodal-looker': { label: 'Multimodal-Looker', subtitle: 'Vision Review', emoji: '👁️', color: '#0F766E', textColor: '#FFFFFF' },
-  'sisyphus-junior': { label: 'Sisyphus-Junior', subtitle: 'Subtask Worker', emoji: '🪨', color: '#2563EB', textColor: '#FFFFFF' },
+  explore: { label: 'Explore', subtitle: 'Codebase Search', emoji: '🔎', color: 'var(--kv2-agent-explore)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  librarian: { label: 'Librarian', subtitle: 'Reference Search', emoji: '📚', color: 'var(--kv2-agent-librarian)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  oracle: { label: 'Oracle', subtitle: 'Deep Review', emoji: '🔮', color: 'var(--kv2-agent-oracle)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  plan: { label: 'Plan', subtitle: 'Planning Agent', emoji: '📝', color: 'var(--kv2-agent-plan)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  metis: { label: 'Metis', subtitle: 'Pre-Planning', emoji: '🧠', color: 'var(--kv2-agent-metis)', textColor: 'var(--kv2-agent-text-on-fill-dark)' },
+  momus: { label: 'Momus', subtitle: 'Quality Review', emoji: '🧐', color: 'var(--kv2-agent-momus)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  'multimodal-looker': { label: 'Multimodal-Looker', subtitle: 'Vision Review', emoji: '👁️', color: 'var(--kv2-agent-multimodal-looker)', textColor: 'var(--kv2-agent-text-on-fill)' },
+  'sisyphus-junior': { label: 'Sisyphus-Junior', subtitle: 'Subtask Worker', emoji: '🪨', color: 'var(--kv2-agent-sisyphus-junior)', textColor: 'var(--kv2-agent-text-on-fill)' },
 } as const;
 
 export type AgentKey = typeof AGENT_CONFIGS[number]['key'];

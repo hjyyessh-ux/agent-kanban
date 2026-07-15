@@ -85,8 +85,8 @@ export const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
       <div className="kv2-directory-control">
         <span className="kv2-directory-icon" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M3.5 6.5h6.2l1.8 2H20.5v9H3.5v-11Z" fill="#FACC15" stroke="#1F2233" strokeWidth="2" strokeLinejoin="round" />
-            <path d="M3.5 8.5h17v9H3.5v-9Z" fill="#FFFFFF" stroke="#1F2233" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M3.5 6.5h6.2l1.8 2H20.5v9H3.5v-11Z" fill="var(--kv2-directory-icon-fill)" stroke="var(--kv2-border-strong)" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M3.5 8.5h17v9H3.5v-9Z" fill="var(--kv2-surface)" stroke="var(--kv2-border-strong)" strokeWidth="2" strokeLinejoin="round" />
           </svg>
         </span>
         <input

@@ -15,14 +15,14 @@
 /* ── Badge Variants ────────────────────────────────────────── */
 .scripts-badge--success {
   background: var(--kv2-status-done-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
 .scripts-badge--fail,
 .scripts-badge--error {
   background: var(--kv2-status-complete-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
@@ -35,19 +35,19 @@
 .scripts-badge--bash,
 .scripts-badge--sh {
   background: var(--kv2-frame);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
 .scripts-badge--python {
   background: var(--kv2-status-todo-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 
 .scripts-badge--node {
   background: var(--kv2-status-done-accent);
-  color: #fff;
+  color: var(--kv2-text-inverse);
   border-color: var(--kv2-border-strong);
 }
 

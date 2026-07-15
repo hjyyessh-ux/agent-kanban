@@ -20,6 +20,7 @@ import { createUnavailableOpencodeAdapter, STANDALONE_OPENCODE_UNAVAILABLE_REASO
 import { isRecentlyFailed } from '../hooks/event-handler';
 import { buildDispatchPromptText } from '../dispatch-prompt';
 import { captureGitStart } from './git-capture';
+import { mergeCodexCliModelsIntoCatalog } from './codex-model-catalog';
 
 export interface RuntimeAvailability {
   runtime: AgentRuntime;
@@ -34,7 +35,7 @@ export interface RuntimeHost {
   watchdog: ClaudeCodexWatchdog;
   dispatchCard(cardId: string): Promise<DispatchResult>;
   getRuntimeAvailability(): RuntimeAvailability[];
-  getRuntimeCatalog(): RuntimeCatalogEntry[];
+  getRuntimeCatalog(): Promise<RuntimeCatalogEntry[]>;
 }
 
 export interface StandaloneRuntimeHostOptions {
@@ -119,7 +120,10 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
     watchdog,
     dispatchCard,
     getRuntimeAvailability: () => availability,
-    getRuntimeCatalog: () => applyRuntimeAvailability(RUNTIME_CATALOG, availability),
+    getRuntimeCatalog: () => mergeCodexCliModelsIntoCatalog(
+      applyRuntimeAvailability(RUNTIME_CATALOG, availability),
+      { commandOverride: options.codexCommandOverride },
+    ),
   };
 }
 

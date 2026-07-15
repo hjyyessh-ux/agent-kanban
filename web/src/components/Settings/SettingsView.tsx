@@ -6,6 +6,7 @@ import { fetchModels, type ModelInfo } from '../../hooks/useKanbanApi';
 import { readSyncedCatalog, useModelSync } from '../../hooks/useModelCatalog';
 import { fetchSetting } from '../../hooks/useSettingsApi';
 import { useFontScale } from '../../hooks/useFontScale';
+import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import { SettingsEntryModal } from './SettingsEntryModal';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
 import { ErrorAlert } from '../shared/ErrorAlert';
@@ -66,6 +67,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   });
   const [hasStoredPreference, setHasStoredPreference] = useState(() => !!localStorage.getItem(MODEL_FILTER_KEY));
   const fontScale = useFontScale();
+  const theme = useTheme();
   const { sync, syncing, outcome } = useModelSync();
   // Bumped after a sync so the derived catalogs re-read the synced pool.
   const [catalogNonce, setCatalogNonce] = useState(0);
@@ -133,7 +135,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSyncModels = async () => {
     await sync();
     setCatalogNonce(n => n + 1);
-    // Sync may have added newly-synced ids to the enabled set; re-read it.
+    // Sync updates the catalog only. Preserve the user's visibility selections.
     const raw = localStorage.getItem(MODEL_FILTER_KEY);
     if (raw) {
       try {
@@ -366,6 +368,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <span className="settings-model-provider">{m.tier ?? 'codex'}</span>
             </label>
           ))}
+        </div>
+      </div>
+
+      {/* Theme */}
+      <div className="settings-model-filter">
+        <div className="settings-model-filter-header">
+          <div className="settings-model-filter-info">
+            <h3 className="settings-network-title">Theme</h3>
+            <p className="settings-network-desc">
+              Switch between light and dark, or follow your system setting
+            </p>
+          </div>
+        </div>
+        <div className="settings-theme-control" role="group" aria-label="Theme">
+          {(['light', 'dark', 'system'] as const).map((opt) => {
+            const labels: Record<ThemePreference, string> = {
+              light: '☀ Light',
+              dark: '🌙 Dark',
+              system: '💻 System',
+            };
+            const active = theme.preference === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                className={`kv2-btn kv2-btn--small ${active ? 'kv2-btn--primary' : 'kv2-btn--outline'}`}
+                aria-pressed={active}
+                onClick={() => theme.setPreference(opt)}
+              >
+                {labels[opt]}
+              </button>
+            );
+          })}
         </div>
       </div>
 

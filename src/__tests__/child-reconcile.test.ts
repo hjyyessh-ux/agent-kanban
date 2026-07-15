@@ -160,48 +160,52 @@ describe('ClaudeCodexWatchdog', () => {
     });
   });
 
-  test('does not touch organic codex hook card with no run', async () => {
+  test('leaves organic Codex and Claude CLI hook cards in progress without run artifacts', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const runStore = new RuntimeRunStore(dir);
       const watchdog = new ClaudeCodexWatchdog(store, runStore);
 
-      // Organic prompt-hook card: codex runtime, sourceContext 'codex', no run.
-      const card = await store.createCard({
-        title: 'Codex prompt',
-        description: 'organic CLI use',
-        agentRuntime: 'codex',
+      const codexCard = await store.createCard({
+        title: 'Organic Codex Task',
+        description: 'direct cli prompt',
         sourceContext: 'codex',
         projectDir: dir,
       });
-      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'sess-hook' });
+      const claudeCard = await store.createCard({
+        title: 'Organic Claude Task',
+        description: 'direct cli prompt',
+        sourceContext: 'claude-code',
+        projectDir: dir,
+      });
+      await store.updateCard(codexCard.id, { status: 'in_progress', sessionId: 'codex-hook-session' });
+      await store.updateCard(claudeCard.id, { status: 'in_progress', sessionId: 'claude-hook-session' });
 
       await watchdog.check();
 
-      const updated = await store.getCard(card.id);
-      expect(updated?.status).toBe('in_progress');
+      expect((await store.getCard(codexCard.id))?.status).toBe('in_progress');
+      expect((await store.getCard(claudeCard.id))?.status).toBe('in_progress');
     });
   });
 
-  test('does not touch organic claude-code hook card with no run', async () => {
+  test('still returns dispatched Codex orphan cards without active runs to todo', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const runStore = new RuntimeRunStore(dir);
       const watchdog = new ClaudeCodexWatchdog(store, runStore);
 
       const card = await store.createCard({
-        title: 'Claude prompt',
-        description: 'organic CLI use',
-        agentRuntime: 'claude',
-        sourceContext: 'claude-code',
+        title: 'Dispatched Codex Task',
+        description: 'dispatch prompt',
+        agentRuntime: 'codex',
         projectDir: dir,
       });
-      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'sess-hook-cc' });
-
+      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'codex-dispatch-session' });
       await watchdog.check();
 
       const updated = await store.getCard(card.id);
-      expect(updated?.status).toBe('in_progress');
+      expect(updated?.status).toBe('todo');
+      expect(updated?.progressSummary).toContain('no active codex run');
     });
   });
 

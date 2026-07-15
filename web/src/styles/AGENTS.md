@@ -30,7 +30,8 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 - No Tailwind, CSS-in-JS, styled-components, or CSS modules anywhere in this project.
 
 ### Testing Requirements
-- No automated tests target CSS directly, but `e2e/v2-visual-audit.e2e.ts` asserts key kv2 metrics (board gap, card radius, dialog width) and captures screenshots — run it plus `board.e2e.ts` after touching shared tokens or `kv2/` files.
+- `no-hardcoded-colors.test.ts` greps every `*.css` under `web/src` (except `kanban-v2.tokens.css`) for hex/rgba literals and fails on anything outside the allowlist documented in `docs/dark-mode-token-map.md` — keeps new colors routed through `--kv2-*` tokens instead of leaking past dark-mode.
+- `e2e/v2-visual-audit.e2e.ts` asserts key kv2 metrics (board gap, card radius, dialog width) and captures screenshots (light + dark) — run it plus `board.e2e.ts` after touching shared tokens or `kv2/` files.
 
 ### Common Patterns
 - Tokens are plain CSS custom properties consumed via `var(--kv2-…)` — do not hardcode hex values if an equivalent token exists.
