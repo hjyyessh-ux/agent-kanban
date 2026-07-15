@@ -1,17 +1,20 @@
 import { describe, test, expect } from 'bun:test';
+import { join } from 'node:path';
 import { PlacementTargetsStore } from '../core/placement-targets-store';
 import { withTempDir } from './setup';
 
 describe('PlacementTargetsStore', () => {
-  test('seeds two builtin targets on first load', async () => {
+  test('seeds Claude/Codex user and cold builtin targets on first load', async () => {
     await withTempDir(async (dir) => {
       const store = new PlacementTargetsStore(dir);
       const targets = await store.getTargets();
-      expect(targets.length).toBeGreaterThanOrEqual(2);
-      const user = targets.find((t) => t.kind === 'user');
+      expect(targets.length).toBeGreaterThanOrEqual(3);
+      const user = targets.find((t) => t.kind === 'user' && t.runtime === 'claude');
+      const codexUser = targets.find((t) => t.kind === 'user' && t.runtime === 'codex');
       const cold = targets.find((t) => t.kind === 'cold');
       expect(user).toBeDefined();
       expect(user?.builtin).toBe(true);
+      expect(codexUser?.builtin).toBe(true);
       expect(cold).toBeDefined();
       expect(cold?.builtin).toBe(true);
     });
@@ -22,6 +25,7 @@ describe('PlacementTargetsStore', () => {
       const store = new PlacementTargetsStore(dir);
       const targets = await store.getTargets();
       expect(targets.find((t) => t.label === 'Global (user)')).toBeDefined();
+      expect(targets.find((t) => t.label === 'Codex Global (user)')).toBeDefined();
       expect(targets.find((t) => t.label === 'Cold Storage')).toBeDefined();
     });
   });
@@ -141,6 +145,53 @@ describe('PlacementTargetsStore', () => {
       expect(found).toBeDefined();
       expect(found?.label).toBe('Persist Me');
       expect(found?.teamShared).toBe(true);
+    });
+  });
+
+  test('migrates legacy targets without runtime to Claude without dropping entries', async () => {
+    await withTempDir(async (dir) => {
+      const legacy = {
+        version: 1,
+        targets: [{
+          id: 'legacy-target',
+          label: 'Legacy',
+          dir: '/tmp/legacy-target',
+          kind: 'project',
+          teamShared: true,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        }],
+        lastModified: '2026-01-01T00:00:00.000Z',
+      };
+      await Bun.write(join(dir, 'placement-targets.json'), JSON.stringify(legacy));
+
+      const targets = await new PlacementTargetsStore(dir).getTargets();
+      const migrated = targets.find((target) => target.id === 'legacy-target');
+      expect(migrated?.runtime).toBe('claude');
+      expect(migrated?.dir).toBe('/tmp/legacy-target');
+    });
+  });
+
+  test('allows the same directory for different runtimes', async () => {
+    await withTempDir(async (dir) => {
+      const store = new PlacementTargetsStore(dir);
+      await store.addTarget({
+        label: 'Claude Repo',
+        dir: '/tmp/shared-runtime-dir',
+        kind: 'project',
+        teamShared: true,
+        runtime: 'claude',
+      });
+      await store.addTarget({
+        label: 'Codex Repo',
+        dir: '/tmp/shared-runtime-dir',
+        kind: 'project',
+        teamShared: true,
+        runtime: 'codex',
+      });
+      const matching = (await store.getTargets())
+        .filter((target) => target.dir === '/tmp/shared-runtime-dir');
+      expect(matching.map((target) => target.runtime).sort()).toEqual(['claude', 'codex']);
     });
   });
 });

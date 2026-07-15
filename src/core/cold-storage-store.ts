@@ -15,7 +15,7 @@ import {
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { DiscoveredSkill, CapScope, McpServerDef, ColdManifestEntry } from './types';
+import { mcpPlacementIdentity, type DiscoveredSkill, type CapScope, type McpPlacement, type McpRuntime, type McpServerDef, type ColdManifestEntry } from './types';
 import { FileLock } from './filelock';
 import { resolveKanbanDataDir } from './data-dir';
 import {
@@ -24,6 +24,7 @@ import {
   backupClaudeJson,
   copyMcp,
 } from './mcp-config-store';
+import { copyCodexMcp, removeCodexMcp } from './codex-mcp-config';
 
 // ─── Directory helpers ───────────────────────────────────────────────────────
 
@@ -38,9 +39,11 @@ export function resolveColdStorageDir(): string {
 
 interface McpRegistryEntry {
   def: McpServerDef;
+  runtime?: McpRuntime;
   originScope: CapScope;
   frozenAt: string;
   hash: string;
+  sourcePlacement?: ColdManifestEntry['sourcePlacement'];
 }
 
 interface McpRegistry {
@@ -93,7 +96,11 @@ function readManifest(): ColdManifestEntry[] {
   const p = manifestPath();
   if (!existsSync(p)) return [];
   try {
-    return JSON.parse(readFileSync(p, 'utf8')) as ColdManifestEntry[];
+    return (JSON.parse(readFileSync(p, 'utf8')) as ColdManifestEntry[]).map((entry) =>
+      entry.kind === 'mcp' && !entry.runtime
+        ? { ...entry, runtime: entry.ref.startsWith('codex/') ? 'codex' : 'claude' }
+        : entry,
+    );
   } catch {
     return [];
   }
@@ -282,8 +289,10 @@ export async function freezeMcp(
   def: McpServerDef,
   scope: CapScope,
   fromDir: string | undefined,
-  opts: { ts: string; claudeJsonPath?: string },
+  opts: { ts: string; runtime?: McpRuntime; claudeJsonPath?: string; codexConfigPath?: string; sourcePlacement?: McpPlacement },
 ): Promise<ColdManifestEntry> {
+  const runtime = opts.runtime ?? 'claude';
+  const ref = runtime === 'claude' ? name : `${runtime}/${name}`;
   const hash = hashDef(def);
   const backupDir = join(resolveColdStorageDir(), 'backups');
   const filePath = opts.claudeJsonPath ?? CLAUDE_JSON_PATH;
@@ -291,12 +300,24 @@ export async function freezeMcp(
   // Save to MCP registry first
   await getMcpRegLock().withLock(async () => {
     const reg = readMcpRegistry();
-    reg.servers[name] = { def, originScope: scope, frozenAt: new Date().toISOString(), hash };
+    const location = opts.sourcePlacement?.location ?? (runtime === 'codex'
+      ? opts.codexConfigPath ?? (fromDir ? join(fromDir, '.codex', 'config.toml') : join(dirname(filePath), '.codex', 'config.toml'))
+      : scope === 'project' && fromDir ? join(fromDir, '.mcp.json') : filePath);
+    const sourcePlacement = {
+      identity: opts.sourcePlacement?.identity ?? mcpPlacementIdentity(runtime, name, location, opts.sourcePlacement?.appliesToDir ?? fromDir),
+      runtime,
+      scope,
+      location,
+      ...(fromDir ? { dir: fromDir } : {}),
+      ...(opts.sourcePlacement?.appliesToDir ? { appliesToDir: opts.sourcePlacement.appliesToDir } : {}),
+    };
+    reg.servers[ref] = { def, runtime, originScope: scope, frozenAt: new Date().toISOString(), hash, sourcePlacement };
     writeMcpRegistry(reg);
   });
 
-  // Remove from active config via CAS engine
-  if (scope === 'user') {
+  try {
+  // Preserve the established Claude CAS-only freeze path exactly. Codex is additive.
+  if (runtime === 'claude' && scope === 'user') {
     backupClaudeJson(filePath, backupDir, opts.ts);
     await safeMutateClaudeJson(
       (obj) => {
@@ -306,7 +327,7 @@ export async function freezeMcp(
       },
       { ts: opts.ts, backupDir, claudeJsonPath: opts.claudeJsonPath },
     );
-  } else if (scope === 'local' && fromDir) {
+  } else if (runtime === 'claude' && scope === 'local' && fromDir) {
     backupClaudeJson(filePath, backupDir, opts.ts);
     await safeMutateClaudeJson(
       (obj) => {
@@ -322,7 +343,7 @@ export async function freezeMcp(
       },
       { ts: opts.ts, backupDir, claudeJsonPath: opts.claudeJsonPath },
     );
-  } else if (scope === 'project' && fromDir) {
+  } else if (runtime === 'claude' && scope === 'project' && fromDir) {
     const mcpJsonPath = join(fromDir, '.mcp.json');
     if (existsSync(mcpJsonPath)) {
       const content = readFileSync(mcpJsonPath, 'utf8');
@@ -334,14 +355,34 @@ export async function freezeMcp(
       delete servers[name];
       atomicWriteFile(mcpJsonPath, JSON.stringify({ ...parsed, mcpServers: servers }, null, 2) + '\n');
     }
+  } else if (runtime === 'codex' && (scope === 'user' || scope === 'local' || scope === 'project')) {
+    await removeCodexMcp(name, scope, {
+      ts: opts.ts,
+      backupDir,
+      configPath: opts.codexConfigPath,
+      targetDir: scope === 'local' ? fromDir : undefined,
+      projectDir: scope === 'project' ? fromDir : undefined,
+    });
+  }
+  } catch (error) {
+    await getMcpRegLock().withLock(async () => {
+      const reg = readMcpRegistry();
+      delete reg.servers[ref];
+      writeMcpRegistry(reg);
+    });
+    throw error;
   }
 
   const entry: ColdManifestEntry = {
     kind: 'mcp',
-    ref: name,
+    ref,
+    runtime,
     sourceScope: scope,
-    sourcePath: scope === 'project' && fromDir ? join(fromDir, '.mcp.json') : filePath,
+    sourcePath: scope === 'project' && fromDir
+      ? join(fromDir, runtime === 'codex' ? '.codex/config.toml' : '.mcp.json')
+      : runtime === 'codex' ? (opts.codexConfigPath ?? join(dirname(filePath), '.codex/config.toml')) : filePath,
     projectRoot: fromDir,
+    sourcePlacement: readMcpRegistry().servers[ref]?.sourcePlacement,
     originalConfigJson: JSON.stringify(def),
     hash,
     createdAt: new Date().toISOString(),
@@ -349,7 +390,7 @@ export async function freezeMcp(
   };
 
   await getManifestLock().withLock(async () => {
-    const entries = readManifest().filter((e) => !(e.kind === 'mcp' && e.ref === name));
+    const entries = readManifest().filter((e) => !(e.kind === 'mcp' && e.ref === ref));
     entries.push(entry);
     writeManifest(entries);
   });
@@ -359,21 +400,48 @@ export async function freezeMcp(
 
 export async function restoreMcp(
   ref: string,
-  toScope: 'user' | 'local' | 'project',
-  opts: { ts: string; targetDir?: string; projectDir?: string; claudeJsonPath?: string },
+  toScope: 'user' | 'local' | 'project' | undefined,
+  opts: {
+    ts: string;
+    runtime?: McpRuntime;
+    targetDir?: string;
+    projectDir?: string;
+    claudeJsonPath?: string;
+    codexConfigPath?: string;
+  },
 ): Promise<void> {
   const reg = readMcpRegistry();
   const regEntry = reg.servers[ref];
   if (!regEntry) throw new Error(`Cold storage MCP not found: ${ref}`);
+  const runtime = regEntry.runtime ?? (ref.startsWith('codex/') ? 'codex' : 'claude');
+  if (opts.runtime && opts.runtime !== runtime) {
+    throw Object.assign(new Error(`Cold MCP runtime is ${runtime}, not ${opts.runtime}`), { code: 'RUNTIME_MISMATCH' });
+  }
+  const manifestEntry = readManifest().find((entry) => entry.kind === 'mcp' && entry.ref === ref);
+  const sourcePlacement = regEntry.sourcePlacement ?? manifestEntry?.sourcePlacement;
+  const resolvedScope = toScope ?? (sourcePlacement?.scope !== 'cold'
+    ? sourcePlacement?.scope : undefined) ?? regEntry.originScope;
+  if (resolvedScope === 'cold') throw new Error('Original MCP placement is not writable');
 
   const backupDir = join(resolveColdStorageDir(), 'backups');
-  await copyMcp(ref, regEntry.def, toScope, {
-    ts: opts.ts,
-    backupDir,
-    targetDir: opts.targetDir,
-    projectDir: opts.projectDir,
-    claudeJsonPath: opts.claudeJsonPath,
-  });
+  const name = runtime === 'codex' && ref.startsWith('codex/') ? ref.slice('codex/'.length) : ref;
+  if (runtime === 'claude') {
+    await copyMcp(name, regEntry.def, resolvedScope, {
+      ts: opts.ts,
+      backupDir,
+      targetDir: opts.targetDir ?? (resolvedScope === 'local' ? sourcePlacement?.dir : undefined),
+      projectDir: opts.projectDir ?? (resolvedScope === 'project' ? sourcePlacement?.dir : undefined),
+      claudeJsonPath: opts.claudeJsonPath,
+    });
+  } else {
+    await copyCodexMcp(name, regEntry.def, resolvedScope, {
+      ts: opts.ts,
+      backupDir,
+      targetDir: opts.targetDir ?? (resolvedScope === 'local' ? sourcePlacement?.dir : undefined),
+      projectDir: opts.projectDir ?? (resolvedScope === 'project' ? sourcePlacement?.dir : undefined),
+      configPath: opts.codexConfigPath,
+    });
+  }
 
   await getMcpRegLock().withLock(async () => {
     const r = readMcpRegistry();
@@ -407,4 +475,20 @@ export async function deleteColdEntry(kind: 'skill' | 'mcp', ref: string): Promi
 
 export function getColdManifest(): ColdManifestEntry[] {
   return readManifest();
+}
+
+export function getColdMcpEntry(ref: string): {
+  def: McpServerDef;
+  runtime: McpRuntime;
+  originScope: CapScope;
+  sourcePlacement?: ColdManifestEntry['sourcePlacement'];
+} | null {
+  const entry = readMcpRegistry().servers[ref];
+  if (!entry) return null;
+  return {
+    def: entry.def,
+    runtime: entry.runtime ?? (ref.startsWith('codex/') ? 'codex' : 'claude'),
+    originScope: entry.originScope,
+    sourcePlacement: entry.sourcePlacement ?? readManifest().find((item) => item.kind === 'mcp' && item.ref === ref)?.sourcePlacement,
+  };
 }

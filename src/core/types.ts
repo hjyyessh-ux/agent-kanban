@@ -680,12 +680,28 @@ export interface SkillRootsStoreState {
 // §3.2 — shared across all Phases, defined once here.
 
 export type CapScope = 'user' | 'project' | 'local' | 'cold';
+export type McpRuntime = 'claude' | 'codex';
+
+export function mcpInventoryIdentity(runtime: McpRuntime, name: string): string {
+  return `${runtime}:${name}`;
+}
+
+export function mcpPlacementIdentity(
+  runtime: McpRuntime,
+  name: string,
+  location: string,
+  appliesToDir?: string,
+): string {
+  return [runtime, name, location, appliesToDir ?? ''].map(encodeURIComponent).join(':');
+}
 
 export interface PlacementTarget {
   id: string;
   label: string;            // "agent-kanban", "Global (user)"
   dir: string;              // absolute path; user/cold have fixed semantic values
   kind: CapScope;
+  /** Runtime whose MCP config is addressed. Missing persisted values migrate to Claude. */
+  runtime: McpRuntime;
   teamShared: boolean;      // project=git-shared true / local=false
   builtin?: boolean;        // user/cold fixed targets — cannot be deleted
   createdAt: string;
@@ -699,11 +715,25 @@ export interface McpServerDef {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  /** Codex env var names/remote-source declarations forwarded to stdio servers. */
+  envVars?: Array<string | { name: string; source?: 'local' | 'remote' }>;
+  cwd?: string;
+  bearerTokenEnvVar?: string;
+  envHttpHeaders?: Record<string, string>;
+  enabled?: boolean;
+  required?: boolean;
+  enabledTools?: string[];
+  disabledTools?: string[];
+  startupTimeoutSec?: number;
+  toolTimeoutSec?: number;
   alwaysLoad?: boolean;
   [k: string]: unknown;
 }
 
 export interface McpPlacement {
+  /** Stable identity for selecting one exact same-name placement. */
+  identity: string;
+  runtime: McpRuntime;
   scope: CapScope;
   location: string;         // actual config file path (~/.claude.json or <repo>/.mcp.json)
   /**
@@ -714,12 +744,29 @@ export interface McpPlacement {
    * Required to correctly target move/remove/freeze for local & project scopes.
    */
   dir?: string;
+  /** Directory whose effective Codex configuration chain this placement was evaluated for. */
+  appliesToDir?: string;
+  /** Codex config layer that owns this placement. Claude placements leave this unset. */
+  configLayer?: 'user' | 'project' | 'subdirectory';
+  /** Precedence within an evaluated Codex chain; larger/nearer values win. */
+  precedence?: number;
+  /** Whether this definition is the nearest same-name definition for appliesToDir. */
+  effective?: boolean;
+  /** Next nearer config path that overrides this same-name definition. */
+  overriddenBy?: string;
+  /** Definition from this exact Codex config layer. */
+  definition?: McpServerDef;
+  /** Project layers require trust, but inventory deliberately does not infer trust state. */
+  projectTrust?: 'not-required' | 'required-status-unknown';
   alwaysLoad: boolean;
   hasPlaintextSecret: boolean;
   managed: boolean;         // plugin/enterprise — cannot be moved
 }
 
 export interface McpInventoryItem {
+  /** Stable cross-runtime identity; same-name Claude/Codex servers remain distinct. */
+  identity: string;
+  runtime: McpRuntime;
   name: string;             // mcpServers key
   def: McpServerDef;
   placements: McpPlacement[];
@@ -740,6 +787,35 @@ export interface ContextDiagnostics {
   runtimeSupportsToolSearch: boolean;
   userScopeMcpCount: number;
   alwaysLoadCount: number;
+  /** Additive MCP discovery diagnostics; existing Claude diagnostic fields keep their meaning. */
+  mcpDiscovery?: McpInventoryDiscoveryDiagnostics;
+}
+
+export interface McpConfigScanIssue {
+  runtime: McpRuntime;
+  path: string;
+  code: 'invalid-config' | 'read-error' | 'scan-failed';
+  message: string;
+}
+
+export interface CodexMcpDiscoveryDiagnostics {
+  candidateConfigPaths: string[];
+  scannedConfigPaths: string[];
+  issues: McpConfigScanIssue[];
+  projectTrust: {
+    required: boolean;
+    status: 'unknown';
+    configPaths: string[];
+  };
+}
+
+export interface McpInventoryDiscoveryDiagnostics {
+  codex: CodexMcpDiscoveryDiagnostics;
+}
+
+export interface McpInventoryDiscoveryResult {
+  items: McpInventoryItem[];
+  diagnostics: McpInventoryDiscoveryDiagnostics;
 }
 
 export interface PlacementTargetsStoreState {
@@ -753,6 +829,44 @@ export interface CreatePlacementTargetInput {
   dir: string;
   kind: CapScope;
   teamShared: boolean;
+  /** Omitted legacy/API inputs retain the pre-Codex Claude behavior. */
+  runtime?: McpRuntime;
+}
+
+export type WritableMcpScope = 'user' | 'local' | 'project';
+
+export interface McpCopyRequest {
+  runtime?: McpRuntime;
+  inventoryIdentity?: string;
+  sourcePlacementIdentity?: string;
+  targetId?: string;
+  toScope: WritableMcpScope;
+  targetDir?: string;
+  projectDir?: string;
+  forceSecret?: boolean;
+}
+
+export interface McpMoveRequest extends McpCopyRequest {
+  fromScope: WritableMcpScope;
+  fromDir?: string;
+}
+
+export interface McpDeleteRequest {
+  runtime?: McpRuntime;
+  inventoryIdentity?: string;
+  placementIdentity?: string;
+  scope: WritableMcpScope;
+  targetDir?: string;
+  projectDir?: string;
+}
+
+export interface McpAlwaysLoadRequest {
+  runtime?: McpRuntime;
+  inventoryIdentity?: string;
+  placementIdentity?: string;
+  location: string;
+  scope: Extract<WritableMcpScope, 'user' | 'project'>;
+  alwaysLoad: boolean;
 }
 
 // ─── Cold Storage Types (Phase 4) ─────────────────────────────
@@ -760,13 +874,22 @@ export interface CreatePlacementTargetInput {
 
 export interface ColdManifestEntry {
   kind: 'skill' | 'mcp';
-  /** Unique ref: "runtime/name" for skill, "name" for MCP */
+  /** Unique ref: "runtime/name" for skill/Codex MCP; legacy Claude MCP keeps "name". */
   ref: string;
   runtime?: SkillRuntime;
   sourceScope: CapScope;
   /** Original absolute path (skill dir or config file) */
   sourcePath: string;
   projectRoot?: string;
+  /** Exact original MCP placement. Missing legacy values are derived as Claude. */
+  sourcePlacement?: {
+    identity: string;
+    runtime: McpRuntime;
+    scope: CapScope;
+    location: string;
+    dir?: string;
+    appliesToDir?: string;
+  };
   /** For MCP: JSON.stringify(def) */
   originalConfigJson?: string;
   /** sha256 of folder contents or def JSON */

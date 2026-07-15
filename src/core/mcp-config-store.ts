@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import type { McpInventoryItem, McpPlacement, McpServerDef } from './types';
+import { mcpInventoryIdentity, mcpPlacementIdentity, type McpInventoryItem, type McpPlacement, type McpServerDef } from './types';
 import { FileLock } from './filelock';
 import { detectPlaintextSecret } from './secret-detect';
 
@@ -363,6 +363,88 @@ export interface McpWriteOpts {
   claudeJsonPath?: string;
 }
 
+export interface McpPreviewChange {
+  filePath: string;
+  isProjectFile: boolean;
+  before: string;
+  after: string;
+}
+
+function previewClaudeJsonMutation(
+  opts: McpWriteOpts,
+  mutator: (obj: ClaudeJson) => ClaudeJson,
+): McpPreviewChange {
+  const filePath = opts.claudeJsonPath ?? CLAUDE_JSON_PATH;
+  const before = existsSync(filePath) ? readFileSync(filePath, 'utf8') : '{}';
+  const parsed = before.trim() ? JSON.parse(before) as ClaudeJson : {};
+  return { filePath, isProjectFile: false, before, after: JSON.stringify(mutator(parsed), null, 2) + '\n' };
+}
+
+function previewProjectMutation(
+  name: string,
+  def: McpServerDef | null,
+  projectDir: string | undefined,
+): McpPreviewChange {
+  if (!projectDir) throw new Error('projectDir required for project scope');
+  const filePath = join(projectDir, '.mcp.json');
+  const before = existsSync(filePath) ? readFileSync(filePath, 'utf8') : '';
+  const parsed = before ? JSON.parse(before) as { mcpServers?: Record<string, McpServerDef>; [k: string]: unknown } : {};
+  const servers = { ...(parsed.mcpServers ?? {}) };
+  if (def) servers[name] = def;
+  else delete servers[name];
+  return { filePath, isProjectFile: true, before, after: JSON.stringify({ ...parsed, mcpServers: servers }, null, 2) + '\n' };
+}
+
+export function previewCopyMcp(
+  name: string,
+  def: McpServerDef,
+  toScope: 'user' | 'local' | 'project',
+  opts: McpWriteOpts,
+): McpPreviewChange[] {
+  if (toScope === 'project') return [previewProjectMutation(name, def, opts.projectDir)];
+  if (toScope === 'local' && !opts.targetDir) throw new Error('targetDir required for local scope');
+  return [previewClaudeJsonMutation(opts, (obj) => toScope === 'user'
+    ? addToUserScope(obj, name, def)
+    : addToLocalScope(obj, opts.targetDir!, name, def))];
+}
+
+export function previewRemoveMcp(
+  name: string,
+  scope: 'user' | 'local' | 'project',
+  opts: McpWriteOpts,
+): McpPreviewChange[] {
+  if (scope === 'project') return [previewProjectMutation(name, null, opts.projectDir)];
+  if (scope === 'local' && !opts.targetDir) throw new Error('targetDir required for local scope remove');
+  return [previewClaudeJsonMutation(opts, (obj) => scope === 'user'
+    ? removeFromUserScope(obj, name)
+    : removeFromLocalScope(obj, opts.targetDir!, name))];
+}
+
+export function previewMoveMcp(
+  name: string,
+  def: McpServerDef,
+  fromScope: 'user' | 'local' | 'project',
+  fromDir: string | undefined,
+  toScope: 'user' | 'local' | 'project',
+  opts: McpWriteOpts,
+): McpPreviewChange[] {
+  if (fromScope !== 'project' && toScope !== 'project') {
+    return [previewClaudeJsonMutation(opts, (obj) => {
+      let next = fromScope === 'user' ? removeFromUserScope(obj, name)
+        : fromDir ? removeFromLocalScope(obj, fromDir, name) : obj;
+      next = toScope === 'user' ? addToUserScope(next, name, def)
+        : opts.targetDir ? addToLocalScope(next, opts.targetDir, name, def) : next;
+      return next;
+    })];
+  }
+  return [
+    ...previewCopyMcp(name, def, toScope, opts),
+    ...(fromScope === 'project'
+      ? previewRemoveMcp(name, fromScope, { ...opts, projectDir: fromDir })
+      : previewRemoveMcp(name, fromScope, { ...opts, targetDir: fromDir })),
+  ];
+}
+
 /**
  * Copy an MCP server definition to a target scope.
  * Source definition is not modified.
@@ -590,8 +672,11 @@ export async function readMcpInventory(
   if (claudeJson?.mcpServers) {
     for (const [name, def] of Object.entries(claudeJson.mcpServers)) {
       addPlacement(name, def, {
+        identity: mcpPlacementIdentity('claude', name, claudeJsonPath),
+        runtime: 'claude',
         scope: 'user',
         location: claudeJsonPath,
+        definition: def,
         alwaysLoad: (def.alwaysLoad as boolean) ?? false,
         hasPlaintextSecret: detectPlaintextSecret(def),
         managed: false,
@@ -604,9 +689,12 @@ export async function readMcpInventory(
       if (!projectData.mcpServers) continue;
       for (const [name, def] of Object.entries(projectData.mcpServers)) {
         addPlacement(name, def, {
+          identity: mcpPlacementIdentity('claude', name, claudeJsonPath, projectKey),
+          runtime: 'claude',
           scope: 'local',
           location: claudeJsonPath,
           dir: projectKey,
+          definition: def,
           alwaysLoad: (def.alwaysLoad as boolean) ?? false,
           hasPlaintextSecret: detectPlaintextSecret(def),
           managed: false,
@@ -620,9 +708,12 @@ export async function readMcpInventory(
     const servers = readMcpJsonFile(mcpJsonPath);
     for (const [name, def] of Object.entries(servers)) {
       addPlacement(name, def, {
+        identity: mcpPlacementIdentity('claude', name, mcpJsonPath, dir),
+        runtime: 'claude',
         scope: 'project',
         location: mcpJsonPath,
         dir,
+        definition: def,
         alwaysLoad: (def.alwaysLoad as boolean) ?? false,
         hasPlaintextSecret: detectPlaintextSecret(def),
         managed: false,
@@ -634,6 +725,8 @@ export async function readMcpInventory(
   for (const [name, { def, placements }] of serverMap) {
     const anyAlwaysLoad = placements.some((p) => p.alwaysLoad);
     items.push({
+      identity: mcpInventoryIdentity('claude', name),
+      runtime: 'claude',
       name,
       def,
       placements,

@@ -14,20 +14,43 @@ import type { RuntimeRunStore } from '../plugin/runtimes/runtime-run-store';
 import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/run-progress';
 import { resolveClaudeTranscriptPath } from '../plugin/wiki/wiki-transcript';
 import { getSettingValueOrDefault } from '../core/settings-store';
-import type { AgentRuntime, DispatchResult, SkillRuntime, WikiArchiveCardStatusFilter } from '../core/types';
+import type {
+  AgentRuntime,
+  DispatchResult,
+  McpInventoryDiscoveryResult,
+  McpPlacement,
+  McpRuntime,
+  PlacementTarget,
+  SkillRuntime,
+  WikiArchiveCardStatusFilter,
+} from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
 import { parseNaturalLanguageToCron, isValidCron, describeCron } from '../core/cron-parser';
 import { extractAgentThread } from '../core/subagent-transcript';
 import { getMaintenanceStatus, readMaintenanceLog, startApplyUpdateRestart } from './maintenance-runner';
 import {
-  readMcpInventory,
   applyAlwaysLoad,
-  setAlwaysLoad,
   copyMcp,
   moveMcp,
   removeMcp,
+  previewCopyMcp,
+  previewMoveMcp,
+  previewRemoveMcp,
+  setAlwaysLoad,
 } from '../core/mcp-config-store';
+import {
+  copyCodexMcp,
+  moveCodexMcp,
+  removeCodexMcp,
+  previewCopyCodexMcp,
+  previewMoveCodexMcp,
+  previewRemoveCodexMcp,
+} from '../core/codex-mcp-config';
+import {
+  getMcpRuntimeAdapter,
+  readAllMcpInventoryWithDiagnostics,
+} from '../core/mcp-runtime-adapter';
 import { resolveKanbanDataDir } from '../core/data-dir';
 import {
   readCcDiagnostics,
@@ -44,11 +67,13 @@ import {
   restoreMcp,
   deleteColdEntry,
   getColdManifest,
+  getColdMcpEntry,
 } from '../core/cold-storage-store';
 import { existsSync, mkdirSync, cpSync, statSync, readFileSync, rmSync } from 'node:fs';
 import { extname, join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
+import { detectPlaintextSecret } from '../core/secret-detect';
 
 // The web UI is served from the same origin as the API, so no cross-origin
 // access is ever required by a legitimate client. We therefore emit NO
@@ -195,6 +220,9 @@ export type NativeSessionInfo = {
 export type AggregateSessionsFn = () => Promise<NativeSessionInfo[]>;
 export type LocalPeerSessionsFn = () => Promise<{ instanceId: string; sessions: NativeSessionInfo[] }>;
 export type PeerTokenFn = () => string;
+export type ScopeMcpInventoryFn = (
+  targets: PlacementTarget[],
+) => Promise<McpInventoryDiscoveryResult>;
 
 function hasAuthorizedBearerToken(req: Request, expectedToken: string | undefined): boolean {
   if (!expectedToken) return false;
@@ -231,6 +259,7 @@ export function createRouteHandler(
   skillRootsStore?: SkillRootsStore,
   placementTargetsStore?: PlacementTargetsStore,
   runtimeRunStore?: RuntimeRunStore,
+  scopeMcpInventoryFn?: ScopeMcpInventoryFn,
 ) {
   async function handleRequest(req: Request, ctx?: { clientAddress?: string }): Promise<Response> {
     const url = new URL(req.url);
@@ -1775,9 +1804,13 @@ export function createRouteHandler(
           dir?: string;
           kind?: string;
           teamShared?: boolean;
+          runtime?: McpRuntime;
         };
         if (!body.label || !body.dir || !body.kind) {
           return errorResponse('label, dir, and kind are required', 400);
+        }
+        if (body.runtime !== undefined && body.runtime !== 'claude' && body.runtime !== 'codex') {
+          return errorResponse('runtime must be claude or codex', 400);
         }
         const expandedDir =
           typeof body.dir === 'string' && body.dir.startsWith('~')
@@ -1791,6 +1824,7 @@ export function createRouteHandler(
           dir: body.dir,
           kind: body.kind as import('../core/types').CapScope,
           teamShared: body.teamShared ?? false,
+          runtime: body.runtime ?? 'claude',
         });
         return json(target, 201);
       } catch (e: unknown) {
@@ -1822,17 +1856,13 @@ export function createRouteHandler(
       const { diagnostics, skillOverrides } = await readCcDiagnostics();
 
       // Collect project dirs from placement targets so .mcp.json files are scanned
-      const projectDirs: string[] = [];
-      if (placementTargetsStore) {
-        const targets = await placementTargetsStore.getTargets();
-        projectDirs.push(
-          ...targets
-            .filter((t) => t.kind === 'project' || t.kind === 'local')
-            .map((t) => t.dir),
-        );
-      }
-
-      const mcp = await readMcpInventory(projectDirs);
+      const placementTargets = placementTargetsStore
+        ? await placementTargetsStore.getTargets()
+        : [];
+      const mcpDiscovery = await (scopeMcpInventoryFn ?? readAllMcpInventoryWithDiagnostics)(
+        placementTargets,
+      );
+      const mcp = mcpDiscovery.items;
 
       // Annotate each skill with computed visibility
       const skillsWithVisibility = skills.map((skill) => ({
@@ -1845,12 +1875,13 @@ export function createRouteHandler(
       }));
 
       // Fill in diagnostics aggregate counts
-      diagnostics.userScopeMcpCount = mcp.filter((item) =>
+      diagnostics.userScopeMcpCount = mcp.filter((item) => item.runtime === 'claude' &&
         item.placements.some((p) => p.scope === 'user'),
       ).length;
-      diagnostics.alwaysLoadCount = mcp.filter((item) =>
+      diagnostics.alwaysLoadCount = mcp.filter((item) => item.runtime === 'claude' &&
         item.placements.some((p) => p.alwaysLoad),
       ).length;
+      diagnostics.mcpDiscovery = mcpDiscovery.diagnostics;
 
       return json({ mcp, skills: skillsWithVisibility, diagnostics });
     }
@@ -1939,6 +1970,9 @@ export function createRouteHandler(
         location?: string;
         scope?: 'user' | 'project';
         alwaysLoad?: boolean;
+        runtime?: McpRuntime;
+        inventoryIdentity?: string;
+        placementIdentity?: string;
       };
 
       if (typeof body.location !== 'string' || !body.location) {
@@ -1946,6 +1980,22 @@ export function createRouteHandler(
       }
       if (typeof body.alwaysLoad !== 'boolean') {
         return errorResponse('alwaysLoad (boolean) is required', 400);
+      }
+      const runtime = body.runtime ?? 'claude';
+      if (!getMcpRuntimeAdapter(runtime).capabilities.alwaysLoad) {
+        return errorResponse('alwaysLoad is only supported by the Claude MCP runtime', 400);
+      }
+
+      if (body.inventoryIdentity || body.placementIdentity) {
+        const targets = placementTargetsStore ? await placementTargetsStore.getTargets() : [];
+        const inventory = scopeMcpInventoryFn
+          ? (await scopeMcpInventoryFn(targets)).items
+          : await getMcpRuntimeAdapter(runtime).readInventory(targets);
+        const item = inventory.find((candidate) => candidate.runtime === runtime && candidate.name === mcpName &&
+          (!body.inventoryIdentity || candidate.identity === body.inventoryIdentity));
+        const placement = item?.placements.find((candidate) =>
+          (!body.placementIdentity || candidate.identity === body.placementIdentity) && candidate.location === body.location);
+        if (!placement) return errorResponse('MCP placement identity does not match location', 404);
       }
 
       const scope = body.scope ?? 'user';
@@ -1974,6 +2024,55 @@ export function createRouteHandler(
 
     // ─── MCP Write Routes (Phase 3) ──────────────────────────────
 
+    const resolveMcpMutationSource = async (
+      runtime: McpRuntime,
+      name: string,
+      inventoryIdentity?: string,
+      placementIdentity?: string,
+    ): Promise<{ def: import('../core/types').McpServerDef; placement?: McpPlacement } | null> => {
+      const targets = placementTargetsStore ? await placementTargetsStore.getTargets() : [];
+      const inventory = scopeMcpInventoryFn
+        ? (await scopeMcpInventoryFn(targets)).items
+        : await getMcpRuntimeAdapter(runtime).readInventory(targets);
+      const item = inventory.find((candidate) =>
+        candidate.runtime === runtime && candidate.name === name &&
+        (!inventoryIdentity || candidate.identity === inventoryIdentity));
+      if (!item) return null;
+      const placement = placementIdentity
+        ? item.placements.find((candidate) => candidate.identity === placementIdentity)
+        : undefined;
+      if (placementIdentity && !placement) return null;
+      return { def: placement?.definition ?? item.def, placement };
+    };
+
+    const resolveMcpDestination = async (body: {
+      runtime?: McpRuntime;
+      targetId?: string;
+      toScope?: string;
+      targetDir?: string;
+      projectDir?: string;
+    }): Promise<{ scope: 'user' | 'local' | 'project'; targetDir?: string; projectDir?: string; teamShared: boolean } | null> => {
+      const runtime = body.runtime ?? 'claude';
+      if (body.targetId) {
+        if (!placementTargetsStore) return null;
+        const target = (await placementTargetsStore.getTargets()).find((candidate) => candidate.id === body.targetId);
+        if (!target || target.runtime !== runtime || target.kind === 'cold') return null;
+        return {
+          scope: target.kind === 'user' ? 'user' : target.kind,
+          targetDir: target.kind === 'local' ? target.dir : undefined,
+          projectDir: target.kind === 'project' ? target.dir : undefined,
+          teamShared: target.teamShared,
+        };
+      }
+      if (!body.toScope || !['user', 'local', 'project'].includes(body.toScope)) return null;
+      return {
+        scope: body.toScope as 'user' | 'local' | 'project',
+        targetDir: body.targetDir,
+        projectDir: body.projectDir,
+        teamShared: body.toScope === 'project',
+      };
+    };
+
     // Route: POST /api/scope/mcp/:name/copy
     const mcpCopyMatch = path.match(/^\/api\/scope\/mcp\/([^/]+)\/copy$/);
     if (mcpCopyMatch && method === 'POST') {
@@ -1983,32 +2082,45 @@ export function createRouteHandler(
         targetDir?: string;
         projectDir?: string;
         forceSecret?: boolean;
+        runtime?: McpRuntime;
+        inventoryIdentity?: string;
+        sourcePlacementIdentity?: string;
+        targetId?: string;
       };
-      if (!body.toScope) return errorResponse('toScope is required', 400);
-      if (!['user', 'local', 'project'].includes(body.toScope)) {
-        return errorResponse('toScope must be user, local, or project', 400);
+      const isPreview = url.searchParams.get('preview') === '1';
+      const runtime = body.runtime ?? 'claude';
+      if (runtime !== 'claude' && runtime !== 'codex') {
+        return errorResponse('runtime must be claude or codex', 400);
       }
 
-      // Look up the source def from inventory
-      const inventory = await readMcpInventory(
-        placementTargetsStore
-          ? (await placementTargetsStore.getTargets()).map((t) => t.dir)
-          : [],
-      );
-      const item = inventory.find((i) => i.name === mcpName);
-      if (!item) return errorResponse(`MCP server "${mcpName}" not found in inventory`, 404);
-
-      const toScope = body.toScope as 'user' | 'local' | 'project';
+      const source = await resolveMcpMutationSource(runtime, mcpName, body.inventoryIdentity, body.sourcePlacementIdentity);
+      if (!source) return errorResponse(`MCP server "${mcpName}" placement not found in inventory`, 404);
+      const destination = await resolveMcpDestination(body);
+      if (!destination) return errorResponse('A matching runtime destination target or toScope is required', 400);
+      const toScope = destination.scope;
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       const backupDir = join(resolveKanbanDataDir(), 'cold-storage', 'backups');
 
       try {
-        const result = await copyMcp(item.name, item.def, toScope, {
+        const opts = {
           ts,
           backupDir,
-          targetDir: body.targetDir,
-          projectDir: body.projectDir,
-        }, body.forceSecret ?? false);
+          targetDir: destination.targetDir,
+          projectDir: destination.projectDir,
+        };
+
+        if (destination.teamShared && !body.forceSecret && detectPlaintextSecret(source.def)) {
+          return json({ secretWarning: true, message: 'This MCP server definition contains a potential plaintext secret. Confirm forceSecret:true to continue.' }, 409);
+        }
+        if (isPreview) {
+          const changes = runtime === 'claude'
+            ? previewCopyMcp(mcpName, source.def, toScope, opts)
+            : previewCopyCodexMcp(mcpName, source.def, toScope, opts);
+          return json({ preview: true, changes });
+        }
+        const result = runtime === 'claude'
+          ? await copyMcp(mcpName, source.def, toScope, opts, body.forceSecret ?? false)
+          : await copyCodexMcp(mcpName, source.def, toScope, opts, body.forceSecret ?? false);
 
         if (result.secretWarning) {
           return json({
@@ -2040,45 +2152,52 @@ export function createRouteHandler(
         targetDir?: string;
         projectDir?: string;
         forceSecret?: boolean;
+        runtime?: McpRuntime;
+        inventoryIdentity?: string;
+        sourcePlacementIdentity?: string;
+        targetId?: string;
       };
-      if (!body.fromScope || !body.toScope) {
-        return errorResponse('fromScope and toScope are required', 400);
+      if (!body.fromScope && !body.sourcePlacementIdentity) {
+        return errorResponse('fromScope or sourcePlacementIdentity is required', 400);
       }
-      if (!['user', 'local', 'project'].includes(body.fromScope)) {
+      if (body.fromScope && !['user', 'local', 'project'].includes(body.fromScope)) {
         return errorResponse('fromScope must be user, local, or project', 400);
       }
-      if (!['user', 'local', 'project'].includes(body.toScope)) {
+      if (!body.targetId && (!body.toScope || !['user', 'local', 'project'].includes(body.toScope))) {
         return errorResponse('toScope must be user, local, or project', 400);
       }
+      const runtime = body.runtime ?? 'claude';
+      const isPreview = url.searchParams.get('preview') === '1';
+      if (runtime !== 'claude' && runtime !== 'codex') {
+        return errorResponse('runtime must be claude or codex', 400);
+      }
 
-      const inventory = await readMcpInventory(
-        placementTargetsStore
-          ? (await placementTargetsStore.getTargets()).map((t) => t.dir)
-          : [],
-      );
-      const item = inventory.find((i) => i.name === mcpName);
-      if (!item) return errorResponse(`MCP server "${mcpName}" not found in inventory`, 404);
+      const source = await resolveMcpMutationSource(runtime, mcpName, body.inventoryIdentity, body.sourcePlacementIdentity);
+      if (!source) return errorResponse(`MCP server "${mcpName}" placement not found in inventory`, 404);
+      const destination = await resolveMcpDestination(body);
+      if (!destination) return errorResponse('A matching runtime destination target or toScope is required', 400);
 
-      const fromScope = body.fromScope as 'user' | 'local' | 'project';
-      const toScope = body.toScope as 'user' | 'local' | 'project';
+      const fromScope = source.placement?.scope && source.placement.scope !== 'cold'
+        ? source.placement.scope : body.fromScope as 'user' | 'local' | 'project';
+      const fromDir = source.placement?.dir ?? body.fromDir;
+      const toScope = destination.scope;
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       const backupDir = join(resolveKanbanDataDir(), 'cold-storage', 'backups');
 
       try {
-        const result = await moveMcp(
-          item.name,
-          item.def,
-          fromScope,
-          body.fromDir,
-          toScope,
-          {
-            ts,
-            backupDir,
-            targetDir: body.targetDir,
-            projectDir: body.projectDir,
-          },
-          body.forceSecret ?? false,
-        );
+        const opts = { ts, backupDir, targetDir: destination.targetDir, projectDir: destination.projectDir };
+        if (destination.teamShared && !body.forceSecret && detectPlaintextSecret(source.def)) {
+          return json({ secretWarning: true, message: 'This MCP server definition contains a potential plaintext secret. Confirm forceSecret:true to continue.' }, 409);
+        }
+        if (isPreview) {
+          const changes = runtime === 'claude'
+            ? previewMoveMcp(mcpName, source.def, fromScope, fromDir, toScope, opts)
+            : previewMoveCodexMcp(mcpName, source.def, fromScope, fromDir, toScope, opts);
+          return json({ preview: true, changes });
+        }
+        const result = runtime === 'claude'
+          ? await moveMcp(mcpName, source.def, fromScope, fromDir, toScope, opts, body.forceSecret ?? false)
+          : await moveCodexMcp(mcpName, source.def, fromScope, fromDir, toScope, opts, body.forceSecret ?? false);
 
         if (result.secretWarning) {
           return json({
@@ -2107,23 +2226,44 @@ export function createRouteHandler(
         scope?: string;
         targetDir?: string;
         projectDir?: string;
+        runtime?: McpRuntime;
+        inventoryIdentity?: string;
+        placementIdentity?: string;
       };
-      if (!body.scope) return errorResponse('scope is required', 400);
-      if (!['user', 'local', 'project'].includes(body.scope)) {
+      if (!body.scope && !body.placementIdentity) return errorResponse('scope or placementIdentity is required', 400);
+      if (body.scope && !['user', 'local', 'project'].includes(body.scope)) {
         return errorResponse('scope must be user, local, or project', 400);
       }
+      const runtime = body.runtime ?? 'claude';
+      const isPreview = url.searchParams.get('preview') === '1';
+      if (runtime !== 'claude' && runtime !== 'codex') {
+        return errorResponse('runtime must be claude or codex', 400);
+      }
 
-      const scope = body.scope as 'user' | 'local' | 'project';
+      const source = await resolveMcpMutationSource(runtime, mcpName, body.inventoryIdentity, body.placementIdentity);
+      if (!source) return errorResponse(`MCP server "${mcpName}" placement not found in inventory`, 404);
+      const scope = source.placement?.scope && source.placement.scope !== 'cold'
+        ? source.placement.scope : body.scope as 'user' | 'local' | 'project';
+      const sourceDir = source.placement?.dir;
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
       const backupDir = join(resolveKanbanDataDir(), 'cold-storage', 'backups');
 
       try {
-        const result = await removeMcp(mcpName, scope, {
+        const opts = {
           ts,
           backupDir,
-          targetDir: body.targetDir,
-          projectDir: body.projectDir,
-        });
+          targetDir: scope === 'local' ? sourceDir ?? body.targetDir : body.targetDir,
+          projectDir: scope === 'project' ? sourceDir ?? body.projectDir : body.projectDir,
+        };
+        if (isPreview) {
+          const changes = runtime === 'claude'
+            ? previewRemoveMcp(mcpName, scope, opts)
+            : previewRemoveCodexMcp(mcpName, scope, opts);
+          return json({ preview: true, changes });
+        }
+        const result = runtime === 'claude'
+          ? await removeMcp(mcpName, scope, opts)
+          : await removeCodexMcp(mcpName, scope, opts);
         return json({ ok: true, before: result.before, after: result.after });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'remove failed';
@@ -2248,12 +2388,16 @@ export function createRouteHandler(
 
     // Route: POST /api/scope/cold/freeze — freeze a skill or MCP to cold storage
     if (method === 'POST' && path === '/api/scope/cold/freeze') {
+      const isPreview = url.searchParams.get('preview') === '1';
       const body = await req.json() as {
         kind?: 'skill' | 'mcp';
         skillId?: string;
         mcpName?: string;
         scope?: string;
         fromDir?: string;
+        runtime?: McpRuntime;
+        inventoryIdentity?: string;
+        placementIdentity?: string;
       };
 
       if (!body.kind) return errorResponse('kind is required', 400);
@@ -2288,25 +2432,39 @@ export function createRouteHandler(
 
       if (body.kind === 'mcp') {
         if (!body.mcpName) return errorResponse('mcpName is required', 400);
-        if (!body.scope) return errorResponse('scope is required', 400);
-        if (!['user', 'local', 'project'].includes(body.scope)) {
+        if (!body.scope && !body.placementIdentity) return errorResponse('scope or placementIdentity is required', 400);
+        if (body.scope && !['user', 'local', 'project'].includes(body.scope)) {
           return errorResponse('scope must be user, local, or project', 400);
         }
+        const runtime = body.runtime ?? 'claude';
+        if (runtime !== 'claude' && runtime !== 'codex') {
+          return errorResponse('runtime must be claude or codex', 400);
+        }
 
-        const projectDirs = placementTargetsStore
-          ? (await placementTargetsStore.getTargets()).map((t) => t.dir)
-          : [];
-        const inventory = await readMcpInventory(projectDirs);
-        const item = inventory.find((i) => i.name === body.mcpName);
-        if (!item) return errorResponse(`MCP server "${body.mcpName}" not found`, 404);
+        const source = await resolveMcpMutationSource(runtime, body.mcpName, body.inventoryIdentity, body.placementIdentity);
+        if (!source) return errorResponse(`MCP server "${body.mcpName}" placement not found`, 404);
+        const sourceScope = source.placement?.scope ?? body.scope;
+        const sourceDir = source.placement?.dir ?? body.fromDir;
 
         try {
+          if (isPreview) {
+            const opts = {
+              ts,
+              backupDir: join(resolveKanbanDataDir(), 'cold-storage', 'backups'),
+              targetDir: sourceScope === 'local' ? sourceDir : undefined,
+              projectDir: sourceScope === 'project' ? sourceDir : undefined,
+            };
+            const changes = runtime === 'claude'
+              ? previewRemoveMcp(body.mcpName, sourceScope as 'user' | 'local' | 'project', opts)
+              : previewRemoveCodexMcp(body.mcpName, sourceScope as 'user' | 'local' | 'project', opts);
+            return json({ preview: true, changes });
+          }
           const entry = await freezeMcp(
             body.mcpName,
-            item.def,
-            body.scope as import('../core/types').CapScope,
-            body.fromDir,
-            { ts },
+            source.def,
+            sourceScope as import('../core/types').CapScope,
+            sourceDir,
+            { ts, runtime, sourcePlacement: source.placement },
           );
           return json({ ok: true, entry }, 201);
         } catch (e: unknown) {
@@ -2321,6 +2479,7 @@ export function createRouteHandler(
 
     // Route: POST /api/scope/cold/restore — restore an entry from cold storage
     if (method === 'POST' && path === '/api/scope/cold/restore') {
+      const isPreview = url.searchParams.get('preview') === '1';
       const body = await req.json() as {
         kind?: 'skill' | 'mcp';
         ref?: string;
@@ -2328,6 +2487,7 @@ export function createRouteHandler(
         toScope?: string;
         targetDir?: string;
         projectDir?: string;
+        runtime?: McpRuntime;
       };
 
       if (!body.kind || !body.ref) return errorResponse('kind and ref are required', 400);
@@ -2360,20 +2520,44 @@ export function createRouteHandler(
       }
 
       if (body.kind === 'mcp') {
-        if (!body.toScope) return errorResponse('toScope required for mcp restore', 400);
-        if (!['user', 'local', 'project'].includes(body.toScope)) {
+        if (body.toScope && !['user', 'local', 'project'].includes(body.toScope)) {
           return errorResponse('toScope must be user, local, or project', 400);
         }
         try {
-          await restoreMcp(body.ref, body.toScope as 'user' | 'local' | 'project', {
+          if (isPreview) {
+            const cold = getColdMcpEntry(body.ref);
+            if (!cold) return errorResponse(`Cold storage MCP not found: ${body.ref}`, 404);
+            if (body.runtime && body.runtime !== cold.runtime) {
+              return errorResponse(`Cold MCP runtime is ${cold.runtime}, not ${body.runtime}`, 400);
+            }
+            const scope = body.toScope as 'user' | 'local' | 'project' | undefined
+              ?? (cold.sourcePlacement?.scope !== 'cold' ? cold.sourcePlacement?.scope : undefined)
+              ?? cold.originScope;
+            if (scope === 'cold') return errorResponse('Original MCP placement is not writable', 400);
+            const name = cold.runtime === 'codex' && body.ref.startsWith('codex/')
+              ? body.ref.slice('codex/'.length) : body.ref;
+            const opts = {
+              ts,
+              backupDir: join(resolveKanbanDataDir(), 'cold-storage', 'backups'),
+              targetDir: body.targetDir ?? (scope === 'local' ? cold.sourcePlacement?.dir : undefined),
+              projectDir: body.projectDir ?? (scope === 'project' ? cold.sourcePlacement?.dir : undefined),
+            };
+            const changes = cold.runtime === 'claude'
+              ? previewCopyMcp(name, cold.def, scope, opts)
+              : previewCopyCodexMcp(name, cold.def, scope, opts);
+            return json({ preview: true, changes });
+          }
+          await restoreMcp(body.ref, body.toScope as 'user' | 'local' | 'project' | undefined, {
             ts,
             targetDir: body.targetDir,
             projectDir: body.projectDir,
+            runtime: body.runtime,
           });
           return json({ ok: true });
         } catch (e: unknown) {
           const msg = e instanceof Error ? e.message : 'restore failed';
-          const code = (e as { code?: string }).code === 'CONFLICT_409' ? 409 : 500;
+          const errorCode = (e as { code?: string }).code;
+          const code = errorCode === 'CONFLICT_409' ? 409 : errorCode === 'RUNTIME_MISMATCH' ? 400 : 500;
           return errorResponse(msg, code);
         }
       }

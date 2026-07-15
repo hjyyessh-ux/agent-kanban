@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import { resolve } from 'node:path';
+
+const e2eHome = resolve(process.cwd(), '.e2e-home');
+const e2eData = resolve(process.cwd(), '.e2e-data');
 
 export default defineConfig({
   testDir: './e2e',
@@ -21,7 +25,7 @@ export default defineConfig({
     command: 'bun scripts/test-server.ts',
     port: 24681,
     reuseExistingServer: true,
-    env: { E2E_PORT: '24681' },
+    env: { E2E_PORT: '24681', HOME: e2eHome, E2E_HOME: e2eHome, KANBAN_DATA_DIR: e2eData },
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

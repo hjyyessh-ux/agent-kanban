@@ -150,6 +150,23 @@ AI 작업 카드들을 칸반 보드 형식으로 표시합니다. 카드는 다
 - **Scripts**: `~/.agent-kanban/scripts/`(또는 `KANBAN_DATA_DIR/scripts/`)에서 동기화된 스크립트와 수동 생성 스크립트를 실행/추적합니다.
 - **Settings**: Telegram 토큰, network exposure, 기타 런타임 설정을 관리합니다.
 
+### Capabilities 탭: MCP와 Skill 관리
+
+Capabilities의 **Inventory**에서는 Claude/Codex MCP와 Claude/Codex/OpenCode Skill을 함께 확인합니다. All/Claude/Codex/OpenCode 필터는 MCP와 Skill 행에 동일하게 적용되며 각 행의 runtime badge로 같은 이름의 항목도 즉시 구분할 수 있습니다. 같은 이름의 Claude/Codex MCP는 각각 `claude:<name>`, `codex:<name>` identity를 사용하므로 상세 보기와 mutation 대상이 섞이지 않습니다.
+
+MCP 설정 위치는 runtime에 따라 다릅니다.
+
+| Runtime | 전역 설정 | 디렉터리 설정 |
+|---|---|---|
+| Claude | `~/.claude.json` | local: `~/.claude.json`의 `projects[dir]`, project: `<dir>/.mcp.json` |
+| Codex | `~/.codex/config.toml` | `<dir>/.codex/config.toml` |
+
+Placement Targets에서 runtime과 디렉터리를 등록하면 실제 설정 파일 경로가 표시됩니다. Codex는 project root부터 target directory까지의 `.codex/config.toml` chain을 읽으며 가까운 디렉터리의 같은 이름 정의가 우선합니다. Inventory placement에는 실제 config path, 적용 디렉터리, effective/overridden 상태가 표시됩니다.
+
+Codex project 설정은 Codex에서 해당 디렉터리가 trusted project일 때만 로드됩니다. agent-kanban은 신뢰 여부를 추측하거나 자동 변경하지 않습니다. 설정을 copy/move/remove/freeze/restore한 뒤에는 새 세션을 시작하거나 Codex 클라이언트를 재시작해야 반영될 수 있습니다.
+
+모든 MCP 파일 변경은 diff Preview 후 Apply로 진행합니다. team-shared target에 평문 secret으로 보이는 값이 있으면 추가 확인 없이는 진행되지 않습니다. Claude의 기존 `alwaysLoad`와 JSON/CLI 흐름은 유지되며 Codex에는 `alwaysLoad`를 기록하지 않습니다. Codex에서는 `enabled`, `enabled_tools`, `disabled_tools` 같은 runtime 고유 옵션을 사용합니다.
+
 ---
 
 ## Telegram 연동

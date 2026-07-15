@@ -300,6 +300,36 @@ runtime UI는 다음 key를 사용합니다.
 
 실행 이력을 반환합니다.
 
+## Capabilities / MCP Scope API
+
+`McpInventoryItem`, 각 placement, placement target은 `runtime`(`claude` | `codex`)을 포함합니다. inventory identity는 `runtime:name`이고 exact placement identity는 runtime/name/config path/적용 디렉터리를 포함하므로 같은 이름의 Claude/Codex 서버나 같은 서버의 여러 directory layer가 합쳐지지 않습니다. runtime이 없던 기존 target과 기존 API 요청은 Claude로 해석됩니다.
+
+Codex directory target은 git/project root부터 target directory까지 존재하는 `.codex/config.toml` chain을 순서대로 스캔합니다. 같은 이름은 가까운 directory 정의가 우선하며 placement의 `appliesToDir`, `configLayer`, `precedence`, `effective`, `overriddenBy`로 적용 관계를 표시합니다. Project config는 trust가 필요하지만 API는 신뢰 여부를 추측하지 않고 `projectTrust=required-status-unknown`과 `diagnostics.mcpDiscovery.codex.projectTrust.status=unknown`을 반환합니다.
+
+누락된 TOML은 빈 layer로 취급하고, 잘못된 TOML은 `diagnostics.mcpDiscovery.codex.issues`에 기록합니다. Codex layer 하나가 실패해도 Claude MCP와 Claude/Codex/OpenCode Skill 목록은 그대로 반환됩니다. 기존 `userScopeMcpCount`와 `alwaysLoadCount`는 계속 Claude MCP만 집계합니다.
+
+- `GET /api/scope/inventory`: Claude `~/.claude.json`/`.mcp.json`과 Codex `~/.codex/config.toml`/`<dir>/.codex/config.toml` inventory를 함께 반환합니다.
+- `GET|POST /api/scope/targets`, `DELETE /api/scope/targets/:id`: runtime별 placement target을 관리합니다. 같은 디렉터리도 runtime이 다르면 별도 target으로 등록할 수 있습니다.
+- `POST /api/scope/mcp/:name/copy`
+- `POST /api/scope/mcp/:name/move`
+- `DELETE /api/scope/mcp/:name`
+- `POST /api/scope/cold/freeze`, `POST /api/scope/cold/restore`: MCP 요청은 선택적 `runtime`을 받으며 생략 시 Claude입니다.
+
+MCP mutation body는 `runtime`, `inventoryIdentity`, 원본 `sourcePlacementIdentity`/`placementIdentity`, 목적지 `targetId`를 받을 수 있습니다. `?preview=1`은 파일을 쓰지 않고 `changes[]` diff만 반환하며, apply 요청은 runtime을 명시 분기합니다. Codex writer는 선택한 `[mcp_servers.*]` table만 수정하고 model/hooks/skills 등 다른 TOML 내용과 순서를 보존합니다. Claude JSON parser/writer와 CLI fallback 계약은 기존 형식을 유지합니다. `alwaysLoad` capability는 Claude 전용입니다.
+
+MCP cold manifest는 원 runtime과 exact source placement를 저장합니다. restore 목적지를 생략하면 해당 원위치를 사용하며, placement가 없는 legacy manifest/registry는 기존처럼 Claude와 `sourceScope`로 해석됩니다. freeze/restore도 `?preview=1`에서 config diff를 먼저 반환합니다.
+
+### Runtime별 설정과 UI 필터
+
+| Runtime | User MCP | Directory MCP | 지원 옵션 |
+|---|---|---|---|
+| Claude | `~/.claude.json` | local은 `~/.claude.json`의 `projects[dir]`, project는 `<dir>/.mcp.json` | 기존 stdio/http/SSE, env, `alwaysLoad`, Claude CLI fallback |
+| Codex | `~/.codex/config.toml` | `<dir>/.codex/config.toml` | stdio/http, env/env_vars, headers, enabled, enabled_tools/disabled_tools, timeout/required 옵션. `alwaysLoad`는 지원하지 않음 |
+
+Capabilities UI의 All/Claude/Codex/OpenCode 필터는 MCP와 Skill에 같은 방식으로 적용됩니다. OpenCode 필터에는 OpenCode Skill이 표시되며 현재 MCP inventory runtime은 Claude/Codex입니다. All은 기존 MCP와 Claude/Codex/OpenCode Skill을 누락 없이 합칩니다.
+
+Codex directory config는 project root에서 선택한 target/current directory까지 chain으로 평가하고 가까운 layer가 같은 이름을 override합니다. 실제 Codex 클라이언트에서 project config가 로드되려면 trusted project여야 합니다. API는 trust 여부를 추측하지 않고 `required-status-unknown`만 반환하며, 변경 후에는 새 세션 또는 Codex 클라이언트 재시작이 필요할 수 있습니다.
+
 ## Runtime / 모델 / 질문 API
 
 ### `GET /api/runtimes`
