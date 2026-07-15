@@ -108,6 +108,106 @@ test.describe('v2 visual audit', () => {
     // already ran unaffected, confirming no light-mode regression.
     await setDarkTheme(page);
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+
+    const darkPalette = await page.evaluate(() => {
+      const rootStyle = getComputedStyle(document.documentElement);
+      const parseRgb = (value: string): [number, number, number] => {
+        const rgb = value.match(/^rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/);
+        if (rgb) return [Math.round(Number(rgb[1])), Math.round(Number(rgb[2])), Math.round(Number(rgb[3]))];
+
+        const srgb = value.match(/^color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/);
+        if (srgb) return [
+          Math.round(Number(srgb[1]) * 255),
+          Math.round(Number(srgb[2]) * 255),
+          Math.round(Number(srgb[3]) * 255),
+        ];
+
+        throw new Error(`Unsupported computed color: ${value}`);
+      };
+      const luminance = ([r, g, b]: [number, number, number]) => {
+        const linear = [r, g, b].map((channel) => {
+          const value = channel / 255;
+          return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+      };
+      const contrast = (foreground: [number, number, number], background: [number, number, number]) => {
+        const foregroundLuminance = luminance(foreground);
+        const backgroundLuminance = luminance(background);
+        return (Math.max(foregroundLuminance, backgroundLuminance) + 0.05)
+          / (Math.min(foregroundLuminance, backgroundLuminance) + 0.05);
+      };
+      const headers = ['todo', 'in_progress', 'complete', 'done'].map((status) => {
+        const element = document.querySelector(`.kv2-column-header[data-status="${status}"]`);
+        if (!element) throw new Error(`Missing ${status} column header`);
+        const style = getComputedStyle(element);
+        const background = parseRgb(style.backgroundColor);
+        const foreground = parseRgb(style.color);
+        return { status, background, foreground, contrast: contrast(foreground, background) };
+      });
+      const createButton = document.querySelector('.kv2-create-btn');
+      if (!createButton) throw new Error('Missing create button');
+      const createStyle = getComputedStyle(createButton);
+      const createBackground = parseRgb(createStyle.backgroundColor);
+      const createForeground = parseRgb(createStyle.color);
+      const todoCard = document.querySelector('.kv2-column[data-status="todo"] .kv2-card');
+      const todoAccent = todoCard?.querySelector('.kv2-card-accent');
+      const runtimeBadge = todoCard?.querySelector('.kv2-runtime-badge');
+      const startAction = todoCard?.querySelector('.kv2-card-action--start');
+      const queueAction = todoCard?.querySelector('.kv2-card-action--queue');
+      if (!todoAccent || !runtimeBadge || !startAction || !queueAction) {
+        throw new Error('Missing Graphite audit controls');
+      }
+
+      return {
+        tokens: {
+          appBg: rootStyle.getPropertyValue('--kv2-app-bg').trim(),
+          surface: rootStyle.getPropertyValue('--kv2-surface').trim(),
+          textPrimary: rootStyle.getPropertyValue('--kv2-text-primary').trim(),
+          borderStrong: rootStyle.getPropertyValue('--kv2-border-strong').trim(),
+          cardBorder: rootStyle.getPropertyValue('--kv2-card-border-color').trim(),
+          shadow: rootStyle.getPropertyValue('--kv2-shadow-color').trim(),
+        },
+        headers,
+        createButton: {
+          background: createBackground,
+          foreground: createForeground,
+          contrast: contrast(createForeground, createBackground),
+        },
+        graphiteChrome: {
+          cardAccentWidth: getComputedStyle(todoAccent).width,
+          cardAccent: parseRgb(getComputedStyle(todoAccent).backgroundColor),
+          runtimeBadge: parseRgb(getComputedStyle(runtimeBadge).backgroundColor),
+          startAction: parseRgb(getComputedStyle(startAction).backgroundColor),
+          queueAction: parseRgb(getComputedStyle(queueAction).backgroundColor),
+        },
+      };
+    });
+
+    expect(darkPalette.tokens).toEqual({
+      appBg: '#1b1d20',
+      surface: '#272a2e',
+      textPrimary: '#d4d7db',
+      borderStrong: '#454a50',
+      cardBorder: '#3c4146',
+      shadow: 'rgba(8, 10, 12, .55)',
+    });
+    expect(darkPalette.headers.map(({ background }) => background)).toEqual([
+      [37, 40, 44],
+      [37, 40, 44],
+      [37, 40, 44],
+      [37, 40, 44],
+    ]);
+    expect(darkPalette.headers.every(({ contrast }) => contrast >= 4.5)).toBe(true);
+    expect(darkPalette.createButton.foreground).toEqual([212, 215, 219]);
+    expect(darkPalette.createButton.contrast).toBeGreaterThanOrEqual(4.5);
+    expect(darkPalette.graphiteChrome).toEqual({
+      cardAccentWidth: '3px',
+      cardAccent: [111, 137, 173],
+      runtimeBadge: [45, 49, 53],
+      startAction: [58, 74, 93],
+      queueAction: [45, 49, 53],
+    });
     await page.screenshot({ path: 'e2e/results/v2-visual-board-desktop-dark.png', fullPage: true });
   });
 
@@ -187,6 +287,21 @@ test.describe('v2 visual audit', () => {
       expect(Number.parseFloat(dialogMetrics.titleSize ?? '0')).toBeGreaterThanOrEqual(24);
       expect(dialogMetrics.actions).toContain(expectedAction);
 
+      if (await page.locator('html').getAttribute('data-theme') === 'dark') {
+        const darkDialogColors = await page.evaluate(() => {
+          const dialog = document.querySelector('.kv2-dialog');
+          const title = document.querySelector('.kv2-title-text');
+          return {
+            background: dialog ? getComputedStyle(dialog).backgroundColor : null,
+            shadow: dialog ? getComputedStyle(dialog).boxShadow : null,
+            title: title ? getComputedStyle(title).color : null,
+          };
+        });
+        expect(darkDialogColors.background).toBe('rgb(39, 42, 46)');
+        expect(darkDialogColors.title).toBe('rgb(212, 215, 219)');
+        expect(darkDialogColors.shadow).toContain('rgb(13, 15, 16)');
+      }
+
       await page.screenshot({ path: screenshotPath, fullPage: true });
       await page.keyboard.press('Escape');
       await expect(page.locator('.kv2-dialog')).not.toBeVisible();
@@ -247,6 +362,18 @@ test.describe('v2 visual audit', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.locator('.kv2-create-btn').click();
     await expect(page.locator('.kv2-dialog--create')).toBeVisible();
+    const darkCreateColors = await page.evaluate(() => {
+      const title = document.querySelector('.kv2-create-header-title');
+      const claude = document.querySelector('.kv2-create-agent-chip--runtime-claude');
+      return {
+        title: title ? getComputedStyle(title).color : null,
+        claudeBackground: claude ? getComputedStyle(claude).backgroundColor : null,
+        claudeForeground: claude ? getComputedStyle(claude).color : null,
+      };
+    });
+    expect(darkCreateColors.title).toBe('rgb(212, 215, 219)');
+    expect(darkCreateColors.claudeBackground).not.toBe('rgb(217, 119, 87)');
+    expect(darkCreateColors.claudeForeground).toBe('rgb(212, 215, 219)');
     await page.screenshot({ path: 'e2e/results/v2-visual-create-modal-dark.png', fullPage: true });
     await page.keyboard.press('Escape');
 
@@ -259,5 +386,72 @@ test.describe('v2 visual audit', () => {
     await page.goto('/');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.screenshot({ path: 'e2e/results/v2-visual-board-mobile-dark.png', fullPage: true });
+  });
+
+  test('keeps legacy board, feedback, session, and wiki chrome legible in Graphite dark', async ({ page, seedCardWithStatus }) => {
+    const original = await seedCardWithStatus(
+      {
+        title: '[GRAPHITE] Original session',
+        description: 'Original prompt for Graphite coverage.',
+      },
+      'complete',
+      {
+        sessionId: 'graphite-session',
+        result: 'Original result for Graphite coverage.',
+      },
+    );
+    await seedCardWithStatus(
+      {
+        title: '[GRAPHITE] Feedback follow-up',
+        description: 'Feedback prompt for Graphite coverage.',
+      },
+      'complete',
+      {
+        sessionId: 'graphite-session',
+        feedbackForCardId: original.id,
+        result: 'Feedback result for Graphite coverage.',
+      },
+    );
+
+    await page.addInitScript(() => {
+      localStorage.setItem('kanban-theme', 'dark');
+      localStorage.setItem('kanban-complete-session-view', 'true');
+    });
+    await page.setViewportSize(VIEWPORTS.desktop);
+    await page.goto('/');
+
+    const columnAction = page.locator('.kv2-column[data-status="complete"] .kv2-column-action').first();
+    const sessionCount = page.locator('.kv2-complete-session-count').first();
+    await expect(columnAction).toBeVisible();
+    await expect(sessionCount).toBeVisible();
+    await expect(columnAction).toHaveCSS('color', 'rgb(207, 211, 215)');
+    await expect(sessionCount).toHaveCSS('color', 'rgb(194, 198, 202)');
+    await page.screenshot({ path: 'e2e/results/v2-visual-legacy-controls-dark.png', fullPage: true });
+
+    const group = page.locator('.kv2-complete-session-group', { hasText: '[GRAPHITE]' }).first();
+    const toggle = group.locator('.kv2-complete-session-toggle');
+    if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+    await group.locator('.kv2-complete-session-card-title', { hasText: 'Feedback follow-up' }).click();
+    const feedbackNav = page.locator('.kv2-back-btn');
+    await expect(feedbackNav).toBeVisible();
+    await expect(feedbackNav).toHaveCSS('background-color', 'rgb(81, 74, 50)');
+    await expect(feedbackNav).toHaveCSS('color', 'rgb(212, 215, 219)');
+    await page.keyboard.press('Escape');
+
+    await group.locator('.kv2-complete-session-header').click();
+    const conversation = page.locator('.session-conversation-dialog');
+    await expect(conversation).toBeVisible();
+    await expect(conversation.locator('.session-conversation-turnLabel').first()).toHaveCSS('background-color', 'rgb(166, 107, 123)');
+    await page.screenshot({ path: 'e2e/results/v2-visual-session-conversation-dark.png', fullPage: true });
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('tab', { name: 'Wiki' }).click();
+    const wikiHero = page.locator('.wiki-hero');
+    await expect(wikiHero).toBeVisible();
+    await expect(wikiHero.locator('.wiki-hero-kicker')).toHaveCSS('background-color', 'rgb(81, 74, 50)');
+    const wikiOptions = wikiHero.locator('.wiki-options-trigger');
+    if (await wikiOptions.evaluate((element) => element.classList.contains('is-active'))) await wikiOptions.click();
+    await expect(wikiOptions).toHaveCSS('background-color', 'rgb(58, 74, 93)');
+    await page.screenshot({ path: 'e2e/results/v2-visual-wiki-dark.png', fullPage: true });
   });
 });

@@ -223,21 +223,6 @@ export function useModelSync() {
       const { catalog: next, added } = deriveSyncedCatalog({ models, runtimes, previous: prev });
       writeSyncedCatalog(next);
 
-      // Keep newly-synced models visible by default when a preference exists.
-      try {
-        const rawEnabled = localStorage.getItem(ENABLED_MODELS_KEY);
-        if (rawEnabled) {
-          const set = new Set<string>(JSON.parse(rawEnabled));
-          for (const m of CLAUDE_MODELS) set.add(m.id);
-          for (const m of CODEX_MODELS) set.add(m.id);
-          for (const m of next.claude) set.add(m.id);
-          for (const m of next.codex) set.add(m.id);
-          localStorage.setItem(ENABLED_MODELS_KEY, JSON.stringify([...set]));
-        }
-      } catch {
-        // ignore
-      }
-
       const result: SyncOutcome = { added, syncedAt: next.syncedAt ?? undefined };
       setOutcome(result);
       return result;

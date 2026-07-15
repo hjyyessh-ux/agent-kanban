@@ -29,7 +29,7 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 | 계층 | 그룹 | 예시 | 다크에서 override? |
 |------|------|------|--------------------|
 | ① 브랜드 (불변) | Status 4종 · Agent 13종 · Runtime 브랜드 · Wiki data-viz | `--kv2-status-todo-accent`, `--kv2-agent-sisyphus`, `--kv2-runtime-claude`, `--kv2-dataviz-troubleshooting` | ❌ 절대 안 바꿈 |
-| ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-focus-ring`, `--kv2-scrim`, `--kv2-info-surface`, `--kv2-surface-inverse` | ✅ 이 계층만 |
+| ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · 역할별 chrome · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-column-header-todo-bg`, `--kv2-dialog-shadow-color`, `--kv2-info-surface` | ✅ 이 계층만 |
 | ③ 구조 (테마 무관) | Typography · Text scale · Spacing · Radius · Geometry · Transition | `--kv2-font-sans`, `--kv2-text-lg`, `--kv2-sp-4`, `--kv2-radius-md` | — (색 아님) |
 
 Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
@@ -53,13 +53,29 @@ Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
 
 ### 다크 보정 규칙
 
-- **네오브루탈리즘 하드 섀도**: 다크 배경에서 검정 오프셋 블록은 소실되므로,
-  하드 섀도 잉크(`--kv2-shadow-color`, `--kv2-shadow-hard-color`)를 **밝은
-  반투명/회색으로 뒤집어** 오프셋 블록이 보이게 한다. 동시에 보더 계열
-  (`--kv2-card-border-color`, `--kv2-border-strong`, `--kv2-*-stroke-color`,
-  `--kv2-ink-*`)을 라이트로 올려 **보더가 구조를 담당**하게 한다. `#000` 하드
-  섀도는 `color-mix(in srgb, var(--kv2-shadow-hard-color) N%, transparent)`로
-  치환되어 있어 라이트에서는 값-동일, 다크에서는 한 토큰으로 함께 바뀐다.
+- **네오브루탈리즘 하드 섀도**: 다크에서는 밝은 회색 오프셋 블록이 반복되어
+  화면 전체가 빛나는 문제를 막기 위해 `--kv2-shadow-color`를
+  `rgba(8,10,12,.55)`, `--kv2-shadow-hard-color`를 `#0D0F10`으로 둔다.
+  구조는 중성 graphite 보더가
+  담당하고, 다이얼로그의 큰 오프셋은 전용 `--kv2-dialog-shadow-color`로 분리한다.
+  `#000` 계열 하드 섀도는 계속
+  `color-mix(in srgb, var(--kv2-shadow-hard-color) N%, transparent)`를 사용하므로
+  라이트 값은 기존과 동일하다.
+- **Graphite display 색과 브랜드 원색 분리**: status/agent/runtime 브랜드 토큰
+  자체는 바꾸지 않는다. 보드처럼 같은 색이 반복되는 화면은
+  `--kv2-status-*-display`를 사용한다. 컬럼 헤더는 `#25282C` 중립 면과 4px
+  display 상태선, 카드는 3px display accent를 사용하며 런타임 배지는 중립 pill로
+  통일한다. 생성·상세 다이얼로그의 큰 런타임 면과 phase/status chrome도 같은
+  display 계층을 사용하고, 원색은 아이콘처럼 작은 브랜드 식별자에만 남긴다.
+  보드의 일괄 액션·세션 카운트·FEEDBACK 이동 배너·세션 대화 모달은 각각
+  `--kv2-column-action-*`, `--kv2-session-*`, `--kv2-feedback-nav-*` 역할 토큰을
+  사용한다. Wiki의 큰 면적과 컨트롤은 `--kv2-wiki-*-display`를 사용하며
+  data-viz 원색을 큰 버튼/헤더 배경에 직접 쓰지 않는다.
+- **글자와 보더 역할 분리**: `--kv2-border-strong`을 제목/라벨 글자색으로 함께
+  쓰면 보더를 낮출 때 글자 대비도 무너진다. 제목은
+  `--kv2-strong-title-color`, 라벨은 `--kv2-strong-label-color`, 입력/선택지는
+  `--kv2-control-text-color`를 사용한다. 이 토큰들은 라이트에서 기존 값과 같고
+  다크에서만 text 역할로 전환된다.
 - **Status-soft 패밀리**: 다크 블록에서 각 패밀리를 **불변 accent에 color-mix로
   재앵커**한다 — `surface`는 accent를 dark surface에 소량 섞고, `text`는 accent를
   `--kv2-text-primary`(밝음)에 섞는다. accent 자체는 상속(밝은 마크). 이 방식으로

@@ -26,7 +26,7 @@
   position: absolute;
   inset: 0 auto 0 0;
   width: 12px;
-  background: var(--kv2-dataviz-project);
+  background: var(--kv2-wiki-project-display);
   border-right: var(--kv2-card-border-width) solid var(--kv2-frame);
 }
 
@@ -44,8 +44,8 @@
   padding: 3px 8px;
   border: var(--kv2-card-border-width) solid var(--kv2-frame);
   box-shadow: 3px 3px 0 var(--kv2-frame);
-  background: var(--kv2-status-in-progress-accent);
-  color: var(--kv2-text-primary);
+  background: var(--kv2-wiki-progress-display);
+  color: var(--kv2-wiki-progress-display-fg);
   font-family: var(--kv2-font-mono);
   font-size: 12px;
   font-weight: 900;
@@ -142,8 +142,8 @@
   min-width: 72px;
   border: var(--kv2-card-border-width) solid var(--kv2-frame);
   box-shadow: var(--kv2-shadow-sm);
-  background: var(--kv2-dataviz-project);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-wiki-project-display);
+  color: var(--kv2-wiki-project-display-fg);
   cursor: pointer;
   font-family: var(--kv2-font-mono);
   font-size: 11px;
@@ -161,8 +161,8 @@
 }
 
 .wiki-options-trigger.is-active {
-  background: var(--kv2-status-in-progress-accent);
-  color: var(--kv2-text-primary);
+  background: var(--kv2-wiki-progress-display);
+  color: var(--kv2-wiki-progress-display-fg);
 }
 
 .wiki-options-panel {
@@ -302,7 +302,8 @@
 }
 
 .wiki-status--running {
-  background: var(--kv2-status-in-progress-accent);
+  background: var(--kv2-wiki-progress-display);
+  color: var(--kv2-wiki-progress-display-fg);
   animation: wiki-pulse 1.4s ease-in-out infinite;
 }
 
@@ -451,12 +452,12 @@
 
 /* Per-category accent (top bar only — guarantees the value stays high-contrast). */
 .wiki-stat--docs        { --wiki-accent: var(--kv2-frame); }
-.wiki-stat--archive     { --wiki-accent: var(--kv2-dataviz-project); }
-.wiki-stat--kept        { --wiki-accent: var(--kv2-status-done-accent); }
-.wiki-stat--archive     { --wiki-accent: var(--kv2-dataviz-project); }
+.wiki-stat--archive     { --wiki-accent: var(--kv2-wiki-project-display); }
+.wiki-stat--kept        { --wiki-accent: var(--kv2-wiki-done-display); }
+.wiki-stat--archive     { --wiki-accent: var(--kv2-wiki-project-display); }
 .wiki-stat--skipped     { --wiki-accent: var(--kv2-dataviz-skipped); }
-.wiki-stat--failed      { --wiki-accent: var(--kv2-text-danger); }
-.wiki-stat--pending     { --wiki-accent: var(--kv2-status-in-progress-accent); }
+.wiki-stat--failed      { --wiki-accent: var(--kv2-wiki-danger-display); }
+.wiki-stat--pending     { --wiki-accent: var(--kv2-wiki-progress-display); }
 .wiki-stat--unprocessed { --wiki-accent: var(--kv2-dataviz-unprocessed); }
 
 /* Pending while the worker is actively processing: flood the card with the
@@ -464,8 +465,8 @@
    count stays legible — mirrors the dark-on-yellow PROCESSING badge. Placed
    after .is-active so it wins when the pending card is both active and running. */
 .wiki-stat--pending.is-running {
-  background: var(--kv2-status-in-progress-accent);
-  color: var(--kv2-text-primary);
+  background: var(--kv2-wiki-progress-display);
+  color: var(--kv2-wiki-progress-display-fg);
   border-top-color: var(--kv2-text-primary);
   animation: wiki-pulse 1.4s ease-in-out infinite;
 }
@@ -630,11 +631,11 @@
 }
 
 /* Per-type accent colors for column headers. */
-.wiki-col--troubleshooting .wiki-col-header { background: var(--kv2-dataviz-troubleshooting); }
-.wiki-col--howto .wiki-col-header { background: var(--kv2-dataviz-howto); }
-.wiki-col--decision .wiki-col-header { background: var(--kv2-dataviz-decision); }
-.wiki-col--concept .wiki-col-header { background: var(--kv2-dataviz-concept); }
-.wiki-col--reference .wiki-col-header { background: var(--kv2-dataviz-reference); }
+.wiki-col--troubleshooting .wiki-col-header { background: var(--kv2-wiki-type-troubleshooting-display); }
+.wiki-col--howto .wiki-col-header { background: var(--kv2-wiki-type-howto-display); }
+.wiki-col--decision .wiki-col-header { background: var(--kv2-wiki-type-decision-display); }
+.wiki-col--concept .wiki-col-header { background: var(--kv2-wiki-type-concept-display); }
+.wiki-col--reference .wiki-col-header { background: var(--kv2-wiki-type-reference-display); }
 
 /* ─── Card inside a column ───────────────────────────────────────── */
 
@@ -676,8 +677,8 @@
   font-weight: 700;
   white-space: nowrap;
   color: var(--kv2-text-primary);
-  background: color-mix(in srgb, var(--kv2-dataviz-project) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--kv2-dataviz-project) 30%, transparent);
+  background: color-mix(in srgb, var(--kv2-wiki-project-display) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kv2-wiki-project-display) 30%, transparent);
   border-radius: 999px;
   padding: 1px 7px;
 }
@@ -732,8 +733,8 @@
 .wiki-topic {
   display: inline-flex;
   align-items: center;
-  background: color-mix(in srgb, var(--kv2-dataviz-project) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--kv2-dataviz-project) 22%, transparent);
+  background: color-mix(in srgb, var(--kv2-wiki-project-display) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kv2-wiki-project-display) 22%, transparent);
   border-radius: 999px;
   padding: 1px 8px;
   font-family: var(--kv2-font-mono);
@@ -916,13 +917,13 @@
   text-transform: uppercase;
   color: var(--kv2-text-inverse);
 }
-.wiki-type-badge--troubleshooting { background: var(--kv2-dataviz-troubleshooting); }
-.wiki-type-badge--howto { background: var(--kv2-dataviz-howto); }
-.wiki-type-badge--decision { background: var(--kv2-dataviz-decision); }
-.wiki-type-badge--concept { background: var(--kv2-dataviz-concept); }
-.wiki-type-badge--reference { background: var(--kv2-dataviz-reference); }
+.wiki-type-badge--troubleshooting { background: var(--kv2-wiki-type-troubleshooting-display); }
+.wiki-type-badge--howto { background: var(--kv2-wiki-type-howto-display); }
+.wiki-type-badge--decision { background: var(--kv2-wiki-type-decision-display); }
+.wiki-type-badge--concept { background: var(--kv2-wiki-type-concept-display); }
+.wiki-type-badge--reference { background: var(--kv2-wiki-type-reference-display); }
 .wiki-state-badge--skipped { background: var(--kv2-neutral-400); color: var(--kv2-text-inverse); }
-.wiki-state-badge--failed { background: var(--kv2-danger-accent); color: var(--kv2-text-inverse); }
+.wiki-state-badge--failed { background: var(--kv2-wiki-danger-display); color: var(--kv2-text-inverse); }
 .wiki-state-badge--pending { background: var(--kv2-dataviz-pending); color: var(--kv2-border-strong); }
 .wiki-state-badge--unprocessed { background: var(--kv2-neutral-500); color: var(--kv2-text-inverse); }
 
@@ -976,7 +977,7 @@
 }
 
 .wiki-config--setup {
-  border-color: var(--kv2-status-in-progress-accent);
+  border-color: var(--kv2-wiki-progress-display);
 }
 
 .wiki-config-title {
@@ -1094,20 +1095,20 @@
    --kv2-dialog-accent for `.kv2-dialog--detail`). Kept docs are colored by their
    document type (matching the board column headers); other states keep a
    state-based accent. */
-.wiki-detail-dialog--type-troubleshooting { --kv2-dialog-accent: var(--kv2-dataviz-troubleshooting); }
-.wiki-detail-dialog--type-howto           { --kv2-dialog-accent: var(--kv2-dataviz-howto); }
-.wiki-detail-dialog--type-decision        { --kv2-dialog-accent: var(--kv2-dataviz-decision); }
-.wiki-detail-dialog--type-concept         { --kv2-dialog-accent: var(--kv2-dataviz-concept); }
-.wiki-detail-dialog--type-reference       { --kv2-dialog-accent: var(--kv2-dataviz-reference); }
+.wiki-detail-dialog--type-troubleshooting { --kv2-dialog-accent: var(--kv2-wiki-type-troubleshooting-display); }
+.wiki-detail-dialog--type-howto           { --kv2-dialog-accent: var(--kv2-wiki-type-howto-display); }
+.wiki-detail-dialog--type-decision        { --kv2-dialog-accent: var(--kv2-wiki-type-decision-display); }
+.wiki-detail-dialog--type-concept         { --kv2-dialog-accent: var(--kv2-wiki-type-concept-display); }
+.wiki-detail-dialog--type-reference       { --kv2-dialog-accent: var(--kv2-wiki-type-reference-display); }
 .wiki-detail-dialog--skipped { --kv2-dialog-accent: var(--kv2-neutral-400); }
-.wiki-detail-dialog--failed  { --kv2-dialog-accent: var(--kv2-danger-accent); }
+.wiki-detail-dialog--failed  { --kv2-dialog-accent: var(--kv2-wiki-danger-display); }
 .wiki-detail-dialog--pending { --kv2-dialog-accent: var(--kv2-dataviz-pending); }
 .wiki-detail-dialog--none    { --kv2-dialog-accent: var(--kv2-neutral-500); }
 
 /* Status pill — adopts the kv2-status-badge shape, wiki state colors. */
-.wiki-state-badge--kept    { background: var(--kv2-success-accent); color: var(--kv2-text-inverse); border-color: var(--kv2-success-accent); }
+.wiki-state-badge--kept    { background: var(--kv2-wiki-done-display); color: var(--kv2-text-inverse); border-color: var(--kv2-wiki-done-display); }
 .wiki-state-badge--skipped { background: var(--kv2-neutral-400); color: var(--kv2-text-inverse); border-color: var(--kv2-neutral-400); }
-.wiki-state-badge--failed  { background: var(--kv2-danger-accent); color: var(--kv2-text-inverse); border-color: var(--kv2-danger-accent); }
+.wiki-state-badge--failed  { background: var(--kv2-wiki-danger-display); color: var(--kv2-text-inverse); border-color: var(--kv2-wiki-danger-display); }
 .wiki-state-badge--pending { background: var(--kv2-dataviz-pending); color: var(--kv2-border-strong); }
 .wiki-state-badge--none    { background: var(--kv2-neutral-500); color: var(--kv2-text-inverse); border-color: var(--kv2-neutral-500); }
 

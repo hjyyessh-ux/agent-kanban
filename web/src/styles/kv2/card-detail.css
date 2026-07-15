@@ -35,14 +35,14 @@
   gap: 6px;
   height: 36px;
   padding: 0 16px;
-  background: var(--kv2-status-in-progress-accent);
-  border: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-feedback-nav-bg);
+  border: 2px solid var(--kv2-feedback-nav-border);
   border-radius: 6px;
-  box-shadow: 3px 3px 0 var(--kv2-border-strong);
+  box-shadow: 3px 3px 0 var(--kv2-feedback-nav-border);
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-feedback-nav-fg);
   cursor: pointer;
   transition: box-shadow 0.1s, transform 0.1s;
   white-space: nowrap;
@@ -52,7 +52,7 @@
 }
 
 .kv2-back-btn:hover {
-  box-shadow: 1px 1px 0 var(--kv2-border-strong);
+  box-shadow: 1px 1px 0 var(--kv2-feedback-nav-border);
   transform: translate(2px, 2px);
 }
 
@@ -109,7 +109,7 @@
   font-weight: 700;
   font-size: var(--kv2-text-2xl);
   line-height: 1.2;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-title-color);
   word-break: break-word;
 }
 
@@ -161,23 +161,23 @@
 }
 
 .kv2-status-badge--todo {
-  background: var(--kv2-status-todo-accent);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-status-todo-badge-bg);
+  color: var(--kv2-status-todo-badge-fg);
 }
 
 .kv2-status-badge--in_progress {
-  background: var(--kv2-status-in-progress-accent);
-  color: var(--kv2-status-in-progress-fg);
+  background: var(--kv2-status-progress-badge-bg);
+  color: var(--kv2-status-progress-badge-fg);
 }
 
 .kv2-status-badge--complete {
-  background: var(--kv2-status-complete-accent);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-status-complete-badge-bg);
+  color: var(--kv2-status-complete-badge-fg);
 }
 
 .kv2-status-badge--done {
-  background: var(--kv2-status-done-accent);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-status-done-badge-bg);
+  color: var(--kv2-status-done-badge-fg);
 }
 
 .kv2-detail-layout {
@@ -220,7 +220,7 @@
 .kv2-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   letter-spacing: 0;
   opacity: 0.85;
 }
@@ -237,7 +237,7 @@
 
 .kv2-panel-subtitle {
   font-size: var(--kv2-text-md-plus);
-  color: var(--kv2-neutral-400);
+  color: var(--kv2-panel-subtitle-color);
 }
 
 /* ── Create Dialog Layout (Penpot single-column) ─────────── */
@@ -266,7 +266,7 @@
 .kv2-create-header-title {
   font-size: var(--kv2-text-3xl);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-title-color);
 }
 
 .kv2-create-body {
@@ -301,7 +301,7 @@
 .kv2-create-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   letter-spacing: 0;
   opacity: 0.85;
 }
@@ -314,7 +314,7 @@
   border-radius: 8px;
   background: var(--kv2-surface);
   font-size: var(--kv2-text-md);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   font-family: var(--kv2-font-sans);
   box-sizing: border-box;
   outline: none;
@@ -340,7 +340,7 @@
   border-radius: 8px;
   background: var(--kv2-surface);
   font-size: var(--kv2-text-md);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   font-family: var(--kv2-font-sans);
   box-sizing: border-box;
   outline: none;
@@ -373,7 +373,7 @@
   border-radius: 8px;
   background: var(--kv2-surface);
   font-size: var(--kv2-text-md);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   font-family: var(--kv2-font-sans);
   box-sizing: border-box;
   outline: none;
@@ -433,7 +433,7 @@
   justify-content: center;
   height: 100%;
   border-right: 2px solid var(--kv2-border-strong);
-  background: var(--kv2-info-surface-strong);
+  background: var(--kv2-directory-accent-bg);
 }
 
 .kv2-directory-input {
@@ -442,7 +442,7 @@
   height: 100%;
   border: 0;
   background: transparent;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-sm);
   font-weight: 700;
@@ -461,8 +461,8 @@
   height: 100%;
   border: 0;
   border-left: 2px solid var(--kv2-border-strong);
-  background: var(--kv2-warn-surface);
-  color: var(--kv2-border-strong);
+  background: var(--kv2-directory-toggle-bg);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-size: var(--kv2-text-xl);
   font-weight: 900;
@@ -485,8 +485,8 @@
   max-height: 320px;
   border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: var(--kv2-surface-warm-soft);
-  box-shadow: 6px 6px 0 var(--kv2-border-strong);
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
   padding: 10px;
   z-index: 60;
 }
@@ -500,7 +500,7 @@
   height: 16px;
   border-left: 2px solid var(--kv2-border-strong);
   border-top: 2px solid var(--kv2-border-strong);
-  background: var(--kv2-surface-warm-soft);
+  background: var(--kv2-selection-popover-bg);
   transform: rotate(45deg);
 }
 
@@ -511,7 +511,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-selection-heading-fg);
   font-size: var(--kv2-text-xs);
   font-weight: 900;
   text-transform: uppercase;
@@ -521,7 +521,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
   background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-size: var(--kv2-text-xs);
   font-weight: 900;
@@ -548,8 +548,8 @@
   min-height: 46px;
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
-  background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  background: var(--kv2-selection-option-bg);
+  color: var(--kv2-selection-option-fg);
   cursor: pointer;
   padding: 8px 10px;
   text-align: left;
@@ -558,7 +558,8 @@
 
 .kv2-directory-option:hover,
 .kv2-directory-option.is-selected {
-  background: var(--kv2-info-border-soft);
+  background: var(--kv2-selection-option-selected-bg);
+  border-color: var(--kv2-selection-option-selected-border);
   transform: translate(-1px, -1px);
   box-shadow: 3px 3px 0 var(--kv2-border-strong);
 }
@@ -577,7 +578,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--kv2-neutral-600);
+  color: var(--kv2-selection-option-secondary-fg);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-xs);
   font-weight: 700;
@@ -588,8 +589,8 @@
   z-index: 1;
   border: 2px dashed var(--kv2-border-strong);
   border-radius: 6px;
-  background: var(--kv2-surface);
-  color: var(--kv2-neutral-500);
+  background: var(--kv2-selection-option-bg);
+  color: var(--kv2-selection-option-secondary-fg);
   font-size: var(--kv2-text-sm);
   font-weight: 700;
   padding: 16px;
@@ -609,7 +610,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
   background: var(--kv2-success-border);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-size: var(--kv2-text-sm);
   font-weight: 900;
@@ -1025,7 +1026,7 @@
   box-shadow: var(--kv2-shadow-sm);
   font-size: var(--kv2-text-md);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
   transition: all var(--kv2-transition-fast);
@@ -1078,25 +1079,25 @@
 }
 
 .kv2-create-agent-chip--runtime-codex {
-  background: linear-gradient(135deg, var(--kv2-info-surface-strong) 0%, var(--kv2-info-border-soft) 52%, var(--kv2-info-border) 100%);
-  border-color: var(--kv2-text-link);
-  color: var(--kv2-info-text-strong);
+  background: var(--kv2-create-runtime-codex-bg);
+  border-color: var(--kv2-create-runtime-codex-border);
+  color: var(--kv2-create-runtime-codex-fg);
 }
 
 .kv2-create-agent-chip--runtime-claude {
-  background: var(--kv2-runtime-claude);
-  border-color: var(--kv2-runtime-opencode);
-  color: var(--kv2-text-inverse);
+  background: var(--kv2-runtime-claude-surface);
+  border-color: var(--kv2-runtime-claude-chip-border);
+  color: var(--kv2-runtime-claude-chip-fg);
 }
 
 .kv2-create-agent-chip--runtime-opencode {
-  background: var(--kv2-neutral-300);
-  border-color: var(--kv2-neutral-500);
-  color: var(--kv2-neutral-700);
+  background: var(--kv2-create-runtime-opencode-bg);
+  border-color: var(--kv2-create-runtime-opencode-border);
+  color: var(--kv2-create-runtime-opencode-fg);
 }
 
 .kv2-create-agent-chip--active {
-  border-bottom: 4px solid var(--kv2-status-todo-accent);
+  border-bottom: 4px solid var(--kv2-create-runtime-active-border);
 }
 
 .kv2-create-agent-chip:hover {
@@ -1104,15 +1105,15 @@
 }
 
 .kv2-create-agent-chip--runtime-codex:hover {
-  background: linear-gradient(135deg, var(--kv2-info-surface) 0%, var(--kv2-info-surface-strong) 52%, var(--kv2-info-border-soft) 100%);
+  background: var(--kv2-create-runtime-codex-hover-bg);
 }
 
 .kv2-create-agent-chip--runtime-claude:hover {
-  background: var(--kv2-runtime-claude-hover);
+  background: var(--kv2-runtime-claude-surface-hover);
 }
 
 .kv2-create-agent-chip--runtime-opencode:hover {
-  background: var(--kv2-code-bg);
+  background: var(--kv2-create-runtime-opencode-hover-bg);
 }
 
 .kv2-create-agent-chip:disabled {
@@ -1232,7 +1233,7 @@
 .kv2-create-radio-title {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
 }
 
 .kv2-form-group {
@@ -1259,7 +1260,7 @@
   border: none;
   cursor: pointer;
   font-size: var(--kv2-text-sm);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
 }
 
 .kv2-radio-label:hover {
@@ -1372,7 +1373,7 @@
 .kv2-children-label {
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   opacity: 0.85;
 }
 

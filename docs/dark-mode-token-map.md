@@ -333,11 +333,18 @@ is what they actually became, so card 4 reuses rather than re-derives:
 | `#8a8fa3` (session "done" accent — `rgba(138,143,163,…)` base) | `--kv2-neutral-480` | `#8a8fa3` |
 | `#eef2ff` (meta-dropdown-option hover bg) | `--kv2-info-surface-pale` | `#eef2ff` |
 | `#c7d2fe` (meta-dropdown-option hover border) | `--kv2-info-border-pale` | `#c7d2fe` |
+
 | `#f0f9ff` (progress-step--agent bg) | `--kv2-cyan-surface-pale` | `#f0f9ff` |
 | `#ddd6fe` (progress-step--skill border) | `--kv2-purple-border-soft` | `#ddd6fe` |
 | `#fbcfe8` (progress-step--memory border) | `--kv2-pink-border` | `#fbcfe8` |
 | `#fdf2f8` (progress-step--memory bg) | `--kv2-pink-surface-pale` | `#fdf2f8` |
 | `#14b8a6` (phase--meta accent — new Teal family) | `--kv2-teal-accent` | `#14b8a6` |
+
+Directory history and model/meta dropdowns now share the role-based
+`--kv2-selection-*` family (popover, option, secondary text, hover, selected,
+heading, shadow). Light aliases preserve the values above; Graphite dark maps
+large menu surfaces to `#292D31`/`#2D3135` and the selected row to the muted
+blue-grey `#303A46` instead of reusing the vivid info surface.
 
 Role notes:
 - `#1f2233` was used uniformly for borders, hard box-shadow ink, *and* text/icon
@@ -532,16 +539,17 @@ finally tokenised — value-exact in light, theme-responsive in dark:
 
 | literal | token | light value | why |
 |---------|-------|-------------|-----|
-| `rgba(0, 0, 0, α)` neo hard shadows (`board.css`) | `--kv2-shadow-hard-color` (`#000000`) via `color-mix(in srgb, var(--kv2-shadow-hard-color) (α×100)%, transparent)` | `#000000` | dark flips the base to `#8a8a9c` so the offset block stays visible; `color-mix(black N%, transparent)` == `rgba(0,0,0,α)` exactly, so light is pixel-identical |
+| `rgba(0, 0, 0, α)` neo hard shadows (`board.css`) | `--kv2-shadow-hard-color` (`#000000`) via `color-mix(in srgb, var(--kv2-shadow-hard-color) (α×100)%, transparent)` | `#000000` | dark uses near-black `#0d0f10`; `color-mix(black N%, transparent)` == `rgba(0,0,0,α)` exactly, so light is pixel-identical |
 | `rgba(0,0,0,0.85)` screenshot lightbox bg (`panels.css`) | `--kv2-scrim-strong` | `rgba(0, 0, 0, 0.85)` | media/lightbox backdrop; dark deepens to `0.9` |
 
 ### Dark strategy (layer ② only)
 
-- **Neobrutalist hard shadow → light offset.** On a dark ground a black offset
-  block vanishes, so `--kv2-shadow-color` and `--kv2-shadow-hard-color` flip to a
-  light translucent/grey; the border tokens (`--kv2-card-border-color`,
-  `--kv2-border-strong`, `--kv2-*-stroke-color`, `--kv2-ink-black/-pure`) are
-  lightened so borders carry the structure.
+- **Neobrutalist hard shadow → dark depth.** The initial light-grey offset made
+  repeated cards and dialogs look luminous. Dark mode now uses
+  `rgba(8,10,12,.55)` for `--kv2-shadow-color`, `#0d0f10` for
+  `--kv2-shadow-hard-color`, and a separate near-black
+  `--kv2-dialog-shadow-color`. Neutral graphite borders carry the outline
+  without creating a glowing grid.
 - **Neutral ramp lightness-inverted.** `--kv2-neutral-900` (darkest text in light)
   → lightest; `--kv2-neutral-300` (light border in light) → dark. Roles preserved.
 - **Status-soft re-anchored on the invariant accent via `color-mix`.** Instead of
@@ -551,6 +559,23 @@ finally tokenised — value-exact in light, theme-responsive in dark:
   `text-primary`). The `*-accent` tokens themselves are inherited (saturated marks
   read fine on dark). `var(--kv2-surface)`/`var(--kv2-text-primary)` resolve to the
   dark values redefined in the same block.
+- **Repeated brand chrome uses Graphite display tokens.** The invariant status
+  and runtime colours remain unchanged, but the board/detail surfaces use
+  `--kv2-status-*-display`: neutral `#25282c` column headers with a 4px status
+  line, 3px card/session accents, neutral runtime pills, and subdued action
+  fills. Create/detail runtime cards and phase chrome use the same display
+  layer; full brand colour remains on small identity icons.
+- **Legacy controls use role-specific Graphite tokens.** Column bulk actions,
+  session counts/toggles/unread markers, feedback navigation, session
+  conversation rails, and Wiki's large project/status/type surfaces no longer
+  reuse `--kv2-frame` as text or raw brand/data-viz colours as fills. Their
+  `--kv2-*-display` roles preserve the original light aliases and switch only
+  the dark theme to muted, contrast-safe values.
+- **Strong text roles are split from strong borders.** Light mode aliases
+  `--kv2-strong-title-color`, `--kv2-strong-label-color`, and
+  `--kv2-control-text-color` to the prior border value for pixel parity. Dark
+  mode maps them to primary/secondary text while keeping
+  `--kv2-border-strong` at subdued graphite.
 - **`color-scheme`** is `light` on `:root`, `dark` in the dark block, so native
   scrollbars/checkboxes/form controls follow.
 
@@ -586,10 +611,12 @@ card 5's assumptions, and closed the loop with regression guards:
   across reload, `prefers-color-scheme` → `system` resolution) and a `-dark`
   screenshot variant next to every existing light capture in
   `e2e/v2-visual-audit.e2e.ts`.
-- Spot-checked all 5 tabs (board/wiki/capabilities/scheduler/settings) plus
-  the create-modal agent/runtime chips in dark — contrast held up on status
-  colours, agent brand colours, hard-shadow borders and the segmented theme
-  toggle; no further correction was needed.
-- The migration (cards 2–6) is considered closed: light mode is pixel-
-  identical to the pre-migration baseline, dark mode is fully themed, and the
-  guard test + e2e specs prevent silent regressions on either side.
+- The initial visual pass later received a quiet-palette correction after a
+  same-data Playwright comparison exposed oversized full-chroma status headers,
+  luminous grey shadows, and role collisions where `--kv2-border-strong` also
+  coloured titles and form labels. The correction keeps light mode pixel-
+  identical, adds explicit dark RGB/contrast assertions to the visual audit,
+  and preserves full brand colour only for small accents.
+- The migration remains guarded by the token test and e2e screenshots; the
+  dark audit now additionally requires status-header and create-control text
+  contrast of at least 4.5:1.

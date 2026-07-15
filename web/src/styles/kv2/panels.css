@@ -95,18 +95,18 @@
 }
 
 .kv2-meta-card--runtime-codex {
-  border-color: var(--kv2-info-border);
-  background: var(--kv2-info-surface);
+  border-color: var(--kv2-runtime-meta-codex-border);
+  background: var(--kv2-runtime-meta-codex-bg);
 }
 
 .kv2-meta-card--runtime-claude {
-  border-color: var(--kv2-orange-border);
-  background: var(--kv2-orange-surface-soft);
+  border-color: var(--kv2-runtime-meta-claude-border);
+  background: var(--kv2-runtime-meta-claude-bg);
 }
 
 .kv2-meta-card--runtime-opencode {
-  border-color: var(--kv2-info-border);
-  background: var(--kv2-info-surface);
+  border-color: var(--kv2-runtime-meta-opencode-border);
+  background: var(--kv2-runtime-meta-opencode-bg);
 }
 
 .kv2-meta-value--claude {
@@ -150,7 +150,7 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   font-size: var(--kv2-text-xs);
   font-weight: 800;
   line-height: 1.2;
@@ -188,7 +188,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
   background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-selection-option-secondary-fg);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-sm);
@@ -277,8 +277,8 @@
   gap: 8px;
   border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: var(--kv2-surface-warm-soft);
-  box-shadow: 6px 6px 0 var(--kv2-border-strong);
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
   padding: 10px;
   z-index: 80;
 }
@@ -413,7 +413,7 @@
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-base);
   font-weight: 600;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
   text-align: left;
   outline: none;
@@ -436,7 +436,7 @@
   flex: 0 0 auto;
   font-size: var(--kv2-text-sm);
   line-height: 1;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-selection-option-secondary-fg);
 }
 
 .kv2-meta-dropdown-popover {
@@ -449,8 +449,8 @@
   min-width: 200px;
   border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
-  background: var(--kv2-surface-warm-soft);
-  box-shadow: 6px 6px 0 var(--kv2-border-strong);
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
   padding: 6px;
 }
 
@@ -461,8 +461,8 @@
   width: 100%;
   border: 2px solid transparent;
   border-radius: 6px;
-  background: transparent;
-  color: var(--kv2-border-strong);
+  background: var(--kv2-selection-option-bg);
+  color: var(--kv2-selection-option-fg);
   cursor: pointer;
   padding: 8px 10px;
   text-align: left;
@@ -472,13 +472,13 @@
 }
 
 .kv2-meta-dropdown-option:hover:not(:disabled) {
-  background: var(--kv2-info-surface-pale);
-  border-color: var(--kv2-info-border-pale);
+  background: var(--kv2-selection-option-hover-bg);
+  border-color: var(--kv2-selection-option-hover-border);
 }
 
 .kv2-meta-dropdown-option.is-selected {
-  background: var(--kv2-info-border-soft);
-  border-color: var(--kv2-border-strong);
+  background: var(--kv2-selection-option-selected-bg);
+  border-color: var(--kv2-selection-option-selected-border);
 }
 
 .kv2-meta-dropdown-option:disabled {
@@ -498,7 +498,7 @@
   flex: 0 0 auto;
   font-size: var(--kv2-text-xs);
   font-weight: 600;
-  color: var(--kv2-neutral-500);
+  color: var(--kv2-selection-option-secondary-fg);
 }
 
 .kv2-meta-dropdown-option-check {
@@ -641,7 +641,7 @@
    Phases (.kv2-phase-*)
    ============================================================= */
 .kv2-phase {
-  background: color-mix(in srgb, var(--kv2-prompt-accent-color) 9%, transparent);
+  background: var(--kv2-phase-prompt-bg);
   border: 1px solid var(--kv2-border-strong);
   border-radius: 8px;
   margin: 0 48px;
@@ -662,43 +662,43 @@
 }
 
 .kv2-phase--prompt {
-  background: color-mix(in srgb, var(--kv2-prompt-accent-color) 9%, transparent);
+  background: var(--kv2-phase-prompt-bg);
 }
 
 .kv2-phase--prompt::before {
-  background-color: var(--kv2-prompt-accent-color);
+  background-color: var(--kv2-phase-prompt-accent);
 }
 
 .kv2-phase--progress {
-  background: color-mix(in srgb, var(--kv2-status-in-progress-accent) 9%, transparent);
+  background: var(--kv2-phase-progress-bg);
 }
 
 .kv2-phase--progress::before {
-  background-color: var(--kv2-status-in-progress-accent);
+  background-color: var(--kv2-phase-progress-accent);
 }
 
 .kv2-phase--result {
-  background: color-mix(in srgb, var(--kv2-status-complete-accent) 9%, transparent);
+  background: var(--kv2-phase-result-bg);
 }
 
 .kv2-phase--result::before {
-  background-color: var(--kv2-status-complete-accent);
+  background-color: var(--kv2-phase-result-accent);
 }
 
 .kv2-phase--question {
-  background: color-mix(in srgb, var(--kv2-status-complete-accent) 9%, transparent);
+  background: var(--kv2-phase-result-bg);
 }
 
 .kv2-phase--question::before {
-  background-color: var(--kv2-status-complete-accent);
+  background-color: var(--kv2-phase-result-accent);
 }
 
 .kv2-phase--meta {
-  background: color-mix(in srgb, var(--kv2-teal-accent) 8%, transparent);
+  background: var(--kv2-phase-meta-bg);
 }
 
 .kv2-phase--meta::before {
-  background-color: var(--kv2-teal-accent);
+  background-color: var(--kv2-phase-meta-accent);
 }
 
 .kv2-phase-card-wrapper {
@@ -1820,19 +1820,19 @@
   resize: both;
 }
 
-/* 좌측 accent stripe + rail/node 색 토큰(--session-accent): complete=핫핑크, done=회색 */
+/* 좌측 accent stripe + rail/node 색 토큰(--session-accent): Graphite display status */
 .session-conversation-dialog--complete.kv2-dialog {
-  --session-accent: var(--kv2-status-complete-accent);
-  --session-accent-soft: color-mix(in srgb, var(--kv2-status-complete-accent) 9%, transparent);
-  --session-accent-wash: color-mix(in srgb, var(--kv2-status-complete-accent) 4.5%, transparent);
-  box-shadow: -8px 0 0 var(--kv2-status-complete-accent), var(--kv2-shadow-lg);
+  --session-accent: var(--kv2-status-complete-display);
+  --session-accent-soft: color-mix(in srgb, var(--kv2-status-complete-display) 12%, transparent);
+  --session-accent-wash: color-mix(in srgb, var(--kv2-status-complete-display) 7%, transparent);
+  box-shadow: -8px 0 0 var(--kv2-status-complete-display), var(--kv2-shadow-lg);
 }
 
 .session-conversation-dialog--done.kv2-dialog {
-  --session-accent: var(--kv2-status-done-accent);
-  --session-accent-soft: color-mix(in srgb, var(--kv2-neutral-480) 14%, transparent);
-  --session-accent-wash: color-mix(in srgb, var(--kv2-neutral-480) 7%, transparent);
-  box-shadow: -8px 0 0 var(--kv2-status-done-accent), var(--kv2-shadow-lg);
+  --session-accent: var(--kv2-status-done-display);
+  --session-accent-soft: color-mix(in srgb, var(--kv2-status-done-display) 12%, transparent);
+  --session-accent-wash: color-mix(in srgb, var(--kv2-status-done-display) 7%, transparent);
+  box-shadow: -8px 0 0 var(--kv2-status-done-display), var(--kv2-shadow-lg);
 }
 
 /* DialogSkeleton 기본 헤더(닫기 X만)는 빈 공간이 되므로, 닫기 버튼만 우상단에 오버레이 */
@@ -1894,7 +1894,7 @@
 }
 
 .session-conversation-resumeChip.is-copied {
-  background: var(--kv2-status-complete-accent);
+  background: var(--kv2-status-complete-display);
   color: var(--kv2-text-inverse);
 }
 
@@ -1982,13 +1982,13 @@
 }
 
 .session-conversation-turnNavChip:hover {
-  border-color: var(--session-accent, var(--kv2-status-complete-accent));
+  border-color: var(--session-accent, var(--kv2-status-complete-display));
   color: var(--kv2-text-primary);
 }
 
 .session-conversation-turnNavChip.is-active {
-  background: var(--session-accent, var(--kv2-status-complete-accent));
-  border-color: var(--session-accent, var(--kv2-status-complete-accent));
+  background: var(--session-accent, var(--kv2-status-complete-display));
+  border-color: var(--session-accent, var(--kv2-status-complete-display));
   color: var(--kv2-text-inverse);
 }
 
@@ -2027,7 +2027,7 @@
 .session-conversation-dialog .kv2-complete-session-turn-header {
   padding: 12px 16px;
   gap: 10px;
-  background: var(--session-accent-soft, color-mix(in srgb, var(--kv2-status-complete-accent) 9%, transparent));
+  background: var(--session-accent-soft, color-mix(in srgb, var(--kv2-status-complete-display) 9%, transparent));
   border-bottom: 2px solid var(--kv2-border-strong);
 }
 
@@ -2039,7 +2039,7 @@
   font-size: var(--kv2-text-md);
   letter-spacing: 0.01em;
   color: var(--kv2-text-inverse);
-  background: var(--session-accent, var(--kv2-status-complete-accent));
+  background: var(--session-accent, var(--kv2-status-complete-display));
   padding: 4px 14px;
   border-radius: 999px;
   box-shadow: 1px 1px 0 color-mix(in srgb, var(--kv2-ink-ambient) 14%, transparent);
@@ -2053,9 +2053,9 @@
   letter-spacing: 0.04em;
   padding: 2px 7px;
   border-radius: 3px;
-  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-accent));
+  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-display));
   background: var(--kv2-surface);
-  color: var(--session-accent, var(--kv2-status-complete-accent));
+  color: var(--session-accent, var(--kv2-status-complete-display));
 }
 
 /* Started/Completed/duration: 기존 title 자리(헤더 우측)로 이동 */

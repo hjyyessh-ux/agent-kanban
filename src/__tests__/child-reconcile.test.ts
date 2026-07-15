@@ -160,6 +160,56 @@ describe('ClaudeCodexWatchdog', () => {
     });
   });
 
+  test('leaves organic Codex and Claude CLI hook cards in progress without run artifacts', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const watchdog = new ClaudeCodexWatchdog(store, runStore);
+
+      const codexCard = await store.createCard({
+        title: 'Organic Codex Task',
+        description: 'direct cli prompt',
+        sourceContext: 'codex',
+        projectDir: dir,
+      });
+      const claudeCard = await store.createCard({
+        title: 'Organic Claude Task',
+        description: 'direct cli prompt',
+        sourceContext: 'claude-code',
+        projectDir: dir,
+      });
+      await store.updateCard(codexCard.id, { status: 'in_progress', sessionId: 'codex-hook-session' });
+      await store.updateCard(claudeCard.id, { status: 'in_progress', sessionId: 'claude-hook-session' });
+
+      await watchdog.check();
+
+      expect((await store.getCard(codexCard.id))?.status).toBe('in_progress');
+      expect((await store.getCard(claudeCard.id))?.status).toBe('in_progress');
+    });
+  });
+
+  test('still returns dispatched Codex orphan cards without active runs to todo', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const watchdog = new ClaudeCodexWatchdog(store, runStore);
+
+      const card = await store.createCard({
+        title: 'Dispatched Codex Task',
+        description: 'dispatch prompt',
+        agentRuntime: 'codex',
+        projectDir: dir,
+      });
+      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'codex-dispatch-session' });
+
+      await watchdog.check();
+
+      const updated = await store.getCard(card.id);
+      expect(updated?.status).toBe('todo');
+      expect(updated?.progressSummary).toContain('no active codex run');
+    });
+  });
+
   test('does not touch opencode in_progress cards', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);

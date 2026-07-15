@@ -147,7 +147,7 @@
 }
 
 .wiki-graph-zoombtn:hover {
-  background: var(--kv2-status-in-progress-accent);
+  background: var(--kv2-wiki-progress-display);
   transform: translate(-1px, -1px);
   box-shadow: 2px 2px 0 var(--kv2-frame);
 }
@@ -178,13 +178,13 @@
 }
 
 .wiki-graph-gear:hover {
-  background: var(--kv2-status-in-progress-accent);
+  background: var(--kv2-wiki-progress-display);
   transform: translate(-1px, -1px);
   box-shadow: calc(4px + 1px) calc(4px + 1px) 0 var(--kv2-frame);
 }
 
 .wiki-graph-gear.is-active {
-  background: var(--kv2-status-in-progress-accent);
+  background: var(--kv2-wiki-progress-display);
 }
 
 /* ─── Settings panel (top-right, under the gear) ─── */
@@ -224,7 +224,7 @@
 }
 
 .wgs-reset:hover {
-  background: var(--kv2-status-complete-accent);
+  background: var(--kv2-wiki-complete-display);
   color: var(--kv2-text-inverse);
 }
 
@@ -267,7 +267,7 @@
 
 .wgs-row input[type='range'] {
   width: 100%;
-  accent-color: var(--kv2-status-complete-accent);
+  accent-color: var(--kv2-wiki-complete-display);
   cursor: pointer;
 }
 
@@ -290,7 +290,7 @@
 .wgs-row--check input[type='checkbox'] {
   width: 18px;
   height: 18px;
-  accent-color: var(--kv2-status-complete-accent);
+  accent-color: var(--kv2-wiki-complete-display);
   cursor: pointer;
 }
 

@@ -26,7 +26,7 @@
   background: var(--kv2-surface);
   border: 2px solid var(--kv2-border-strong);
   border-radius: 12px;
-  box-shadow: 8px 12px 0 var(--kv2-border-strong);
+  box-shadow: 8px 12px 0 var(--kv2-dialog-shadow-color);
   width: 90vw;
   max-height: 90vh;
   overflow: hidden;
@@ -72,7 +72,7 @@
   background: transparent;
   font-size: var(--kv2-text-display);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -109,23 +109,23 @@
 /* ── Dialog Modifiers ─────────────────────────────────────── */
 .kv2-dialog--detail,
 .kv2-dialog--create {
-  box-shadow: -7px 0 0 var(--kv2-dialog-accent, var(--kv2-status-todo-accent)), 8px 12px 0 var(--kv2-border-strong);
+  box-shadow: -7px 0 0 var(--kv2-dialog-accent, var(--kv2-status-todo-display)), 8px 12px 0 var(--kv2-dialog-shadow-color);
 }
 
 .kv2-dialog--status-todo {
-  --kv2-dialog-accent: var(--kv2-status-todo-accent);
+  --kv2-dialog-accent: var(--kv2-status-todo-display);
 }
 
 .kv2-dialog--status-in_progress {
-  --kv2-dialog-accent: var(--kv2-status-in-progress-accent);
+  --kv2-dialog-accent: var(--kv2-status-progress-display);
 }
 
 .kv2-dialog--status-complete {
-  --kv2-dialog-accent: var(--kv2-status-complete-accent);
+  --kv2-dialog-accent: var(--kv2-status-complete-display);
 }
 
 .kv2-dialog--status-done {
-  --kv2-dialog-accent: var(--kv2-status-done-accent);
+  --kv2-dialog-accent: var(--kv2-status-done-display);
 }
 
 /* ── Form Elements ────────────────────────────────────────── */

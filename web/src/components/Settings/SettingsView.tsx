@@ -135,7 +135,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleSyncModels = async () => {
     await sync();
     setCatalogNonce(n => n + 1);
-    // Sync may have added newly-synced ids to the enabled set; re-read it.
+    // Sync updates the catalog only. Preserve the user's visibility selections.
     const raw = localStorage.getItem(MODEL_FILTER_KEY);
     if (raw) {
       try {

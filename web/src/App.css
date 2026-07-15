@@ -211,8 +211,8 @@
 }
 
 .app-board-view-toggle-btn.is-active {
-  border-color: var(--kv2-frame);
-  background: var(--kv2-status-in-progress-accent);
+  border-color: var(--kv2-board-mode-active-border);
+  background: var(--kv2-board-mode-active-bg);
   box-shadow: 2px 2px 0 var(--kv2-frame);
 }
 
@@ -233,7 +233,8 @@
 }
 
 .app-board-session-toggle.is-active {
-  background: var(--kv2-success-surface-vivid);
+  background: var(--kv2-board-session-active-bg);
+  border-color: var(--kv2-board-session-active-border);
   box-shadow: 5px 5px 0 var(--kv2-frame);
   transform: translate(-1px, -1px);
 }
