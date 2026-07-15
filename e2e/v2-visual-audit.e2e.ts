@@ -150,6 +150,16 @@ test.describe('v2 visual audit', () => {
       const createStyle = getComputedStyle(createButton);
       const createBackground = parseRgb(createStyle.backgroundColor);
       const createForeground = parseRgb(createStyle.color);
+      const filterButton = document.querySelector('.kv2-filter-trigger');
+      if (!filterButton) throw new Error('Missing filter button');
+      const filterStyle = getComputedStyle(filterButton);
+      const filterBackground = parseRgb(filterStyle.backgroundColor);
+      const filterForeground = parseRgb(filterStyle.color);
+      const selectedProject = document.querySelector('.app-project-chip.is-active');
+      if (!selectedProject) throw new Error('Missing selected project control');
+      const selectedProjectStyle = getComputedStyle(selectedProject);
+      const selectedProjectBackground = parseRgb(selectedProjectStyle.backgroundColor);
+      const selectedProjectForeground = parseRgb(selectedProjectStyle.color);
       const todoCard = document.querySelector('.kv2-column[data-status="todo"] .kv2-card');
       const todoAccent = todoCard?.querySelector('.kv2-card-accent');
       const runtimeBadge = todoCard?.querySelector('.kv2-runtime-badge');
@@ -174,6 +184,15 @@ test.describe('v2 visual audit', () => {
           foreground: createForeground,
           contrast: contrast(createForeground, createBackground),
         },
+        filterButton: {
+          background: filterBackground,
+          contrast: contrast(filterForeground, filterBackground),
+        },
+        selectedProject: {
+          background: selectedProjectBackground,
+          foreground: selectedProjectForeground,
+          contrast: contrast(selectedProjectForeground, selectedProjectBackground),
+        },
         graphiteChrome: {
           cardAccentWidth: getComputedStyle(todoAccent).width,
           cardAccent: parseRgb(getComputedStyle(todoAccent).backgroundColor),
@@ -192,18 +211,18 @@ test.describe('v2 visual audit', () => {
       cardBorder: '#3c4146',
       shadow: 'rgba(8, 10, 12, .55)',
     });
-    expect(darkPalette.headers.map(({ background }) => background)).toEqual([
-      [37, 40, 44],
-      [37, 40, 44],
-      [37, 40, 44],
-      [37, 40, 44],
-    ]);
+    expect(new Set(darkPalette.headers.map(({ background }) => background.join(','))).size).toBe(4);
     expect(darkPalette.headers.every(({ contrast }) => contrast >= 4.5)).toBe(true);
     expect(darkPalette.createButton.foreground).toEqual([212, 215, 219]);
     expect(darkPalette.createButton.contrast).toBeGreaterThanOrEqual(4.5);
+    expect(darkPalette.filterButton.background).toEqual([59, 130, 246]);
+    expect(darkPalette.filterButton.contrast).toBeGreaterThanOrEqual(4.5);
+    expect(darkPalette.selectedProject.background).toEqual([48, 58, 70]);
+    expect(darkPalette.selectedProject.foreground).toEqual([212, 215, 219]);
+    expect(darkPalette.selectedProject.contrast).toBeGreaterThanOrEqual(4.5);
     expect(darkPalette.graphiteChrome).toEqual({
-      cardAccentWidth: '3px',
-      cardAccent: [111, 137, 173],
+      cardAccentWidth: '8px',
+      cardAccent: [59, 130, 246],
       runtimeBadge: [45, 49, 53],
       startAction: [58, 74, 93],
       queueAction: [45, 49, 53],

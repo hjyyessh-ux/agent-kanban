@@ -29,7 +29,7 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 | 계층 | 그룹 | 예시 | 다크에서 override? |
 |------|------|------|--------------------|
 | ① 브랜드 (불변) | Status 4종 · Agent 13종 · Runtime 브랜드 · Wiki data-viz | `--kv2-status-todo-accent`, `--kv2-agent-sisyphus`, `--kv2-runtime-claude`, `--kv2-dataviz-troubleshooting` | ❌ 절대 안 바꿈 |
-| ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · 역할별 chrome · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-column-header-todo-bg`, `--kv2-dialog-shadow-color`, `--kv2-info-surface` | ✅ 이 계층만 |
+| ② 시맨틱 (테마 가변) | Surface · Text · Border · Neutral ramp · Interactive · Shadow · Status-soft · 역할별 chrome · Inverse | `--kv2-surface`, `--kv2-text-primary`, `--kv2-border`, `--kv2-neutral-500`, `--kv2-control-selected-bg`, `--kv2-column-header-todo-bg`, `--kv2-dialog-shadow-color` | ✅ 이 계층만 |
 | ③ 구조 (테마 무관) | Typography · Text scale · Spacing · Radius · Geometry · Transition | `--kv2-font-sans`, `--kv2-text-lg`, `--kv2-sp-4`, `--kv2-radius-md` | — (색 아님) |
 
 Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
@@ -62,11 +62,11 @@ Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
   `color-mix(in srgb, var(--kv2-shadow-hard-color) N%, transparent)`를 사용하므로
   라이트 값은 기존과 동일하다.
 - **Graphite display 색과 브랜드 원색 분리**: status/agent/runtime 브랜드 토큰
-  자체는 바꾸지 않는다. 보드처럼 같은 색이 반복되는 화면은
-  `--kv2-status-*-display`를 사용한다. 컬럼 헤더는 `#25282C` 중립 면과 4px
-  display 상태선, 카드는 3px display accent를 사용하며 런타임 배지는 중립 pill로
-  통일한다. 생성·상세 다이얼로그의 큰 런타임 면과 phase/status chrome도 같은
-  display 계층을 사용하고, 원색은 아이콘처럼 작은 브랜드 식별자에만 남긴다.
+  자체는 바꾸지 않는다. 보드처럼 상태 구분이 핵심인 화면은
+  `--kv2-status-*-display`를 사용한다. 컬럼 헤더는 상태색을 섞은 graphite 면과
+  6px 상태선, 카드는 8px 원색 accent와 옅은 상태 tint를 사용한다. 런타임 배지는
+  중립 pill로 통일하고, 생성·상세 다이얼로그의 큰 런타임 면과 phase/status chrome은
+  더 조용한 display 계층을 사용한다.
   보드의 일괄 액션·세션 카운트·FEEDBACK 이동 배너·세션 대화 모달은 각각
   `--kv2-column-action-*`, `--kv2-session-*`, `--kv2-feedback-nav-*` 역할 토큰을
   사용한다. Wiki의 큰 면적과 컨트롤은 `--kv2-wiki-*-display`를 사용하며

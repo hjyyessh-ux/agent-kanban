@@ -222,7 +222,6 @@
   font-weight: 700;
   color: var(--kv2-strong-label-color);
   letter-spacing: 0;
-  opacity: 0.85;
 }
 
 .kv2-panel-heading {
@@ -303,7 +302,6 @@
   font-weight: 700;
   color: var(--kv2-strong-label-color);
   letter-spacing: 0;
-  opacity: 0.85;
 }
 
 .kv2-create-input {
@@ -634,9 +632,7 @@
 }
 
 .kv2-command-control {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 42px;
-  align-items: stretch;
+  display: block;
   min-height: 56px;
   border: 2px solid var(--kv2-border-strong);
   border-radius: 8px;
@@ -646,7 +642,7 @@
 }
 
 .kv2-command-picker--meta .kv2-command-control {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   min-height: 0;
   border: 0;
@@ -660,6 +656,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
   border-right: 2px solid var(--kv2-border-strong);
   background: var(--kv2-success-surface-deep);
   color: var(--kv2-border-strong);
@@ -673,16 +670,18 @@
 }
 
 .kv2-command-trigger {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
   gap: 2px;
+  width: 100%;
+  min-height: 56px;
   min-width: 0;
   border: 0;
   background: transparent;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 0;
   text-align: left;
   font-family: var(--kv2-font-sans);
 }
@@ -700,6 +699,7 @@
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-sm);
   font-weight: 900;
+  padding: 8px 12px;
 }
 
 .kv2-command-trigger--empty .kv2-command-trigger-main {
@@ -708,52 +708,38 @@
 }
 
 .kv2-command-picker--meta .kv2-command-trigger {
-  min-height: 0;
-  padding: 0 8px 0 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 30px;
+  padding: 0;
 }
 
 .kv2-command-picker--meta .kv2-command-trigger-main {
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-md-plus);
   font-weight: 700;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
+  padding: 0;
 }
 
 .kv2-command-picker--meta .kv2-command-trigger--empty .kv2-command-trigger-main {
-  color: var(--kv2-border-strong);
+  color: var(--kv2-text-secondary);
   font-weight: 700;
 }
 
-.kv2-command-toggle {
-  width: 42px;
-  border: 0;
-  border-left: 2px solid var(--kv2-border-strong);
-  background: var(--kv2-warn-surface);
-  color: var(--kv2-border-strong);
-  cursor: pointer;
-  font-size: var(--kv2-text-xl);
-  font-weight: 900;
-  line-height: 1;
-}
-
-.kv2-command-toggle:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
-
-.kv2-command-picker--meta .kv2-command-toggle {
-  align-self: start;
-  width: auto;
-  border: 0;
-  background: transparent;
-  color: var(--kv2-border-strong);
-  font-size: var(--kv2-text-xs);
+.kv2-command-trigger-arrow {
+  flex: 0 0 auto;
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-sm);
   font-weight: 800;
   line-height: 1;
-  padding: 7px 0 0 8px;
+  padding: 0 12px;
 }
 
-.kv2-command-picker--meta .kv2-command-toggle:hover {
+.kv2-command-picker--meta .kv2-command-trigger-arrow {
+  padding: 0;
+}
+
+.kv2-command-trigger:hover .kv2-command-trigger-arrow {
   color: var(--kv2-text-link);
 }
 
@@ -802,7 +788,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   font-size: var(--kv2-text-xs);
   font-weight: 900;
   text-transform: uppercase;
@@ -829,7 +815,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
   background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-control-text-color);
   padding: 8px 10px;
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-sm);
@@ -867,7 +853,7 @@
   border: 2px solid var(--kv2-border-strong);
   border-radius: 6px;
   background: var(--kv2-surface);
-  color: var(--kv2-border-strong);
+  color: var(--kv2-text-primary);
   cursor: pointer;
   padding: 9px 10px;
   text-align: left;
@@ -890,21 +876,22 @@
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-sm);
   font-weight: 900;
+  color: var(--kv2-text-primary);
 }
 
 .kv2-command-option-desc {
   min-width: 0;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-text-secondary);
   font-size: var(--kv2-text-sm);
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.25;
 }
 
 .kv2-command-option-params {
   min-width: 0;
-  color: var(--kv2-neutral-600);
+  color: var(--kv2-text-muted);
   font-size: var(--kv2-text-xs);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.25;
 }
 
@@ -929,12 +916,11 @@
   min-width: 0;
   border: 0;
   background: transparent;
-  color: var(--kv2-border-strong);
+  color: var(--kv2-strong-label-color);
   cursor: pointer;
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-base);
   font-weight: 700;
-  opacity: 0.85;
   padding: 0;
   text-align: left;
 }

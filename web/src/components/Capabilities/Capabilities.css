@@ -122,12 +122,12 @@
 }
 
 .cap-viewnav-btn--active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-tab-active-fg);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
 }
 
 .cap-viewnav-btn--active .cap-viewnav-caption {
-  color: var(--kv2-tab-active-fg);
+  color: var(--kv2-control-selected-fg);
 }
 
 .cap-viewnav-btn:hover:not(.cap-viewnav-btn--active) {
@@ -178,8 +178,8 @@
 }
 
 .cap-filter-btn--active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-tab-active-fg);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
 }
 
 .cap-filter-btn:hover:not(.cap-filter-btn--active) {
@@ -807,9 +807,9 @@
 }
 
 .inv-vis-btn--active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-surface);
-  border-color: var(--kv2-text-primary);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
+  border-color: var(--kv2-control-selected-border);
 }
 
 .inv-item-vis-panel {
@@ -1518,8 +1518,8 @@
 }
 
 .vis-seg-btn--active {
-  background: var(--kv2-text-primary);
-  color: var(--kv2-tab-active-fg);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
 }
 
 .vis-seg-btn:hover:not(.vis-seg-btn--active):not(:disabled) {
@@ -1896,4 +1896,3 @@
     overflow-x: visible;
   }
 }
-

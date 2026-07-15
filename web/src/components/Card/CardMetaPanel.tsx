@@ -102,9 +102,6 @@ const RuntimePicker: React.FC<RuntimePickerProps> = ({ value, runtimes, onChange
         aria-expanded={open}
         title="Change runtime"
       >
-        <span className={`kv2-runtime-trigger-icon kv2-runtime-trigger-icon--${value}`}>
-          <RuntimeBadgeIcon runtime={value} />
-        </span>
         <span className="kv2-runtime-trigger-label">{selectedRuntime?.label ?? value}</span>
         <span className="kv2-runtime-trigger-arrow" aria-hidden="true">▾</span>
       </button>
