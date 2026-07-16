@@ -40,10 +40,7 @@ if [ -n "${AGENT_KANBAN_DISPATCH_CARD_ID:-}" ]; then
 fi
 
 SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id // empty')
-LAST_MESSAGE=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // empty')
-
-# Truncate result to 10KB to avoid oversized payloads.
-RESULT=$(echo "$LAST_MESSAGE" | head -c 10240)
+RESULT=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // empty')
 
 TRACKING_DIR="${KANBAN_DATA_DIR_RESOLVED}/.claude-hooks"
 TRACKING_FILE="${TRACKING_DIR}/${SESSION_ID}.card-id"

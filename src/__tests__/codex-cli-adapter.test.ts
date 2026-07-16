@@ -115,6 +115,32 @@ describe('CodexCliAdapter', () => {
     });
   });
 
+  test('dispatch preserves a result longer than the former card mirror limit', async () => {
+    await withTempDir(async (dir) => {
+      const result = `${'codex-result-'.repeat(6_000)}RESULT-END`;
+      const fakeCodex = await createFakeCodexBinary(dir, 'success', { output: result });
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const card = await store.createCard({
+        title: 'Codex long result',
+        description: 'Return everything',
+        agentRuntime: 'codex',
+        projectDir: dir,
+      });
+      const adapter = createCodexCliAdapter({
+        store,
+        runStore,
+        commandOverride: [fakeCodex],
+        threadIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      await handle.done;
+
+      expect((await store.getCard(card.id))?.result).toBe(result);
+    });
+  });
+
   test('failure marks run failed and returns card to todo', async () => {
     await withTempDir(async (dir) => {
       const fakeCodex = await createFakeCodexBinary(dir, 'failure', { stderr: 'rate limit' });

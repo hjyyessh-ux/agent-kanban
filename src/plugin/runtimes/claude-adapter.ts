@@ -17,8 +17,6 @@ import { withSpawnLock } from './spawn-lock';
 import { notifyTelegramCompletion } from '../telegram-completion';
 
 const DEFAULT_SESSION_ID_TIMEOUT_MS = 30_000;
-const MAX_RESULT_MIRROR_LENGTH = 60_000;
-
 export interface ClaudeAdapterDeps {
   store: KanbanStore;
   settingsStore: SettingsStore;
@@ -393,7 +391,7 @@ async function handleClaudeCompletion(input: {
       status: 'complete',
       resolution: 'completed',
       sessionId: input.state.sessionId,
-      result: mirrorResult(finalResult || '(no output)'),
+      result: finalResult || '(no output)',
       responseAt: new Date().toISOString(),
       progressSummary: undefined,
       staleStatus: null,
@@ -430,7 +428,7 @@ async function handleClaudeCompletion(input: {
   await input.deps.store.updateCard(input.input.card.id, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
-    result: mirrorResult(finalResult || message),
+    result: finalResult || message,
     staleStatus: null,
     staleDetectedAt: null,
   });
@@ -468,11 +466,6 @@ async function readTail(path: string): Promise<string> {
   const text = (await readFile(path, 'utf8')).trim();
   if (!text) return '';
   return text.slice(-4096);
-}
-
-function mirrorResult(text: string): string {
-  if (text.length <= MAX_RESULT_MIRROR_LENGTH) return text;
-  return `${text.slice(0, MAX_RESULT_MIRROR_LENGTH)}\n\n[truncated] Full result is preserved in the runtime run directory.`;
 }
 
 function getReadableStream(value: unknown): ReadableStream<Uint8Array> {

@@ -72,6 +72,10 @@
 - `supersededByCardId`
 - `supersededAt`
 
+`description`, `progressSummary`, `result` 문자열은 애플리케이션에서 길이를 제한하거나 잘라 저장하지 않습니다.
+`GET /api/cards/:id/progress`도 전체 단계와 tool detail/body를 반환합니다. UI의 접힌 상태는 일부만
+보여줄 수 있지만 펼치면 서버가 반환한 전체 내용을 표시합니다.
+
 ### `DELETE /api/cards/:id`
 
 카드를 active view에서 숨기고 `deletedAt`을 기록합니다. 응답은 `204 No Content`입니다.

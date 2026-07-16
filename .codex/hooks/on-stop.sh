@@ -44,7 +44,7 @@ if [ -n "${AGENT_KANBAN_DISPATCH_CARD_ID:-}" ]; then
 fi
 
 SESSION_ID=$(json_get '.session_id // .sessionID // .sessionId // .id')
-LAST_MESSAGE=$(json_get '.last_assistant_message // .lastAssistantMessage // .result // .message // .text')
+RESULT=$(json_get '.last_assistant_message // .lastAssistantMessage // .result // .message // .text')
 
 if [ -z "$SESSION_ID" ]; then
   exit 0
@@ -62,8 +62,6 @@ CARD_ID=$(cat "$TRACKING_FILE")
 if [ -z "$CARD_ID" ]; then
   exit 0
 fi
-
-RESULT=$(echo "$LAST_MESSAGE" | head -c 10240)
 
 curl "${KANBAN_CURL_ARGS[@]}" -X PATCH "${KANBAN_API}/api/cards/${CARD_ID}" \
   -H "Content-Type: application/json" \

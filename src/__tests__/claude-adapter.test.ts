@@ -99,6 +99,34 @@ describe('ClaudeAdapter', () => {
     });
   });
 
+  test('dispatch preserves a result longer than the former card mirror limit', async () => {
+    await withTempDir(async (dir) => {
+      const result = `${'claude-result-'.repeat(6_000)}RESULT-END`;
+      const fakeClaude = await createFakeClaudeBinary(dir, 'success', { output: result });
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const card = await store.createCard({
+        title: 'Claude long result',
+        description: 'Return everything',
+        agentRuntime: 'claude',
+        projectDir: dir,
+      });
+      const adapter = createClaudeAdapter({
+        store,
+        settingsStore,
+        runStore,
+        commandOverride: [fakeClaude],
+        sessionIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      await handle.done;
+
+      expect((await store.getCard(card.id))?.result).toBe(result);
+    });
+  });
+
   test('failure marks run failed and returns card to todo', async () => {
     await withTempDir(async (dir) => {
       const fakeClaude = await createFakeClaudeBinary(dir, 'failure', { stderr: 'rate limit' });

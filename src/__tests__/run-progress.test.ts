@@ -94,23 +94,26 @@ describe('buildRunProgress — claude stream', () => {
     expect(progress.steps[0].detail).toBe('/repo/a.ts');
     expect(progress.steps[0].body).toBe('- const a = 1;\n+ const a = 2;');
     expect(progress.steps[1].body).toBe('export const b = 3;');
-    expect(progress.steps[2].body).toBeUndefined(); // short command → detail suffices
+    expect(progress.steps[2].body).toBe('ls');
     expect(progress.steps[3].body).toBe(longCommand);
   });
 
-  test('truncates long detail and keeps only the most recent steps past the cap', () => {
+  test('preserves every step and the full tool detail and body', () => {
     const longCommand = 'x'.repeat(500);
+    const longContent = `${'content\n'.repeat(1_000)}WRITE-END`;
     const lines = [
       assistantToolUse('Bash', { command: longCommand }),
+      assistantToolUse('Write', { file_path: '/f/full.txt', content: longContent }),
       ...Array.from({ length: 450 }, (_, i) => assistantToolUse('Read', { file_path: `/f/${i}.ts` })),
     ];
 
     const progress = buildRunProgress(makeRun(), lines);
-    expect(progress.totalSteps).toBe(451);
-    expect(progress.steps.length).toBe(400);
-    // Oldest steps dropped — the Bash step is gone, the tail is preserved.
+    expect(progress.totalSteps).toBe(452);
+    expect(progress.steps.length).toBe(452);
+    expect(progress.steps[0].detail).toBe(longCommand);
+    expect(progress.steps[0].body).toBe(longCommand);
+    expect(progress.steps[1].body).toBe(longContent);
     expect(progress.steps[progress.steps.length - 1].detail).toBe('/f/449.ts');
-    expect(progress.steps.every(s => (s.detail?.length ?? 0) <= 201)).toBe(true);
   });
 });
 

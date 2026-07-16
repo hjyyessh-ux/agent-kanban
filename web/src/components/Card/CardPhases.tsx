@@ -77,9 +77,6 @@ const ProgressSteps: React.FC<{
       : steps.slice(0, INITIAL_VISIBLE_STEPS);
   const hiddenCount = steps.length - visibleSteps.length;
   const offset = collapsed && live ? steps.length - visibleSteps.length : 0;
-  const truncatedCount = totalSteps - steps.length;
-  const showProgressNote = !collapsed && truncatedCount > 0;
-  const showProgressFooter = showProgressNote || live;
 
   return (
     <div className="kv2-progress">
@@ -134,12 +131,9 @@ const ProgressSteps: React.FC<{
           );
         })}
       </ol>
-      {showProgressFooter && (
+      {live && (
         <div className="kv2-progress-footer">
-          {showProgressNote && (
-            <span className="kv2-progress-note">{totalSteps} steps total (oldest {truncatedCount} omitted)</span>
-          )}
-          {live && <span className="kv2-progress-live">● running · {totalSteps} steps so far</span>}
+          <span className="kv2-progress-live">● running · {totalSteps} steps so far</span>
         </div>
       )}
     </div>
@@ -324,8 +318,8 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
           collapsed={collapsedPhases.progress}
           onToggle={() => togglePhase('progress')}
         >
-          {/* No CSS height clip here — ProgressSteps truncates by step count
-              instead, so the single header show/hide toggle reveals everything. */}
+          {/* No CSS height clip here — collapsed mode limits visible steps,
+              while the single header show/hide toggle reveals everything. */}
           <div className="kv2-phase-content kv2-phase-content--markdown kv2-phase-content--expanded">
             {card.progressSummary && <CardMarkdown text={card.progressSummary} />}
             {progress && progress.steps.length > 0 && (

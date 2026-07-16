@@ -166,6 +166,9 @@ sequenceDiagram
 | `stderr.log` | subprocess stderr |
 | `last-message.md` | adapter가 card result로 사용할 최종 메시지 |
 
+Prompt와 최종 메시지는 run artifact와 card 양쪽에 길이 제한 없이 보존합니다. Progress API도
+`events.jsonl`에서 파싱한 전체 단계와 tool detail/body를 잘라내지 않고 반환합니다.
+
 `RuntimeRunStore.reconcileStale(store)`는 플러그인 재시작 시 `starting`/`running` run을 `failed`로 정리하고, 연결된 `in_progress` card를 `todo`로 되돌린다.
 
 ### 원자적 쓰기

@@ -59,7 +59,7 @@ Runtime dispatch is one of the high-risk areas tracked in `docs/invariants.md` (
 
 - Adapters are constructed via `create<Name>Adapter(deps)` factories taking `{ store, settingsStore, runStore, dispatchFn, commandOverride, ...timeouts }` — `commandOverride` and injected timeouts exist specifically so tests can swap the spawned binary and avoid real timeout waits.
 - Card failure updates always set `staleStatus: null, staleDetectedAt: null` alongside `status: 'todo'` — clearing stale flags is part of the "return to todo" contract, not optional cleanup.
-- `mirrorResult()` (both adapters, duplicated intentionally) truncates result text mirrored onto the card at 60,000 chars; full output always remains in the run directory's `last-message.md`/`events.jsonl`.
+- Both adapters persist the complete final result on the card as well as in the run directory's `last-message.md`/`events.jsonl`; do not introduce mirror-length caps because the card result is a lossless task artifact.
 - Stream parsers (`claude-stream-parser.ts`, `codex-jsonl-parser.ts`) are pure functions with no I/O — extend them with new event variants rather than parsing JSON inline in the adapters.
 
 ## Dependencies
