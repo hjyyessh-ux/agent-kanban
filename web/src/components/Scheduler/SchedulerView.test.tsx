@@ -38,9 +38,9 @@ describe('SchedulerView readability', () => {
 
     expect(html).toContain('정해진 시간에 shell command나 skill을 자동으로 실행합니다');
     expect(html).toContain('자동 실행 중');
-    expect(html).toContain('<strong>Schedule</strong>');
-    expect(html).toContain('<strong>Timezone</strong>');
-    expect(html).toContain('<strong>Next run</strong>');
+    expect(html).toContain('<strong>일정</strong>');
+    expect(html).toContain('<strong>시간대</strong>');
+    expect(html).toContain('<strong>다음 실행</strong>');
     expect(html).toContain('role="button"');
     expect(html).toContain('tabindex="0"');
   });

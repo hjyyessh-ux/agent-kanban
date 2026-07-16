@@ -83,6 +83,7 @@ export default function App() {
   const [boardViewMode, setBoardViewMode] = useState<'board' | 'list'>(getStoredBoardViewMode);
   const [groupCompleteSessions, setGroupCompleteSessions] = useState(getStoredCompleteSessionView);
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
+  const [showBoardTools, setShowBoardTools] = useState(false);
   const scheduler = useScheduler(activeTab === 'scheduler');
   const scripts = useScripts(activeTab === 'capabilities');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
@@ -234,7 +235,21 @@ export default function App() {
           <h1 className="app-title">Agent Kanban</h1>
           <AppTabs activeTab={activeTab} onActivate={setActiveTab} />
           {activeTab === 'board' && (
-            <div className="app-board-view-controls">
+            <button
+              type="button"
+              className={`app-board-mobile-tools-toggle${showBoardTools ? ' is-active' : ''}`}
+              aria-expanded={showBoardTools}
+              aria-controls="app-board-tools"
+              onClick={() => setShowBoardTools((open) => !open)}
+            >
+              {showBoardTools ? 'Board 도구 닫기' : '☰ Board 도구'}
+            </button>
+          )}
+          {activeTab === 'board' && (
+            <div
+              className={`app-board-view-controls${showBoardTools ? ' is-mobile-open' : ''}`}
+              id="app-board-tools"
+            >
               <BoardFilterBar
                 cards={cards}
                 filters={boardFilters}
@@ -272,7 +287,7 @@ export default function App() {
             </div>
           )}
           {activeTab === 'board' && (
-            <div className="app-board-subheader">
+            <div className={`app-board-subheader${showBoardTools ? ' is-mobile-open' : ''}`}>
               <div className="app-project-controls">
                 <BoardProjectSwitcher
                   cards={cards}

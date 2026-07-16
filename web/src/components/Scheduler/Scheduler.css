@@ -380,6 +380,38 @@
   }
 }
 
+@media (max-width: 640px) {
+  .scheduler-view {
+    padding: 0 var(--kv2-sp-4);
+  }
+
+  .scheduler-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scheduler-toolbar .kv2-btn--primary {
+    width: 100%;
+  }
+
+  .scheduler-item-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scheduler-item-actions {
+    justify-content: space-between;
+  }
+
+  .scheduler-meta-group {
+    width: 100%;
+  }
+
+  .scheduler-item-footer .kv2-btn {
+    flex: 1 1 auto;
+  }
+}
+
 /* ── History Panel (body inside DialogSkeleton) ──────────────── */
 .scheduler-history-list {
   display: flex;

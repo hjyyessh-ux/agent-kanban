@@ -1961,6 +1961,10 @@
    ============================================================= */
 
 @media (max-width: 520px) {
+  .cap-view {
+    padding: 0 var(--kv2-sp-4);
+  }
+
   /* Header: view tabs / primary actions / gear each get their own line
      instead of being forced onto one row that clips at narrow widths. */
   .cap-header {
@@ -1999,6 +2003,62 @@
   .diag-bar-inner {
     flex-wrap: wrap;
     overflow-x: visible;
+  }
+
+  .diag-badge {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  .ptp-item {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .ptp-item-label {
+    grid-column: 3;
+    grid-row: 1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .ptp-item-dir {
+    grid-column: 3;
+    grid-row: 2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .ptp-git-badge {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .ptp-remove-btn,
+  .ptp-builtin {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .ptp-item .scope-chip {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .ptp-item > .kv2-badge {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .ptp-add-label,
+  .ptp-add-kind,
+  .ptp-add-dir {
+    flex-basis: 100%;
+    width: 100%;
+    min-width: 0;
   }
 
   .cap-freeze-guide {

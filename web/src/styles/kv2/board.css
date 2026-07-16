@@ -18,6 +18,10 @@
   padding: 0 calc(5% + 30px);
 }
 
+.kv2-board-mobile-nav {
+  display: none;
+}
+
 .kv2-filter {
   display: flex;
   flex-direction: column;
@@ -1203,8 +1207,48 @@
 }
 
 @media (max-width: 768px) {
+  .kv2-board-mobile-nav {
+    display: flex;
+    gap: var(--kv2-sp-2);
+    margin: 0 var(--kv2-sp-3) var(--kv2-sp-4);
+    padding-bottom: var(--kv2-sp-1);
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .kv2-board-mobile-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--kv2-sp-2);
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: 0 var(--kv2-sp-3);
+    border: 2px solid var(--kv2-frame);
+    background: var(--kv2-surface);
+    color: var(--kv2-text-primary);
+    box-shadow: var(--kv2-shadow-sm);
+    font-family: var(--kv2-font-heading);
+    font-size: var(--kv2-text-sm);
+    font-weight: 800;
+  }
+
+  .kv2-board-mobile-nav-btn span {
+    min-width: 20px;
+    padding: 1px var(--kv2-sp-1);
+    border: 1.5px solid var(--kv2-frame);
+    background: var(--kv2-bg);
+    font-family: var(--kv2-font-mono);
+    font-size: var(--kv2-text-ui-sm);
+    text-align: center;
+  }
+
   .kv2-board {
     grid-template-columns: 1fr;
+    padding: 0 var(--kv2-sp-3);
+  }
+
+  .kv2-column {
+    scroll-margin-top: 170px;
   }
 }
 
@@ -1909,7 +1953,7 @@
   line-height: 1;
   letter-spacing: 0.02em;
   color: var(--kv2-prompt-label-color);
-  opacity: 0.5;
+  opacity: 0.78;
   text-transform: capitalize;
 }
 
@@ -2066,7 +2110,7 @@
   letter-spacing: 0;
   line-height: 1.35;
   color: var(--kv2-card-date-color);
-  opacity: 0.6;
+  opacity: 0.82;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

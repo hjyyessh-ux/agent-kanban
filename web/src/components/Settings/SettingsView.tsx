@@ -71,6 +71,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const { sync, syncing, outcome } = useModelSync();
   // Bumped after a sync so the derived catalogs re-read the synced pool.
   const [catalogNonce, setCatalogNonce] = useState(0);
+  const [modelQuery, setModelQuery] = useState('');
+  const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(
+    () => new Set(['opencode']),
+  );
 
   const claudeCatalog = useMemo<RuntimeCatalogModel[]>(() => {
     const synced = readSyncedCatalog().claude;
@@ -102,6 +106,49 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     ],
     [modelList, claudeCatalog, codexCatalog],
   );
+  const modelGroups = useMemo(() => {
+    const query = modelQuery.trim().toLowerCase();
+    const groups = [
+      {
+        key: 'opencode',
+        label: 'OpenCode',
+        items: modelList.map((model) => ({
+          id: model.id,
+          name: model.name,
+          provider: model.providerName,
+        })),
+      },
+      {
+        key: 'claude',
+        label: 'Claude',
+        items: claudeCatalog.map((model) => ({
+          id: model.id,
+          name: model.label,
+          provider: model.tier ?? 'claude',
+        })),
+      },
+      {
+        key: 'codex',
+        label: 'Codex',
+        items: codexCatalog.map((model) => ({
+          id: model.id,
+          name: model.label,
+          provider: model.tier ?? 'codex',
+        })),
+      },
+    ];
+
+    return groups.map((group) => ({
+      ...group,
+      visibleItems: query
+        ? group.items.filter((item) =>
+            item.name.toLowerCase().includes(query) ||
+            item.id.toLowerCase().includes(query) ||
+            item.provider.toLowerCase().includes(query),
+          )
+        : group.items,
+    }));
+  }, [modelQuery, modelList, claudeCatalog, codexCatalog]);
 
   useEffect(() => {
     fetchModels().then(setModelList).catch(() => setModelList([]));
@@ -130,6 +177,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setEnabledModelIds(next);
     localStorage.setItem(MODEL_FILTER_KEY, JSON.stringify([...next]));
     setHasStoredPreference(true);
+  };
+
+  const toggleModelGroup = (groupKey: string) => {
+    setExpandedModelGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
   };
 
   const handleSyncModels = async () => {
@@ -209,15 +265,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   return (
     <div className="settings-view">
       <div className="settings-toolbar">
-        <span className="settings-toolbar-title">
-          Settings ({entries.length})
-        </span>
+        <div className="settings-toolbar-heading">
+          <h2 className="settings-toolbar-title">Settings</h2>
+          <p className="settings-toolbar-subtitle">
+            연결, 모델, 화면 표시와 로컬 설정을 관리합니다. {entries.length}개 사용자 설정
+          </p>
+        </div>
         <button
           type="button"
           className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
-          + NEW SETTING
+          + 새 설정
         </button>
       </div>
 
@@ -225,11 +284,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {networkEntry && (
         <div className="settings-network-toggle">
           <div className="settings-network-info">
-            <h3 className="settings-network-title">Network Access</h3>
+            <h3 className="settings-network-title">네트워크 접근</h3>
             <p className="settings-network-desc">
               {isNetworkExposed
-                ? 'Board is accessible from other devices on your network (0.0.0.0)'
-                : 'Board is only accessible on this machine (localhost)'}
+                ? '같은 네트워크의 다른 기기에서도 보드에 접근할 수 있습니다 (0.0.0.0).'
+                : '이 기기에서만 보드에 접근할 수 있습니다 (localhost).'}
             </p>
           </div>
           <button
@@ -252,11 +311,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {lanFullAccessEntry && isNetworkExposed && (
         <div className="settings-network-toggle">
           <div className="settings-network-info">
-            <h3 className="settings-network-title">LAN Full Access</h3>
+            <h3 className="settings-network-title">LAN 전체 접근</h3>
             <p className="settings-network-desc">
               {isLanFullAccess
-                ? 'LAN devices receive the auth token: Capabilities, Skills, Scripts, Settings and all mutations work off-localhost. Anyone who can reach this port gets full control.'
-                : 'LAN devices get a read-only board view. Capabilities, Skills, Scripts and Settings require opening the board via localhost.'}
+                ? 'LAN 기기에 인증 토큰을 제공해 모든 기능과 변경 작업을 허용합니다. 이 포트에 접근 가능한 사용자는 전체 권한을 갖습니다.'
+                : 'LAN 기기에는 읽기 전용 보드만 제공합니다. Capabilities와 Settings 변경은 localhost에서만 가능합니다.'}
             </p>
           </div>
           <button
@@ -283,7 +342,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="settings-model-filter-info">
             <h3 className="settings-network-title">Model Visibility</h3>
             <p className="settings-network-desc">
-              Choose which models appear in card creation and editing dropdowns
+              카드 생성·편집 화면에 표시할 모델을 선택합니다.
             </p>
           </div>
           <div className="settings-model-filter-actions">
@@ -294,16 +353,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               disabled={syncing}
               title="Fetch the latest Claude/Codex models from the backend provider list"
             >
-              {syncing ? 'Syncing…' : '↻ Sync models'}
+              {syncing ? '동기화 중…' : '↻ 모델 동기화'}
             </button>
             <button
               type="button"
               className="kv2-btn kv2-btn--outline kv2-btn--small"
               onClick={toggleAllModels}
             >
-              {allKnownIds.every(id => enabledModelIds.has(id)) ? 'Deselect All' : 'Select All'}
+              {allKnownIds.every(id => enabledModelIds.has(id)) ? '전체 해제' : '전체 선택'}
             </button>
           </div>
+        </div>
+
+        <div className="settings-model-search-row">
+          <input
+            type="search"
+            className="kv2-input settings-model-search"
+            value={modelQuery}
+            onChange={(event) => setModelQuery(event.target.value)}
+            placeholder="모델 이름, ID, provider 검색"
+            aria-label="Search visible models"
+          />
+          <span className="settings-model-selection-count">
+            {enabledModelIds.size} / {allKnownIds.length}개 표시
+          </span>
         </div>
 
         {(syncedAt || outcome) && (
@@ -318,125 +391,112 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </p>
         )}
 
-        {modelList.length > 0 && (
-          <>
-            <h4 className="settings-model-group-title">Opencode</h4>
-            <div className="settings-model-list">
-              {modelList.map(m => (
-                <label key={m.id} className="settings-model-item">
-                  <input
-                    type="checkbox"
-                    className="settings-model-checkbox"
-                    checked={enabledModelIds.has(m.id)}
-                    onChange={() => toggleModel(m.id)}
-                  />
-                  <span className="settings-model-name">{m.name}</span>
-                  <span className="settings-model-provider">{m.providerName}</span>
-                </label>
-              ))}
-            </div>
-          </>
-        )}
-
-        <h4 className="settings-model-group-title">Claude</h4>
-        <div className="settings-model-list">
-          {claudeCatalog.map(m => (
-            <label key={m.id} className="settings-model-item">
-              <input
-                type="checkbox"
-                className="settings-model-checkbox"
-                checked={enabledModelIds.has(m.id)}
-                onChange={() => toggleModel(m.id)}
-              />
-              <span className="settings-model-name">{m.label}</span>
-              <span className="settings-model-provider">{m.tier ?? 'claude'}</span>
-            </label>
-          ))}
-        </div>
-
-        <h4 className="settings-model-group-title">Codex</h4>
-        <div className="settings-model-list">
-          {codexCatalog.map(m => (
-            <label key={m.id} className="settings-model-item">
-              <input
-                type="checkbox"
-                className="settings-model-checkbox"
-                checked={enabledModelIds.has(m.id)}
-                onChange={() => toggleModel(m.id)}
-              />
-              <span className="settings-model-name">{m.label}</span>
-              <span className="settings-model-provider">{m.tier ?? 'codex'}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Theme */}
-      <div className="settings-model-filter">
-        <div className="settings-model-filter-header">
-          <div className="settings-model-filter-info">
-            <h3 className="settings-network-title">Theme</h3>
-            <p className="settings-network-desc">
-              Switch between light and dark, or follow your system setting
-            </p>
-          </div>
-        </div>
-        <div className="settings-theme-control" role="group" aria-label="Theme">
-          {(['light', 'dark', 'system'] as const).map((opt) => {
-            const labels: Record<ThemePreference, string> = {
-              light: '☀ Light',
-              dark: '🌙 Dark',
-              system: '💻 System',
-            };
-            const active = theme.preference === opt;
+        <div className="settings-model-groups">
+          {modelGroups.map((group) => {
+            const open = modelQuery.trim().length > 0 || expandedModelGroups.has(group.key);
+            const selectedCount = group.items.filter((item) => enabledModelIds.has(item.id)).length;
             return (
-              <button
-                key={opt}
-                type="button"
-                className={`kv2-btn kv2-btn--small ${active ? 'kv2-btn--primary' : 'kv2-btn--outline'}`}
-                aria-pressed={active}
-                onClick={() => theme.setPreference(opt)}
-              >
-                {labels[opt]}
-              </button>
+              <section key={group.key} className="settings-model-group">
+                <button
+                  type="button"
+                  className="settings-model-group-toggle"
+                  onClick={() => toggleModelGroup(group.key)}
+                  aria-expanded={open}
+                  aria-controls={`settings-model-group-${group.key}`}
+                >
+                  <span>{group.label}</span>
+                  <span className="settings-model-group-count">
+                    {selectedCount}/{group.items.length} 표시 {open ? '▴' : '▾'}
+                  </span>
+                </button>
+                {open && (
+                  <div className="settings-model-list" id={`settings-model-group-${group.key}`}>
+                    {group.visibleItems.length > 0 ? group.visibleItems.map((model) => (
+                      <label key={model.id} className="settings-model-item">
+                        <input
+                          type="checkbox"
+                          className="settings-model-checkbox"
+                          checked={enabledModelIds.has(model.id)}
+                          onChange={() => toggleModel(model.id)}
+                        />
+                        <span className="settings-model-name">{model.name}</span>
+                        <span className="settings-model-provider">{model.provider}</span>
+                      </label>
+                    )) : (
+                      <p className="settings-model-empty">검색 결과가 없습니다.</p>
+                    )}
+                  </div>
+                )}
+              </section>
             );
           })}
         </div>
       </div>
 
-      {/* Font Size Scale */}
+      {/* Appearance */}
       <div className="settings-model-filter">
         <div className="settings-model-filter-header">
           <div className="settings-model-filter-info">
-            <h3 className="settings-network-title">Font Size</h3>
+            <h3 className="settings-network-title">Appearance</h3>
             <p className="settings-network-desc">
-              Adjust text size across the board, modals, and UI elements
+              테마와 전체 UI 글자 크기를 한곳에서 조정합니다.
             </p>
           </div>
-          {fontScale.scale !== 1 && (
-            <button
-              type="button"
-              className="kv2-btn kv2-btn--outline kv2-btn--small"
-              onClick={() => fontScale.setScale(1)}
-            >
-              Reset
-            </button>
-          )}
         </div>
-        <div className="settings-font-scale-control">
-          <span className="settings-font-scale-label">A</span>
-          <input
-            type="range"
-            className="settings-font-scale-slider"
-            min={fontScale.min}
-            max={fontScale.max}
-            step={0.05}
-            value={fontScale.scale}
-            onChange={(e) => fontScale.setScale(Number(e.target.value))}
-            aria-label="Font size scale"
-          />
-          <span className="settings-font-scale-label settings-font-scale-label--lg">A</span>
-          <span className="settings-font-scale-value">{Math.round(fontScale.scale * 100)}%</span>
+        <div className="settings-appearance-grid">
+          <div className="settings-appearance-section">
+            <span className="settings-appearance-label">Theme</span>
+            <div className="settings-theme-control" role="group" aria-label="Theme">
+              {(['light', 'dark', 'system'] as const).map((opt) => {
+                const labels: Record<ThemePreference, string> = {
+                  light: '☀ Light',
+                  dark: '🌙 Dark',
+                  system: '💻 System',
+                };
+                const active = theme.preference === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`kv2-btn kv2-btn--small ${active ? 'kv2-btn--primary' : 'kv2-btn--outline'}`}
+                    aria-pressed={active}
+                    onClick={() => theme.setPreference(opt)}
+                  >
+                    {labels[opt]}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="settings-appearance-section">
+            <div className="settings-appearance-section-header">
+              <span className="settings-appearance-label">Font Size</span>
+              {fontScale.scale !== 1 && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--outline kv2-btn--small"
+                  onClick={() => fontScale.setScale(1)}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <div className="settings-font-scale-control">
+              <span className="settings-font-scale-label">A</span>
+              <input
+                type="range"
+                className="settings-font-scale-slider"
+                min={fontScale.min}
+                max={fontScale.max}
+                step={0.05}
+                value={fontScale.scale}
+                onChange={(e) => fontScale.setScale(Number(e.target.value))}
+                aria-label="Font size scale"
+              />
+              <span className="settings-font-scale-label settings-font-scale-label--lg">A</span>
+              <span className="settings-font-scale-value">{Math.round(fontScale.scale * 100)}%</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -457,12 +517,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="loading-spinner" role="status" aria-live="polite" />
       ) : entries.length === 0 ? (
         <div className="settings-empty">
-          No settings yet. Add secrets and configuration values to use in scripts.
+          아직 사용자 설정이 없습니다. 스크립트에서 사용할 secret이나 설정값을 추가하세요.
         </div>
       ) : (
         <div className="settings-list">
           {sortedEntries.map((entry) => (
-            <div key={entry.id} className="settings-item" onClick={() => setEditEntry(entry)} style={{ cursor: 'pointer' }}>
+            <div
+              key={entry.id}
+              className="settings-item settings-item--clickable"
+              onClick={() => setEditEntry(entry)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setEditEntry(entry);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Edit setting ${entry.key}`}
+            >
               <div className="settings-item-header">
                 <div className="settings-item-info">
                   <h3 className="settings-item-key">{entry.key}</h3>

@@ -3,7 +3,7 @@ import type { KanbanStatus } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
 import { CardActions, FavoriteToggleButton, NestedChildAccordion, RuntimeBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
-import { formatDuration } from '../../utils/format-duration';
+import { formatDuration, formatRelativeTime } from '../../utils/format-duration';
 import { buildResumeCommand } from '../../utils/resume-command';
 
 export interface BoardCardProps {
@@ -76,6 +76,8 @@ export const BoardCard: React.FC<BoardCardProps> = ({
     : (vm.startedAt && vm.completedAt
         ? formatDuration(new Date(vm.completedAt).getTime() - new Date(vm.startedAt).getTime())
         : null);
+  const wasUpdated = vm.updatedAt !== vm.createdAt;
+  const activityAt = wasUpdated ? vm.updatedAt : vm.createdAt;
 
   return (
     <div
@@ -182,12 +184,13 @@ export const BoardCard: React.FC<BoardCardProps> = ({
 
       <div className="kv2-card-footer">
         <div className="kv2-card-footer-meta">
-          <div>
-            <span className="kv2-card-timestamp">Created {formatExactTimestamp(vm.createdAt)}</span>
+          <div title={`Created ${formatExactTimestamp(vm.createdAt)} · Updated ${formatExactTimestamp(vm.updatedAt)}`}>
+            <span className="kv2-card-timestamp">
+              {wasUpdated ? 'Updated' : 'Created'} {formatRelativeTime(activityAt)}
+            </span>
             {durationLabel && (
               <span className="kv2-card-timestamp kv2-card-timestamp--duration">⏱ {durationLabel}</span>
             )}
-            <span className="kv2-card-timestamp kv2-card-timestamp--updated">Updated {formatExactTimestamp(vm.updatedAt)}</span>
           </div>
         </div>
 

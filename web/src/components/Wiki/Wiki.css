@@ -172,6 +172,35 @@
   padding: 16px;
 }
 
+.wiki-setup-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kv2-sp-4);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-card-border-width) solid var(--kv2-wiki-progress-display);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-sm);
+}
+
+.wiki-setup-callout > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+.wiki-setup-callout strong {
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-base);
+}
+
+.wiki-setup-callout span {
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-sm);
+}
+
 .wiki-options-section {
   display: flex;
   flex-direction: column;
@@ -276,6 +305,10 @@
 }
 
 @media (max-width: 640px) {
+  .wiki-view {
+    padding: 0 var(--kv2-sp-4);
+  }
+
   .wiki-hero {
     padding: 16px;
   }
@@ -287,6 +320,26 @@
   .wiki-hero-status-card,
   .wiki-options-trigger {
     width: 100%;
+  }
+
+  .wiki-setup-callout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wiki-setup-callout .kv2-btn {
+    width: 100%;
+  }
+
+  .wiki-pipeline {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wiki-pipeline span {
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
   }
 }
 
