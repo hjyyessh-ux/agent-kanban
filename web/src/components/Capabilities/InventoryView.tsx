@@ -170,6 +170,20 @@ export function InventoryView({
         </p>
       )}
 
+      <aside className="cap-freeze-guide" aria-labelledby="cap-freeze-guide-title">
+        <div className="cap-freeze-guide__icon" aria-hidden="true">❄</div>
+        <div className="cap-freeze-guide__copy">
+          <strong id="cap-freeze-guide-title">잠시 사용하지 않을 항목은 Freeze 하세요</strong>
+          <span>
+            Freeze는 삭제가 아닙니다. 현재 agent 설정에서만 빼고 안전하게 보관하며,
+            Cold Storage에서 원하는 위치로 다시 복원할 수 있습니다.
+          </span>
+        </div>
+        <span className="cap-freeze-guide__flow" aria-label="Freeze workflow">
+          Active → Freeze → Cold Storage → Restore
+        </span>
+      </aside>
+
       {/* ── Toolbar ─────────────────────────────────────────── */}
       <div className="cap-toolbar">
         <input
@@ -310,13 +324,13 @@ export function InventoryView({
                         {!p.managed && (
                           <button
                             type="button"
-                            className="inv-freeze-btn"
+                            className="kv2-btn kv2-btn--small cold-freeze-btn"
                             title={FREEZE_TITLE}
                             disabled={freezingIds.has(`mcp:${item.identity}:${p.identity}`)}
                             onClick={() => void handleFreezeMcpPlacement(item, p)}
                             aria-label={`Freeze ${item.runtime} ${item.name} (${p.scope}) to cold storage`}
                           >
-                            {freezingIds.has(`mcp:${item.identity}:${p.identity}`) ? '…' : '❄ Freeze'}
+                            {freezingIds.has(`mcp:${item.identity}:${p.identity}`) ? '보관 중…' : '❄ Freeze to storage'}
                           </button>
                         )}
                       </div>
@@ -415,13 +429,13 @@ export function InventoryView({
                       {skill.scope !== 'system' && (
                         <button
                           type="button"
-                          className="inv-freeze-btn"
+                          className="kv2-btn kv2-btn--small cold-freeze-btn"
                           title={FREEZE_TITLE}
                           disabled={freezingIds.has(identity)}
                           onClick={() => void handleFreezeSkill(skill)}
                           aria-label={`Freeze ${skill.skillName} to cold storage`}
                         >
-                          {freezingIds.has(identity) ? '…' : '❄ Freeze'}
+                          {freezingIds.has(identity) ? '보관 중…' : '❄ Freeze to storage'}
                         </button>
                       )}
                     </div>

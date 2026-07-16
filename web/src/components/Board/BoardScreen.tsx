@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
 import { selectColumns } from './board-selectors';
@@ -50,6 +50,7 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
   filters,
 }) => {
   const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -81,31 +82,50 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
   return (
     <div>
       {viewMode === 'board' ? (
-        <div className="kv2-board">
-          {columns.map((col) => (
-            <BoardColumn
-              key={col.status}
-              column={col}
-              allCards={filteredCards}
-              onCardClick={onCardClick}
-              onSessionOpen={onSessionOpen}
-              onStatusChange={onStatusChange}
-              onFavoriteToggle={onFavoriteToggle}
-              onDispatch={onDispatch}
-              onQueueOpen={onQueueOpen}
-              onUnqueue={onUnqueue}
-              onDelete={onDelete}
-              onArchiveCards={onArchiveCards}
-              onCreate={col.status === 'todo' ? onCreate : undefined}
-              groupCompleteSessions={groupCompleteSessions}
-              onCompleteAll={
-                col.status === 'complete' ? onCompleteAll : undefined
-              }
-              onArchive={col.status === 'done' ? onArchive : undefined}
-              onReorder={col.status === 'todo' ? onReorder : undefined}
-            />
-          ))}
-        </div>
+        <>
+          <nav className="kv2-board-mobile-nav" aria-label="Board status sections">
+            {columns.map((column) => (
+              <button
+                key={column.status}
+                type="button"
+                className="kv2-board-mobile-nav-btn"
+                data-status={column.status}
+                onClick={() => {
+                  boardRef.current
+                    ?.querySelector<HTMLElement>(`.kv2-column[data-status="${column.status}"]`)
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+              >
+                {column.label} <span>{column.count}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="kv2-board" ref={boardRef}>
+            {columns.map((col) => (
+              <BoardColumn
+                key={col.status}
+                column={col}
+                allCards={filteredCards}
+                onCardClick={onCardClick}
+                onSessionOpen={onSessionOpen}
+                onStatusChange={onStatusChange}
+                onFavoriteToggle={onFavoriteToggle}
+                onDispatch={onDispatch}
+                onQueueOpen={onQueueOpen}
+                onUnqueue={onUnqueue}
+                onDelete={onDelete}
+                onArchiveCards={onArchiveCards}
+                onCreate={col.status === 'todo' ? onCreate : undefined}
+                groupCompleteSessions={groupCompleteSessions}
+                onCompleteAll={
+                  col.status === 'complete' ? onCompleteAll : undefined
+                }
+                onArchive={col.status === 'done' ? onArchive : undefined}
+                onReorder={col.status === 'todo' ? onReorder : undefined}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <BoardListView
           columns={columns}

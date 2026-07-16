@@ -13,10 +13,10 @@ const COMMANDS = [
 ];
 
 function getStatusLabel(status: MaintenanceStatus | null): string {
-  if (!status || status.state === 'idle') return 'Idle';
-  if (status.state === 'running') return 'Running';
-  if (status.state === 'success') return 'Completed';
-  return 'Failed';
+  if (!status || status.state === 'idle') return '대기';
+  if (status.state === 'running') return '진행 중';
+  if (status.state === 'success') return '완료';
+  return '실패';
 }
 
 function getStatusClass(status: MaintenanceStatus | null): string {
@@ -116,9 +116,9 @@ export function SettingsMaintenancePanel() {
     <section className="settings-maintenance" aria-labelledby="settings-maintenance-title">
       <div className="settings-maintenance-header">
         <div className="settings-network-info">
-          <h3 id="settings-maintenance-title" className="settings-network-title">Maintenance</h3>
+          <h3 id="settings-maintenance-title" className="settings-network-title">유지보수</h3>
           <p className="settings-network-desc">
-            Build, install, and restart the local Agent Kanban plugin.
+            로컬 Agent Kanban 플러그인을 빌드·설치하고 재시작합니다.
           </p>
         </div>
         <span className={`settings-maintenance-status ${getStatusClass(status)}`}>
@@ -133,14 +133,14 @@ export function SettingsMaintenancePanel() {
       <div className="settings-maintenance-actions">
         <button
           type="button"
-          className="kv2-btn kv2-btn--primary"
+          className="kv2-btn kv2-btn--outline"
           onClick={() => {
             setError(null);
             setConfirmOpen(true);
           }}
           disabled={busy}
         >
-          {busy ? 'Restarting...' : 'Apply Update & Restart'}
+          {busy ? '재시작 중…' : '업데이트 및 재시작'}
         </button>
         <button
           type="button"
@@ -149,13 +149,13 @@ export function SettingsMaintenancePanel() {
             void handleToggleLog();
           }}
         >
-          {logOpen ? 'Hide restart log' : 'View restart log'}
+          {logOpen ? '재시작 로그 숨기기' : '재시작 로그 보기'}
         </button>
       </div>
 
       {waitingForRestart && (
         <div className="settings-maintenance-reconnect" role="status" aria-live="polite">
-          Waiting for the plugin server to return...
+          플러그인 서버가 다시 연결되기를 기다리는 중입니다…
         </div>
       )}
 

@@ -416,16 +416,16 @@ export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose,
               <span className="cap-detail-section-title">❄ Freeze to Cold Storage</span>
               <button
                 type="button"
-                className="kv2-btn kv2-btn--outline kv2-btn--small cap-freeze-action-btn"
+                className="kv2-btn kv2-btn--small cold-freeze-btn"
                 onClick={() => void handleFreeze()}
                 disabled={freezing || frozenSuccess}
               >
-                {freezing ? 'Freezing...' : '❄ Freeze'}
+                {freezing ? '보관 중…' : '❄ Freeze to storage'}
               </button>
             </div>
             <p className="cap-detail-section-hint">
-              Config에서 제거되어 에이전트가 읽을 수 없게 됩니다.
-              Cold Storage 탭에서 restore 가능합니다.
+              삭제하지 않고 현재 agent 설정에서만 분리합니다.
+              필요할 때 Cold Storage 탭에서 원하는 위치로 복원할 수 있습니다.
             </p>
             {(skill.scope === 'project' || skill.source?.includes('project')) && (
               <p className="cap-detail-section-hint cap-detail-section-hint--danger">

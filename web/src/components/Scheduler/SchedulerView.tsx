@@ -80,15 +80,18 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   return (
     <div className="scheduler-view">
       <div className="scheduler-toolbar">
-        <span className="scheduler-toolbar-title">
-          Schedulers ({entries.length})
-        </span>
+        <div className="scheduler-toolbar-heading">
+          <h2 className="scheduler-toolbar-title">Scheduler</h2>
+          <p className="scheduler-toolbar-subtitle">
+            정해진 시간에 shell command나 skill을 자동으로 실행합니다. {entries.length}개 등록됨
+          </p>
+        </div>
         <button
           type="button"
           className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
-          + NEW SCHEDULER
+          + 새 Scheduler
         </button>
       </div>
 
@@ -109,7 +112,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         <div className="loading-spinner" role="status" aria-live="polite" />
       ) : entries.length === 0 ? (
         <div className="scheduler-empty">
-          No schedulers yet. Create one to start automating tasks.
+          아직 등록된 Scheduler가 없습니다. 반복 작업을 자동화할 일정을 만들어 보세요.
         </div>
       ) : (
         <div className="scheduler-list">
@@ -118,13 +121,23 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               key={entry.id}
               className={`scheduler-item ${entry.status === 'inactive' ? 'scheduler-item--inactive' : ''}`}
               onClick={() => handleEditOpen(entry)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleEditOpen(entry);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${entry.name} scheduler details`}
             >
               <div className="scheduler-item-header">
                 <div className="scheduler-item-info">
                   <div className="scheduler-item-title-row">
                     <h3 className="scheduler-item-name">{entry.name}</h3>
                     <span className={`kv2-badge scheduler-badge--${entry.status}`}>
-                      {entry.status}
+                      {entry.status === 'active' ? '활성' : '정지'}
                     </span>
                   </div>
                   {entry.description && (
@@ -132,6 +145,9 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                   )}
                 </div>
                 <div className="scheduler-item-actions">
+                  <span className="scheduler-toggle-label">
+                    {entry.status === 'active' ? '자동 실행 중' : '일시 정지됨'}
+                  </span>
                   <button
                     type="button"
                     className={`scheduler-toggle ${entry.status === 'active' ? 'scheduler-toggle--active' : ''}`}
@@ -141,21 +157,28 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                     }}
                     role="switch"
                     aria-checked={entry.status === 'active'}
-                    title={entry.status === 'active' ? 'Deactivate' : 'Activate'}
-                    aria-label={entry.status === 'active' ? 'Deactivate' : 'Activate'}
+                    title={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
+                    aria-label={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
                   />
                 </div>
               </div>
 
               <div className="scheduler-item-meta">
-                <span title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
-                  ⏰ {entry.cronDescription ?? entry.cron}
+                <span className="scheduler-meta-group" title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
+                  <strong>일정</strong>
+                  <span>{entry.cronDescription ?? entry.cron}</span>
                 </span>
                 {entry.timezone && (
-                  <span aria-label={`Timezone: ${entry.timezone}`}>🌐 {entry.timezone}</span>
+                  <span className="scheduler-meta-group" aria-label={`Timezone: ${entry.timezone}`}>
+                    <strong>시간대</strong>
+                    <span>{entry.timezone}</span>
+                  </span>
                 )}
                 {entry.nextRunAt && (
-                  <span>Next: {new Date(entry.nextRunAt).toLocaleString()}</span>
+                  <span className="scheduler-meta-group">
+                    <strong>다음 실행</strong>
+                    <span>{new Date(entry.nextRunAt).toLocaleString()}</span>
+                  </span>
                 )}
               </div>
 
@@ -178,8 +201,9 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
 
               <div className="scheduler-item-meta">
                 {entry.lastRunAt && (
-                  <span>
-                    Last run: {timeAgo(entry.lastRunAt)}
+                  <span className="scheduler-meta-group">
+                    <strong>최근 실행</strong>
+                    <span>{timeAgo(entry.lastRunAt)}</span>
                     {entry.lastRunStatus && (
                       <> — <span className={`kv2-badge scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
                     )}
@@ -196,7 +220,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                     void onRunEntry(entry.id);
                   }}
                 >
-                  ▶ Run Now
+                  ▶ 지금 실행
                 </button>
                 <button
                   type="button"
@@ -206,7 +230,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                     setHistoryEntry(entry);
                   }}
                 >
-                  📋 History ({entry.history.length})
+                  📋 기록 ({entry.history.length})
                 </button>
                 <button
                   type="button"
@@ -216,7 +240,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                     handleEditOpen(entry);
                   }}
                 >
-                  ✎ Edit
+                  ✎ 수정
                 </button>
                 <button
                   type="button"
@@ -226,7 +250,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                     handleDelete(entry);
                   }}
                 >
-                  ✕ Delete
+                  ✕ 삭제
                 </button>
               </div>
             </div>

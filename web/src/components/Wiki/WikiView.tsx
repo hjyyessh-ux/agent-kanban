@@ -76,10 +76,10 @@ function firstLine(value?: string): string {
 }
 
 function statusLabel(status: WikiWorkerStatus | null): string {
-  if (!status) return '...';
-  if (!status.enabled) return 'Disabled';
-  if (status.running) return 'Processing';
-  return 'Idle';
+  if (!status) return '확인 중';
+  if (!status.enabled) return '비활성';
+  if (status.running) return '처리 중';
+  return '대기 중';
 }
 
 function statusClass(status: WikiWorkerStatus | null): string {
@@ -266,12 +266,6 @@ export function WikiView() {
     }
   }, [mode, reloadArchiveCards]);
 
-  useEffect(() => {
-    if (config && !config.configured) {
-      setShowOptions(true);
-    }
-  }, [config]);
-
   // Status polling — refresh the list when a processing run finishes.
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -430,9 +424,9 @@ export function WikiView() {
             완료된 작업 기록을 읽고 보존할 내용만 선별해 troubleshooting, how-to, decision, concept, reference 문서로 정리합니다.
           </p>
           <div className="wiki-pipeline" aria-label="LLM Wiki 처리 흐름">
-            <span>Done Archive</span>
-            <span>LLM Triage</span>
-            <span>Type 분류</span>
+            <span>Done 보관</span>
+            <span>LLM 선별</span>
+            <span>문서 유형 분류</span>
             <span>Obsidian 저장</span>
           </div>
         </div>
@@ -444,10 +438,10 @@ export function WikiView() {
               {status?.running && status.totalInRun > 0 && ` ${status.processedInRun}/${status.totalInRun}`}
             </span>
             <div className="wiki-hero-metrics">
-              <span><strong>{stats?.pending ?? status?.pendingCount ?? 0}</strong> pending</span>
-              <span><strong>{stats?.failed ?? 0}</strong> failed</span>
+              <span><strong>{stats?.pending ?? status?.pendingCount ?? 0}</strong> 대기</span>
+              <span><strong>{stats?.failed ?? 0}</strong> 실패</span>
               {status?.lastFinishedAt && !status.running && (
-                <span title="마지막 처리 완료 시각"><strong>{formatTime(status.lastFinishedAt)}</strong> last</span>
+                <span title="마지막 처리 완료 시각"><strong>{formatTime(status.lastFinishedAt)}</strong> 최근</span>
               )}
             </div>
           </div>
@@ -457,20 +451,36 @@ export function WikiView() {
             onClick={() => setShowOptions(v => !v)}
             aria-expanded={showOptions}
             aria-controls="wiki-options-panel"
-            title="Wiki options"
+            title="Wiki 설정"
           >
             <span aria-hidden="true">⚙</span>
-            <span>Options</span>
+            <span>설정</span>
           </button>
         </div>
       </section>
+
+      {config && !config.configured && !showOptions && (
+        <section className="wiki-setup-callout" aria-labelledby="wiki-setup-title">
+          <div>
+            <strong id="wiki-setup-title">Obsidian 저장 위치를 연결하면 시작할 수 있습니다</strong>
+            <span>모델 선택 → 저장 폴더 지정 → 활성화의 3단계로 설정합니다.</span>
+          </div>
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--primary"
+            onClick={() => setShowOptions(true)}
+          >
+            위키 설정 시작
+          </button>
+        </section>
+      )}
 
       {/* ─── Options drawer: config, worker actions, logs ─────────── */}
       {showOptions && (
         <section className="wiki-options-panel" id="wiki-options-panel">
           <div className="wiki-options-section wiki-options-section--unified">
             <div className="wiki-options-section-head">
-              <h3>Settings</h3>
+              <h3>Wiki 설정</h3>
               <span>
                 {config ? routeLabel(config.route, config.model) : '—'}
                 {status ? ` · ${statusLabel(status)} · prompt v${status.promptVersion}` : ''}
@@ -482,7 +492,7 @@ export function WikiView() {
 
             <div className="wiki-worker-actions">
               <div className="wiki-backfill-note">
-                <strong>Backfill 최신 500</strong>
+                <strong>최근 500개 백필</strong>
                 <span>
                   미처리, 실패, 오래된 프롬프트 버전의 아카이브 카드 후보를 최신 updatedAt 순으로 최대 500개만 pending 큐에 넣습니다.
                 </span>
@@ -494,7 +504,7 @@ export function WikiView() {
                   onClick={() => setShowLogs(v => !v)}
                   title="워커 활동 로그 보기"
                 >
-                  Logs {showLogs ? '▴' : '▾'}
+                  로그 {showLogs ? '▴' : '▾'}
                 </button>
                 <button
                   type="button"
@@ -503,7 +513,7 @@ export function WikiView() {
                   disabled={busy}
                   title="워커 상태를 리셋하고 타이머를 재시작합니다"
                 >
-                  Restart
+                  워커 재시작
                 </button>
                 <button
                   type="button"
@@ -512,7 +522,7 @@ export function WikiView() {
                   disabled={busy || !status?.enabled}
                   title="가장 최근 500장까지만 큐잉합니다 (토큰 보호)"
                 >
-                  Backfill (최신 500)
+                  최근 500개 백필
                 </button>
               </div>
             </div>
@@ -546,10 +556,10 @@ export function WikiView() {
         <div className="wiki-stat-cards">
           {([
             ['documents', null, stats.docCount, '문서', 'docs'],
-            ['archive', null, stats.total, 'Archive Cards', 'archive'],
-            ['cards', 'failed', stats.failed, 'Failed', 'failed'],
-            ['cards', 'pending', stats.pending, 'Pending', 'pending'],
-            ['cards', 'skipped', stats.skipped, 'Skipped', 'skipped'],
+            ['archive', null, stats.total, '보관 카드', 'archive'],
+            ['cards', 'failed', stats.failed, '실패', 'failed'],
+            ['cards', 'pending', stats.pending, '대기', 'pending'],
+            ['cards', 'skipped', stats.skipped, '제외', 'skipped'],
             ['cards', 'unprocessed', stats.unprocessed, '미처리', 'unprocessed'],
           ] as [WikiMode, DecisionFilter | null, number, string, string][]).map(([targetMode, filter, num, label, accent]) => {
             const active = targetMode === 'documents'
