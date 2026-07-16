@@ -52,11 +52,16 @@ test.describe('Capabilities tab — navigation', () => {
 
   test('view nav switches between the three views', async ({ page }) => {
     await goToCapabilities(page);
+    await expect(page.locator('.cap-freeze-guide')).toContainText('Freeze는 삭제가 아닙니다');
     await page.locator('.cap-viewnav-btn', { hasText: 'Skills & Scripts' }).click();
     await expect(page.locator('.cap-viewnav-btn--active')).toContainText('Skills & Scripts');
     await expect(page.locator('.cap-commands-section')).toBeVisible();
     await page.locator('.cap-viewnav-btn', { hasText: 'Cold Storage' }).click();
     await expect(page.locator('.cap-viewnav-btn--active')).toContainText('Cold Storage');
+    const intro = page.locator('.cold-intro');
+    await expect(intro).toContainText('지금은 쓰지 않지만 나중에 다시 필요할 capability');
+    await expect(intro).toContainText('Freeze는 삭제가 아닙니다');
+    await expect(intro).toContainText('Delete만 영구 삭제');
     await page.locator('.cap-viewnav-btn', { hasText: 'Inventory' }).click();
     await expect(page.locator('.cap-viewnav-btn--active')).toContainText('Inventory');
   });

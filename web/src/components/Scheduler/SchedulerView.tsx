@@ -80,9 +80,12 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   return (
     <div className="scheduler-view">
       <div className="scheduler-toolbar">
-        <span className="scheduler-toolbar-title">
-          Schedulers ({entries.length})
-        </span>
+        <div className="scheduler-toolbar-heading">
+          <h2 className="scheduler-toolbar-title">Schedulers</h2>
+          <p className="scheduler-toolbar-subtitle">
+            정해진 시간에 shell command나 skill을 자동으로 실행합니다. {entries.length}개 등록됨
+          </p>
+        </div>
         <button
           type="button"
           className="kv2-btn kv2-btn--primary"
@@ -118,6 +121,16 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               key={entry.id}
               className={`scheduler-item ${entry.status === 'inactive' ? 'scheduler-item--inactive' : ''}`}
               onClick={() => handleEditOpen(entry)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleEditOpen(entry);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${entry.name} scheduler details`}
             >
               <div className="scheduler-item-header">
                 <div className="scheduler-item-info">
@@ -132,6 +145,9 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
                   )}
                 </div>
                 <div className="scheduler-item-actions">
+                  <span className="scheduler-toggle-label">
+                    {entry.status === 'active' ? '자동 실행 중' : '일시 정지됨'}
+                  </span>
                   <button
                     type="button"
                     className={`scheduler-toggle ${entry.status === 'active' ? 'scheduler-toggle--active' : ''}`}
@@ -148,14 +164,21 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
               </div>
 
               <div className="scheduler-item-meta">
-                <span title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
-                  ⏰ {entry.cronDescription ?? entry.cron}
+                <span className="scheduler-meta-group" title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
+                  <strong>Schedule</strong>
+                  <span>{entry.cronDescription ?? entry.cron}</span>
                 </span>
                 {entry.timezone && (
-                  <span aria-label={`Timezone: ${entry.timezone}`}>🌐 {entry.timezone}</span>
+                  <span className="scheduler-meta-group" aria-label={`Timezone: ${entry.timezone}`}>
+                    <strong>Timezone</strong>
+                    <span>{entry.timezone}</span>
+                  </span>
                 )}
                 {entry.nextRunAt && (
-                  <span>Next: {new Date(entry.nextRunAt).toLocaleString()}</span>
+                  <span className="scheduler-meta-group">
+                    <strong>Next run</strong>
+                    <span>{new Date(entry.nextRunAt).toLocaleString()}</span>
+                  </span>
                 )}
               </div>
 
@@ -178,8 +201,9 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
 
               <div className="scheduler-item-meta">
                 {entry.lastRunAt && (
-                  <span>
-                    Last run: {timeAgo(entry.lastRunAt)}
+                  <span className="scheduler-meta-group">
+                    <strong>Last run</strong>
+                    <span>{timeAgo(entry.lastRunAt)}</span>
                     {entry.lastRunStatus && (
                       <> — <span className={`kv2-badge scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
                     )}

@@ -347,12 +347,12 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
                   <div className="mcp-detail-placement-actions">
                     <button
                       type="button"
-                      className="inv-freeze-btn"
+                      className="kv2-btn kv2-btn--small cold-freeze-btn"
                       disabled={freezingIdx === i}
                       onClick={() => void handleFreeze(p, i)}
                       title="이 placement를 Cold Storage로 보관합니다 (같은 이름이 있으면 최신으로 덮어씀)"
                     >
-                      {freezingIdx === i ? '…' : '❄ Freeze'}
+                      {freezingIdx === i ? '보관 중…' : '❄ Freeze to storage'}
                     </button>
                     <button
                       type="button"

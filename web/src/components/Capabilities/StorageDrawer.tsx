@@ -196,24 +196,23 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
 
   if (cold.entries.length === 0) {
     return (
-      <div className="cap-empty cold-empty">
-        <p className="cold-empty__icon">❄</p>
-        <p>Cold Storage is empty.</p>
-        <p className="cold-empty__hint">
-          Freeze a skill or MCP from the Inventory view to remove it from the active context.
-        </p>
+      <div className="cold-drawer">
+        <StorageIntroduction />
+        <div className="cap-empty cold-empty">
+          <p className="cold-empty__icon" aria-hidden="true">❄</p>
+          <p className="cold-empty__title">아직 보관된 항목이 없습니다</p>
+          <p className="cold-empty__hint">
+            Inventory에서 <strong>Freeze to storage</strong>를 누르면 skill이나 MCP를
+            삭제하지 않고 이곳에 보관할 수 있습니다.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="cold-drawer">
-      <div className="cold-drawer__hint">
-        <p>
-          Frozen items are removed from the agent context (agents cannot read them). Restore to
-          bring them back. Delete is permanent.
-        </p>
-      </div>
+      <StorageIntroduction />
 
       {skillEntries.length > 0 && (
         <section className="cold-section">
@@ -257,5 +256,38 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
         </section>
       )}
     </div>
+  );
+}
+
+function StorageIntroduction() {
+  return (
+    <section className="cold-intro" aria-labelledby="cold-intro-title">
+      <div className="cold-intro__heading">
+        <span className="cold-intro__icon" aria-hidden="true">❄</span>
+        <div>
+          <h2 id="cold-intro-title">Cold Storage</h2>
+          <p>지금은 쓰지 않지만 나중에 다시 필요할 capability를 보관하는 곳입니다.</p>
+        </div>
+      </div>
+      <div className="cold-intro__steps" aria-label="Cold Storage 동작 방식">
+        <div className="cold-intro__step">
+          <strong>1. Freeze</strong>
+          <span>agent 설정에서 분리</span>
+        </div>
+        <span className="cold-intro__arrow" aria-hidden="true">→</span>
+        <div className="cold-intro__step">
+          <strong>2. Keep</strong>
+          <span>파일과 설정을 안전하게 보관</span>
+        </div>
+        <span className="cold-intro__arrow" aria-hidden="true">→</span>
+        <div className="cold-intro__step">
+          <strong>3. Restore</strong>
+          <span>원하는 위치로 다시 활성화</span>
+        </div>
+      </div>
+      <p className="cold-intro__warning">
+        Freeze는 삭제가 아닙니다. <strong>Delete만 영구 삭제</strong>이며 되돌릴 수 없습니다.
+      </p>
+    </section>
   );
 }
