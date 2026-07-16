@@ -31,6 +31,8 @@
 
 ### 완료 전환
 
+- 카드의 Prompt 본문과 Result는 생성 경로(organic Claude/Codex 훅, 보드 runtime dispatch, opencode idle completion)에 관계없이 원문 전체를 저장해야 한다. 자동 생성 제목의 기존 120바이트 요약은 유지하되 본문이나 결과를 제목 길이에 맞춰 자르면 안 된다.
+- Progress timeline은 모든 단계를 보존하고, tool detail/body도 원문 전체를 API에 반환해야 한다. UI의 접기/펼치기는 허용하지만 펼친 내용에서 단계나 문자열이 누락되면 안 된다.
 - `session.idle`는 이 프로세스에서 실제 `chat.message` 활동이 관측된 세션만 완료 처리한다.
 - 같은 session에 완료 가능한 `in_progress` 카드가 여러 장이면 `session.idle`에서 전부 `complete`로 전환하되, 가장 최신 완료 가능 카드는 `resolution=completed`, 이전 완료 가능 카드들은 `resolution=superseded`와 `supersededByCardId`를 기록한다.
 - top-level parent 카드에 직접 연결된 child/subagent 카드가 `in_progress`이면 parent는 `session.idle`에서도 완료되지 않는다.

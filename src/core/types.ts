@@ -107,7 +107,7 @@ export type RunProgressStepKind = 'skill' | 'mcp' | 'agent' | 'memory' | 'comman
 export interface RunProgressStep {
   kind: RunProgressStepKind;
   label: string;    // skill 이름, mcp__server__tool, agentType, tool 이름 등
-  detail?: string;  // 한 줄 힌트: command 앞부분 / 파일 경로 / description (truncate 됨)
+  detail?: string;  // command / 파일 경로 / description 전체
   body?: string;    // 클릭 시 펼치는 본문: Edit old/new diff, Bash 전체 command, Write 내용 등
 }
 
@@ -122,8 +122,8 @@ export interface CardRunProgress {
   runStatus: string;        // starting | running | completed | failed | aborted
   startedAt: string;        // ISO 8601
   finishedAt?: string;      // ISO 8601
-  steps: RunProgressStep[]; // 실행 순서 유지, MAX 초과 시 최근 구간만
-  totalSteps: number;       // truncate 이전 전체 단계 수
+  steps: RunProgressStep[]; // 전체 실행 순서 유지
+  totalSteps: number;       // 전체 단계 수
   summary: {
     skills: string[];       // distinct, 정렬
     mcpServers: string[];

@@ -231,6 +231,36 @@ describe('runtime hook scripts', () => {
         });
       });
     });
+
+    test(`${runtime} organic hooks preserve full prompt and result content`, async () => {
+      await withTempDir(async (dir) => {
+        await withFakeApi(async (apiUrl, requests) => {
+          const prompt = `${'prompt-'.repeat(12_000)}PROMPT-END`;
+          const result = `${'result-'.repeat(12_000)}결과-끝`;
+          const promptInput = { ...HOOKS[runtime].promptInput, prompt };
+          const stopInput = { ...HOOKS[runtime].stopInput, last_assistant_message: result };
+
+          await runHook(HOOKS[runtime].prompt, promptInput, {
+            apiUrl,
+            dataDir: dir,
+          });
+          await runHook(HOOKS[runtime].stop, stopInput, {
+            apiUrl,
+            dataDir: dir,
+          });
+
+          const createRequest = requests.find(
+            request => request.method === 'POST' && request.path === '/api/cards',
+          );
+          const completeRequest = requests.findLast(
+            request => request.method === 'PATCH' && request.path === '/api/cards/card-from-hook',
+          );
+          expect((createRequest?.body as { title?: string }).title).toBe(prompt.slice(0, 120));
+          expect((createRequest?.body as { description?: string }).description).toBe(prompt);
+          expect((completeRequest?.body as { result?: string }).result).toBe(result);
+        });
+      });
+    });
   }
 
   test('claude on-stop drains earlier deferred cards even while background tasks remain', async () => {
@@ -416,6 +446,45 @@ describe('runtime hook scripts', () => {
         expect((allPatches[1]?.body as { result?: string }).result).toBe('final wrap-up summary');
         // Still preserved for any further turns.
         expect(existsSync(currentTracking)).toBe(true);
+      });
+    });
+  });
+
+  test('claude subagent completion hooks preserve full results', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const trackingDir = join(dir, HOOKS.claude.trackingDir);
+        mkdirSync(trackingDir, { recursive: true });
+        const syncResult = `${'sync-subagent-'.repeat(6_000)}SYNC-END`;
+        const asyncResult = `${'async-subagent-'.repeat(6_000)}ASYNC-END`;
+
+        writeFileSync(join(trackingDir, 'subagent-tool-long.card-id'), 'sync-child');
+        await runHook(
+          join(process.cwd(), '.claude', 'hooks', 'on-subagent-stop.sh'),
+          {
+            session_id: 'parent-session',
+            tool_name: 'Agent',
+            tool_use_id: 'tool-long',
+            tool_response: syncResult,
+          },
+          { apiUrl, dataDir: dir },
+        );
+
+        writeFileSync(join(trackingDir, 'subagent-agent-agent-long.card-id'), 'async-child');
+        await runHook(
+          join(process.cwd(), '.claude', 'hooks', 'on-subagent-realstop.sh'),
+          {
+            session_id: 'parent-session',
+            agent_id: 'agent-long',
+            last_assistant_message: asyncResult,
+          },
+          { apiUrl, dataDir: dir },
+        );
+
+        const syncPatch = requests.find(request => request.path === '/api/cards/sync-child');
+        const asyncPatch = requests.find(request => request.path === '/api/cards/async-child');
+        expect((syncPatch?.body as { result?: string }).result).toBe(syncResult);
+        expect((asyncPatch?.body as { result?: string }).result).toBe(asyncResult);
       });
     });
   });

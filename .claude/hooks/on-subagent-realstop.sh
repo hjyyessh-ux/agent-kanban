@@ -84,7 +84,6 @@ fi
 
 # The subagent's real final output.
 RESULT=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // ""' 2>/dev/null) || RESULT=""
-RESULT=$(printf '%s' "$RESULT" | head -c 10240)
 
 curl -sf "${KANBAN_AUTH[@]}" -X PATCH "${KANBAN_API}/api/cards/${CHILD_CARD_ID}" \
   -H "Content-Type: application/json" \

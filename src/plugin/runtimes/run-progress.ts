@@ -11,15 +11,6 @@ import type { RuntimeRun } from './runtime-run-store';
 
 type JsonRecord = Record<string, unknown>;
 
-// Payload cap: keep the most recent steps so a live in_progress view always
-// shows current activity; totalSteps preserves the pre-truncation count.
-const MAX_STEPS = 400;
-const MAX_DETAIL_LENGTH = 200;
-// body is the expandable per-step payload (full command, edit diff, …);
-// clipped per side so one giant Write can't blow up the response.
-const MAX_BODY_LENGTH = 1600;
-const MAX_BODY_SIDE_LENGTH = 700;
-
 function asRecord(value: unknown): JsonRecord | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as JsonRecord)
@@ -30,15 +21,8 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function truncateDetail(text: string): string {
-  const singleLine = text.replace(/\s+/g, ' ').trim();
-  if (singleLine.length <= MAX_DETAIL_LENGTH) return singleLine;
-  return `${singleLine.slice(0, MAX_DETAIL_LENGTH)}…`;
-}
-
-function clipBody(text: string, max: number = MAX_BODY_LENGTH): string {
-  if (text.length <= max) return text;
-  return `${text.slice(0, max)}\n… (truncated)`;
+function formatDetail(text: string): string {
+  return text;
 }
 
 // Unified-diff-style preview of an Edit tool call: old lines prefixed with
@@ -46,7 +30,7 @@ function clipBody(text: string, max: number = MAX_BODY_LENGTH): string {
 function formatEditBody(oldString?: string, newString?: string): string | undefined {
   if (!oldString && !newString) return undefined;
   const prefix = (text: string, sign: string) =>
-    clipBody(text, MAX_BODY_SIDE_LENGTH).split('\n').map(line => `${sign} ${line}`).join('\n');
+    text.split('\n').map(line => `${sign} ${line}`).join('\n');
   const parts: string[] = [];
   if (oldString) parts.push(prefix(oldString, '-'));
   if (newString) parts.push(prefix(newString, '+'));
@@ -87,7 +71,7 @@ function extractToolDetail(input: JsonRecord | undefined): string | undefined {
     ?? asString(input.url)
     ?? asString(input.description)
     ?? asString(input.prompt);
-  return candidate ? truncateDetail(candidate) : undefined;
+  return candidate ? formatDetail(candidate) : undefined;
 }
 
 // The expandable body of a tool_use step: full command for Bash, old/new diff
@@ -95,15 +79,13 @@ function extractToolDetail(input: JsonRecord | undefined): string | undefined {
 function extractToolBody(name: string, input: JsonRecord | undefined): string | undefined {
   if (!input) return undefined;
   if (name === 'Bash') {
-    const command = asString(input.command);
-    return command ? clipBody(command) : undefined;
+    return asString(input.command);
   }
   if (name === 'Edit') {
     return formatEditBody(asString(input.old_string), asString(input.new_string));
   }
   if (name === 'Write') {
-    const content = asString(input.content);
-    return content ? clipBody(content, MAX_BODY_SIDE_LENGTH) : undefined;
+    return asString(input.content);
   }
   return undefined;
 }
@@ -144,7 +126,7 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
       steps.push({
         kind: 'agent',
         label: agentType ?? 'agent',
-        ...(description ? { detail: truncateDetail(description) } : {}),
+        ...(description ? { detail: formatDetail(description) } : {}),
       });
       continue;
     }
@@ -175,8 +157,8 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
         steps.push({
           kind: 'agent',
           label: agentType ?? 'agent',
-          ...(description ? { detail: truncateDetail(description) } : {}),
-          ...(prompt ? { body: clipBody(prompt, MAX_BODY_SIDE_LENGTH) } : {}),
+          ...(description ? { detail: formatDetail(description) } : {}),
+          ...(prompt ? { body: prompt } : {}),
         });
         continue;
       }
@@ -192,8 +174,8 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
         steps.push({
           kind: 'command',
           label: 'Bash',
-          ...(command ? { detail: truncateDetail(command) } : {}),
-          ...(command && command.length > MAX_DETAIL_LENGTH ? { body: clipBody(command) } : {}),
+          ...(command ? { detail: formatDetail(command) } : {}),
+          ...(command ? { body: command } : {}),
         });
         continue;
       }
@@ -248,8 +230,8 @@ function stepsFromCodexLines(lines: string[]): RunProgressStep[] {
       steps.push({
         kind: 'command',
         label: 'Shell',
-        ...(command ? { detail: truncateDetail(command) } : {}),
-        ...(command && command.length > MAX_DETAIL_LENGTH ? { body: clipBody(command) } : {}),
+        ...(command ? { detail: formatDetail(command) } : {}),
+        ...(command ? { body: command } : {}),
       });
       continue;
     }
@@ -296,10 +278,9 @@ function assembleProgress(
   meta: Pick<CardRunProgress, 'runId' | 'source' | 'runtime' | 'runStatus' | 'startedAt' | 'finishedAt'>,
   steps: RunProgressStep[],
 ): CardRunProgress {
-  const truncated = steps.length > MAX_STEPS ? steps.slice(steps.length - MAX_STEPS) : steps;
   return {
     ...meta,
-    steps: truncated,
+    steps,
     totalSteps: steps.length,
     summary: summarize(steps),
   };

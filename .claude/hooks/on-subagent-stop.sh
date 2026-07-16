@@ -121,9 +121,6 @@ RESULT=$(echo "$HOOK_INPUT" | jq -r '
     else (. | tostring) end
 ' 2>/dev/null) || RESULT=""
 
-# Truncate to 10KB to avoid oversized payloads.
-RESULT=$(printf '%s' "$RESULT" | head -c 10240)
-
 # Build the PATCH payload; include durationMs only when the hook supplied a number.
 PATCH_BODY=$(echo "$HOOK_INPUT" | jq \
   --arg result "$RESULT" \
