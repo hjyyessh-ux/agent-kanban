@@ -57,8 +57,9 @@
 - runtime-aware follow-up이 완전히 활성화되기 전에는 `/sessions` 후보를 opencode-only로 제한하고 Codex/Claude session을 몰래 새 session으로 fallback하지 않는다.
 - selected session이 stale/invalid이면 새 session을 몰래 만들지 않고 명확한 실패 응답을 보낸다.
 - follow-up 성공 시에도 traceability를 위해 새 in-progress 카드를 만든다.
+- follow-up 카드는 선택된 session의 `projectDir`를 이어받고, 새 session/후속 전달 ACK에는 실제 적용 경로를 표시한다.
 - follow-up 실패 시 selected session을 유지하고 새 session을 몰래 만들지 않는다.
-- `/new_session`은 selected session/card만 지우고 sticky default agent/model/runtime은 보존한다.
+- `/new_session`은 selected session/card만 지우고 sticky default agent/model/runtime/projectDir은 보존한다. `/directory` 기본값은 다른 경로를 지정하거나 `clear`하기 전까지 새 session에 유지된다.
 - trailing agent command와 explicit agent command는 필요할 때만 새 dispatch를 강제한다.
 - `session.idle` 이후에도 Telegram selected session은 유지되어 다음 plain message가 같은 session으로 follow-up될 수 있어야 한다.
 

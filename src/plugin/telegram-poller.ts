@@ -99,15 +99,19 @@ export class TelegramPoller {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
     const bySession = new Map<string, typeof relevant[number]>();
+    const projectDirBySession = new Map<string, string>();
     for (const card of relevant) {
       if (!card.sessionId) continue;
       const key = this.sessionKey(resolveAgentRuntime(card), card.sessionId);
       if (!bySession.has(key)) {
         bySession.set(key, card);
       }
+      if (card.projectDir && !projectDirBySession.has(key)) {
+        projectDirBySession.set(key, card.projectDir);
+      }
     }
 
-    return Array.from(bySession.values()).map((card, index) => ({
+    return Array.from(bySession.entries()).map(([key, card], index) => ({
       index: index + 1,
       sessionId: card.sessionId!,
       cardId: card.id,
@@ -116,6 +120,7 @@ export class TelegramPoller {
       agentRuntime: resolveAgentRuntime(card),
       agentType: card.agentType,
       model: card.model,
+      projectDir: projectDirBySession.get(key),
       updatedAt: card.updatedAt,
     }));
   }
@@ -357,6 +362,7 @@ export class TelegramPoller {
       agentRuntime: runtime,
       agentType: runtime === 'opencode' ? sessionInfo?.agentType : undefined,
       model: sessionInfo?.model,
+      projectDir: sessionInfo?.projectDir,
       resumeSessionId: activeSession.sessionId,
     });
 
@@ -504,7 +510,7 @@ export class TelegramPoller {
     }
   }
 
-  private buildDispatchAck(card: { id: string; title: string; agentType?: string; agentRuntime?: AgentRuntime; model?: string }, sessionId: string, session?: TelegramSessionSummary): string {
+  private buildDispatchAck(card: { id: string; title: string; agentType?: string; agentRuntime?: AgentRuntime; model?: string; projectDir?: string }, sessionId: string, session?: TelegramSessionSummary): string {
     return [
       '✅ 카드 등록 및 작업 시작',
       `- 카드: ${card.title} (${card.id})`,
@@ -512,6 +518,7 @@ export class TelegramPoller {
       `- 런타임: ${this.formatRuntime(session?.agentRuntime ?? card.agentRuntime)}`,
       `- 에이전트: ${getPrimaryAgentDisplayLabel(card.agentType) ?? card.agentType ?? 'Default'}`,
       `- 모델: ${card.model ?? 'default'}`,
+      `- 경로: ${session?.projectDir ?? card.projectDir ?? 'not set'}`,
       '- 방식: 새 세션 시작',
     ].join('\n');
   }
@@ -525,6 +532,7 @@ export class TelegramPoller {
       `- 런타임: ${this.formatRuntime(target?.agentRuntime)}`,
       `- 에이전트: ${getPrimaryAgentDisplayLabel(target?.agentType) ?? target?.agentType ?? 'Default'}`,
       `- 모델: ${target?.model ?? 'default'}`,
+      `- 경로: ${target?.projectDir ?? 'not set'}`,
       '- 방식: 후속 메시지',
     ].join('\n');
   }
@@ -822,6 +830,7 @@ export class TelegramPoller {
       agentRuntime,
       agentType: hasStoredSession ? card.agentType : undefined,
       model: hasStoredSession ? card.model : undefined,
+      projectDir: card.projectDir,
       updatedAt: card.updatedAt,
     };
   }
