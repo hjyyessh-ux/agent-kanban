@@ -1,5 +1,12 @@
 import { describe, test, expect } from 'bun:test';
-import type { KanbanCard, KanbanBoard, KanbanStatus, CreateCardInput, UpdateCardInput } from '../core/types';
+import type {
+  KanbanCard,
+  KanbanBoard,
+  KanbanStatus,
+  CreateCardInput,
+  UpdateCardInput,
+  SchedulerAction,
+} from '../core/types';
 
 describe('KanbanCard type', () => {
   test('has correct shape with required fields', () => {
@@ -33,12 +40,23 @@ describe('KanbanCard type', () => {
       resolution: 'completed',
       supersededByCardId: 'card-newest',
       supersededAt: new Date().toISOString(),
+      scheduledDispatch: {
+        scheduledAt: '2026-07-18T00:00:00.000Z',
+        status: 'scheduled',
+        updatedAt: '2026-07-17T00:00:00.000Z',
+      },
+      originChannel: 'scheduler',
+      schedulerId: 'scheduler-1',
+      schedulerRunId: 'run-1',
+      schedulerName: 'Morning sync',
     };
     expect(card.sessionId).toBe('session-123');
     expect(card.progressSummary).toBe('Working on it');
     expect(card.queueSessionMode).toBe('continue_queued_after_session');
     expect(card.resolution).toBe('completed');
     expect(card.supersededByCardId).toBe('card-newest');
+    expect(card.scheduledDispatch?.status).toBe('scheduled');
+    expect(card.originChannel).toBe('scheduler');
   });
 });
 
@@ -83,6 +101,7 @@ describe('UpdateCardInput type', () => {
     const input: UpdateCardInput = {
       command: null,
       arguments: null,
+      scheduledDispatch: null,
       resolution: null,
       supersededByCardId: null,
       supersededAt: null,
@@ -92,8 +111,22 @@ describe('UpdateCardInput type', () => {
     expect(input.queueSessionMode).toBeUndefined();
     expect(input.command).toBeNull();
     expect(input.arguments).toBeNull();
+    expect(input.scheduledDispatch).toBeNull();
     expect(input.resolution).toBeNull();
     expect(input.supersededByCardId).toBeNull();
     expect(input.supersededAt).toBeNull();
+  });
+});
+
+describe('SchedulerAction type', () => {
+  test('supports bash and prompt actions', () => {
+    const actions: SchedulerAction[] = [
+      { type: 'bash', command: 'echo hello', cwd: '/tmp' },
+      { type: 'prompt', prompt: 'summarize backlog', projectDir: '/repo', agentRuntime: 'codex', model: 'gpt-5' },
+    ];
+
+    expect(actions).toHaveLength(2);
+    expect(actions[0].type).toBe('bash');
+    expect(actions[1].type).toBe('prompt');
   });
 });

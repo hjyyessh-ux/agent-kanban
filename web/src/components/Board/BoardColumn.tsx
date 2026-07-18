@@ -44,6 +44,8 @@ interface BoardColumnProps {
   onStatusChange?: (card: KanbanCard, newStatus: KanbanStatus) => void;
   onFavoriteToggle?: (card: KanbanCard) => void;
   onDispatch?: (card: KanbanCard) => void | Promise<void>;
+  onScheduleOpen?: (card: KanbanCard) => void;
+  onCancelSchedule?: (card: KanbanCard) => void;
   onQueueOpen?: (card: KanbanCard) => void;
   onUnqueue?: (card: KanbanCard) => void;
   onDelete?: (card: KanbanCard) => void;
@@ -63,6 +65,8 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
   onStatusChange,
   onFavoriteToggle,
   onDispatch,
+  onScheduleOpen,
+  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
   onDelete,
@@ -249,6 +253,12 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                   }
                   onDispatch={
                     raw && onDispatch ? () => onDispatch(raw) : undefined
+                  }
+                  onScheduleOpen={
+                    raw && onScheduleOpen ? () => onScheduleOpen(raw) : undefined
+                  }
+                  onCancelSchedule={
+                    raw && onCancelSchedule ? () => onCancelSchedule(raw) : undefined
                   }
                   onQueueOpen={
                     raw && onQueueOpen ? () => onQueueOpen(raw) : undefined

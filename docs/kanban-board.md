@@ -84,6 +84,16 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 | `queuePosition` | `number` (선택) | 큐 내 위치 번호. 낮을수록 먼저 실행된다. |
 | `queueSessionMode` | `new_session \| continue_queued_after_session` (선택) | queue로 시작될 때 새 세션을 열지, queued-after 카드 세션을 이어갈지 명시한다. |
 
+### 카드 1회 예약 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `scheduledDispatch.scheduledAt` | `string` | 한 번만 자동 dispatch할 UTC 시각. UI는 항상 KST로 표시한다. |
+| `scheduledDispatch.status` | `scheduled \| dispatching \| dispatched \| failed` | 예약 상태. `scheduled -> dispatching -> dispatched/failed`로 이동한다. |
+| `scheduledDispatch.dispatchedAt` | `string` (선택) | runtime이 dispatch를 수락한 시각 |
+| `scheduledDispatch.error` | `string` (선택) | 자동 dispatch 실패 이유 |
+| `schedulerId` / `schedulerRunId` / `schedulerName` | 선택 | 반복 스케줄러가 만든 scheduler-origin 카드에만 채워진다. 카드 1회 예약과는 별도다. |
+
 ### 시각 필드
 
 | 필드 | 타입 | 설명 |
@@ -137,6 +147,32 @@ TODO 상태의 카드를 순서대로 자동 실행하는 큐 시스템이 내�
 `getQueuedCards()`는 `queuePosition` 기준으로 정렬된 카드 목록을 반환한다. `getNextQueuePosition()`은 새 카드를 큐에 추가할 때 올바른 위치 번호를 계산한다. 큐는 TODO 컬럼 내 드래그 앤 드롭으로도 순서를 조정할 수 있다.
 
 선행 카드가 `session.idle`을 통해 `complete`로 전환되면, 그 카드 뒤에 queue된 `todo` 카드 중 가장 앞선 카드 하나를 자동으로 dispatch한다.
+
+## 카드 1회 예약 (Scheduled Dispatch)
+
+top-level `todo` 카드 하나를 **미래의 KST 시각에 한 번만** 자동 dispatch하는 기능이다. 반복 실행이 필요하면 스케줄러를 쓰고, 카드 하나를 정확히 한 번 시작하려면 이 기능을 쓴다.
+
+예시:
+
+- `2026-07-18 09:30 KST`에 카드 하나만 시작하려면 card schedule
+- 평일마다 `09:30 KST`에 같은 작업을 만들려면 scheduler
+
+### 동작 규칙
+
+- 예약 가능한 카드는 top-level `todo` 카드뿐이다.
+- queued 카드(`queuedAfterCardId`가 있는 카드)는 예약할 수 없다.
+- 예약된 카드(`scheduled`/`dispatching`)는 Queue에 넣을 수 없다.
+- `Start Now`는 현재 예약을 **소비**하고 즉시 dispatch한다.
+- background due scan과 `Start Now`가 경합해도 dispatch는 한 번만 일어난다.
+- `dispatching` 상태에서 프로세스가 죽어도 재시작 시 stale claim이 복구되고 overdue 카드는 다시 한 번만 scan된다.
+- dispatch 실패 시 카드는 `todo`로 남고 `progressSummary`에 `[failed] ...` 흔적이 남으며, 예약 상태는 `failed`가 된다.
+
+### 상태 예시
+
+1. `2026-07-17`에 카드 B를 만들고 `2026-07-18 09:35 KST`로 예약한다.
+2. `2026-07-18 09:35 KST`가 되면 singleton runtime owner가 claim을 잡고 `dispatching`으로 바꾼다.
+3. runtime이 수락하면 카드 상태는 `in_progress`, 예약 상태는 `dispatched`가 된다.
+4. 사용자가 `2026-07-18 09:34:59 KST`에 `Start Now`를 눌렀다면 같은 예약을 먼저 소비하므로 due scan은 중복 dispatch하지 않는다.
 
 ---
 

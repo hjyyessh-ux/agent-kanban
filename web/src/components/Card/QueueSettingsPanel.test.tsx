@@ -65,4 +65,27 @@ describe("QueueSettingsPanel", () => {
     expect(html).toContain("SAVE QUEUE SETTINGS");
     expect(html).toContain('checked=""');
   });
+
+  test("shows a schedule conflict message when queueing is blocked by a reservation", () => {
+    const html = renderToStaticMarkup(
+      <QueueSettingsPanel
+        card={makeCard({ id: "source", title: "Source card" })}
+        allCards={[
+          makeCard({ id: "source", title: "Source card" }),
+          makeCard({ id: "target", title: "Target card", status: "in_progress" }),
+        ]}
+        queueModeSummary={{ title: "Continue previous card session", description: "" }}
+        queueTargetId="target"
+        queueSessionMode="continue_queued_after_session"
+        disabledReason="예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다."
+        onQueueTargetChange={mock(() => undefined)}
+        onQueueSessionModeChange={mock(() => undefined)}
+        onQueue={mock(() => undefined)}
+        defaultExpanded
+      />,
+    );
+
+    expect(html).toContain("예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.");
+    expect(html).not.toContain("SAVE QUEUE SETTINGS");
+  });
 });

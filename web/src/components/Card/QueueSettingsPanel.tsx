@@ -136,6 +136,7 @@ interface QueueSettingsPanelProps {
   queueModeSummary: { title: string; description: string };
   queueTargetId: string;
   queueSessionMode: QueueSessionMode;
+  disabledReason?: string;
   onQueueTargetChange: (value: string) => void;
   onQueueSessionModeChange: (value: QueueSessionMode) => void;
   onQueue?: (cardId: string, afterCardId: string, sessionMode: QueueSessionMode) => Promise<KanbanCard> | void;
@@ -149,6 +150,7 @@ export const QueueSettingsPanel: React.FC<QueueSettingsPanelProps> = ({
   queueModeSummary,
   queueTargetId,
   queueSessionMode,
+  disabledReason,
   onQueueTargetChange,
   onQueueSessionModeChange,
   onQueue,
@@ -169,6 +171,7 @@ export const QueueSettingsPanel: React.FC<QueueSettingsPanelProps> = ({
     : undefined;
 
   const isQueued = Boolean(card.queuedAfterCardId);
+  const isDisabled = Boolean(disabledReason);
   const showBody = expanded || isQueued;
 
   return (
@@ -191,6 +194,11 @@ export const QueueSettingsPanel: React.FC<QueueSettingsPanelProps> = ({
         )}
       </div>
       <div className="kv2-session-helper">선택한 작업이 끝난 뒤 이 작업을 이어서 시작합니다.</div>
+      {disabledReason && (
+        <div className="kv2-session-helper kv2-session-helper--warn" role="note">
+          {disabledReason}
+        </div>
+      )}
 
       {showBody && isQueued ? (
         <div className="kv2-queue-summary-card">
@@ -223,10 +231,11 @@ export const QueueSettingsPanel: React.FC<QueueSettingsPanelProps> = ({
             id="detail-queue-select"
             value={queueTargetId}
             options={queueTargets}
+            disabled={isDisabled}
             onChange={onQueueTargetChange}
           />
 
-          {queueTargetId && (
+          {queueTargetId && !isDisabled && (
             <>
               <QueueSessionModePicker
                 value={queueSessionMode}

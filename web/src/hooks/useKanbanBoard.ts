@@ -9,6 +9,8 @@ import {
   deleteCard as apiDeleteCard,
   archiveCards as apiArchiveCards,
   dispatchCard as apiDispatchCard,
+  scheduleCard as apiScheduleCard,
+  cancelCardSchedule as apiCancelCardSchedule,
 } from './useKanbanApi';
 import { usePolling } from './usePolling';
 import { createUiAlert, type UiAlert } from './uiAlert';
@@ -92,6 +94,9 @@ export function useKanbanBoard(): {
   completeAllCards: () => Promise<void>;
   queueCard: (cardId: string, afterCardId: string, sessionMode: QueueSessionMode) => Promise<KanbanCard>;
   unqueueCard: (cardId: string) => Promise<KanbanCard>;
+  scheduleCard: (cardId: string, scheduledAt: string) => Promise<KanbanCard>;
+  rescheduleCard: (cardId: string, scheduledAt: string) => Promise<KanbanCard>;
+  cancelCardSchedule: (cardId: string) => Promise<KanbanCard>;
   reorderCards: (reorderedCardIds: string[]) => Promise<void>;
   setResumeSession: (cardId: string, sessionId: string) => Promise<void>;
   clearResumeSession: (cardId: string) => Promise<void>;
@@ -231,6 +236,30 @@ export function useKanbanBoard(): {
     }
   }, []);
 
+  const scheduleCard = useCallback(async (cardId: string, scheduledAt: string): Promise<KanbanCard> => {
+    try {
+      const card = await apiScheduleCard(cardId, scheduledAt);
+      dispatch({ type: 'UPDATE', card });
+      return card;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to schedule card';
+      dispatch({ type: 'SET_ERROR', error: createUiAlert('Schedule update failed', message, 'Refresh board') });
+      throw err;
+    }
+  }, []);
+
+  const cancelCardSchedule = useCallback(async (cardId: string): Promise<KanbanCard> => {
+    try {
+      const card = await apiCancelCardSchedule(cardId);
+      dispatch({ type: 'UPDATE', card });
+      return card;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to cancel schedule';
+      dispatch({ type: 'SET_ERROR', error: createUiAlert('Schedule update failed', message, 'Refresh board') });
+      throw err;
+    }
+  }, []);
+
   const reorderCards = useCallback(async (reorderedCardIds: string[]) => {
     try {
       // Update each card's position
@@ -310,6 +339,9 @@ export function useKanbanBoard(): {
     refreshCards,
     queueCard,
     unqueueCard,
+    scheduleCard,
+    rescheduleCard: scheduleCard,
+    cancelCardSchedule,
     reorderCards,
     setResumeSession,
     clearResumeSession,

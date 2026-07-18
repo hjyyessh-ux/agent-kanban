@@ -54,4 +54,30 @@ describe("CardDetailDialog", () => {
     expect(html).toContain("kv2-runtime-trigger");
     expect(html).not.toContain("kv2-runtime-trigger-icon");
   });
+
+  test("shows scheduled dispatch status and Start Now copy for scheduled todo cards", () => {
+    const html = renderToStaticMarkup(
+      <CardDetailDialog
+        card={{
+          ...makeCard("todo"),
+          scheduledDispatch: {
+            scheduledAt: "2026-07-18T00:30:00.000Z",
+            status: "scheduled",
+            updatedAt: "2026-07-17T00:00:00.000Z",
+          },
+        }}
+        onClose={mock(() => undefined)}
+        onStatusChange={mock(() => true)}
+        onDelete={mock(() => true)}
+        onDispatch={mock(() => true)}
+        onScheduleOpen={mock(() => undefined)}
+        onCancelSchedule={mock(() => Promise.resolve(makeCard("todo")))}
+      />,
+    );
+
+    expect(html).toContain("START NOW");
+    expect(html).toContain("Scheduled Dispatch");
+    expect(html).toContain("2026-07-18 09:30 KST");
+    expect(html).toContain("Start Now는 이 예약을 소비하고 즉시 한 번만 실행합니다.");
+  });
 });

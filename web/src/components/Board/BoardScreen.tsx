@@ -17,6 +17,8 @@ export interface BoardScreenProps {
   onArchive?: () => void;
   onCompleteAll?: () => void;
   onDispatch?: (card: KanbanCard) => void | Promise<void>;
+  onScheduleOpen?: (card: KanbanCard) => void;
+  onCancelSchedule?: (card: KanbanCard) => void;
   onQueueOpen?: (card: KanbanCard) => void;
   onUnqueue?: (card: KanbanCard) => void;
   onDelete?: (card: KanbanCard) => void;
@@ -36,6 +38,8 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
   onStatusChange,
   onFavoriteToggle,
   onDispatch,
+  onScheduleOpen,
+  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
   onDelete,
@@ -111,6 +115,8 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
                 onStatusChange={onStatusChange}
                 onFavoriteToggle={onFavoriteToggle}
                 onDispatch={onDispatch}
+                onScheduleOpen={onScheduleOpen}
+                onCancelSchedule={onCancelSchedule}
                 onQueueOpen={onQueueOpen}
                 onUnqueue={onUnqueue}
                 onDelete={onDelete}

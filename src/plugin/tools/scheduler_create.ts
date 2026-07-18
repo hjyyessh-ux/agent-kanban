@@ -4,6 +4,7 @@ import type { PluginInput } from '@opencode-ai/plugin';
 import type { SchedulerStore } from '../../core/scheduler-store';
 import type { SchedulerEngine } from '../scheduler-engine';
 import { parseNaturalLanguageToCron, isValidCron, describeCron } from '../../core/cron-parser';
+import { validateSchedulerActionInput } from '../../core/scheduling';
 
 export function createSchedulerCreateTool(
   store: SchedulerStore,
@@ -21,17 +22,34 @@ export function createSchedulerCreateTool(
         .describe(
           'Cron expression (e.g., "*/5 * * * *") or natural language (e.g., "every 5 minutes", "매일 오전 9시")',
         ),
-      timezone: z.string().optional().describe('IANA timezone (e.g., "Asia/Seoul"). Defaults to system timezone.'),
       actionType: z
-        .enum(['shell', 'skill'])
-        .describe('Type of action: "shell" for shell commands (no token cost), "skill" for skill invocation (⚠️ uses tokens)'),
-      command: z.string().optional().describe('Shell command to execute (required when actionType is "shell")'),
-      skillName: z.string().optional().describe('Skill name to invoke (required when actionType is "skill")'),
-      skillInput: z.string().optional().describe('JSON string of skill arguments (optional, for actionType "skill")'),
+        .enum(['bash', 'prompt'])
+        .describe('Type of action: "bash" executes a Bash command; "prompt" stores a prompt-based scheduler contract'),
+      command: z.string().optional().describe('Bash command to execute (required when actionType is "bash")'),
+      cwd: z.string().optional().describe('Working directory for bash execution (optional)'),
+      prompt: z.string().optional().describe('Prompt body to dispatch later (required when actionType is "prompt")'),
+      projectDir: z.string().optional().describe('Project directory for a prompt scheduler'),
+      agentRuntime: z.enum(['opencode', 'codex', 'claude']).optional().describe('Preferred runtime for prompt schedulers'),
+      model: z.string().optional().describe('Preferred model for prompt schedulers'),
     },
     async execute(args) {
       // Parse cron — might be natural language
       const parsed = parseNaturalLanguageToCron(args.cron);
+      const action = validateSchedulerActionInput(
+        args.actionType === 'bash'
+          ? {
+              type: 'bash',
+              command: args.command,
+              cwd: args.cwd,
+            }
+          : {
+              type: 'prompt',
+              prompt: args.prompt,
+              projectDir: args.projectDir,
+              agentRuntime: args.agentRuntime,
+              model: args.model,
+            },
+      );
       if (parsed) {
         const cronExpr = parsed.cron;
         const cronDesc = parsed.description ?? describeCron(cronExpr);
@@ -40,17 +58,10 @@ export function createSchedulerCreateTool(
           description: args.description,
           cron: cronExpr,
           cronDescription: cronDesc,
-          timezone: args.timezone,
-          action: {
-            type: args.actionType,
-            command: args.command,
-            skillName: args.skillName,
-            skillInput: args.skillInput,
-          },
+          action,
         });
         engine.scheduleEntry(entry);
-        const warning = args.actionType === 'skill' ? ' ⚠️ Skill actions consume LLM tokens on each run.' : '';
-        return `⏰ Created scheduler "${entry.name}" (${cronDesc}) [${entry.status}]${warning}`;
+        return `⏰ Created scheduler "${entry.name}" (${cronDesc}) [${entry.status}]`;
       }
       // Not NL — try as raw cron
       if (!isValidCron(args.cron)) {
@@ -64,17 +75,10 @@ export function createSchedulerCreateTool(
         description: args.description,
         cron: args.cron,
         cronDescription: cronDesc,
-        timezone: args.timezone,
-        action: {
-          type: args.actionType,
-          command: args.command,
-          skillName: args.skillName,
-          skillInput: args.skillInput,
-        },
+        action,
       });
       engine.scheduleEntry(entry);
-      const warning = args.actionType === 'skill' ? ' ⚠️ Skill actions consume LLM tokens on each run.' : '';
-      return `⏰ Created scheduler "${entry.name}" (${cronDesc}) [${entry.status}]${warning}`;
+      return `⏰ Created scheduler "${entry.name}" (${cronDesc}) [${entry.status}]`;
     },
   });
 }

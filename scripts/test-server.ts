@@ -10,6 +10,7 @@ import { SkillRootsStore } from '../src/core/skill-roots-store';
 import { PlacementTargetsStore } from '../src/core/placement-targets-store';
 import { RuntimeRunStore } from '../src/plugin/runtimes/runtime-run-store';
 import { WikiWorker } from '../src/plugin/wiki/wiki-worker';
+import { ScheduledDispatchService } from '../src/plugin/scheduled-dispatch-service';
 import { createServer } from '../src/server/index';
 import type { DispatchResult, KanbanCard } from '../src/core/types';
 import { resolveAgentRuntime } from '../src/core/runtime-config';
@@ -21,6 +22,38 @@ const port = Number.parseInt(process.env.E2E_PORT ?? '24681', 10);
 const dataDir = resolve(process.cwd(), '.e2e-data');
 const e2eHome = resolve(process.env.E2E_HOME ?? join(process.cwd(), '.e2e-home'));
 const staticDir = resolve(process.cwd(), 'web/dist');
+const DEFAULT_E2E_NOW = '2026-07-18T00:20:00.000Z';
+
+class FakeClock {
+  private nowMs: number;
+
+  constructor(initialIso: string) {
+    this.nowMs = new Date(initialIso).getTime();
+  }
+
+  now(): Date {
+    return new Date(this.nowMs);
+  }
+
+  toISOString(): string {
+    return this.now().toISOString();
+  }
+
+  set(iso: string): void {
+    const nextMs = new Date(iso).getTime();
+    if (Number.isNaN(nextMs)) {
+      throw new Error(`Invalid fake clock value: ${iso}`);
+    }
+    this.nowMs = nextMs;
+  }
+
+  advance(ms: number): void {
+    if (!Number.isFinite(ms)) {
+      throw new Error(`Invalid fake clock advance: ${ms}`);
+    }
+    this.nowMs += ms;
+  }
+}
 
 if (resolve(process.env.HOME ?? '') !== e2eHome) {
   throw new Error(
@@ -35,7 +68,7 @@ if (process.env.E2E_KEEP_DATA !== 'true') {
 }
 mkdirSync(e2eHome, { recursive: true });
 
-if (!existsSync(join(staticDir, 'index.html'))) {
+if (process.env.E2E_SKIP_BUILD !== 'true') {
   const build = Bun.spawnSync(['bun', 'run', 'build:web'], {
     cwd: process.cwd(),
     stdout: 'inherit',
@@ -50,7 +83,11 @@ if (!existsSync(join(staticDir, 'index.html'))) {
 const store = new KanbanStore(dataDir);
 const settingsStore = new SettingsStore(dataDir);
 const schedulerStore = new SchedulerStore(dataDir);
-const schedulerEngine = new SchedulerEngine(schedulerStore, settingsStore);
+const fakeClock = new FakeClock(process.env.E2E_FAKE_NOW ?? DEFAULT_E2E_NOW);
+const schedulerEngine = new SchedulerEngine(schedulerStore, {
+  settingsStore,
+  now: () => fakeClock.now(),
+});
 const scriptStore = new ScriptStore(dataDir);
 const runtimeRunStore = new RuntimeRunStore(dataDir);
 const wikiWorker = new WikiWorker(store, settingsStore);
@@ -215,6 +252,7 @@ const runtimeCounters: Record<string, number> = {
   codex: 0,
   claude: 0,
 };
+const dispatchAttemptsByCardId = new Map<string, number>();
 
 async function resolveResumeSessionId(card: KanbanCard): Promise<string | undefined> {
   if (card.feedbackForCardId) {
@@ -281,16 +319,18 @@ async function simulatePromptHookForRuntime(
 async function fakeDispatch(cardId: string): Promise<DispatchResult> {
   const card = await store.getCard(cardId);
   if (!card) throw new RuntimeDispatchError('Card not found', 404);
+  dispatchAttemptsByCardId.set(cardId, (dispatchAttemptsByCardId.get(cardId) ?? 0) + 1);
 
   const runtime = resolveAgentRuntime(card);
   const resumeSessionId = await resolveResumeSessionId(card);
   const prompt = buildDispatchPromptText(card, (screenshot) => store.getScreenshotPath(screenshot.filename));
   const hasScreenshotContext = prompt.includes('Attached screenshots:');
   const sessionId = nextSessionId(runtime, resumeSessionId);
-  const runId = `${runtime}-e2e-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const startedAt = new Date().toISOString();
+  const startedAt = fakeClock.toISOString();
+  const runId = `${runtime}-e2e-run-${startedAt.replace(/[-:.TZ]/g, '')}-${Math.random().toString(36).slice(2, 8)}`;
 
   const shouldFail = card.description.includes('[fail-once]') && !isRecentlyFailed(card);
+  const shouldHoldOpen = card.description.includes('[hold-open]');
   await store.updateCard(card.id, {
     status: 'in_progress',
     sessionId,
@@ -313,6 +353,10 @@ async function fakeDispatch(cardId: string): Promise<DispatchResult> {
     return { sessionId, runId, startedAt };
   }
 
+  if (shouldHoldOpen) {
+    return { sessionId, runId, startedAt };
+  }
+
   setTimeout(() => {
     void (async () => {
       await store.updateCard(card.id, {
@@ -331,6 +375,14 @@ async function fakeDispatch(cardId: string): Promise<DispatchResult> {
   return { sessionId, runId, startedAt };
 }
 
+const scheduledDispatchService = new ScheduledDispatchService({
+  store,
+  dispatchFn: fakeDispatch,
+  now: () => fakeClock.now(),
+  tickMs: 60_000,
+});
+schedulerEngine.setPromptDispatcher(store, fakeDispatch);
+
 const modelsFn = async () => [
   { id: 'github-copilot/gpt-5.4', name: 'GPT-5.4', providerID: 'github-copilot', providerName: 'GitHub Copilot' },
   { id: 'github-copilot/claude-opus-4.6', name: 'Claude Opus 4.6', providerID: 'github-copilot', providerName: 'GitHub Copilot' },
@@ -343,9 +395,12 @@ await settingsStore.upsertByKey('network_exposed', 'false', {
   masked: false,
 });
 
-const server = createServer(
+await schedulerEngine.start();
+await scheduledDispatchService.start();
+
+const innerServer = createServer(
   store,
-  port,
+  0,
   staticDir,
   fakeDispatch,
   schedulerStore,
@@ -367,14 +422,96 @@ const server = createServer(
   runtimeRunStore,
 );
 
-console.log(`E2E server listening on http://127.0.0.1:${server.port}`);
+async function restartBackgroundServices(): Promise<void> {
+  scheduledDispatchService.stop();
+  schedulerEngine.stop();
+  await schedulerEngine.start();
+  await scheduledDispatchService.start();
+}
+
+const outerServer = Bun.serve({
+  port,
+  hostname: '127.0.0.1',
+  idleTimeout: 120,
+  async fetch(req) {
+    const url = new URL(req.url);
+
+    if (url.pathname === '/api/e2e/clock' && req.method === 'GET') {
+      return Response.json({ now: fakeClock.toISOString() });
+    }
+
+    if (url.pathname === '/api/e2e/clock' && req.method === 'PUT') {
+      const body = await req.json() as { now?: string; kickScheduledDispatch?: boolean };
+      if (typeof body.now !== 'string') {
+        return Response.json({ error: 'now is required' }, { status: 400 });
+      }
+      fakeClock.set(body.now);
+      if (body.kickScheduledDispatch) {
+        await scheduledDispatchService.kick();
+      }
+      return Response.json({ now: fakeClock.toISOString() });
+    }
+
+    if (url.pathname === '/api/e2e/clock/advance' && req.method === 'POST') {
+      const body = await req.json() as { ms?: number; kickScheduledDispatch?: boolean };
+      if (typeof body.ms !== 'number') {
+        return Response.json({ error: 'ms is required' }, { status: 400 });
+      }
+      fakeClock.advance(body.ms);
+      if (body.kickScheduledDispatch) {
+        await scheduledDispatchService.kick();
+      }
+      return Response.json({ now: fakeClock.toISOString() });
+    }
+
+    if (url.pathname === '/api/e2e/scheduled-dispatch/kick' && req.method === 'POST') {
+      await scheduledDispatchService.kick();
+      return Response.json({ ok: true, now: fakeClock.toISOString() });
+    }
+
+    const dispatchAttemptsMatch = url.pathname.match(/^\/api\/e2e\/dispatch-attempts\/([^/]+)$/);
+    if (dispatchAttemptsMatch && req.method === 'GET') {
+      const cardId = decodeURIComponent(dispatchAttemptsMatch[1] ?? '');
+      return Response.json({ cardId, attempts: dispatchAttemptsByCardId.get(cardId) ?? 0 });
+    }
+
+    if (url.pathname === '/api/e2e/services/restart' && req.method === 'POST') {
+      await restartBackgroundServices();
+      return Response.json({ ok: true, now: fakeClock.toISOString() });
+    }
+
+    const proxyUrl = new URL(req.url);
+    proxyUrl.port = String(innerServer.port);
+    const headers = new Headers(req.headers);
+    headers.delete('origin');
+    headers.delete('host');
+    const init: RequestInit = {
+      method: req.method,
+      headers,
+      redirect: 'manual',
+    };
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      init.body = await req.arrayBuffer();
+    }
+    return fetch(proxyUrl, init);
+  },
+});
+
+console.log(`E2E server listening on http://127.0.0.1:${outerServer.port}`);
+
+function stopAll(): void {
+  outerServer.stop(true);
+  innerServer.stop();
+  scheduledDispatchService.stop();
+  schedulerEngine.stop();
+}
 
 process.on('SIGINT', () => {
-  server.stop();
+  stopAll();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
-  server.stop();
+  stopAll();
   process.exit(0);
 });

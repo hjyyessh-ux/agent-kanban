@@ -1,5 +1,18 @@
 import { test, expect } from './fixtures/kanban';
-import { apiUpdateCard, apiGetCards } from './helpers/api';
+import { apiE2ESetClock, apiUpdateCard, apiGetCards } from './helpers/api';
+
+function futureKstSchedule(offsetMinutes: number): { input: string; labelPattern: RegExp } {
+  const date = new Date(Date.now() + offsetMinutes * 60_000);
+  date.setSeconds(0, 0);
+  const kst = new Date(date.getTime() + 9 * 60 * 60_000);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${kst.getUTCFullYear()}-${pad(kst.getUTCMonth() + 1)}-${pad(kst.getUTCDate())}`;
+  const time = `${pad(kst.getUTCHours())}:${pad(kst.getUTCMinutes())}`;
+  return {
+    input: `${stamp}T${time}`,
+    labelPattern: new RegExp(`${stamp} ${time} KST`),
+  };
+}
 
 test.describe('Card Creation', () => {
   test('created card appears in TODO column', async ({ page, seedCard }) => {
@@ -42,5 +55,45 @@ test.describe('Card Creation', () => {
     await expect(inlineAlert).toContainText('Missing required information');
     await expect(page.locator('#create-card-title-input')).toHaveAttribute('aria-invalid', 'true');
     await expect(page.locator('#create-card-description-input')).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  test('create dialog schedules directly from the launch timing selector and shows the badge immediately', async ({ page }) => {
+    const title = `[E2E] Scheduled Create ${Date.now()}`;
+    const schedule = futureKstSchedule(30);
+    await apiE2ESetClock(new Date().toISOString());
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    const scheduleSwitch = page.getByRole('switch', { name: /예약 시작/ });
+    await expect(scheduleSwitch).toHaveAttribute('aria-checked', 'false');
+    await expect(page.locator('#create-card-schedule-datetime')).toHaveCount(0);
+    await expect(page.getByText('지금 시작', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'CREATE', exact: true })).toBeVisible();
+    await page.locator('#create-card-title-input').fill(title);
+    await page.locator('#create-card-description-input').fill('Create and schedule in one step');
+    await scheduleSwitch.click();
+    await expect(scheduleSwitch).toHaveAttribute('aria-checked', 'true');
+    await page.locator('#create-card-schedule-datetime').fill(schedule.input);
+    await page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true }).click();
+
+    const todoCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
+    await expect(todoCard).toBeVisible();
+    await expect(todoCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', schedule.labelPattern);
+
+    await page.reload();
+    const reloadedCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
+    await expect(reloadedCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', schedule.labelPattern);
+    await expect(reloadedCard.getByRole('button', { name: 'Reschedule', exact: true })).toBeVisible();
+    await expect(reloadedCard.getByRole('button', { name: 'Cancel schedule', exact: true })).toBeVisible();
+  });
+
+  test('390px create footer preserves button meaning for schedule mode', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    await page.getByRole('switch', { name: /예약 시작/ }).click();
+    await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();
   });
 });

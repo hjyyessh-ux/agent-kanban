@@ -27,6 +27,8 @@ All Bun-based test coverage lives here as `*.test.ts` files (60+ suites). The su
 | `skill-store.test.ts` | Existing persisted Claude/Codex/Opencode skill inventory compatibility |
 | `skill-frontmatter.test.ts` | `disable-model-invocation` frontmatter add/update/preserve-body logic for `core/skill-frontmatter.ts` |
 | `dispatch-tracker.test.ts`, `integration.test.ts` | Cross-module dispatch flows |
+| `scheduled-dispatch-service.test.ts` | Owner-gated due-card dispatch scans, stale-claim recovery, manual/timer race, bootstrap lifecycle |
+| `scheduler-engine.test.ts` | Injected Bash/Prompt scheduler execution, env/cwd/output handling, run↔card linkage |
 | `question-monitor.test.ts`, `question-routes.test.ts` | SSE/poll proxy behavior |
 | `server.test.ts`, `plugin-server.test.ts`, `server-monitor.test.ts` | Real server + fetch, recovery behavior |
 | `subagent-parent-registry.test.ts` | Session-to-parent mapping |

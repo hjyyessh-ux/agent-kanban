@@ -18,6 +18,7 @@ import { RuntimeLock } from './runtime-lock';
 import { PeerSessionCoordinator, type NativeSessionInfo } from './peer-session-coordinator';
 import { TelegramPoller, type FollowUpFn } from './telegram-poller';
 import { TelegramReminderService } from './telegram-reminder';
+import { ScheduledDispatchService } from './scheduled-dispatch-service';
 import { WikiWorker } from './wiki/wiki-worker';
 import { sweepWikiInternalCards } from './wiki/wiki-sweep';
 import { appendRuntimeDebugLog } from './debug-log';
@@ -26,7 +27,7 @@ import type { RuntimeRunStore } from './runtimes/runtime-run-store';
 
 /** Owner-gated background service started/stopped with the singleton runtime. */
 export interface SingletonService {
-  start(): void;
+  start(): void | Promise<void>;
   stop(): void;
 }
 
@@ -130,6 +131,11 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   };
 
   const dispatch = await options.createDispatch(stores);
+  schedulerEngine.setPromptDispatcher(store, dispatch.dispatchCard);
+  const scheduledDispatchService = new ScheduledDispatchService({
+    store,
+    dispatchFn: dispatch.dispatchCard,
+  });
 
   // Seed network settings so the Settings UI can render their toggles on
   // fresh installs. Idempotent against the shared settings store.
@@ -238,8 +244,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     appendRuntimeDebugLog(`${options.debugLabel}.start`, { owner: true });
     schedulerEngine.setRuntimeOwner(true);
     await schedulerEngine.start();
+    await scheduledDispatchService.start();
     for (const service of extraServices) {
-      service.start();
+      await service.start();
     }
     wikiWorker.start();
     telegramPoller.start();
@@ -256,6 +263,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     for (const service of [...extraServices].reverse()) {
       service.stop();
     }
+    scheduledDispatchService.stop();
     schedulerEngine.setRuntimeOwner(false);
     singletonStarted = false;
   };

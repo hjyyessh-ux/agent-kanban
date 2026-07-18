@@ -9,7 +9,7 @@ interface BoardListRowActionProps {
 }
 
 export interface RowActionConfig {
-  label: 'START' | 'REOPEN' | 'DONE';
+  label: 'START' | 'START NOW' | 'REOPEN' | 'DONE';
   run?: () => void | Promise<void>;
   styleClass: string;
 }
@@ -23,7 +23,7 @@ export function getRowActionConfig(
 
   if (card.status === 'todo') {
     return {
-      label: 'START',
+      label: card.scheduledDispatch?.status === 'scheduled' ? 'START NOW' : 'START',
       run: onDispatch ? () => onDispatch(card) : undefined,
       styleClass: 'kv2-card-action--start',
     };
@@ -59,7 +59,7 @@ export const BoardListRowAction: React.FC<BoardListRowActionProps> = ({
 }) => {
   const [pending, setPending] = useState(false);
   const action = getRowActionConfig(card, onStatusChange, onDispatch);
-  const isStart = action?.label === 'START';
+  const isStart = action?.label === 'START' || action?.label === 'START NOW';
 
   // START only *initiates* a dispatch; the card flips to in_progress later via
   // polling. Hold the spinner until the status actually leaves `todo` so the

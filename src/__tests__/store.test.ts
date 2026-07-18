@@ -3,6 +3,12 @@ import { KanbanStore } from '../core/store';
 import { setDynamicSkillCommands } from '../core/commands';
 import { withTempDir } from './setup';
 
+const FUTURE_SCHEDULED_AT_UTC = (() => {
+  const date = new Date(Date.now() + 60 * 60 * 1000);
+  date.setUTCSeconds(0, 0);
+  return date.toISOString();
+})();
+
 describe('KanbanStore', () => {
   test('creates board file if not exists', async () => {
     await withTempDir(async (dir) => {
@@ -226,6 +232,159 @@ describe('KanbanStore', () => {
       expect(todos).toHaveLength(2);
       const inProgress = await store.getCards({ status: 'in_progress' });
       expect(inProgress).toHaveLength(1);
+    });
+  });
+
+  test('schedules a top-level todo card and records dispatch audit state', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Schedule me', description: 'Desc' });
+
+      const scheduled = await store.scheduleCardDispatch(card.id, '2026-07-18T00:30:00.000Z');
+      expect(scheduled.scheduledDispatch).toEqual({
+        scheduledAt: '2026-07-18T00:30:00.000Z',
+        status: 'scheduled',
+        updatedAt: scheduled.updatedAt,
+      });
+
+      const claimed = await store.claimScheduledDispatch(card.id, '2026-07-18T00:30:01.000Z');
+      expect(claimed?.scheduledDispatch?.status).toBe('dispatching');
+      expect(claimed?.scheduledDispatch?.updatedAt).toBe('2026-07-18T00:30:01.000Z');
+
+      const dispatched = await store.finalizeScheduledDispatch(card.id, {
+        status: 'dispatched',
+        dispatchedAt: '2026-07-18T00:30:05.000Z',
+      }, '2026-07-18T00:30:05.000Z');
+      expect(dispatched.scheduledDispatch?.status).toBe('dispatched');
+      expect(dispatched.scheduledDispatch?.dispatchedAt).toBe('2026-07-18T00:30:05.000Z');
+      expect(dispatched.scheduledDispatch?.error).toBeUndefined();
+    });
+  });
+
+  test('creates a scheduled card atomically from createCard input', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+
+      const created = await store.createCard({
+        title: 'Create scheduled',
+        description: 'Desc',
+        scheduledDispatch: {
+          scheduledAt: FUTURE_SCHEDULED_AT_UTC,
+        },
+      });
+
+      expect(created.status).toBe('todo');
+      expect(created.scheduledDispatch).toEqual({
+        scheduledAt: FUTURE_SCHEDULED_AT_UTC,
+        status: 'scheduled',
+        updatedAt: created.updatedAt,
+      });
+
+      const reloaded = await store.getCard(created.id);
+      expect(reloaded?.scheduledDispatch?.status).toBe('scheduled');
+    });
+  });
+
+  test('rejects createCard when scheduledDispatch is already in the past', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+
+      await expect(store.createCard({
+        title: 'Past schedule',
+        description: 'Desc',
+        scheduledDispatch: {
+          scheduledAt: '2026-07-16T23:59:00.000Z',
+        },
+      })).rejects.toThrow('scheduledDispatch.scheduledAt must be a future datetime');
+
+      expect(await store.getCards()).toHaveLength(0);
+    });
+  });
+
+  test('rejects scheduling a queued card', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const parent = await store.createCard({ title: 'Parent', description: 'Desc' });
+      const queued = await store.createCard({ title: 'Queued', description: 'Desc' });
+      await store.updateCard(queued.id, {
+        queuedAfterCardId: parent.id,
+        queuePosition: 1,
+        queueSessionMode: 'new_session',
+      });
+
+      await expect(
+        store.scheduleCardDispatch(queued.id, '2026-07-18T01:00:00.000Z')
+      ).rejects.toThrow('Queued cards cannot also be scheduled');
+    });
+  });
+
+  test('rejects queue updates on a scheduled card', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const parent = await store.createCard({ title: 'Parent', description: 'Desc' });
+      const scheduled = await store.createCard({ title: 'Scheduled', description: 'Desc' });
+      await store.scheduleCardDispatch(scheduled.id, '2026-07-18T01:00:00.000Z');
+
+      await expect(
+        store.updateCard(scheduled.id, {
+          queuedAfterCardId: parent.id,
+          queuePosition: 1,
+          queueSessionMode: 'new_session',
+        })
+      ).rejects.toThrow('Scheduled cards cannot also be queued');
+    });
+  });
+
+  test('allows dispatch status transition while a scheduled reservation is being consumed', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Scheduled start', description: 'Desc' });
+      await store.scheduleCardDispatch(card.id, '2026-07-18T01:00:00.000Z');
+
+      const updated = await store.updateCard(card.id, { status: 'in_progress' });
+
+      expect(updated.status).toBe('in_progress');
+      expect(updated.scheduledDispatch?.status).toBe('scheduled');
+    });
+  });
+
+  test('claimScheduledDispatch consumes a pending reservation atomically', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Claim once', description: 'Desc' });
+      await store.scheduleCardDispatch(card.id, '2026-07-18T02:00:00.000Z');
+
+      const [first, second] = await Promise.all([
+        store.claimScheduledDispatch(card.id, '2026-07-18T02:00:00.000Z'),
+        store.claimScheduledDispatch(card.id, '2026-07-18T02:00:00.000Z'),
+      ]);
+
+      expect([first, second].filter(Boolean)).toHaveLength(1);
+      const stored = await store.getCard(card.id);
+      expect(stored?.scheduledDispatch?.status).toBe('dispatching');
+      expect(stored?.scheduledDispatch?.updatedAt).toBe('2026-07-18T02:00:00.000Z');
+    });
+  });
+
+  test('claimDueScheduledDispatch claims only due cards once', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const dueA = await store.createCard({ title: 'Due A', description: 'Desc' });
+      const dueB = await store.createCard({ title: 'Due B', description: 'Desc' });
+      const future = await store.createCard({ title: 'Future', description: 'Desc' });
+
+      await store.scheduleCardDispatch(dueA.id, '2026-07-18T02:59:00.000Z');
+      await store.scheduleCardDispatch(dueB.id, '2026-07-18T03:00:00.000Z');
+      await store.scheduleCardDispatch(future.id, '2026-07-18T03:30:00.000Z');
+
+      const firstClaim = await store.claimDueScheduledDispatch('2026-07-18T03:00:00.000Z');
+      expect(firstClaim.map(card => card.id)).toEqual([dueA.id, dueB.id]);
+
+      const secondClaim = await store.claimDueScheduledDispatch('2026-07-18T03:00:00.000Z');
+      expect(secondClaim).toEqual([]);
+
+      const futureCard = await store.getCard(future.id);
+      expect(futureCard?.scheduledDispatch?.status).toBe('scheduled');
     });
   });
 

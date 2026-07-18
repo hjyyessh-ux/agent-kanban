@@ -239,6 +239,69 @@
   color: var(--kv2-panel-subtitle-color);
 }
 
+.kv2-session-helper--warn {
+  color: var(--kv2-danger-accent);
+}
+
+.kv2-schedule-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.kv2-dialog--schedule .kv2-dialog-content {
+  padding-top: 0;
+}
+
+.kv2-schedule-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kv2-schedule-dialog-note {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-schedule-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 10px;
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-schedule-preview.is-invalid {
+  border-color: var(--kv2-danger-accent);
+}
+
+.kv2-schedule-preview-label {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kv2-schedule-preview-value {
+  font-size: var(--kv2-text-base);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-schedule-preview-error {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-danger-accent);
+}
+
+.kv2-dialog-actions--compact {
+  justify-content: flex-end;
+  padding: 0;
+}
+
 /* ── Create Dialog Layout (Penpot single-column) ─────────── */
 .kv2-dialog--create .kv2-dialog-header {
   display: none;
@@ -376,7 +439,7 @@
   box-sizing: border-box;
   outline: none;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h10L5 6z' fill='%2364748b'/%3E%3C/svg%3E");
+  background-image: var(--kv2-select-chevron-image);
   background-repeat: no-repeat;
   background-position: right 12px center;
   cursor: pointer;
@@ -999,6 +1062,19 @@
   flex-wrap: wrap;
 }
 
+.runtime-model-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.runtime-model-fields__runtime,
+.runtime-model-fields__model,
+.runtime-model-fields__runtime-grid {
+  min-width: 0;
+}
+
 .kv2-create-agent-chip {
   flex: 1 1 130px;
   height: 42px;
@@ -1020,6 +1096,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.kv2-create-agent-chip-copy {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
 }
 
 .kv2-create-agent-chip-icon {
@@ -1084,6 +1168,71 @@
 
 .kv2-create-agent-chip--active {
   border-bottom: 4px solid var(--kv2-create-runtime-active-border);
+}
+
+.kv2-create-agent-chip--selector-card {
+  min-height: 74px;
+  height: auto;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-width: 1px;
+  border-color: var(--kv2-border);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
+}
+
+.kv2-create-agent-chip--selector-card .kv2-create-agent-chip-copy {
+  flex: 1;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kv2-create-agent-chip--selector-card .kv2-create-agent-chip-label {
+  white-space: normal;
+  color: var(--kv2-text-primary);
+}
+
+.kv2-create-agent-chip-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 999px;
+  background: var(--kv2-surface-sunken);
+  color: transparent;
+  font-size: var(--kv2-text-sm);
+  font-weight: 800;
+  line-height: 1;
+  flex: 0 0 22px;
+}
+
+.kv2-create-agent-chip--selector-card.kv2-create-agent-chip--active {
+  border: 2px solid var(--kv2-control-selected-border);
+  border-bottom-width: 2px;
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-create-agent-chip--selector-card.kv2-create-agent-chip--active .kv2-create-agent-chip-check {
+  border-color: var(--kv2-control-selected-border);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
+}
+
+.kv2-create-agent-chip--selector-card:hover {
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-create-agent-chip--selector-card:focus-visible {
+  outline: 2px solid var(--kv2-control-selected-border);
+  outline-offset: 2px;
 }
 
 .kv2-create-agent-chip:hover {
@@ -1160,11 +1309,108 @@
   color: var(--kv2-neutral-400);
 }
 
+.kv2-create-launch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.kv2-create-launch-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.kv2-create-launch-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  text-align: left;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 14%, transparent);
+}
+
+.kv2-create-launch-grid--single .kv2-create-launch-option {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kv2-create-launch-option-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.kv2-create-launch-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+.kv2-create-launch-option--active {
+  background: var(--kv2-surface-sunken);
+  border-color: var(--kv2-control-selected-border);
+}
+
+.kv2-create-launch-option-title {
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  color: var(--kv2-strong-title-color);
+}
+
+.kv2-create-launch-option-desc {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-neutral-575);
+  line-height: 1.45;
+}
+
+.kv2-create-launch-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 24px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: 999px;
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-create-launch-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--kv2-control-text-color);
+  transition: transform var(--kv2-transition-fast);
+}
+
+.kv2-create-launch-option--active .kv2-create-launch-switch {
+  border-color: var(--kv2-control-selected-border);
+  background: var(--kv2-control-selected-bg);
+}
+
+.kv2-create-launch-option--active .kv2-create-launch-switch-knob {
+  background: var(--kv2-control-selected-fg);
+  transform: translateX(20px);
+}
+
 .kv2-create-footer {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 16px 48px 24px;
+}
+
+.kv2-create-footer .kv2-btn {
+  min-width: 180px;
 }
 
 .kv2-create-progress {
@@ -1220,6 +1466,23 @@
   font-size: var(--kv2-text-base);
   font-weight: 700;
   color: var(--kv2-strong-label-color);
+}
+
+@media (max-width: 900px) {
+  .kv2-create-launch-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .kv2-create-footer {
+    justify-content: stretch;
+  }
+
+  .kv2-create-footer .kv2-btn {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 }
 
 .kv2-form-group {

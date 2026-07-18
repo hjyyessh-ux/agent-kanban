@@ -1,14 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { fetchModels, uploadScreenshot, type ModelInfo } from "../../hooks/useKanbanApi";
+import { uploadScreenshot } from "../../hooks/useKanbanApi";
 import { KanbanCard, CreateCardInput, QueueSessionMode, AgentRuntime, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode } from "../../../../src/core/types";
 import {
-  DEFAULT_CLAUDE_MODEL,
-  DEFAULT_CODEX_MODEL,
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_SANDBOX,
 } from "../../../../src/core/runtime-config";
-import { useRuntimes } from "../../hooks/useRuntimes";
-import { readEnabledSet, isModelVisible } from "../../hooks/useModelCatalog";
 import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
 import { AGENT_CONFIGS } from "../../constants/agents";
 import {
@@ -24,67 +20,18 @@ import { QueueSessionModePicker, QueueTargetList } from "./QueueSettingsPanel";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { CommandPicker } from "./CommandPicker";
 import { useDirectoryHistory } from "../../hooks/useDirectoryHistory";
-import { RuntimeBadgeIcon } from "../Board/BoardCardSections";
-
-const AGENT_MODEL_PREFERENCE_KEY = "kanban-agent-model-preference";
-const CREATE_RUNTIME_ORDER: AgentRuntime[] = ["codex", "claude", "opencode"];
-
-function getFallbackModelForAgent(agentKey: string, availableModels: ModelInfo[]): string {
-  if (availableModels.length === 0) return "";
-
-  const configuredDefault = AGENT_CONFIGS.find((agent) => agent.key === agentKey)?.model;
-  if (configuredDefault && availableModels.some((model) => model.id === configuredDefault)) {
-    return configuredDefault;
-  }
-
-  if (agentKey === "atlas") {
-    const atlasLike = availableModels.find((model) =>
-      /sonnet|executor/i.test(`${model.id} ${model.name}`)
-    );
-    if (atlasLike) return atlasLike.id;
-  }
-
-  const generalDefault = availableModels.find((model) =>
-    /gpt-5\.4|opus|claude/i.test(`${model.id} ${model.name}`)
-  );
-  if (generalDefault) return generalDefault.id;
-
-  return availableModels[0]?.id ?? "";
-}
-
-function readAgentModelPreference(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(AGENT_MODEL_PREFERENCE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      return Object.entries(parsed).reduce<Record<string, string>>((acc, [key, value]) => {
-        if (typeof value === "string" && value.trim()) acc[key] = value;
-        return acc;
-      }, {});
-    }
-  } catch {
-    return {};
-  }
-  return {};
-}
-
-function writeAgentModelPreference(agentKey: string, modelId: string): void {
-  if (!agentKey || !modelId) return;
-  const current = readAgentModelPreference();
-  current[agentKey] = modelId;
-  try {
-    localStorage.setItem(AGENT_MODEL_PREFERENCE_KEY, JSON.stringify(current));
-  } catch {
-    return;
-  }
-}
+import { RuntimeModelFields } from "../shared/RuntimeModelFields";
+import {
+  buildDefaultScheduleInput,
+  ScheduledDispatchEditor,
+  validateScheduleInputKst,
+} from "../shared/ScheduledDispatchUi";
+import { useRuntimeModelSelection } from "../../hooks/useRuntimeModelSelection";
 
 interface CreateCardDialogProps {
   allCards: KanbanCard[];
   onClose: () => void;
   onCreate: (input: CreateCardInput) => Promise<KanbanCard>;
-  onDispatch: (id: string) => Promise<void>;
   onQueue: (
     cardId: string,
     afterCardId: string,
@@ -95,12 +42,45 @@ interface CreateCardDialogProps {
 }
 
 const DEFAULT_QUEUE_SESSION_MODE: QueueSessionMode = "new_session";
+export type CreateLaunchTiming = "later" | "schedule";
+
+export interface CreateLaunchUiState {
+  primaryActionLabel: "CREATE" | "CREATE & SCHEDULE";
+  queueDisabledReason: string | null;
+  scheduleDisabledReason: string | null;
+}
+
+export function deriveCreateLaunchUiState(
+  launchTiming: CreateLaunchTiming,
+  queueAfterId: string,
+): CreateLaunchUiState {
+  if (launchTiming === "schedule") {
+    return {
+      primaryActionLabel: "CREATE & SCHEDULE",
+      queueDisabledReason: "예약 시작이 설정되어 있어 Queue After를 사용할 수 없습니다. 예약 시작을 끄면 Queue를 설정할 수 있습니다.",
+      scheduleDisabledReason: null,
+    };
+  }
+
+  if (queueAfterId) {
+    return {
+      primaryActionLabel: "CREATE",
+      queueDisabledReason: null,
+      scheduleDisabledReason: "Queue After가 설정되어 있어 예약 시작을 사용할 수 없습니다. queue target을 해제하면 예약할 수 있습니다.",
+    };
+  }
+
+  return {
+    primaryActionLabel: "CREATE",
+    queueDisabledReason: null,
+    scheduleDisabledReason: null,
+  };
+}
 
 export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   allCards,
   onClose,
   onCreate,
-  onDispatch,
   onQueue,
   onClearBoardError,
   onReportBoardAlert,
@@ -109,17 +89,17 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [description, setDescription] = useState("");
   const [projectDir, setProjectDir] = useState("");
   const [model, setModel] = useState("");
-  const [models, setModels] = useState<ModelInfo[]>([]);
   const [queueAfterId, setQueueAfterId] = useState("");
   const [queueSessionMode, setQueueSessionMode] = useState<QueueSessionMode>(
     DEFAULT_QUEUE_SESSION_MODE
   );
   const [queueExpanded, setQueueExpanded] = useState(false);
+  const [launchTiming, setLaunchTiming] = useState<CreateLaunchTiming>("later");
+  const [scheduledAtInput, setScheduledAtInput] = useState(() => buildDefaultScheduleInput(new Date()));
+  const [currentNow, setCurrentNow] = useState(() => new Date());
   const [agentType, setAgentType] = useState("sisyphus");
-  const { runtimes } = useRuntimes();
   const {
     prefs,
-    setDefault,
     setCodexReasoningEffort: saveCodexReasoningEffortDefault,
     setCodexSandbox: saveCodexSandboxDefault,
     setCodexBypassApprovalsAndSandbox,
@@ -147,7 +127,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [commandArguments, setCommandArguments] = useState("");
   const [commandExpanded, setCommandExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMode, setSubmitMode] = useState<'create' | 'start' | null>(null);
+  const [submitMode, setSubmitMode] = useState<CreateLaunchTiming | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string>("");
@@ -166,12 +146,14 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [fieldErrors, setFieldErrors] = useState<{ title?: string; description?: string }>({});
 
   const { saveDirToHistory } = useDirectoryHistory();
-
-  useEffect(() => {
-    fetchModels()
-      .then(setModels)
-      .catch(() => setModels([]));
-  }, []);
+  const {
+    orderedRuntimes,
+    displayedModels,
+    getDefaultModelForRuntime,
+    isModelAvailableForRuntime,
+    persistRuntimeSelection,
+    persistModelSelection,
+  } = useRuntimeModelSelection(runtime, agentType);
 
   useEffect(() => {
     if (!prefs.runtime || runtimeTouchedRef.current) return;
@@ -203,83 +185,18 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setCodexSandbox(prefs.codexSandbox);
   }, [prefs.codexSandbox]);
 
-  const filteredModels = useMemo(() => {
-    try {
-      const stored = localStorage.getItem("kanban-enabled-models");
-      if (stored) {
-        const enabledIds = new Set<string>(JSON.parse(stored));
-        return models.filter((m) => enabledIds.has(m.id));
-      }
-    } catch {
-      return models;
-    }
-    return models;
-  }, [models]);
-
   const filteredCommands = useMemo(() => getFilteredCommandsForRuntime(runtime), [runtime]);
-
-  const claudeModels = useMemo(
-    () => runtimes.find((entry) => entry.runtime === "claude")?.models ?? [],
-    [runtimes],
+  const scheduleValidation = useMemo(
+    () => validateScheduleInputKst(scheduledAtInput, currentNow),
+    [scheduledAtInput, currentNow],
   );
-  const codexModels = useMemo(
-    () => runtimes.find((entry) => entry.runtime === "codex")?.models ?? [],
-    [runtimes],
+  const launchUiState = useMemo(
+    () => deriveCreateLaunchUiState(launchTiming, queueAfterId),
+    [launchTiming, queueAfterId],
   );
-  const orderedRuntimes = useMemo(
-    () => [...runtimes].sort((a, b) => {
-      const aIndex = CREATE_RUNTIME_ORDER.indexOf(a.runtime);
-      const bIndex = CREATE_RUNTIME_ORDER.indexOf(b.runtime);
-      return (aIndex === -1 ? CREATE_RUNTIME_ORDER.length : aIndex)
-        - (bIndex === -1 ? CREATE_RUNTIME_ORDER.length : bIndex);
-    }),
-    [runtimes],
-  );
-
-  const displayedModels = useMemo(() => {
-    const enabled = readEnabledSet();
-    if (runtime === "codex") {
-      return codexModels
-        .filter((m) => isModelVisible(m.id, enabled))
-        .map((m) => ({
-          id: m.id,
-          label: `${m.label}${m.tier ? ` (${m.tier})` : ""}`,
-        }));
-    }
-    if (runtime === "claude") {
-      return claudeModels
-        .filter((m) => isModelVisible(m.id, enabled))
-        .map((m) => ({
-          id: m.id,
-          label: `${m.label}${m.tier ? ` (${m.tier})` : ""}`,
-        }));
-    }
-    return filteredModels.map((m) => ({
-      id: m.id,
-      label: `${m.name} (${m.providerName})`,
-    }));
-  }, [claudeModels, codexModels, filteredModels, runtime]);
-
-  const resolveModelForRuntime = () => {
-    if (model) return model;
-
-    if (runtime === "codex") {
-      return prefs.codex && codexModels.some((m) => m.id === prefs.codex)
-        ? prefs.codex
-        : codexModels[0]?.id ?? DEFAULT_CODEX_MODEL;
-    }
-
-    if (runtime === "claude") {
-      return prefs.claude && claudeModels.some((m) => m.id === prefs.claude)
-        ? prefs.claude
-        : claudeModels[0]?.id ?? DEFAULT_CLAUDE_MODEL;
-    }
-
-    const preferred = readAgentModelPreference()[agentType];
-    return preferred && filteredModels.some((m) => m.id === preferred)
-      ? preferred
-      : getFallbackModelForAgent(agentType, filteredModels);
-  };
+  const scheduleSelected = launchTiming === "schedule";
+  const queueDisabled = scheduleSelected;
+  const scheduleDisabled = Boolean(queueAfterId);
 
   const selectedCommandMeta = command ? getCommandHint(command) : undefined;
   const selectedCommandMode = selectedCommandMeta?.executionMode;
@@ -310,36 +227,18 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   }, [isCommandOnly]);
 
   useEffect(() => {
-    if (!agentType || filteredModels.length === 0 || model) return;
-    const preferred = readAgentModelPreference()[agentType];
-    if (preferred && filteredModels.some((m) => m.id === preferred)) {
-      setModel(preferred);
-      return;
-    }
-    const fallback = getFallbackModelForAgent(agentType, filteredModels);
-    if (fallback) setModel(fallback);
-  }, [agentType, model, filteredModels]);
-
-  useEffect(() => {
-    if (runtime !== "codex") return;
-    if (model && codexModels.some((m) => m.id === model)) return;
-    const nextModel = prefs.codex && codexModels.some((m) => m.id === prefs.codex)
-      ? prefs.codex
-      : codexModels[0]?.id ?? DEFAULT_CODEX_MODEL;
-    setModel(nextModel);
-  }, [codexModels, model, prefs.codex, runtime]);
-
-  useEffect(() => {
-    if (runtime !== "claude") return;
-    if (model && claudeModels.some((m) => m.id === model)) return;
-    const nextModel = prefs.claude && claudeModels.some((m) => m.id === prefs.claude)
-      ? prefs.claude
-      : claudeModels[0]?.id ?? DEFAULT_CLAUDE_MODEL;
-    setModel(nextModel);
-  }, [claudeModels, model, prefs.claude, runtime]);
+    if (model && isModelAvailableForRuntime(model, runtime, agentType)) return;
+    const nextModel = getDefaultModelForRuntime(runtime, agentType);
+    if (nextModel) setModel(nextModel);
+  }, [agentType, getDefaultModelForRuntime, isModelAvailableForRuntime, model, runtime]);
 
   useEffect(() => {
     firstInputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentNow(new Date()), 30000);
+    return () => clearInterval(timer);
   }, []);
 
   const clearFieldError = useCallback((field: 'title' | 'description') => {
@@ -358,6 +257,14 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
 
     if ((!command && !description.trim()) || (isCommandWithPrompt && !description.trim())) {
       nextErrors.description = 'Add the prompt details before creating this task.';
+    }
+
+    if (launchTiming === "schedule" && !scheduleValidation.scheduledAtUtc) {
+      setSubmitError({
+        title: 'Invalid schedule',
+        message: scheduleValidation.error ?? 'Choose a future KST date/time before scheduling this task.',
+      });
+      return false;
     }
 
     if (nextErrors.title || nextErrors.description) {
@@ -379,7 +286,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setFieldErrors({});
     setSubmitError(null);
     return true;
-  }, [command, description, isCommandWithPrompt, title]);
+  }, [command, description, isCommandWithPrompt, launchTiming, scheduleValidation.error, scheduleValidation.scheduledAtUtc, title]);
 
   useEffect(() => {
     return () => {
@@ -454,13 +361,13 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleSubmit = async (shouldDispatch: boolean) => {
+  const handleSubmit = async (mode: CreateLaunchTiming) => {
     if (!validateBeforeSubmit()) return;
 
     setIsSubmitting(true);
-    setSubmitMode(shouldDispatch ? 'start' : 'create');
+    setSubmitMode(mode);
     setSubmitError(null);
-    const resolvedModel = resolveModelForRuntime();
+    const resolvedModel = model || getDefaultModelForRuntime(runtime, agentType);
     if (resolvedModel && resolvedModel !== model) {
       setModel(resolvedModel);
     }
@@ -487,6 +394,9 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         command: command || undefined,
         arguments: commandArguments.trim() || undefined,
         resumeSessionId: resumeSessionId || undefined,
+        scheduledDispatch: mode === "schedule" && scheduleValidation.scheduledAtUtc
+          ? { scheduledAt: scheduleValidation.scheduledAtUtc }
+          : undefined,
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'The task could not be created.';
@@ -535,16 +445,6 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         onClearBoardError();
         const message = err instanceof Error ? err.message : 'Queue setup failed.';
         followUpIssues.push(`Queue setup failed: ${message}`);
-      }
-    }
-
-    if (shouldDispatch) {
-      try {
-        await onDispatch(newCard.id);
-      } catch (err: unknown) {
-        onClearBoardError();
-        const message = err instanceof Error ? err.message : 'Start failed.';
-        followUpIssues.push(`Start failed: ${message}`);
       }
     }
 
@@ -659,53 +559,27 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             <span className="kv2-create-helper">Recent directories are saved in this browser after use.</span>
           </div>
 
-          <div className="kv2-create-field">
-            <div className="kv2-create-label">Runtime</div>
-            <div className="kv2-create-agent-row">
-              {orderedRuntimes.map((entry) => {
-                const unavailable = entry.disabled || entry.available === false;
-                return (
-                  <button
-                    key={entry.runtime}
-                    type="button"
-                    className={`kv2-create-agent-chip kv2-create-agent-chip--runtime-${entry.runtime} ${runtime === entry.runtime ? "kv2-create-agent-chip--active" : ""} ${unavailable ? "kv2-create-agent-chip--unavailable" : ""}`}
-                    onClick={() => {
-                      if (unavailable) return;
-                      runtimeTouchedRef.current = true;
-                      setRuntime(entry.runtime);
-                      setDefault("runtime", entry.runtime);
-                      if (entry.runtime === "claude") {
-                        const preferred = prefs.claude;
-                        const nextModel = preferred && entry.models?.some((m) => m.id === preferred)
-                          ? preferred
-                          : entry.models?.[0]?.id ?? DEFAULT_CLAUDE_MODEL;
-                        setModel(nextModel);
-                      } else if (entry.runtime === "codex") {
-                        const preferred = prefs.codex;
-                        const nextModel = preferred && entry.models?.some((m) => m.id === preferred)
-                          ? preferred
-                          : entry.models?.[0]?.id ?? DEFAULT_CODEX_MODEL;
-                        setModel(nextModel);
-                      } else if (entry.runtime === "opencode") {
-                        const preferred = readAgentModelPreference()[agentType];
-                        setModel(preferred && filteredModels.some((m) => m.id === preferred)
-                          ? preferred
-                          : getFallbackModelForAgent(agentType, filteredModels));
-                      }
-                    }}
-                    disabled={isSubmitting || unavailable}
-                    title={entry.unavailableReason}
-                  >
-                    <span className={`kv2-create-agent-chip-icon kv2-create-agent-chip-icon--${entry.runtime}`} aria-hidden="true">
-                      <RuntimeBadgeIcon runtime={entry.runtime} />
-                    </span>
-                    <span className="kv2-create-agent-chip-label">{entry.label}</span>
-                    {unavailable && <span className="kv2-create-agent-chip-badge">Unavailable</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <RuntimeModelFields
+            runtime={runtime}
+            model={model}
+            orderedRuntimes={orderedRuntimes}
+            displayedModels={displayedModels}
+            runtimeInputId="create-card-runtime-group"
+            modelInputId="create-card-model-select"
+            disabled={isSubmitting}
+            onRuntimeChange={(nextRuntime) => {
+              runtimeTouchedRef.current = true;
+              setRuntime(nextRuntime);
+              persistRuntimeSelection(nextRuntime);
+              setModel(getDefaultModelForRuntime(nextRuntime, agentType));
+            }}
+            onModelChange={(nextModel) => {
+              setModel(nextModel);
+              if (nextModel) {
+                persistModelSelection(runtime, nextModel, agentType);
+              }
+            }}
+          />
 
           {runtime === "opencode" && (
           <div className="kv2-create-field">
@@ -718,12 +592,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
                   className={`kv2-create-agent-chip ${agentType === agent.key ? "kv2-create-agent-chip--active" : ""}`}
                   onClick={() => {
                     setAgentType(agent.key);
-                    const preferred = readAgentModelPreference()[agent.key];
-                    if (preferred && filteredModels.some((m) => m.id === preferred)) {
-                      setModel(preferred);
-                      return;
-                    }
-                    setModel(getFallbackModelForAgent(agent.key, filteredModels));
+                    setModel(getDefaultModelForRuntime("opencode", agent.key));
                   }}
                   disabled={isSubmitting}
                 >
@@ -733,30 +602,6 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             </div>
           </div>
           )}
-
-          <div className="kv2-create-field">
-            <label className="kv2-create-label" htmlFor="create-card-model-select">Model</label>
-            <select
-              id="create-card-model-select"
-              className="kv2-create-select"
-              value={model}
-              onChange={(e) => {
-                const selected = e.target.value;
-                setModel(selected);
-                if (runtime === "opencode" && selected) writeAgentModelPreference(agentType, selected);
-                if (runtime === "codex" && selected) setDefault("codex", selected);
-                if (runtime === "claude" && selected) setDefault("claude", selected);
-              }}
-              disabled={isSubmitting}
-            >
-              <option value="">-- Default model --</option>
-              {displayedModels.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
 
           {runtime === "codex" && (
             <div className="kv2-create-field">
@@ -914,6 +759,55 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
           </div>
 
           <div className="kv2-create-field">
+            <div className="kv2-create-label">Schedule</div>
+            <div className="kv2-session-helper">설정한 KST 시각에 이 작업을 한 번 자동으로 시작합니다.</div>
+            <div className="kv2-create-launch-grid kv2-create-launch-grid--single">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={launchTiming === "schedule"}
+                className={`kv2-create-launch-option${launchTiming === "schedule" ? " kv2-create-launch-option--active" : ""}`}
+                onClick={() => setLaunchTiming((current) => current === "schedule" ? "later" : "schedule")}
+                disabled={isSubmitting || scheduleDisabled}
+                aria-describedby={scheduleDisabled ? "create-card-schedule-disabled-reason" : undefined}
+              >
+                <span className="kv2-create-launch-option-copy">
+                  <span className="kv2-create-launch-option-title">예약 시작</span>
+                  <span className="kv2-create-launch-option-desc">
+                    {scheduleSelected
+                      ? "설정한 KST 시각에 한 번 자동 dispatch합니다."
+                      : "사용하지 않으면 todo 상태로만 생성합니다."}
+                  </span>
+                </span>
+                <span className="kv2-create-launch-switch" aria-hidden="true">
+                  <span className="kv2-create-launch-switch-knob" />
+                </span>
+              </button>
+            </div>
+            {launchUiState.scheduleDisabledReason && (
+              <div
+                id="create-card-schedule-disabled-reason"
+                className="kv2-session-helper kv2-session-helper--warn"
+                role="note"
+              >
+                {launchUiState.scheduleDisabledReason}
+              </div>
+            )}
+            {scheduleSelected && (
+              <div className="kv2-session-config-card">
+                <ScheduledDispatchEditor
+                  currentNow={currentNow}
+                  inputId="create-card-schedule-datetime"
+                  noteLabel="현재 KST보다 미래인 시각만 예약할 수 있습니다."
+                  value={scheduledAtInput}
+                  onChange={setScheduledAtInput}
+                  disabled={isSubmitting}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="kv2-create-field">
             <button
               type="button"
               id="create-card-queue-label"
@@ -921,6 +815,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0, textAlign: 'left' }}
               aria-expanded={queueExpanded || Boolean(queueAfterId)}
               onClick={() => setQueueExpanded((current) => !current)}
+              disabled={queueDisabled}
+              aria-describedby={queueDisabled ? "create-card-queue-disabled-reason" : undefined}
             >
               Queue After
               <span
@@ -931,6 +827,15 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               </span>
             </button>
             <div className="kv2-session-helper">선택한 작업이 끝난 뒤 이 작업을 이어서 시작합니다.</div>
+            {launchUiState.queueDisabledReason && (
+              <div
+                id="create-card-queue-disabled-reason"
+                className="kv2-session-helper kv2-session-helper--warn"
+                role="note"
+              >
+                {launchUiState.queueDisabledReason}
+              </div>
+            )}
 
             {(queueExpanded || queueAfterId) && (
               <div className="kv2-session-config-card">
@@ -938,14 +843,14 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
                   value={queueAfterId}
                   options={queueOptions}
                   onChange={setQueueAfterId}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || queueDisabled}
                 />
 
                 {queueAfterId && (
                   <QueueSessionModePicker
                     value={queueSessionMode}
                     onChange={setQueueSessionMode}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || queueDisabled}
                   />
                 )}
               </div>
@@ -1035,9 +940,9 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             </div>
             <span className="kv2-create-progress-label">
               {uploadProgress
-                || (submitMode === 'start'
-                  ? 'Creating task & starting agent…'
-                  : 'Creating task…')}
+                || (submitMode === 'schedule'
+                    ? 'Creating task & saving schedule…'
+                    : 'Creating task…')}
             </span>
           </div>
         )}
@@ -1046,31 +951,27 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
           <button
             type="button"
             className="kv2-btn kv2-btn--outline"
-            onClick={() => handleSubmit(false)}
+            onClick={onClose}
             disabled={isSubmitting}
-            aria-busy={isSubmitting && submitMode === 'create'}
           >
-            {isSubmitting && submitMode === 'create' ? (
-              <>
-                <span className="kv2-action-spinner" aria-hidden="true" /> Creating…
-              </>
-            ) : (
-              'CREATE'
-            )}
+            Cancel
           </button>
           <button
             type="button"
             className="kv2-btn kv2-btn--primary"
-            onClick={() => handleSubmit(true)}
-            disabled={isSubmitting}
-            aria-busy={isSubmitting && submitMode === 'start'}
+            onClick={() => handleSubmit(launchTiming)}
+            disabled={isSubmitting || (scheduleSelected && !scheduleValidation.scheduledAtUtc)}
+            aria-busy={isSubmitting && submitMode === launchTiming}
           >
-            {isSubmitting && submitMode === 'start' ? (
+            {isSubmitting && submitMode === launchTiming ? (
               <>
-                <span className="kv2-action-spinner" aria-hidden="true" /> Starting…
+                <span className="kv2-action-spinner" aria-hidden="true" />
+                {launchTiming === "schedule"
+                    ? " Scheduling…"
+                    : " Creating…"}
               </>
             ) : (
-              'CREATE & START'
+              launchUiState.primaryActionLabel
             )}
           </button>
         </div>

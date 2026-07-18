@@ -132,6 +132,22 @@ export async function dispatchCard(id: string): Promise<DispatchResult> {
   return handleResponse<DispatchResult>(res);
 }
 
+export async function scheduleCard(id: string, scheduledAt: string): Promise<KanbanCard> {
+  const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(id)}/schedule`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scheduledAt }),
+  });
+  return handleResponse<KanbanCard>(res);
+}
+
+export async function cancelCardSchedule(id: string): Promise<KanbanCard> {
+  const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(id)}/schedule`, {
+    method: 'DELETE',
+  });
+  return handleResponse<KanbanCard>(res);
+}
+
 export async function fetchQueuedCards(cardId: string): Promise<KanbanCard[]> {
   const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(cardId)}/queue`);
   return handleResponse<KanbanCard[]>(res);

@@ -4,6 +4,7 @@ import type { PluginInput } from '@opencode-ai/plugin';
 import type { SchedulerStore } from '../../core/scheduler-store';
 import type { SchedulerEngine } from '../scheduler-engine';
 import { parseNaturalLanguageToCron, isValidCron, describeCron } from '../../core/cron-parser';
+import { validateSchedulerActionInput } from '../../core/scheduling';
 
 export function createSchedulerUpdateTool(
   store: SchedulerStore,
@@ -21,21 +22,22 @@ export function createSchedulerUpdateTool(
         .string()
         .optional()
         .describe('New cron expression or natural language'),
-      timezone: z.string().optional().describe('New IANA timezone'),
       actionType: z
-        .enum(['shell', 'skill'])
+        .enum(['bash', 'prompt'])
         .optional()
         .describe('New action type'),
-      command: z.string().optional().describe('New shell command'),
-      skillName: z.string().optional().describe('New skill name'),
-      skillInput: z.string().optional().describe('New skill input JSON'),
+      command: z.string().optional().describe('New bash command'),
+      cwd: z.string().optional().describe('New bash working directory'),
+      prompt: z.string().optional().describe('New prompt body'),
+      projectDir: z.string().optional().describe('New prompt project directory'),
+      agentRuntime: z.enum(['opencode', 'codex', 'claude']).optional().describe('New prompt runtime'),
+      model: z.string().optional().describe('New prompt model'),
     },
     async execute(args) {
       const updates: Record<string, unknown> = {};
 
       if (args.name !== undefined) updates.name = args.name;
       if (args.description !== undefined) updates.description = args.description;
-      if (args.timezone !== undefined) updates.timezone = args.timezone;
 
       if (args.cron !== undefined) {
         const parsed = parseNaturalLanguageToCron(args.cron);
@@ -51,12 +53,21 @@ export function createSchedulerUpdateTool(
       }
 
       if (args.actionType !== undefined) {
-        updates.action = {
-          type: args.actionType,
-          command: args.command,
-          skillName: args.skillName,
-          skillInput: args.skillInput,
-        };
+        updates.action = validateSchedulerActionInput(
+          args.actionType === 'bash'
+            ? {
+                type: 'bash',
+                command: args.command,
+                cwd: args.cwd,
+              }
+            : {
+                type: 'prompt',
+                prompt: args.prompt,
+                projectDir: args.projectDir,
+                agentRuntime: args.agentRuntime,
+                model: args.model,
+              },
+        );
       }
 
       const updated = await store.updateEntry(args.id, updates);

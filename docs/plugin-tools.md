@@ -123,7 +123,7 @@
 
 새 스케줄러를 생성한다.
 
-**설명**: cron 표현식이나 자연어(한국어/영어)로 실행 주기를 지정하고, shell 명령 또는 스킬을 정해진 시간에 자동 실행하도록 예약한다. 생성 즉시 활성 상태로 등록된다.
+**설명**: cron 표현식이나 자연어(한국어/영어)로 실행 주기를 지정하고, `bash` 또는 `prompt` action을 KST 기준으로 반복 예약한다. 생성 즉시 활성 상태로 등록된다.
 
 **파라미터**
 
@@ -132,11 +132,14 @@
 | name | string | 필수 | 스케줄러 이름 |
 | description | string | 필수 | 스케줄러 설명 |
 | cron | string | 필수 | cron 표현식(5 필드) 또는 자연어 (예: "매 5분마다", "every hour") |
-| actionType | 'shell' \| 'skill' | 필수 | 실행할 액션 유형 |
-| command | string | 선택 | 실행할 shell 명령 (actionType이 'shell'일 때 사용) |
-| skillName | string | 선택 | 실행할 스킬 이름 (actionType이 'skill'일 때 사용) |
-| skillInput | string | 선택 | 스킬에 전달할 입력값 (actionType이 'skill'일 때 사용) |
-| timezone | string | 선택 | cron 실행 기준 타임존 (예: "Asia/Seoul") |
+| actionType | 'bash' \| 'prompt' | 필수 | 실행할 액션 유형 |
+| command | string | 선택 | 실행할 Bash 명령 (`actionType='bash'`) |
+| cwd | string | 선택 | Bash 실행 디렉토리 |
+| prompt | string | 선택 | scheduler-origin 카드의 prompt 본문 (`actionType='prompt'`) |
+| projectDir | string | 선택 | prompt scheduler projectDir |
+| agentRuntime | 'opencode' \| 'codex' \| 'claude' | 선택 | prompt scheduler runtime |
+| model | string | 선택 | prompt scheduler model |
+| timezone | string | 선택 | 항상 `"Asia/Seoul"`만 허용 |
 
 **반환값**: 생성된 스케줄러 항목의 전체 정보를 담은 JSON 문자열
 
@@ -146,7 +149,7 @@
 
 기존 스케줄러의 설정을 수정한다.
 
-**설명**: 스케줄러의 이름, 설명, cron 주기, 액션 등 모든 필드를 수정할 수 있다. 수정 즉시 새 설정으로 스케줄이 재등록된다.
+**설명**: 스케줄러의 이름, 설명, cron 주기, action을 수정한다. 수정 즉시 새 설정으로 스케줄이 재등록된다.
 
 **파라미터**
 
@@ -156,10 +159,13 @@
 | name | string | 선택 | 새 이름 |
 | description | string | 선택 | 새 설명 |
 | cron | string | 선택 | 새 cron 표현식 또는 자연어 |
-| actionType | 'shell' \| 'skill' | 선택 | 새 액션 유형 |
-| command | string | 선택 | 새 shell 명령 |
-| skillName | string | 선택 | 새 스킬 이름 |
-| skillInput | string | 선택 | 새 스킬 입력값 |
+| actionType | 'bash' \| 'prompt' | 선택 | 새 액션 유형 |
+| command | string | 선택 | 새 Bash 명령 |
+| cwd | string | 선택 | 새 Bash 실행 디렉토리 |
+| prompt | string | 선택 | 새 prompt 본문 |
+| projectDir | string | 선택 | 새 prompt projectDir |
+| agentRuntime | 'opencode' \| 'codex' \| 'claude' | 선택 | 새 prompt runtime |
+| model | string | 선택 | 새 prompt model |
 | timezone | string | 선택 | 새 타임존 |
 
 **반환값**: 수정된 스케줄러 요약 정보를 담은 JSON 문자열
@@ -218,7 +224,7 @@
 
 스케줄러를 cron 주기와 관계없이 즉시 수동으로 실행한다.
 
-**설명**: 다음 예약 시간을 기다리지 않고 지금 바로 실행이 필요할 때 사용한다. 실행 결과는 해당 스케줄러의 실행 이력에 기록된다.
+**설명**: 다음 예약 시간을 기다리지 않고 즉시 실행한다. `bash`는 stdout/stderr 중심 실행 기록을 남기고, `prompt`는 scheduler-origin 카드를 만든 뒤 runtime dispatch를 접수한다. 실행 결과는 해당 스케줄러의 실행 이력에 기록된다.
 
 **파라미터**
 
@@ -287,7 +293,7 @@ scheduler_create({
   name: "서버 헬스체크",
   description: "매일 오전 9시에 API 서버 상태를 확인하고 결과를 로깅",
   cron: "매일 오전 9시",
-  actionType: "shell",
+  actionType: "bash",
   command: "curl -f http://localhost:3000/health && echo 'OK' || echo 'FAIL'",
   timezone: "Asia/Seoul"
 })
@@ -318,7 +324,7 @@ kanban_get({ id: "card_abc123" })
 
 **zod 스키마 검증**: 도구 입력 검증에는 플러그인에 번들된 zod(`tool.schema`)를 사용한다. `import { z } from 'zod'`로 직접 zod를 가져오면 다른 zod 인스턴스가 사용되어 타입 오류가 발생한다. 새 도구를 추가할 때 반드시 `tool.schema`를 통해 스키마를 정의해야 한다.
 
-**스킬 액션의 토큰 소비 경고**: `actionType: 'skill'`로 설정된 스케줄러는 실행 시 AI 토큰을 소비한다. shell 액션은 `Bun.spawn()`으로 실행되므로 토큰을 쓰지 않지만, 스킬 액션은 opencode 스킬 실행 경로를 거치기 때문에 토큰이 사용된다. 스케줄러 UI에서도 이 차이를 경고로 표시한다.
+**prompt 액션의 토큰 소비 경고**: `actionType: 'prompt'`로 설정된 스케줄러는 scheduler-origin 카드를 만들고 runtime dispatch를 호출하므로 AI 토큰을 소비한다. 반대로 `bash` 액션은 `Bun.spawn()`으로 실행되므로 토큰을 쓰지 않는다.
 
 **카드 삭제와 아카이브**: `kanban_delete`는 카드를 영구 삭제한다. 완료된 작업의 이력을 보존하려면 `kanban_archive`를 사용해야 한다. 아카이브된 카드는 `~/.agent-kanban/archive/` 디렉토리의 월별 파일에 저장된다. `KANBAN_DATA_DIR`을 설정한 경우 해당 경로가 우선한다.
 

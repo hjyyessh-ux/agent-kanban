@@ -1796,6 +1796,24 @@
   flex-basis: 10px;
 }
 
+.kv2-scheduled-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: 999px;
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface);
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.kv2-scheduled-badge svg {
+  display: block;
+}
+
 .kv2-telegram-badge {
   display: inline-flex;
   align-items: center;
@@ -1810,6 +1828,24 @@
   display: block;
   width: 21px;
   height: 21px;
+}
+
+.kv2-scheduler-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: 999px;
+  color: var(--kv2-text-secondary);
+  background: color-mix(in srgb, var(--kv2-status-complete-accent) 10%, var(--kv2-surface));
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.kv2-scheduler-badge svg {
+  display: block;
 }
 
 .kv2-runtime-badge {
@@ -2523,6 +2559,18 @@
   border-color: var(--kv2-card-action-queue-border);
   color: var(--kv2-card-action-queue-fg);
   width: var(--kv2-btn-primary-width);
+}
+
+.kv2-card-action--schedule {
+  background: var(--kv2-surface);
+  border-color: var(--kv2-border);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-card-action--schedule-cancel {
+  background: var(--kv2-danger-surface);
+  border-color: var(--kv2-danger-accent);
+  color: var(--kv2-danger-accent);
 }
 
 .kv2-card-action--no-upper {

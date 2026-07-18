@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import type { V2ColumnViewModel } from './board-selectors';
 import { selectCardById } from './board-selectors';
-import { FavoriteToggleButton, QueueTargetChip, RuntimeBadge } from './BoardCardSections';
+import { FavoriteToggleButton, QueueTargetChip, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
 import { BoardListRowAction } from './BoardListRowAction';
 
 interface BoardListViewProps {
@@ -155,6 +155,10 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
                                   title="Unread completion"
                                   aria-label="Unread completion"
                                 />
+                              )}
+                              <ScheduledMetaBadge vm={vm} />
+                              {vm.originChannel === 'scheduler' && (
+                                <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} size={18} />
                               )}
                               {vm.title}
                             </button>

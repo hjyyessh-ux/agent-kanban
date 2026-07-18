@@ -25,6 +25,32 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
     .filter(isVisibleFocusableElement);
 }
 
+export function shouldCloseModalOnKey(key: string): boolean {
+  return key === 'Escape';
+}
+
+export function resolveModalTabTarget<T>(
+  activeElement: T | null,
+  focusables: readonly T[],
+  container: T,
+  shiftKey: boolean,
+): T | null {
+  if (focusables.length === 0) {
+    return container;
+  }
+
+  const firstFocusable = focusables[0] ?? container;
+  const lastFocusable = focusables[focusables.length - 1] ?? container;
+
+  if (shiftKey) {
+    return activeElement === firstFocusable || activeElement === container
+      ? lastFocusable
+      : null;
+  }
+
+  return activeElement === lastFocusable ? firstFocusable : null;
+}
+
 export function useModalAccessibility(
   enabled: boolean,
   containerRef: RefObject<HTMLElement | null>,
@@ -54,7 +80,7 @@ export function useModalAccessibility(
     if (firstFocusable !== container) firstFocusable.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (shouldCloseModalOnKey(event.key)) {
         event.preventDefault();
         onCloseRef.current();
         return;
@@ -71,20 +97,10 @@ export function useModalAccessibility(
         return;
       }
 
-      const firstFocusable = currentFocusables[0] ?? container;
-      const lastFocusable = currentFocusables[currentFocusables.length - 1] ?? container;
-
-      if (event.shiftKey) {
-        if (active === firstFocusable || active === container) {
-          event.preventDefault();
-          lastFocusable.focus();
-        }
-        return;
-      }
-
-      if (active === lastFocusable) {
+      const nextTarget = resolveModalTabTarget(active, currentFocusables, container, event.shiftKey);
+      if (nextTarget) {
         event.preventDefault();
-        firstFocusable.focus();
+        nextTarget.focus();
       }
     };
 
