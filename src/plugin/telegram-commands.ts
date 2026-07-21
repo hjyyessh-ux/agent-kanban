@@ -19,6 +19,7 @@ export interface TelegramSessionSummary {
   agentRuntime: AgentRuntime;
   agentType?: string;
   model?: string;
+  projectDir?: string;
   updatedAt: string;
 }
 

@@ -80,6 +80,7 @@
 - Feedback cards keep their wrapper text on idle completion; non-feedback cards may sanitize on idle.
 - Dispatch updates the card and dispatch tracker before `promptAsync()` to avoid duplicate creation races.
 - Telegram follow-ups reuse the selected session, while `/new_session` clears only the selected session and keeps sticky default agent/model.
+- Telegram follow-up cards inherit the selected session `projectDir`; `/directory` remains sticky until changed or cleared, and new-session/follow-up ACKs show the effective path.
 - Feedback dispatch reuses the original session strictly via `feedbackForCardId`, not by description text shape.
 - Tool factories must keep string return values; route handlers must keep CORS.
 - Cards, schedulers, settings, scripts, and Telegram chat state persist in separate JSON stores.

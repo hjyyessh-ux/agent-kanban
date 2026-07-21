@@ -718,6 +718,9 @@ describe('TelegramPoller', () => {
 
         const dispatchFn = mock(async () => ({ sessionId: 'ses-abc' }));
         const followUpFn = mock(async () => {});
+        const projectDir = '/Users/user/workspace/photo-editor';
+        const telegramStateStore = new TelegramStateStore(dir);
+        await telegramStateStore.upsertChatState(55555, { defaultProjectDir: projectDir });
 
         let pollCount = 0;
         const sentMessages: string[] = [];
@@ -772,10 +775,12 @@ describe('TelegramPoller', () => {
         expect(followUpCard!.status).toBe('in_progress');
         expect(followUpCard!.sessionId).toBe('ses-abc');
         expect(followUpCard!.telegramChatId).toBe(55555);
+        expect(followUpCard!.projectDir).toBe(projectDir);
 
         // Follow-up Telegram message should show card registered
         const followUpMsg = sentMessages.find(m => m.includes('기존 세션에 전달됨') && m.includes(followUpCard!.id));
         expect(followUpMsg).toBeDefined();
+        expect(followUpMsg).toContain(`- 경로: ${projectDir}`);
       });
     });
 
@@ -2171,6 +2176,63 @@ describe('TelegramPoller', () => {
         expect(state?.selectedAgentRuntime).toBe('codex');
         expect(state?.defaultAgentRuntime).toBe('codex');
         expect(state?.defaultModel).toBe('gpt-5.5');
+      });
+    });
+
+    test('/directory persists for new sessions until another directory is set', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+        const telegramStateStore = new TelegramStateStore(dir);
+        const firstDir = '/Users/user/workspace/photo-editor';
+        const secondDir = '/Users/user/workspace/agent-kanban';
+        let sessionCount = 0;
+        const dispatchFn = mock(async (cardId: string) => {
+          const sessionId = `ses-directory-${++sessionCount}`;
+          await store.updateCard(cardId, { sessionId, status: 'in_progress' });
+          return { sessionId };
+        });
+        const sentMessages: string[] = [];
+
+        globalThis.fetch = mock(async (url: RequestInfo, init?: RequestInit) => {
+          const urlStr = url instanceof URL ? url.toString() : url as string;
+          if (urlStr.includes('/getUpdates')) {
+            return new Response(JSON.stringify({
+              ok: true,
+              result: [
+                makeUpdate(3250, `/directory ${firstDir}`, 12345),
+                makeUpdate(3251, 'First directory task', 12345),
+                makeUpdate(3252, '/new_session', 12345),
+                makeUpdate(3253, 'Second directory task', 12345),
+                makeUpdate(3254, `/directory ${secondDir}`, 12345),
+                makeUpdate(3255, 'Changed directory task', 12345),
+              ],
+            }), { status: 200 });
+          }
+          if (urlStr.includes('/sendMessage') && init?.body) {
+            const body = JSON.parse(init.body as string) as { text: string };
+            sentMessages.push(body.text);
+          }
+          return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
+        }) as unknown as typeof fetch;
+
+        const poller = new TelegramPoller(store, settingsStore, dispatchFn, undefined, { telegramStateStore });
+        await runPoll(poller);
+
+        const board = await store.load();
+        expect(board.cards.find(card => card.description === 'First directory task')?.projectDir).toBe(firstDir);
+        expect(board.cards.find(card => card.description === 'Second directory task')?.projectDir).toBe(firstDir);
+        expect(board.cards.find(card => card.description === 'Changed directory task')?.projectDir).toBe(secondDir);
+
+        const dispatchAcks = sentMessages.filter(message => message.includes('카드 등록 및 작업 시작'));
+        expect(dispatchAcks).toHaveLength(3);
+        expect(dispatchAcks[0]).toContain(`- 경로: ${firstDir}`);
+        expect(dispatchAcks[1]).toContain(`- 경로: ${firstDir}`);
+        expect(dispatchAcks[2]).toContain(`- 경로: ${secondDir}`);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.defaultProjectDir).toBe(secondDir);
       });
     });
 

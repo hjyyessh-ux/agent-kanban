@@ -76,6 +76,7 @@ plugin/
 - Idle completion must stay gated by observed session activity; do not reintroduce unconditional `session.idle` completion.
 - Parent/child waiting semantics must stay aligned with stale detection so top-level parents waiting on direct child work are not flagged as orphaned.
 - Telegram selected-session reuse, sticky default agent/model behavior, and idle-completion boundaries must stay aligned with `docs/invariants.md`.
+- Telegram follow-up cards inherit the selected session `projectDir`; `/directory` remains sticky until changed or cleared, and dispatch/follow-up ACKs show the effective path.
 
 ## FRAGILE WORKFLOW FILES
 
