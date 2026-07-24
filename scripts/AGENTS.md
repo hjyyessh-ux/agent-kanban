@@ -11,7 +11,7 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 
 | File | Description |
 |------|-------------|
-| `test-server.ts` | Boots `createServer()` on port `E2E_PORT` (default 24681) against `.e2e-data/`; wires all core stores (Kanban, Settings, Scheduler, Script, Skill, SkillRoots), `SchedulerEngine`, and `WikiWorker`; builds `web/dist` on demand. Used by Playwright (`playwright.config.ts`) |
+| `test-server.ts` | Boots an E2E proxy server on `E2E_PORT` (default 24681) against `.e2e-data/`; wires all core stores (Kanban, Settings, Scheduler, Script, Skill, SkillRoots), `SchedulerEngine`, `ScheduledDispatchService`, and `WikiWorker`; rebuilds `web/dist` before startup and exposes test-only fake-clock / service-restart routes under `/api/e2e/*`. Used by Playwright (`playwright.config.ts`) |
 | `install.sh` | Builds the project and installs the opencode plugin bundle plus Claude Code/Codex hooks into global config dirs; supports `--uninstall` to strip agent-kanban entries via `jq` |
 | `restart-main-session.sh` | Gracefully restarts the current agent-kanban runtime-owner process using the singleton lock/peers files under the kanban data dir; supports `--dry-run`, `--force`, `--data-dir`; falls back to a cold-start command (`KANBAN_RESTART_COMMAND`, default `opencode`) when no live owner is found |
 | `restart-opencode-plugin.sh` | Restart helper scoped to the opencode plugin process, same data-dir resolution pattern as `restart-main-session.sh` |

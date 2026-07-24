@@ -1,7 +1,7 @@
 import React from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
-import { CardActions, FavoriteToggleButton, NestedChildAccordion, RuntimeBadge, TelegramBadge } from './BoardCardSections';
+import { CardActions, FavoriteToggleButton, NestedChildAccordion, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { formatDuration, formatRelativeTime } from '../../utils/format-duration';
 import { buildResumeCommand } from '../../utils/resume-command';
@@ -14,6 +14,8 @@ export interface BoardCardProps {
   onDragEnd?: (e: React.DragEvent) => void;
   onStatusChange?: (newStatus: KanbanStatus) => void;
   onDispatch?: () => void | Promise<void>;
+  onScheduleOpen?: () => void;
+  onCancelSchedule?: () => void;
   onQueueOpen?: () => void;
   onUnqueue?: () => void;
   onDelete?: () => void;
@@ -53,6 +55,8 @@ export const BoardCard: React.FC<BoardCardProps> = ({
   onDragEnd,
   onStatusChange,
   onDispatch,
+  onScheduleOpen,
+  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
   onDelete,
@@ -130,6 +134,10 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             aria-label="Unread completion"
           />
         )}
+        <ScheduledMetaBadge vm={vm} />
+        {vm.originChannel === 'scheduler' && (
+          <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
+        )}
         {vm.originChannel === 'telegram' && <TelegramBadge />}
         {onFavoriteToggle && (
           <FavoriteToggleButton
@@ -199,6 +207,8 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             vm={vm}
             onStatusChange={onStatusChange}
             onDispatch={onDispatch}
+            onScheduleOpen={onScheduleOpen}
+            onCancelSchedule={onCancelSchedule}
             onQueueOpen={onQueueOpen}
             onUnqueue={onUnqueue}
           />

@@ -15,7 +15,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 | Change scheduler action/history schema | `types.ts`, `scheduler-store.ts` | Scheduler JSON lives in `schedulers.json` |
 | Change settings secrets/toggles storage | `settings-store.ts` | Persists `settings.json` |
 | Change synced script storage/history | `script-store.ts` | Persists `scripts.json`, syncs `KANBAN_DATA_DIR/scripts/` |
-| Change board/archive/screenshot persistence | `store.ts` | `active.json`, archive files, screenshot paths |
+| Change board/archive/screenshot persistence | `store.ts` | `active.json`, archive files, screenshot paths, queue helpers, scheduled-dispatch claim/recovery |
 | Change wiki state stamping/queueing on archived cards | `store.ts`, `types.ts` | `CardWikiState`; archive stamps `wiki.status='pending'`; `markWikiPending()` drives backfill |
 | Change Telegram chat/session pinning | `telegram-state-store.ts` | Persists `telegram-state.json` |
 | Change cron parsing or descriptions | `cron-parser.ts` | Korean/English natural language support |
@@ -42,6 +42,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - `findCardBySessionId()` returns the newest matching card.
 - `UpdateTelegramChatStateInput` uses `null` to clear persisted optional fields.
 - Script and scheduler stdout/stderr are capped to 8KB.
+- Scheduled-dispatch reservations are store-owned and atomic: `scheduled -> dispatching -> dispatched/failed`, with explicit stale-claim recovery after restart.
 - Primary-agent defaults live here; UI and plugin must not fork model/label maps.
 - Clearing selected Telegram session/card state must not implicitly clear sticky default agent/model fields.
 - `feedbackForCardId`, `telegramChatId`, and Telegram selected-session fields are part of fragile workflow contracts tracked in `docs/invariants.md`.
@@ -74,7 +75,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 
 ## NOTES
 
-- `store.ts` also owns screenshot persistence and queue ordering helpers.
+- `store.ts` also owns screenshot persistence, queue ordering helpers, and scheduled-dispatch recovery helpers.
 - `script-store.ts` tags runtime-synced entries with `Synced from data scripts/<file>` descriptions.
 - `settings-store.ts` carries runtime toggles such as `network_exposed` and secret tokens.
 - `retry.ts` is the shared utility for retryable runtime edges.

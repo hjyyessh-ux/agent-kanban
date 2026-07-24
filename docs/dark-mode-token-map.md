@@ -577,6 +577,9 @@ finally tokenised — value-exact in light, theme-responsive in dark:
   `--kv2-control-selected-bg` / `-fg` / `-border`. Dark mode uses a muted blue
   graphite fill with light text instead of deriving the fill from the inverted
   `text-primary` value, which previously produced a glaring near-white control.
+- **Select chevrons follow the active theme.** Native-looking kv2 selects use
+  `--kv2-select-chevron-image`, with dark structural ink in light mode and a
+  light graphite arrow in dark mode instead of a permanently dark inline SVG.
 - **Strong text roles are split from strong borders.** Light mode aliases
   `--kv2-strong-title-color`, `--kv2-strong-label-color`, and
   `--kv2-control-text-color` to the prior border value for pixel parity. Dark

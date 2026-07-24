@@ -2,14 +2,14 @@
 
 ## 개요
 
-서버는 `Bun.serve()` 기반이며 모든 `/api/*` 응답에 CORS 헤더를 포함합니다. 실패 응답은 `{ "error": string }` 형식을 사용합니다.
+서버는 `Bun.serve()` 기반이며 실패 응답은 `{ "error": string }` 형식을 사용합니다.
 
 기본 URL은 `http://localhost:24680`이며, 포트 충돌 시 다음 포트를 순차적으로 시도할 수 있습니다.
 
 ## 공통 규칙
 
 - Content-Type: `application/json` (스크린샷 업로드 제외)
-- CORS: `Access-Control-Allow-Origin: *`
+- 브라우저 보안: wildcard CORS는 사용하지 않는다. same-origin 요청만 허용한다.
 - 수정 계열 카드/스케줄러/설정/스크립트 업데이트는 `PATCH`
 - 삭제 성공 응답은 보통 `204 No Content`
 
@@ -106,6 +106,42 @@ soft-delete된 카드의 `deletedAt`을 제거하고 active view로 복구합니
 
 Codex `thread_id` timeout 또는 Claude `session_id` timeout은 실패 응답을 반환합니다. 이때 card는 `todo`로 돌아가고 `progressSummary`에는 `[failed] ...` 요약이 남습니다.
 
+예약된 카드(`scheduledDispatch.status='scheduled'`)에 이 엔드포인트를 호출하면 같은 예약 claim wrapper를 사용해 **Start Now**가 된다. background due scan과 경합해도 dispatch는 한 번만 허용된다.
+
+### `PUT /api/cards/:id/schedule`
+
+top-level `todo` 카드를 **KST 기준 미래 시각**에 한 번만 자동 dispatch하도록 예약한다.
+
+요청:
+
+```json
+{ "scheduledAt": "2026-07-18T09:35" }
+```
+
+응답 예시:
+
+```json
+{
+  "id": "card_123",
+  "status": "todo",
+  "scheduledDispatch": {
+    "scheduledAt": "2026-07-18T00:35:00.000Z",
+    "status": "scheduled",
+    "updatedAt": "2026-07-17T12:00:00.000Z"
+  }
+}
+```
+
+규칙:
+
+- 입력은 KST 로컬 datetime 문자열이어야 한다.
+- 현재(`Friday, July 17, 2026`)보다 미래여야 한다.
+- child 카드, `in_progress` 카드, queued 카드는 거부된다.
+
+### `DELETE /api/cards/:id/schedule`
+
+카드의 1회 예약을 취소한다. `scheduledDispatch` 필드가 제거된다.
+
 ### `GET /api/cards/:id/queue`
 
 해당 카드 뒤에 연결된 queued 카드 목록을 반환합니다.
@@ -184,7 +220,7 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 - `name` (required)
 - `description`
-- `cron` 또는 `naturalLanguage`
+- `scheduleInput` (`simple` 또는 `cron` 모드) 또는 `cron`
 - `timezone`
 - `action` (required)
 
@@ -192,7 +228,7 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 ```json
 {
-  "type": "shell",
+  "type": "bash",
   "command": "bun test"
 }
 ```
@@ -201,9 +237,10 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 ```json
 {
-  "type": "skill",
-  "skillName": "example_skill",
-  "skillInput": "..."
+  "type": "prompt",
+  "prompt": "새벽 점검 결과를 요약해 주세요.",
+  "agentRuntime": "codex",
+  "model": "gpt-5.4"
 }
 ```
 
@@ -213,7 +250,7 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 ### `PATCH /api/schedulers/:id`
 
-스케줄러를 수정합니다. `cron`을 넘기면 유효성 검사를 하고, `naturalLanguage`만 넘기면 cron으로 변환합니다.
+스케줄러를 수정합니다. `scheduleInput` 또는 `cron`을 넘기면 유효성 검사 후 저장합니다.
 
 ### `DELETE /api/schedulers/:id`
 
@@ -225,7 +262,10 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 ### `POST /api/schedulers/:id/run`
 
-즉시 실행합니다.
+즉시 실행한다.
+
+- `bash` action: `stdout` / `stderr` / `exitCode`를 포함한 `SchedulerRun`을 반환한다.
+- `prompt` action: 먼저 scheduler-origin `todo` 카드를 만들고 기존 runtime dispatch를 호출한다. 성공 시 `cardId`, `dispatched`, `dispatchAcceptedAt`가 채워진다.
 
 ### `GET /api/schedulers/:id/history`
 
@@ -233,18 +273,18 @@ wiki 상태가 없거나, `failed`이거나, `promptVersion`이 현재보다 낮
 
 ### `POST /api/schedulers/parse-cron`
 
-자연어 또는 raw cron 입력을 파싱/검증합니다.
+raw cron 입력을 파싱/검증합니다. `mode`는 `cron`만 지원합니다.
 
 요청:
 
 ```json
-{ "input": "매일 오전 9시" }
+{ "input": "0 9 * * *", "mode": "cron" }
 ```
 
 응답 예시:
 
 ```json
-{ "cron": "0 9 * * *", "description": "매일 오전 9시", "valid": true }
+{ "cron": "0 9 * * *", "description": "KST 실행: 매일 09:00", "valid": true }
 ```
 
 ## 설정 API

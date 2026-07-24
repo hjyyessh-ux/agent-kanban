@@ -14,7 +14,8 @@ plugin/
 ├── bootstrap.ts          # createKanbanApp(): shared boot wiring for daemon + plugin
 ├── index.ts              # opencode plugin entrypoint: tools/hooks + inline dispatch + beforeExit cleanup
 ├── server.ts             # ServerMonitor: staticDir resolution + recovery
-├── scheduler-engine.ts   # Croner-backed scheduler runtime
+├── scheduler-engine.ts   # Croner-backed scheduler runtime (bash + prompt cards)
+├── scheduled-dispatch-service.ts # Owner-gated due-card dispatcher for scheduled todo cards
 ├── stale-checker.ts      # Detect orphaned/stuck cards
 ├── question-monitor.ts   # SSE + polling bridge for pending questions
 ├── telegram-*.ts         # Telegram polling, commands, notifier, reminders
@@ -41,7 +42,8 @@ plugin/
 | Change opencode plugin startup / shutdown | `index.ts` | Tools, hooks, `beforeExit` cleanup |
 | Change dispatch prompt/model/agent resolution | `index.ts` | `buildDispatchPromptBody()` + `dispatchCard()` |
 | Change static file discovery or recovery | `server.ts` | Resolves `web/dist`, restarts on failure |
-| Change cron runtime behavior | `scheduler-engine.ts` | Shell execution + next-run updates |
+| Change cron runtime behavior | `scheduler-engine.ts` | Bash/prompt execution + next-run updates |
+| Change scheduled todo auto-dispatch | `scheduled-dispatch-service.ts`, `bootstrap.ts`, `server/routes.ts` | Owner-gated due scan, stale-claim recovery, manual/auto race handling |
 | Change stale-card detection | `stale-checker.ts` | Orphan/stuck heuristics |
 | Change question ingestion or auto-answering | `question-monitor.ts` | `/event` SSE + `/question` polling |
 | Change Telegram command routing | `telegram-commands.ts` | Explicit commands and aliases |
@@ -59,8 +61,10 @@ plugin/
 - All `input.client.tui` calls wrapped in try/catch — TUI may not be available
 - `process.env.KANBAN_DATA_DIR` and `process.env.KANBAN_PORT` override defaults
 - `bootstrap.ts` is the orchestration shell (stores → dispatch factory → server → singleton services); `index.ts` injects opencode-specific factories (`createDispatch`, `createQuestionMonitor`, `createFollowUpFn`, `modelsFn`, `listNativeSessions`) and builds tools/hooks from the returned app.
+- `ScheduledDispatchService` is started/stopped with the singleton runtime owner in `bootstrap.ts`; it does an immediate scan on start, reclaims stale `dispatching` reservations, and only dispatches cards that pass the store claim atomically.
 - The two `dispatchCard` implementations stay separate on purpose: the plugin's inline one in `index.ts` (opencode session dispatch) and the daemon's `runtimes/runtime-host.ts`. Both are referenced by `docs/invariants.md` — do not merge them.
 - `dispatchCard()` validates `projectDir`, updates the card to `in_progress`, registers dispatch tracking, then calls `promptAsync()`.
+- Manual `POST /api/cards/:id/dispatch` uses the same scheduled-reservation wrapper as the background dispatcher so a due-card timer and a user click cannot double-dispatch the same card.
 - `stale-checker.ts` must stay aligned with parent/child idle guards: top-level parents waiting on direct child work are not stale/orphan candidates.
 - `buildDispatchPromptBody()` converts `provider/model` strings and resolves shared agent labels from `src/core/agent-config.ts`.
 - `createKanbanApp()` ensures the runtime `KANBAN_DATA_DIR/scripts/` directory exists and keeps ScriptStore as the source of persisted script state.

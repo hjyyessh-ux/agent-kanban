@@ -8,7 +8,7 @@ function createTestInput(overrides: Partial<CreateSchedulerInput> = {}): CreateS
     name: 'Test Job',
     description: 'A test scheduler',
     cron: '*/5 * * * *',
-    action: { type: 'shell' as const, command: 'echo hello' },
+    action: { type: 'bash' as const, command: 'echo hello' },
     ...overrides,
   };
 }
@@ -43,15 +43,25 @@ describe('SchedulerStore', () => {
   test('createEntry creates entry with correct defaults', async () => {
     await withTempDir(async (dir) => {
       const store = new SchedulerStore(dir);
-      const entry = await store.createEntry(createTestInput());
+      const entry = await store.createEntry(createTestInput({
+        scheduleInput: {
+          mode: 'simple',
+          simple: { repeat: 'minutes', interval: 5 },
+        },
+      }));
 
       expect(entry.id).toBeTruthy();
       expect(entry.name).toBe('Test Job');
       expect(entry.description).toBe('A test scheduler');
       expect(entry.cron).toBe('*/5 * * * *');
+      expect(entry.scheduleInput).toEqual({
+        mode: 'simple',
+        simple: { repeat: 'minutes', interval: 5 },
+      });
       expect(entry.status).toBe('active');
       expect(entry.history).toEqual([]);
-      expect(entry.action).toEqual({ type: 'shell', command: 'echo hello' });
+      expect(entry.timezone).toBe('Asia/Seoul');
+      expect(entry.action).toMatchObject({ type: 'bash', command: 'echo hello', editState: 'ready' });
       expect(entry.createdAt).toBeTruthy();
       expect(entry.updatedAt).toBeTruthy();
     });
@@ -82,10 +92,18 @@ describe('SchedulerStore', () => {
       const updated = await store.updateEntry(entry.id, {
         name: 'Updated Job',
         cron: '0 * * * *',
+        scheduleInput: {
+          mode: 'cron',
+          expression: '0 * * * *',
+        },
       });
 
       expect(updated.name).toBe('Updated Job');
       expect(updated.cron).toBe('0 * * * *');
+      expect(updated.scheduleInput).toEqual({
+        mode: 'cron',
+        expression: '0 * * * *',
+      });
       expect(updated.description).toBe('A test scheduler'); // unchanged
       expect(updated.updatedAt).not.toBe(entry.updatedAt);
     });
@@ -267,6 +285,68 @@ describe('SchedulerStore', () => {
       await store.updateNextRunAt(entry.id, undefined);
       const cleared = await store.getEntry(entry.id);
       expect(cleared!.nextRunAt).toBeUndefined();
+    });
+  });
+
+  test('load normalizes legacy shell and skill actions without losing data', async () => {
+    await withTempDir(async (dir) => {
+      const { writeFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+
+      writeFileSync(join(dir, 'schedulers.json'), JSON.stringify({
+        version: 1,
+        lastModified: '2026-07-17T00:00:00Z',
+        entries: [
+          {
+            id: 'legacy-shell',
+            name: 'Legacy shell',
+            description: 'shell action',
+            cron: '0 9 * * *',
+            timezone: 'UTC',
+            status: 'active',
+            action: { type: 'shell', command: 'echo hi', cwd: '/tmp' },
+            history: [],
+            createdAt: '2026-07-17T00:00:00Z',
+            updatedAt: '2026-07-17T00:00:00Z',
+          },
+          {
+            id: 'legacy-skill',
+            name: 'Legacy skill',
+            description: 'skill action',
+            cron: '0 10 * * *',
+            timezone: 'UTC',
+            status: 'active',
+            action: { type: 'skill', skillName: 'daily-sync', skillInput: '{"team":"core"}' },
+            history: [],
+            createdAt: '2026-07-17T00:00:00Z',
+            updatedAt: '2026-07-17T00:00:00Z',
+          },
+        ],
+      }));
+
+      const store = new SchedulerStore(dir);
+      const entries = await store.getEntries();
+
+      expect(entries).toHaveLength(2);
+      expect(entries[0].timezone).toBe('Asia/Seoul');
+      expect(entries[0].action).toMatchObject({
+        type: 'bash',
+        command: 'echo hi',
+        cwd: '/tmp',
+        editState: 'ready',
+      });
+      expect(entries[1].timezone).toBe('Asia/Seoul');
+      expect(entries[1].status).toBe('inactive');
+      expect(entries[1].action).toMatchObject({
+        type: 'prompt',
+        prompt: '',
+        editState: 'edit-required',
+        legacy: {
+          type: 'skill',
+          skillName: 'daily-sync',
+          skillInput: '{"team":"core"}',
+        },
+      });
     });
   });
 

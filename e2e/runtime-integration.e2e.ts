@@ -50,8 +50,9 @@ async function createAndStartRuntimeCard(
   const dialog = page.getByRole('dialog');
   await dialog.locator('#create-card-title-input').fill(title);
   await dialog.locator('#create-card-description-input').fill(description);
-  await dialog.getByRole('button', { name: runtime === 'codex' ? 'Codex' : 'Claude', exact: true }).click();
-  await dialog.getByRole('button', { name: 'CREATE & START', exact: true }).click();
+  await dialog.getByRole('radio', { name: runtime === 'codex' ? 'Codex' : 'Claude', exact: true }).click();
+  await dialog.getByRole('button', { name: 'CREATE', exact: true }).click();
+  await startCard(page, title);
   await expectCardInColumn(page, 'complete', title);
 
   const cards = await apiGetCards();
@@ -105,15 +106,15 @@ test.describe('Runtime integration', () => {
     const dialog = page.getByRole('dialog');
 
     await expect(dialog.getByText('Runtime', { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Opencode', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Codex', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: 'Claude', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Opencode', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Codex', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Claude', exact: true })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Opencode', exact: true }).click();
+    await dialog.getByRole('radio', { name: 'Opencode', exact: true }).click();
     await expect(dialog.getByText('Agent', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Sisyphus/ })).toBeVisible();
 
-    await dialog.getByRole('button', { name: 'Codex', exact: true }).click();
+    await dialog.getByRole('radio', { name: 'Codex', exact: true }).click();
     await expect(dialog.getByLabel('Codex reasoning effort')).toBeVisible();
     await expect(dialog.getByLabel('Codex sandbox')).toBeVisible();
     await expect(dialog.getByText('Skip git repo check')).toBeVisible();
@@ -126,7 +127,7 @@ test.describe('Runtime integration', () => {
       return entries.find((entry: { key: string; value: string }) => entry.key === 'agent.defaults.codex')?.value;
     }).toBe('gpt-5.4-mini');
 
-    await dialog.getByRole('button', { name: 'Claude', exact: true }).click();
+    await dialog.getByRole('radio', { name: 'Claude', exact: true }).click();
     await expect(dialog.getByText('Claude Permissions')).toBeVisible();
     await expect(dialog.getByText('Dangerously skip permissions')).toBeVisible();
 
@@ -160,7 +161,7 @@ test.describe('Runtime integration', () => {
     await page.getByRole('button', { name: 'Create new card' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('button', { name: 'Claude', exact: true })).toHaveClass(/kv2-create-agent-chip--active/);
+    await expect(dialog.getByRole('radio', { name: 'Claude', exact: true })).toHaveClass(/kv2-create-agent-chip--active/);
     await expect(dialog.getByLabel('Model')).toHaveValue('claude-sonnet-4-6');
     await expect(dialog.locator('.kv2-create-field', { hasText: 'Claude Permissions' }).locator('select')).toHaveValue('plan');
   });
@@ -437,7 +438,7 @@ test.describe('Runtime integration', () => {
 
     await page.getByRole('button', { name: 'Create new card' }).click();
     const dialog = page.getByRole('dialog');
-    await dialog.getByRole('button', { name: 'Opencode', exact: true }).click();
+    await dialog.getByRole('radio', { name: 'Opencode', exact: true }).click();
     // Session Resume panel is collapsed by default; expand it first.
     await dialog.getByRole('button', { name: /Session Resume/ }).click();
     await expect(dialog.locator('.kv2-session-panel--embedded')).toContainText('Opencode');

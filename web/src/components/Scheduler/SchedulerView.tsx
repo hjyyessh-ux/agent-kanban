@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import type { SchedulerEntry, CreateSchedulerInput, UpdateSchedulerInput } from '../../../../src/core/types';
-import { SchedulerJobModal } from './SchedulerJobModal';
+import type {
+  CreateSchedulerInput,
+  SchedulerEntry,
+  SchedulerRun,
+  UpdateSchedulerInput,
+} from '../../../../src/core/types';
 import { SchedulerHistoryPanel } from './SchedulerHistoryPanel';
+import { SchedulerJobModal, SchedulerTimezoneNotice } from './SchedulerJobModal';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
 import './Scheduler.css';
@@ -14,23 +19,200 @@ interface SchedulerViewProps {
   onUpdateEntry: (id: string, input: UpdateSchedulerInput) => Promise<void>;
   onDeleteEntry: (id: string) => Promise<void>;
   onToggleEntry: (id: string) => Promise<void>;
-  onRunEntry: (id: string) => Promise<void>;
+  onRunEntry: (id: string) => Promise<SchedulerRun>;
   onRefresh: () => Promise<void>;
   onClearError: () => void;
+  onOpenCard?: (cardId: string) => void;
 }
 
-const timeAgo = (isoString: string) => {
+const KST_FORMATTER = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+function formatKstDateTime(iso: string): string {
+  return `${KST_FORMATTER.format(new Date(iso))} KST`;
+}
+
+function formatTimeAgo(isoString: string): string {
   const date = new Date(isoString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-  if (diffInSeconds < 60) return 'just now';
+  if (diffInSeconds < 60) return '방금 전';
   const diffInMinutes = Math.floor(diffInSeconds / 60);
-  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
   const diffInHours = Math.floor(diffInMinutes / 60);
-  if (diffInHours < 24) return `${diffInHours}h ago`;
+  if (diffInHours < 24) return `${diffInHours}시간 전`;
   const diffInDays = Math.floor(diffInHours / 24);
-  return `${diffInDays}d ago`;
+  return `${diffInDays}일 전`;
+}
+
+function getPromptRuntimeLabel(entry: SchedulerEntry): string {
+  if (entry.action.type !== 'prompt') return '';
+  const runtime = entry.action.agentRuntime ?? 'opencode';
+  return runtime === 'opencode' ? 'Opencode' : runtime === 'codex' ? 'Codex' : 'Claude';
+}
+
+function getPromptModelLabel(entry: SchedulerEntry): string {
+  if (entry.action.type !== 'prompt') return '';
+  return entry.action.model ?? 'Default model';
+}
+
+export const SchedulerEntryCard: React.FC<{
+  entry: SchedulerEntry;
+  onToggleEntry: (id: string) => Promise<void>;
+  onRunEntry: (id: string) => Promise<SchedulerRun>;
+  onEditEntry: (entry: SchedulerEntry) => void;
+  onDeleteEntry: (entry: SchedulerEntry) => void;
+  onOpenHistory: (entry: SchedulerEntry) => void;
+}> = ({
+  entry,
+  onToggleEntry,
+  onRunEntry,
+  onEditEntry,
+  onDeleteEntry,
+  onOpenHistory,
+}) => {
+  const stopClickPropagation = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  };
+  const needsEdit = entry.action.editState === 'edit-required';
+
+  return (
+    <article
+      className={`scheduler-item scheduler-item--${entry.action.type}${entry.status === 'inactive' ? ' scheduler-item--inactive' : ''}${needsEdit ? ' scheduler-item--legacy' : ''}`}
+    >
+      <div className="scheduler-item-header">
+        <div className="scheduler-item-heading">
+          <div className="scheduler-item-title-row">
+            <h3 className="scheduler-item-name">{entry.name}</h3>
+            <span className={`kv2-badge scheduler-badge--${entry.status}`}>
+              {entry.status === 'active' ? '활성' : '정지'}
+            </span>
+            <span className={`kv2-badge scheduler-badge--action-${entry.action.type}`}>
+              {entry.action.type === 'bash' ? 'Bash' : 'Prompt'}
+            </span>
+            {needsEdit && (
+              <span className="kv2-badge scheduler-badge--legacy">편집 필요</span>
+            )}
+          </div>
+          {entry.description && <p className="scheduler-item-desc">{entry.description}</p>}
+        </div>
+
+        <div className="scheduler-item-header-actions">
+          <label className="scheduler-switch-row">
+            <span className="scheduler-switch-copy">{entry.status === 'active' ? '자동 실행 중' : '자동 실행 정지'}</span>
+            <button
+              type="button"
+              className={`scheduler-toggle ${entry.status === 'active' ? 'scheduler-toggle--active' : ''}`}
+              onClick={(event) => {
+                stopClickPropagation(event);
+                void onToggleEntry(entry.id);
+              }}
+              role="switch"
+              aria-checked={entry.status === 'active'}
+              aria-label={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
+              title={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="scheduler-item-grid">
+        <div className="scheduler-detail-card">
+          <span className="scheduler-detail-label">Schedule</span>
+          <strong className="scheduler-detail-value">{entry.cronDescription ?? entry.cron}</strong>
+          <code className="scheduler-detail-subvalue">{entry.cron}</code>
+        </div>
+
+        <div className="scheduler-detail-card">
+          <span className="scheduler-detail-label">Next run KST</span>
+          <strong className="scheduler-detail-value">{entry.nextRunAt ? formatKstDateTime(entry.nextRunAt) : '계산 대기 중'}</strong>
+          <span className="scheduler-detail-subvalue">Asia/Seoul 고정</span>
+        </div>
+
+        <div className="scheduler-detail-card">
+          <span className="scheduler-detail-label">Recent run</span>
+          <strong className="scheduler-detail-value">{entry.lastRunAt ? formatTimeAgo(entry.lastRunAt) : '아직 없음'}</strong>
+          <span className="scheduler-detail-subvalue">
+            {entry.lastRunStatus ? `상태: ${entry.lastRunStatus}` : '실행되면 여기에 표시됩니다.'}
+          </span>
+        </div>
+
+        {entry.action.type === 'bash' ? (
+          <div className="scheduler-detail-card scheduler-detail-card--wide">
+            <span className="scheduler-detail-label">Bash command</span>
+            <strong className="scheduler-detail-value scheduler-detail-value--mono">{entry.action.command}</strong>
+            <span className="scheduler-detail-subvalue">
+              {entry.action.cwd ? `cwd: ${entry.action.cwd}` : 'cwd 없음'}
+            </span>
+          </div>
+        ) : (
+          <div className="scheduler-detail-card scheduler-detail-card--wide">
+            <span className="scheduler-detail-label">Prompt runtime / model</span>
+            <strong className="scheduler-detail-value">
+              {getPromptRuntimeLabel(entry)} · {getPromptModelLabel(entry)}
+            </strong>
+            <span className="scheduler-detail-subvalue">
+              {needsEdit
+                ? 'legacy skill에서 변환됨. 저장 후 다시 활성화하세요.'
+                : entry.action.projectDir
+                  ? `projectDir: ${entry.action.projectDir}`
+                  : 'projectDir 없음'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="scheduler-item-footer">
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--outline kv2-btn--small"
+          onClick={(event) => {
+            stopClickPropagation(event);
+            void onRunEntry(entry.id);
+          }}
+        >
+          지금 실행
+        </button>
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--outline kv2-btn--small"
+          onClick={(event) => {
+            stopClickPropagation(event);
+            onOpenHistory(entry);
+          }}
+        >
+          기록 {entry.history.length}개
+        </button>
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--outline kv2-btn--small"
+          onClick={(event) => {
+            stopClickPropagation(event);
+            onEditEntry(entry);
+          }}
+        >
+          수정
+        </button>
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
+          onClick={(event) => {
+            stopClickPropagation(event);
+            onDeleteEntry(entry);
+          }}
+        >
+          삭제
+        </button>
+      </div>
+    </article>
+  );
 };
 
 export const SchedulerView: React.FC<SchedulerViewProps> = ({
@@ -44,18 +226,11 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   onRunEntry,
   onRefresh,
   onClearError,
+  onOpenCard,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editEntry, setEditEntry] = useState<SchedulerEntry | null>(null);
   const [historyEntry, setHistoryEntry] = useState<SchedulerEntry | null>(null);
-
-  const handleCreate = async (input: CreateSchedulerInput) => {
-    await onCreateEntry(input);
-  };
-
-  const handleUpdate = async (id: string, input: UpdateSchedulerInput) => {
-    await onUpdateEntry(id, input);
-  };
 
   const handleDelete = (entry: SchedulerEntry) => {
     if (window.confirm(`Delete "${entry.name}"? This cannot be undone.`)) {
@@ -63,15 +238,6 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
     }
   };
 
-  const handleEditOpen = (entry: SchedulerEntry) => {
-    setEditEntry(entry);
-  };
-
-  const stopClickPropagation = (event: React.MouseEvent<HTMLButtonElement>) => {
-    event.stopPropagation();
-  };
-
-  // Sort: active first, then by createdAt desc
   const sortedEntries = [...entries].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'active' ? -1 : 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -83,7 +249,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         <div className="scheduler-toolbar-heading">
           <h2 className="scheduler-toolbar-title">Scheduler</h2>
           <p className="scheduler-toolbar-subtitle">
-            정해진 시간에 shell command나 skill을 자동으로 실행합니다. {entries.length}개 등록됨
+            반복 작업을 Bash 또는 Prompt로 예약하고, 실행 이력을 카드와 함께 추적합니다.
           </p>
         </div>
         <button
@@ -91,9 +257,11 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
           className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
-          + 새 Scheduler
+          새 Scheduler
         </button>
       </div>
+
+      <SchedulerTimezoneNotice />
 
       {error && (
         <ErrorAlert
@@ -112,175 +280,50 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
         <div className="loading-spinner" role="status" aria-live="polite" />
       ) : entries.length === 0 ? (
         <div className="scheduler-empty">
-          아직 등록된 Scheduler가 없습니다. 반복 작업을 자동화할 일정을 만들어 보세요.
+          아직 등록된 Scheduler가 없습니다. KST 기준으로 반복 작업을 자동화할 일정을 만들어 보세요.
         </div>
       ) : (
         <div className="scheduler-list">
           {sortedEntries.map((entry) => (
-            <div
+            <SchedulerEntryCard
               key={entry.id}
-              className={`scheduler-item ${entry.status === 'inactive' ? 'scheduler-item--inactive' : ''}`}
-              onClick={() => handleEditOpen(entry)}
-              onKeyDown={(event) => {
-                if (event.target !== event.currentTarget) return;
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  handleEditOpen(entry);
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              aria-label={`${entry.name} scheduler details`}
-            >
-              <div className="scheduler-item-header">
-                <div className="scheduler-item-info">
-                  <div className="scheduler-item-title-row">
-                    <h3 className="scheduler-item-name">{entry.name}</h3>
-                    <span className={`kv2-badge scheduler-badge--${entry.status}`}>
-                      {entry.status === 'active' ? '활성' : '정지'}
-                    </span>
-                  </div>
-                  {entry.description && (
-                    <p className="scheduler-item-desc">{entry.description}</p>
-                  )}
-                </div>
-                <div className="scheduler-item-actions">
-                  <span className="scheduler-toggle-label">
-                    {entry.status === 'active' ? '자동 실행 중' : '일시 정지됨'}
-                  </span>
-                  <button
-                    type="button"
-                    className={`scheduler-toggle ${entry.status === 'active' ? 'scheduler-toggle--active' : ''}`}
-                    onClick={(event) => {
-                      stopClickPropagation(event);
-                      void onToggleEntry(entry.id);
-                    }}
-                    role="switch"
-                    aria-checked={entry.status === 'active'}
-                    title={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
-                    aria-label={entry.status === 'active' ? '자동 실행 일시 정지' : '자동 실행 활성화'}
-                  />
-                </div>
-              </div>
-
-              <div className="scheduler-item-meta">
-                <span className="scheduler-meta-group" title={entry.cron} aria-label={`Schedule: ${entry.cronDescription ?? entry.cron}`}>
-                  <strong>일정</strong>
-                  <span>{entry.cronDescription ?? entry.cron}</span>
-                </span>
-                {entry.timezone && (
-                  <span className="scheduler-meta-group" aria-label={`Timezone: ${entry.timezone}`}>
-                    <strong>시간대</strong>
-                    <span>{entry.timezone}</span>
-                  </span>
-                )}
-                {entry.nextRunAt && (
-                  <span className="scheduler-meta-group">
-                    <strong>다음 실행</strong>
-                    <span>{new Date(entry.nextRunAt).toLocaleString()}</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="scheduler-item-meta scheduler-item-command">
-                <span
-                  className={`kv2-badge scheduler-badge--${entry.action.type}`}
-                  aria-label={entry.action.type === 'shell' ? 'Action type: shell' : 'Action type: skill'}
-                >
-                  {entry.action.type === 'shell' ? '🖥 shell' : '🧩 skill'}
-                </span>
-                {entry.action.type === 'shell' && entry.action.command && (
-                  <span title={entry.action.command}>
-                    $ {entry.action.command.length > 50 ? entry.action.command.substring(0, 50) + '...' : entry.action.command}
-                  </span>
-                )}
-                {entry.action.type === 'skill' && entry.action.skillName && (
-                  <span>🧩 {entry.action.skillName}</span>
-                )}
-              </div>
-
-              <div className="scheduler-item-meta">
-                {entry.lastRunAt && (
-                  <span className="scheduler-meta-group">
-                    <strong>최근 실행</strong>
-                    <span>{timeAgo(entry.lastRunAt)}</span>
-                    {entry.lastRunStatus && (
-                      <> — <span className={`kv2-badge scheduler-badge--${entry.lastRunStatus}`}>{entry.lastRunStatus}</span></>
-                    )}
-                  </span>
-                )}
-              </div>
-
-              <div className="scheduler-item-footer">
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--outline kv2-btn--small"
-                  onClick={(event) => {
-                    stopClickPropagation(event);
-                    void onRunEntry(entry.id);
-                  }}
-                >
-                  ▶ 지금 실행
-                </button>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--outline kv2-btn--small"
-                  onClick={(event) => {
-                    stopClickPropagation(event);
-                    setHistoryEntry(entry);
-                  }}
-                >
-                  📋 기록 ({entry.history.length})
-                </button>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--outline kv2-btn--small"
-                  onClick={(event) => {
-                    stopClickPropagation(event);
-                    handleEditOpen(entry);
-                  }}
-                >
-                  ✎ 수정
-                </button>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
-                  onClick={(event) => {
-                    stopClickPropagation(event);
-                    handleDelete(entry);
-                  }}
-                >
-                  ✕ 삭제
-                </button>
-              </div>
-            </div>
+              entry={entry}
+              onToggleEntry={onToggleEntry}
+              onRunEntry={onRunEntry}
+              onEditEntry={setEditEntry}
+              onDeleteEntry={handleDelete}
+              onOpenHistory={setHistoryEntry}
+            />
           ))}
         </div>
       )}
 
-      {/* Create Modal */}
       {showCreateModal && (
         <SchedulerJobModal
           onClose={() => setShowCreateModal(false)}
-          onSave={handleCreate}
+          onSave={async (input) => {
+            await onCreateEntry(input);
+          }}
         />
       )}
 
-      {/* Edit Modal */}
       {editEntry && (
         <SchedulerJobModal
           onClose={() => setEditEntry(null)}
-          onSave={handleCreate}
-          onUpdate={handleUpdate}
+          onSave={async () => {}}
+          onUpdate={onUpdateEntry}
           editEntry={editEntry}
         />
       )}
 
-      {/* History Panel */}
       {historyEntry && (
         <SchedulerHistoryPanel
           entry={historyEntry}
           onClose={() => setHistoryEntry(null)}
+          onOpenCard={(cardId) => {
+            setHistoryEntry(null);
+            onOpenCard?.(cardId);
+          }}
         />
       )}
     </div>

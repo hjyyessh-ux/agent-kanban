@@ -2,12 +2,13 @@
 
 ## 개요
 
-agent-kanban은 세 개의 레이어와 runtime adapter 하위 시스템으로 구성된다.
+agent-kanban은 세 개의 레이어, runtime adapter 하위 시스템, 그리고 owner-gated background 서비스로 구성된다.
 
 ```
 ┌─────────────────────────────────────────┐
-│  Plugin Layer (opencode 플러그인)         │
+│  Plugin Layer (opencode/daemon runtime)   │
 │  tools + hooks + runtime adapters         │
+│  + SchedulerEngine + ScheduledDispatchService │
 └──────────────┬──────────────────────────┘
                │ HTTP
 ┌──────────────▼──────────────────────────┐
@@ -21,7 +22,7 @@ agent-kanban은 세 개의 레이어와 runtime adapter 하위 시스템으로 �
 └─────────────────────────────────────────┘
 ```
 
-플러그인이 opencode 안에서 실행되며 카드, runtime dispatch, Telegram follow-up 상태, question 흐름을 관리한다. HTTP 서버가 데이터를 파일시스템 JSON으로 저장하고 REST API를 노출한다. React SPA가 폴링으로 서버 데이터를 가져와 보드, 스케줄러, 스크립트, 설정, 질문 UI를 렌더링한다.
+플러그인/daemon runtime이 카드, runtime dispatch, Telegram follow-up, question 흐름, 반복 스케줄러, 카드 1회 예약 due scan을 관리한다. HTTP 서버가 데이터를 파일시스템 JSON으로 저장하고 REST API를 노출한다. React SPA가 폴링으로 서버 데이터를 가져와 보드, 스케줄러, 스크립트, 설정, 질문 UI를 렌더링한다.
 
 카드 실행 runtime은 `agentRuntime`으로 구분한다. 값이 없는 legacy card는 `opencode`로 해석한다.
 
@@ -70,7 +71,8 @@ src/
 ├── plugin/                  # 백엔드 런타임 (공유 부트스트랩 + opencode 플러그인 레이어)
 │   ├── index.ts             # store → runtime registry → tools → hooks → monitors
 │   ├── server.ts            # ServerMonitor — 자동 복구 서버
-│   ├── scheduler-engine.ts  # scheduler runtime
+│   ├── scheduler-engine.ts  # cron 기반 반복 scheduler runtime
+│   ├── scheduled-dispatch-service.ts # top-level todo card 1회 예약 due scan / claim / recovery
 │   ├── question-monitor.ts  # pending question bridge
 │   ├── telegram-*.ts        # poller / commands / notifier / reminder
 │   ├── runtimes/            # AgentRuntime adapters + RuntimeRunStore
@@ -129,6 +131,11 @@ sequenceDiagram
     API->>Runtime: runtime registry로 adapter 선택
     Runtime->>Store: in_progress / sessionId / run artifact 업데이트
     Runtime-->>API: { sessionId, runId, startedAt }
+
+    Note over Runtime,Store: ScheduledDispatchService는 singleton owner에서만 due card를 scan한다.
+    Runtime->>Store: scheduled -> dispatching atomic claim
+    Runtime->>Runtime: dispatchCard(cardId)
+    Runtime->>Store: scheduledDispatch=dispatched or failed
 ```
 
 데이터 흐름의 핵심은 단방향성이다. 상태는 항상 파일시스템 JSON이 원본이며, UI는 폴링으로 최신 상태를 가져온다. 실시간 푸시(WebSocket, SSE)는 사용하지 않는다.
@@ -218,6 +225,24 @@ Prompt와 최종 메시지는 run artifact와 card 양쪽에 길이 제한 없�
 - 포트 충돌 시 최대 3개 연속 포트 시도 (기본 24680 → 24681 → 24682)
 
 포트 우선순위는 `KANBAN_PORT` 환경변수로 기본값을 변경할 수 있다.
+
+---
+
+## 예약/스케줄 배경 서비스
+
+### SchedulerEngine
+
+- `SchedulerEntry`를 `croner` job으로 등록한다.
+- `bash` action은 stdout/stderr를 8KB cap으로 저장한다.
+- `prompt` action은 먼저 `SchedulerRun.id`를 만들고, `schedulerRunId`가 박힌 scheduler-origin 카드를 생성한 뒤 기존 runtime dispatch를 호출한다.
+
+### ScheduledDispatchService
+
+- top-level `todo` 카드의 `scheduledDispatch`를 KST 입력 기준 UTC due 시각으로 저장해 두고, singleton runtime owner에서만 scan한다.
+- startup 시 immediate scan을 수행한다.
+- `scheduled -> dispatching -> dispatched/failed` claim state machine은 store가 원자적으로 관리한다.
+- stale `dispatching` claim은 재시작 후 복구된다.
+- 수동 `Start Now`와 background due scan은 같은 claim wrapper를 사용하므로 경합해도 dispatch는 한 번만 접수된다.
 
 ---
 

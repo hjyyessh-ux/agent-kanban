@@ -10,6 +10,7 @@ import type {
 } from './types';
 import { FileLock } from './filelock';
 import { resolveDir } from './data-dir';
+import { normalizeSchedulerAction, normalizeSchedulerEntry, SCHEDULER_TIMEZONE } from './scheduling';
 
 const MAX_HISTORY = 20;
 const MAX_OUTPUT_BYTES = 8192; // 8KB cap for stdout/stderr
@@ -59,7 +60,7 @@ export class SchedulerStore {
 
     if (existsSync(this.schedulersPath)) {
       const content = await Bun.file(this.schedulersPath).text();
-      return JSON.parse(content) as SchedulerStoreState;
+      return this.normalizeState(JSON.parse(content) as SchedulerStoreState);
     }
 
     return this.defaultState();
@@ -75,15 +76,17 @@ export class SchedulerStore {
 
   async createEntry(input: CreateSchedulerInput): Promise<SchedulerEntry> {
     const now = new Date().toISOString();
+    const normalizedAction = normalizeSchedulerAction(input.action);
     const entry: SchedulerEntry = {
       id: nanoid(),
       name: input.name,
       description: input.description,
       cron: input.cron,
       cronDescription: input.cronDescription,
-      timezone: input.timezone,
-      status: 'active',
-      action: input.action,
+      scheduleInput: input.scheduleInput,
+      timezone: SCHEDULER_TIMEZONE,
+      status: normalizedAction.action.editState === 'edit-required' ? 'inactive' : 'active',
+      action: normalizedAction.action,
       history: [],
       createdAt: now,
       updatedAt: now,
@@ -109,9 +112,17 @@ export class SchedulerStore {
       if (index === -1) {
         throw new Error(`Scheduler entry not found: ${id}`);
       }
+      const normalizedAction = input.action ? normalizeSchedulerAction(input.action) : null;
       state.entries[index] = {
         ...state.entries[index],
         ...input,
+        ...(normalizedAction ? {
+          action: normalizedAction.action,
+          status: normalizedAction.action.editState === 'edit-required'
+            ? 'inactive'
+            : input.status ?? state.entries[index].status,
+        } : {}),
+        timezone: SCHEDULER_TIMEZONE,
         updatedAt: now,
       };
       state.lastModified = now;
@@ -216,6 +227,19 @@ export class SchedulerStore {
       version: 1,
       entries: [],
       lastModified: new Date().toISOString(),
+    };
+  }
+
+  private normalizeState(state: SchedulerStoreState): SchedulerStoreState {
+    return {
+      ...state,
+      version: 1,
+      entries: state.entries
+        .map((entry) => normalizeSchedulerEntry(entry))
+        .filter((entry): entry is SchedulerEntry => entry !== null),
+      lastModified: typeof state.lastModified === 'string'
+        ? new Date(state.lastModified).toISOString()
+        : new Date().toISOString(),
     };
   }
 }

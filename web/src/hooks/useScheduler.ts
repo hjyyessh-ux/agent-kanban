@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { SchedulerEntry, CreateSchedulerInput, UpdateSchedulerInput } from '../../../src/core/types';
+import type { SchedulerEntry, CreateSchedulerInput, UpdateSchedulerInput, SchedulerRun } from '../../../src/core/types';
 import {
   fetchSchedulers,
   createScheduler as apiCreateScheduler,
@@ -28,7 +28,7 @@ export function useScheduler(enabled: boolean): {
   updateEntry: (id: string, input: UpdateSchedulerInput) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   toggleEntry: (id: string) => Promise<void>;
-  runEntry: (id: string) => Promise<void>;
+  runEntry: (id: string) => Promise<SchedulerRun>;
   refreshEntries: () => Promise<void>;
   clearError: () => void;
 } {
@@ -60,11 +60,12 @@ export function useScheduler(enabled: boolean): {
     }
   }, [applyUpdate, reportError]);
 
-  const runEntry = useCallback(async (id: string) => {
+  const runEntry = useCallback(async (id: string): Promise<SchedulerRun> => {
     try {
-      await apiRunScheduler(id);
+      const run = await apiRunScheduler(id);
       // Refresh to get updated lastRunAt, lastRunStatus, history
       await refreshEntries();
+      return run;
     } catch (err: unknown) {
       reportError('run', err, 'Failed to run scheduler');
       throw err;

@@ -1,7 +1,8 @@
-import type { AgentRuntime, KanbanCard, KanbanStatus, QueueSessionMode } from '../../../../src/core/types';
+import type { AgentRuntime, CardOriginChannel, KanbanCard, KanbanStatus, QueueSessionMode, ScheduledDispatchStatus } from '../../../../src/core/types';
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
 import { getAgentConfig } from '../../constants/agents';
 import { formatAgentTypeLabel } from '../../utils/agent-label';
+import { formatScheduledKstLabel } from '../shared/ScheduledDispatchUi';
 import { groupCardsByParent, sortCardsForColumn } from './board-utils';
 import type { CardWithChildren } from './board-utils';
 
@@ -45,7 +46,8 @@ export interface V2CardViewModel {
   queueTargetTitle: string | undefined;
   parentCardId: string | undefined;
   sourceContext: string | undefined;
-  originChannel: 'telegram' | undefined;
+  originChannel: CardOriginChannel | undefined;
+  schedulerName: string | undefined;
   telegramMessageId: string | undefined;
   telegramChatId: number | undefined;
   telegramReplyStatus: 'pending' | 'sent' | 'failed' | 'skipped' | undefined;
@@ -53,6 +55,13 @@ export interface V2CardViewModel {
   telegramReplyError: string | undefined;
   favorite: boolean;
   hasUnreadCompletion: boolean;
+  hasScheduledBadge: boolean;
+  scheduledStatus: ScheduledDispatchStatus | undefined;
+  scheduledAt: string | undefined;
+  scheduledAtLabel: string | undefined;
+  scheduledBadgeLabel: string | undefined;
+  scheduledFailureReason: string | undefined;
+  scheduledDispatchedAtLabel: string | undefined;
 }
 
 export interface V2ColumnViewModel {
@@ -144,6 +153,7 @@ function toCardViewModel(
     parentCardId: card.parentCardId,
     sourceContext: card.sourceContext,
     originChannel: card.originChannel,
+    schedulerName: card.schedulerName,
     telegramMessageId: card.telegramMessageId,
     telegramChatId: card.telegramChatId,
     telegramReplyStatus: card.telegramReplyStatus,
@@ -151,6 +161,19 @@ function toCardViewModel(
     telegramReplyError: card.telegramReplyError,
     favorite: !!card.favorite,
     hasUnreadCompletion: hasUnreadCompletion(card),
+    hasScheduledBadge: card.scheduledDispatch?.status === 'scheduled',
+    scheduledStatus: card.scheduledDispatch?.status,
+    scheduledAt: card.scheduledDispatch?.scheduledAt,
+    scheduledAtLabel: card.scheduledDispatch?.scheduledAt
+      ? formatScheduledKstLabel(card.scheduledDispatch.scheduledAt)
+      : undefined,
+    scheduledBadgeLabel: card.scheduledDispatch?.status === 'scheduled' && card.scheduledDispatch.scheduledAt
+      ? `예약됨 · ${formatScheduledKstLabel(card.scheduledDispatch.scheduledAt)}`
+      : undefined,
+    scheduledFailureReason: card.scheduledDispatch?.error,
+    scheduledDispatchedAtLabel: card.scheduledDispatch?.dispatchedAt
+      ? formatScheduledKstLabel(card.scheduledDispatch.dispatchedAt)
+      : undefined,
   };
 }
 

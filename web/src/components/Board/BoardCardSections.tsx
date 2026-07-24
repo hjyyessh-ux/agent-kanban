@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import codexIconUrl from '../../assets/codex-icon-transparent.png';
+import { ScheduledDispatchBadge } from '../shared/ScheduledDispatchUi';
 import type { ChildItem, V2CardViewModel } from './board-selectors';
 
 export const ActionSpinner: React.FC = () => (
@@ -29,6 +30,20 @@ const TelegramIcon: React.FC<{ size?: number }> = ({ size = 21 }) => (
 export const TelegramBadge: React.FC<{ title?: string; size?: number }> = ({ title = 'Telegram origin', size = 21 }) => (
   <span className="kv2-telegram-badge" title={title} role="img" aria-label="Telegram">
     <TelegramIcon size={size} />
+  </span>
+);
+
+const SchedulerIcon: React.FC<{ size?: number }> = ({ size = 21 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <rect x="2.5" y="4" width="19" height="16.5" rx="3" fill="var(--kv2-surface)" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M7 2.75V6M17 2.75V6M3.5 8.5H20.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M9 12.25H15M9 16H13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+
+export const SchedulerBadge: React.FC<{ title?: string; size?: number }> = ({ title = 'Scheduler origin', size = 21 }) => (
+  <span className="kv2-scheduler-badge" title={title} role="img" aria-label="Scheduler">
+    <SchedulerIcon size={size} />
   </span>
 );
 
@@ -210,6 +225,8 @@ interface CardActionsProps {
   vm: V2CardViewModel;
   onStatusChange?: (newStatus: KanbanStatus) => void;
   onDispatch?: () => void | Promise<void>;
+  onScheduleOpen?: () => void;
+  onCancelSchedule?: () => void;
   onQueueOpen?: () => void;
   onUnqueue?: () => void;
 }
@@ -218,6 +235,8 @@ export const CardActions: React.FC<CardActionsProps> = ({
   vm,
   onStatusChange,
   onDispatch,
+  onScheduleOpen,
+  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
 }) => {
@@ -241,6 +260,7 @@ export const CardActions: React.FC<CardActionsProps> = ({
   if (vm.parentCardId) return null;
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
+  const startLabel = vm.hasScheduledBadge ? '▶ Start Now' : '▶ Start';
 
   if (vm.status === 'todo') {
     return (
@@ -269,7 +289,7 @@ export const CardActions: React.FC<CardActionsProps> = ({
                 <ActionSpinner /> Starting…
               </>
             ) : (
-              '▶ Start'
+              startLabel
             )}
           </button>
         )}
@@ -305,6 +325,46 @@ export const CardActions: React.FC<CardActionsProps> = ({
           queueSessionMode={vm.queueSessionMode}
           onClick={onQueueOpen}
         />
+
+        {vm.hasScheduledBadge ? (
+          <>
+            {onScheduleOpen && (
+              <button
+                type="button"
+                className="kv2-card-action kv2-card-action--schedule"
+                onClick={(e) => {
+                  stop(e);
+                  onScheduleOpen();
+                }}
+              >
+                Reschedule
+              </button>
+            )}
+            {onCancelSchedule && (
+              <button
+                type="button"
+                className="kv2-card-action kv2-card-action--schedule-cancel kv2-card-action--no-upper"
+                onClick={(e) => {
+                  stop(e);
+                  onCancelSchedule();
+                }}
+              >
+                Cancel schedule
+              </button>
+            )}
+          </>
+        ) : onScheduleOpen ? (
+          <button
+            type="button"
+            className="kv2-card-action kv2-card-action--schedule"
+            onClick={(e) => {
+              stop(e);
+              onScheduleOpen();
+            }}
+          >
+            Schedule
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -387,4 +447,11 @@ export const CardActions: React.FC<CardActionsProps> = ({
       )}
     </div>
   );
+};
+
+export const ScheduledMetaBadge: React.FC<{
+  vm: Pick<V2CardViewModel, 'hasScheduledBadge' | 'scheduledBadgeLabel'>;
+}> = ({ vm }) => {
+  if (!vm.hasScheduledBadge || !vm.scheduledBadgeLabel) return null;
+  return <ScheduledDispatchBadge ariaLabel={vm.scheduledBadgeLabel} />;
 };

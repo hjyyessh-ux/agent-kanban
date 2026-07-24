@@ -18,6 +18,7 @@
 | Telegram agent/model | sticky default나 override가 예상과 다르게 바뀜 | `src/plugin/telegram-commands.ts`, `src/core/agent-config.ts`, `src/core/telegram-state-store.ts` | `src/__tests__/telegram-poller.test.ts`, `src/__tests__/telegram-state-store.test.ts` |
 | Feedback 카드 | feedback wrapper가 sanitize되거나 원본 session 재사용이 깨짐 | `src/plugin/index.ts`, `src/plugin/hooks/event-handler.ts` | `src/__tests__/feedback-session-reuse.test.ts`, `src/__tests__/plugin-hooks.test.ts` |
 | Runtime dispatch | runtime별 session id나 실패 복구 계약이 깨짐 | `src/core/types.ts`, `src/core/runtime-config.ts`, `src/plugin/runtimes/*`, `src/plugin/index.ts` | `src/__tests__/runtime-registry.test.ts`, `src/__tests__/dispatch-routing.test.ts`, `src/__tests__/codex-cli-adapter.test.ts`, `src/__tests__/claude-adapter.test.ts` |
+| 예약/스케줄 dispatch | due 카드가 중복 실행되거나 run↔card 연결이 끊김 | `src/core/store.ts`, `src/plugin/scheduled-dispatch-service.ts`, `src/plugin/scheduler-engine.ts`, `src/server/routes.ts` | `src/__tests__/scheduled-dispatch-service.test.ts`, `src/__tests__/scheduler-engine.test.ts`, `src/__tests__/store.test.ts` |
 
 ## 불변식 목록
 
@@ -86,6 +87,18 @@
 - Codex/Claude stale run은 `RuntimeRunStore.reconcileStale(store)`가 처리한다.
 - `ClaudeCodexWatchdog`의 "active run 없음 → todo 복귀" 판정은 RuntimeRunStore로 시작한 보드 dispatch 카드에만 적용한다. `.codex/hooks/on-prompt.sh` / `.claude/hooks/on-prompt.sh`가 만든 organic CLI 카드(`sourceContext=codex` 또는 `claude-code`)는 run artifact가 없으므로 watchdog orphan으로 되돌리면 안 된다. 해당 카드는 Stop hook이 `complete`로 닫는다.
 - queue helper는 성공 완료 콜백에서만 호출하고, 실패 흔적이 있는 `todo` card는 자동 재dispatch하지 않는다.
+
+### 예약/스케줄 dispatch
+
+- scheduled card background dispatch는 singleton runtime owner에서만 동작하며, owner 획득 시 즉시 due scan을 한 번 수행한다.
+- scheduled card는 store atomic claim(`scheduled -> dispatching`)을 통과한 경우에만 실제 `dispatchCard(cardId)`로 들어간다.
+- active scheduled reservation을 소비하는 정상 dispatch 경로는 card status를 `in_progress`로 올릴 수 있어야 한다. 이 전이를 queue/eligibility 가드가 다시 막으면 안 된다.
+- stale `dispatching` claim은 restart 후 복구 가능해야 하며, 복구 기준은 테스트로 고정한다.
+- 수동 `POST /api/cards/:id/dispatch`와 background due scan은 같은 예약-claim wrapper를 사용해야 하며, 경합 시 dispatch는 한 번만 일어난다.
+- scheduled dispatch 접수 성공은 `scheduledDispatch.status='dispatched'`와 실제 accepted timestamp를 기록한다.
+- scheduled dispatch 접수 실패는 card를 `todo`로 남기고 `[failed] ...` 흔적과 `scheduledDispatch.status='failed'` / `error`를 기록하며 자동 재시도하지 않는다.
+- scheduler prompt run은 먼저 `SchedulerRun.id`를 만들고, 그 id를 `card.schedulerRunId`에 박은 scheduler-origin `todo` 카드를 생성한 뒤 기존 dispatch를 호출한다.
+- scheduler run의 성공은 dispatch acceptance 기준이며, 실제 작업 완료/실패 추적은 run의 `cardId`로 이어진 board card가 담당한다.
 
 ### Git/Usage 캡처
 

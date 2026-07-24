@@ -23,6 +23,17 @@ import { resolveDir } from './data-dir';
 import { normalizeAgentType } from './agent-type';
 import { normalizeRuntimeCommandId } from './commands';
 import type { AgentRuntime } from './types';
+import {
+  claimScheduledDispatchState,
+  createScheduledDispatchState,
+  finalizeScheduledDispatchState,
+  hasActiveScheduledDispatch,
+  normalizeScheduledDispatchState,
+  recoverScheduledDispatchClaimState,
+  validateCardScheduleEligibility,
+  validateCreateScheduledDispatchInput,
+  validateQueueCompatibility,
+} from './scheduling';
 
 function inferAgentRuntime(input: Pick<CreateCardInput, 'agentRuntime' | 'sourceContext'>): AgentRuntime {
   if (input.agentRuntime) return input.agentRuntime;
@@ -37,6 +48,7 @@ function migrateCardStatus(card: KanbanCard): KanbanCard {
   const migrated: KanbanCard = {
     ...card,
     agentRuntime: card.agentRuntime ?? 'opencode',
+    scheduledDispatch: normalizeScheduledDispatchState(card.scheduledDispatch),
   };
   if ((migrated.status as string) === 'opencode_complete') {
     return { ...migrated, status: 'complete' };
@@ -189,6 +201,12 @@ export class KanbanStore {
     // Pre-build card OUTSIDE the lock
     const now = new Date().toISOString();
     const agentRuntime = inferAgentRuntime(input);
+    const scheduledDispatchInput = input.scheduledDispatch
+      ? validateCreateScheduledDispatchInput(input.scheduledDispatch)
+      : undefined;
+    if (scheduledDispatchInput && input.queueSessionMode) {
+      throw new Error('Queued cards cannot also be scheduled');
+    }
     const card: KanbanCard = {
       id: nanoid(),
       title: input.title,
@@ -215,11 +233,17 @@ export class KanbanStore {
       sessionTitle: input.sessionTitle,
       sessionCreatedAt: input.sessionCreatedAt,
       feedbackForCardId: input.feedbackForCardId,
+      scheduledDispatch: scheduledDispatchInput
+        ? createScheduledDispatchState(scheduledDispatchInput.scheduledAt, now)
+        : undefined,
       queueSessionMode: input.queueSessionMode,
       resumeSessionId: input.resumeSessionId,
       dispatchType: input.dispatchType,
       telegramChatId: input.telegramChatId,
       originChannel: input.originChannel,
+      schedulerId: input.schedulerId,
+      schedulerRunId: input.schedulerRunId,
+      schedulerName: input.schedulerName,
       telegramMessageId: input.telegramMessageId,
       telegramReplyStatus: input.telegramReplyStatus,
       telegramReplyMessageId: input.telegramReplyMessageId,
@@ -240,6 +264,10 @@ export class KanbanStore {
       (input.description?.startsWith(WIKI_INTERNAL_MARKER) ?? false);
     if (isWikiInternal) {
       return card;
+    }
+
+    if (card.scheduledDispatch) {
+      validateCardScheduleEligibility(card);
     }
 
     // Lock only covers read→merge→write
@@ -278,6 +306,7 @@ export class KanbanStore {
         queueSessionMode,
         staleStatus,
         staleDetectedAt,
+        scheduledDispatch,
         model,
         agentRuntime,
         agentType,
@@ -290,6 +319,9 @@ export class KanbanStore {
         supersededByCardId,
         supersededAt,
         originChannel,
+        schedulerId,
+        schedulerRunId,
+        schedulerName,
         telegramMessageId,
         telegramReplyStatus,
         telegramReplyMessageId,
@@ -361,6 +393,15 @@ export class KanbanStore {
       }
       if (safeUpdates.status === 'done' && completedSeenAt === undefined) {
         board.cards[index].completedSeenAt = now;
+      }
+      if (scheduledDispatch === null) {
+        delete board.cards[index].scheduledDispatch;
+      } else if (scheduledDispatch !== undefined) {
+        const normalizedScheduledDispatch = normalizeScheduledDispatchState(scheduledDispatch);
+        if (!normalizedScheduledDispatch) {
+          throw new Error('Invalid scheduled dispatch payload');
+        }
+        board.cards[index].scheduledDispatch = normalizedScheduledDispatch;
       }
       // Handle queue field updates: null → delete, value → set
       if (queuedAfterCardId === null) {
@@ -456,6 +497,21 @@ export class KanbanStore {
       } else if (originChannel !== undefined) {
         board.cards[index].originChannel = originChannel;
       }
+      if (schedulerId === null) {
+        delete board.cards[index].schedulerId;
+      } else if (schedulerId !== undefined) {
+        board.cards[index].schedulerId = schedulerId;
+      }
+      if (schedulerRunId === null) {
+        delete board.cards[index].schedulerRunId;
+      } else if (schedulerRunId !== undefined) {
+        board.cards[index].schedulerRunId = schedulerRunId;
+      }
+      if (schedulerName === null) {
+        delete board.cards[index].schedulerName;
+      } else if (schedulerName !== undefined) {
+        board.cards[index].schedulerName = schedulerName;
+      }
       if (telegramMessageId === null) {
         delete board.cards[index].telegramMessageId;
       } else if (telegramMessageId !== undefined) {
@@ -481,9 +537,174 @@ export class KanbanStore {
       } else if (telegramReplyUpdatedAt !== undefined) {
         board.cards[index].telegramReplyUpdatedAt = telegramReplyUpdatedAt;
       }
+      if (
+        queuedAfterCardId !== undefined
+        || queuePosition !== undefined
+        || queueSessionMode !== undefined
+      ) {
+        validateQueueCompatibility(board.cards[index]);
+      }
+      const allowScheduledDispatchStatusTransition = safeUpdates.status === 'in_progress'
+        || scheduledDispatch !== undefined;
+      if (hasActiveScheduledDispatch(board.cards[index]) && !allowScheduledDispatchStatusTransition) {
+        validateCardScheduleEligibility(board.cards[index]);
+      }
       board.lastModified = now;
       await this.save(board);
       updatedCard = board.cards[index];
+    });
+
+    return updatedCard!;
+  }
+
+  async scheduleCardDispatch(id: string, scheduledAt: string): Promise<KanbanCard> {
+    const now = new Date().toISOString();
+    let updatedCard: KanbanCard | undefined;
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((entry) => entry.id === id);
+      if (!card) {
+        throw new Error(`Card not found: ${id}`);
+      }
+
+      validateCardScheduleEligibility(card);
+      card.scheduledDispatch = createScheduledDispatchState(scheduledAt, now);
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+      updatedCard = card;
+    });
+
+    return updatedCard!;
+  }
+
+  async cancelScheduledDispatch(id: string): Promise<KanbanCard> {
+    const now = new Date().toISOString();
+    let updatedCard: KanbanCard | undefined;
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((entry) => entry.id === id);
+      if (!card) {
+        throw new Error(`Card not found: ${id}`);
+      }
+
+      delete card.scheduledDispatch;
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+      updatedCard = card;
+    });
+
+    return updatedCard!;
+  }
+
+  async claimScheduledDispatch(id: string, claimAt = new Date().toISOString()): Promise<KanbanCard | null> {
+    let claimedCard: KanbanCard | null = null;
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((entry) => entry.id === id);
+      if (!card) {
+        throw new Error(`Card not found: ${id}`);
+      }
+      if (!card.scheduledDispatch || card.scheduledDispatch.status !== 'scheduled') {
+        return;
+      }
+
+      validateCardScheduleEligibility(card);
+      card.scheduledDispatch = claimScheduledDispatchState(card.scheduledDispatch, claimAt);
+      card.updatedAt = claimAt;
+      board.lastModified = claimAt;
+      await this.save(board);
+      claimedCard = card;
+    });
+
+    return claimedCard;
+  }
+
+  async claimDueScheduledDispatch(dueAt = new Date().toISOString()): Promise<KanbanCard[]> {
+    const claimedCards: KanbanCard[] = [];
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const dueCards = board.cards
+        .filter((card) =>
+          card.scheduledDispatch?.status === 'scheduled'
+          && card.scheduledDispatch.scheduledAt <= dueAt,
+        )
+        .sort((a, b) => a.scheduledDispatch!.scheduledAt.localeCompare(b.scheduledDispatch!.scheduledAt));
+
+      for (const card of dueCards) {
+        validateCardScheduleEligibility(card);
+        card.scheduledDispatch = claimScheduledDispatchState(card.scheduledDispatch!, dueAt);
+        card.updatedAt = dueAt;
+        claimedCards.push(card);
+      }
+
+      if (claimedCards.length > 0) {
+        board.lastModified = dueAt;
+        await this.save(board);
+      }
+    });
+
+    return claimedCards;
+  }
+
+  async recoverStaleScheduledDispatchClaims(
+    staleBefore: string,
+    recoveredAt = new Date().toISOString(),
+  ): Promise<KanbanCard[]> {
+    const recoveredCards: KanbanCard[] = [];
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      for (const card of board.cards) {
+        if (
+          card.scheduledDispatch?.status !== 'dispatching'
+          || card.scheduledDispatch.updatedAt > staleBefore
+        ) {
+          continue;
+        }
+
+        validateCardScheduleEligibility(card);
+        card.scheduledDispatch = recoverScheduledDispatchClaimState(card.scheduledDispatch, recoveredAt);
+        card.updatedAt = recoveredAt;
+        recoveredCards.push(card);
+      }
+
+      if (recoveredCards.length > 0) {
+        board.lastModified = recoveredAt;
+        await this.save(board);
+      }
+    });
+
+    return recoveredCards;
+  }
+
+  async finalizeScheduledDispatch(
+    id: string,
+    result: { status: 'dispatched' | 'failed'; dispatchedAt?: string; error?: string },
+    updatedAt = new Date().toISOString(),
+  ): Promise<KanbanCard> {
+    let updatedCard: KanbanCard | undefined;
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((entry) => entry.id === id);
+      if (!card) {
+        throw new Error(`Card not found: ${id}`);
+      }
+      if (!card.scheduledDispatch) {
+        throw new Error(`Card has no scheduled dispatch: ${id}`);
+      }
+
+      card.scheduledDispatch = finalizeScheduledDispatchState(card.scheduledDispatch, updatedAt, result);
+      card.updatedAt = updatedAt;
+      board.lastModified = updatedAt;
+      await this.save(board);
+      updatedCard = card;
     });
 
     return updatedCard!;

@@ -112,6 +112,15 @@
   box-shadow: -7px 0 0 var(--kv2-dialog-accent, var(--kv2-status-todo-display)), 8px 12px 0 var(--kv2-dialog-shadow-color);
 }
 
+.kv2-dialog--scheduler {
+  max-width: min(56.25rem, calc(100vw - 3rem));
+}
+
+.kv2-dialog--scheduler.kv2-dialog--resizable {
+  max-width: 95vw;
+  min-width: min(55rem, calc(100vw - 3rem));
+}
+
 .kv2-dialog--status-todo {
   --kv2-dialog-accent: var(--kv2-status-todo-display);
 }
@@ -161,7 +170,7 @@
 .kv2-select {
   appearance: none;
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 0h10L5 6z' fill='%231A1A2E'/%3E%3C/svg%3E");
+  background-image: var(--kv2-select-chevron-image);
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 32px;
@@ -265,6 +274,18 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.kv2-dialog-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--kv2-border-muted);
+  background: var(--kv2-surface);
 }
 
 .kv2-dialog-actions--detail {

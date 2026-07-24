@@ -1,6 +1,7 @@
 import type { KanbanStore } from '../core/store';
 import type { SchedulerStore } from '../core/scheduler-store';
 import type { SchedulerEngine } from '../plugin/scheduler-engine';
+import { dispatchCardWithScheduledReservation } from '../plugin/scheduled-dispatch-service';
 import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
 import type { SkillStore } from '../core/skill-store';
@@ -21,12 +22,13 @@ import type {
   McpPlacement,
   McpRuntime,
   PlacementTarget,
+  SchedulerScheduleInputState,
+  SchedulerSimpleRepeat,
   SkillRuntime,
   WikiArchiveCardStatusFilter,
 } from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
-import { parseNaturalLanguageToCron, isValidCron, describeCron } from '../core/cron-parser';
 import { extractAgentThread } from '../core/subagent-transcript';
 import { getMaintenanceStatus, readMaintenanceLog, startApplyUpdateRestart } from './maintenance-runner';
 import {
@@ -52,6 +54,13 @@ import {
   readAllMcpInventoryWithDiagnostics,
 } from '../core/mcp-runtime-adapter';
 import { resolveKanbanDataDir } from '../core/data-dir';
+import {
+  isValidFiveFieldCron,
+  resolveSchedulerScheduleInput,
+  validateScheduledAtKstInput,
+  validateSchedulerActionInput,
+  validateSchedulerTimezoneInput,
+} from '../core/scheduling';
 import {
   readCcDiagnostics,
   computeSkillVisibility,
@@ -111,6 +120,44 @@ function json(data: unknown, status: number = 200): Response {
 
 function errorResponse(message: string, status: number): Response {
   return json({ error: message }, status);
+}
+
+function readSchedulerScheduleInput(body: Record<string, unknown>): SchedulerScheduleInputState {
+  if (body.scheduleInput && typeof body.scheduleInput === 'object') {
+    const raw = body.scheduleInput as Record<string, unknown>;
+    if (raw.mode === 'simple' && raw.simple && typeof raw.simple === 'object') {
+      const simple = raw.simple as Record<string, unknown>;
+      const repeat = typeof simple.repeat === 'string' ? simple.repeat : '';
+      if (
+        repeat !== 'minutes'
+        && repeat !== 'hours'
+        && repeat !== 'daily'
+        && repeat !== 'weekdays'
+        && repeat !== 'weekly'
+      ) {
+        throw new Error('scheduleInput.simple.repeat is invalid');
+      }
+      return {
+        mode: 'simple',
+        simple: {
+          repeat: repeat as SchedulerSimpleRepeat,
+          interval: typeof simple.interval === 'number' ? simple.interval : undefined,
+          hour: typeof simple.hour === 'number' ? simple.hour : undefined,
+          minute: typeof simple.minute === 'number' ? simple.minute : undefined,
+          dayOfWeek: typeof simple.dayOfWeek === 'number' ? simple.dayOfWeek : undefined,
+        },
+      };
+    }
+    if (raw.mode === 'cron' && typeof raw.expression === 'string') {
+      return { mode: 'cron', expression: raw.expression };
+    }
+    throw new Error('scheduleInput shape is invalid');
+  }
+
+  if (typeof body.cron === 'string') {
+    return { mode: 'cron', expression: body.cron };
+  }
+  throw new Error('scheduleInput is required');
 }
 
 /**
@@ -716,21 +763,81 @@ export function createRouteHandler(
     // Route: POST /api/cards
     if (method === 'POST' && path === '/api/cards') {
       try {
-        const body = await req.json();
-        const agentRuntime = AGENT_RUNTIME_VALUES.has(body.agentRuntime) ? body.agentRuntime : 'opencode';
+        const body = await req.json() as {
+          agentRuntime?: string;
+          command?: string;
+          title?: string;
+          description?: string;
+          scheduledDispatch?: { scheduledAt?: string };
+          queuedAfterCardId?: string;
+          queuePosition?: number;
+          queueSessionMode?: import('../core/types').QueueSessionMode;
+        };
+        const agentRuntime: import('../core/types').AgentRuntime = (
+          body.agentRuntime === 'opencode'
+          || body.agentRuntime === 'codex'
+          || body.agentRuntime === 'claude'
+        )
+          ? body.agentRuntime
+          : 'opencode';
         const commandDefinition = getRuntimeCommandDefinition(body.command, agentRuntime);
         const requiresPrompt = !commandDefinition || commandDefinition.executionMode === 'command_with_prompt';
         if (!body.title || (requiresPrompt && !body.description)) {
           return errorResponse('title and description are required', 400);
         }
-        const card = await store.createCard(body);
+        let scheduledDispatch: { scheduledAt: string } | undefined;
+        if (body.scheduledDispatch) {
+          const scheduledAt = body.scheduledDispatch?.scheduledAt;
+          if (typeof scheduledAt !== 'string') {
+            return errorResponse('scheduledDispatch.scheduledAt is required', 400);
+          }
+          if (body.queuedAfterCardId || body.queuePosition !== undefined || body.queueSessionMode !== undefined) {
+            return errorResponse('Queued cards cannot also be scheduled', 400);
+          }
+          scheduledDispatch = { scheduledAt };
+        }
+        const card = await store.createCard({
+          ...body,
+          agentRuntime,
+          title: body.title,
+          description: body.description ?? '',
+          scheduledDispatch,
+        });
         return json(card, 201);
-      } catch {
-        return errorResponse('Invalid request body', 400);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
       }
     }
 
     // Route: POST /api/cards/:id/dispatch
+    const scheduleMatch = path.match(/^\/api\/cards\/([^/]+)\/schedule$/);
+    if (scheduleMatch && method === 'PUT') {
+      const id = scheduleMatch[1];
+      try {
+        const body = await req.json();
+        const scheduledAt = validateScheduledAtKstInput(body?.scheduledAt);
+        const card = await store.scheduleCardDispatch(id, scheduledAt);
+        return json(card);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Schedule update failed';
+        if (message.includes('Card not found')) return errorResponse('Card not found', 404);
+        return errorResponse(message, 400);
+      }
+    }
+
+    if (scheduleMatch && method === 'DELETE') {
+      const id = scheduleMatch[1];
+      try {
+        const card = await store.cancelScheduledDispatch(id);
+        return json(card);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Schedule cancel failed';
+        if (message.includes('Card not found')) return errorResponse('Card not found', 404);
+        return errorResponse(message, 400);
+      }
+    }
+
     const dispatchMatch = path.match(/^\/api\/cards\/([^/]+)\/dispatch$/);
     if (dispatchMatch && method === 'POST') {
       const id = dispatchMatch[1];
@@ -743,7 +850,11 @@ export function createRouteHandler(
         if (card.status !== 'todo') {
           return errorResponse('Can only dispatch cards in todo status', 400);
         }
-        const result = await dispatchFn(id);
+        const result = await dispatchCardWithScheduledReservation({
+          store,
+          dispatchFn,
+          cardId: id,
+        });
         return json(result, 200);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Dispatch failed';
@@ -911,38 +1022,26 @@ export function createRouteHandler(
       if (!schedulerStore || !schedulerEngine) return errorResponse('Scheduler not available', 503);
       try {
         const body = await req.json();
-        if (!body.name || !body.action) {
+        if (typeof body.name !== 'string' || !body.name.trim() || !body.action) {
           return errorResponse('name and action are required', 400);
         }
-        // Parse natural language to cron if needed
-        let cron = body.cron as string | undefined;
-        let cronDescription = body.cronDescription as string | undefined;
-        if (body.naturalLanguage && !cron) {
-          const parsed = parseNaturalLanguageToCron(body.naturalLanguage as string);
-          if (!parsed) {
-            return errorResponse(`Cannot parse schedule: ${body.naturalLanguage}`, 400);
-          }
-          cron = parsed.cron;
-          cronDescription = parsed.description ?? (body.naturalLanguage as string);
-        }
-        if (!cron) {
-          return errorResponse('cron expression or naturalLanguage is required', 400);
-        }
-        if (!isValidCron(cron)) {
-          return errorResponse('Invalid cron expression', 400);
-        }
+        const schedule = resolveSchedulerScheduleInput(readSchedulerScheduleInput(body as Record<string, unknown>));
+        const action = validateSchedulerActionInput(body.action);
+        const timezone = validateSchedulerTimezoneInput(body.timezone);
         const entry = await schedulerStore.createEntry({
-          name: body.name,
-          description: body.description ?? '',
-          cron,
-          cronDescription: cronDescription ?? describeCron(cron),
-          timezone: body.timezone,
-          action: body.action,
+          name: body.name.trim(),
+          description: typeof body.description === 'string' ? body.description : '',
+          cron: schedule.cron,
+          cronDescription: schedule.cronDescription,
+          scheduleInput: schedule.scheduleInput,
+          timezone,
+          action,
         });
         schedulerEngine.scheduleEntry(entry);
         return json(entry, 201);
-      } catch {
-        return errorResponse('Invalid request body', 400);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
       }
     }
 
@@ -1007,30 +1106,57 @@ export function createRouteHandler(
         if (!schedulerEngine) return errorResponse('Scheduler not available', 503);
         try {
           const body = await req.json();
-          // If cron is being updated, validate it
-          if (body.cron) {
-            if (!isValidCron(body.cron)) {
-              return errorResponse('Invalid cron expression', 400);
-            }
-            if (!body.cronDescription) {
-              body.cronDescription = describeCron(body.cron);
-            }
+          const updates: Record<string, unknown> = {};
+          if (body.scheduleInput !== undefined || body.cron !== undefined) {
+            const schedule = resolveSchedulerScheduleInput(readSchedulerScheduleInput(body as Record<string, unknown>));
+            updates.cron = schedule.cron;
+            updates.cronDescription = schedule.cronDescription;
+            updates.scheduleInput = schedule.scheduleInput;
           }
-          // If naturalLanguage provided, parse to cron
-          if (body.naturalLanguage && !body.cron) {
-            const parsed = parseNaturalLanguageToCron(body.naturalLanguage as string);
-            if (!parsed) {
-              return errorResponse(`Cannot parse schedule: ${body.naturalLanguage}`, 400);
+          if (body.name !== undefined) {
+            if (typeof body.name !== 'string' || !body.name.trim()) {
+              return errorResponse('name must be a non-empty string', 400);
             }
-            body.cron = parsed.cron;
-            body.cronDescription = parsed.description ?? (body.naturalLanguage as string);
+            updates.name = body.name.trim();
           }
-          const entry = await schedulerStore.updateEntry(id, body);
+          if (body.description !== undefined) {
+            if (typeof body.description !== 'string') {
+              return errorResponse('description must be a string', 400);
+            }
+            updates.description = body.description;
+          }
+          if (body.status !== undefined) {
+            updates.status = body.status;
+          }
+          if (body.timezone !== undefined) {
+            updates.timezone = validateSchedulerTimezoneInput(body.timezone);
+          }
+          if (body.action !== undefined) {
+            updates.action = validateSchedulerActionInput(body.action);
+          }
+          const entry = await schedulerStore.updateEntry(id, updates);
           schedulerEngine.scheduleEntry(entry);
           return json(entry);
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : '';
           if (message.includes('not found')) return errorResponse('Scheduler not found', 404);
+          if (
+            message.includes('timezone must be')
+            || message.includes('action.type must be')
+            || message.includes('bash action requires')
+            || message.includes('prompt action')
+            || message.includes('name must be')
+            || message.includes('description must be')
+            || message.includes('scheduleInput')
+            || message.includes('Cron 직접 입력')
+            || message.includes('지원하지 않는 간편 설정')
+            || message.includes('시간은')
+            || message.includes('분은')
+            || message.includes('간격은')
+            || message.includes('요일은')
+          ) {
+            return errorResponse(message, 400);
+          }
           return errorResponse('Update failed', 500);
         }
       }
@@ -1049,20 +1175,16 @@ export function createRouteHandler(
     if (method === 'POST' && path === '/api/schedulers/parse-cron') {
       try {
         const body = await req.json();
-        const input = body.input as string;
+        const input = typeof body?.input === 'string' ? body.input : '';
+        const mode = body?.mode;
         if (!input) return errorResponse('input is required', 400);
-        const parsed = parseNaturalLanguageToCron(input);
-        if (parsed) {
-          const description = describeCron(parsed.cron);
-          return json({ cron: parsed.cron, description, valid: true });
+        if (mode !== 'cron') {
+          return errorResponse('mode must be cron', 400);
         }
-        // Try as raw cron
-        if (isValidCron(input)) {
-          return json({ cron: input, description: describeCron(input), valid: true });
-        }
-        return json({ valid: false, error: 'Cannot parse cron expression' });
-      } catch {
-        return errorResponse('Invalid request body', 400);
+        const schedule = resolveSchedulerScheduleInput({ mode: 'cron', expression: input });
+        return json({ cron: schedule.cron, description: schedule.preview, valid: true });
+      } catch (error: unknown) {
+        return json({ valid: false, error: error instanceof Error ? error.message : 'Invalid request body' });
       }
     }
 

@@ -2,12 +2,14 @@
 export type KanbanStatus = 'todo' | 'in_progress' | 'complete' | 'done';
 export type QueueSessionMode = 'new_session' | 'continue_queued_after_session';
 export type CardResolution = 'completed' | 'superseded';
-export type CardOriginChannel = 'telegram';
+export type CardOriginChannel = 'telegram' | 'scheduler';
 export type TelegramReplyStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 export type AgentRuntime = 'opencode' | 'codex' | 'claude';
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 export type ClaudePermissionMode = 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+export type ScheduledDispatchStatus = 'scheduled' | 'dispatching' | 'dispatched' | 'failed';
+export type SchedulerEditState = 'ready' | 'edit-required';
 
 /**
  * Sentinel prepended to every wiki LLM prompt. The wiki worker runs codex/claude
@@ -133,6 +135,21 @@ export interface CardRunProgress {
   };
 }
 
+/**
+ * One-shot dispatch reservation for a top-level todo card.
+ * State transitions:
+ * scheduled -> dispatching -> dispatched
+ * scheduled -> dispatching -> failed
+ * failed/dispatched -> scheduled (when the card is re-scheduled)
+ */
+export interface ScheduledDispatchState {
+  scheduledAt: string;      // ISO 8601 UTC due time
+  status: ScheduledDispatchStatus;
+  dispatchedAt?: string;    // ISO 8601 UTC when runtime accepted the dispatch
+  error?: string;           // last dispatch failure reason
+  updatedAt: string;        // ISO 8601 UTC audit stamp for the reservation itself
+}
+
 // Core kanban card
 export interface KanbanCard {
   id: string;              // nanoid
@@ -174,6 +191,7 @@ export interface KanbanCard {
   resolution?: CardResolution;
   supersededByCardId?: string;
   supersededAt?: string;
+  scheduledDispatch?: ScheduledDispatchState;
   // TODO: Add labels?: string[]
   // TODO: Add priority?: 'low' | 'medium' | 'high' | 'urgent'
   // TODO: Add sessionLinks?: string[] (link to related sessions)
@@ -186,6 +204,9 @@ export interface KanbanCard {
   dispatchType?: 'instant' | 'manual';  // instant = auto-dispatch on creation (e.g., from Telegram)
   telegramChatId?: number;              // Telegram chat ID for response messages
   originChannel?: CardOriginChannel;
+  schedulerId?: string;       // scheduler entry ID that created this card
+  schedulerRunId?: string;    // scheduler run ID that created this card
+  schedulerName?: string;     // scheduler name snapshot at creation time
   telegramMessageId?: string;           // Telegram origin message ID
   telegramSenderId?: string;            // Telegram sender user ID
   telegramMessageTimestamp?: string;    // Telegram message timestamp (ISO 8601)
@@ -335,6 +356,10 @@ export interface KanbanBoard {
 }
 
 // API request/response types
+export interface CreateScheduledDispatchInput {
+  scheduledAt: string; // ISO 8601 UTC due time, validated from a KST datetime input
+}
+
 export interface CreateCardInput {
   title: string;
   description: string;
@@ -359,11 +384,15 @@ export interface CreateCardInput {
   skills?: string[];
   sourceContext?: string;
   feedbackForCardId?: string;
+  scheduledDispatch?: CreateScheduledDispatchInput;
   queueSessionMode?: QueueSessionMode;
   resumeSessionId?: string;
   dispatchType?: 'instant' | 'manual';
   telegramChatId?: number;
   originChannel?: CardOriginChannel;
+  schedulerId?: string;
+  schedulerRunId?: string;
+  schedulerName?: string;
   telegramMessageId?: string;
   telegramSenderId?: string;
   telegramMessageTimestamp?: string;
@@ -395,6 +424,7 @@ export interface UpdateCardInput {
   sessionTitle?: string;
   sessionCreatedAt?: string;
   favorite?: boolean;
+  scheduledDispatch?: ScheduledDispatchState | null;
   queuedAfterCardId?: string | null;  // null = clear from queue
   queuePosition?: number | null;      // null = clear from queue
   queueSessionMode?: QueueSessionMode | null;
@@ -407,6 +437,9 @@ export interface UpdateCardInput {
   supersededByCardId?: string | null;
   supersededAt?: string | null;
   originChannel?: CardOriginChannel | null;
+  schedulerId?: string | null;
+  schedulerRunId?: string | null;
+  schedulerName?: string | null;
   telegramMessageId?: string | null;
   telegramReplyStatus?: TelegramReplyStatus | null;
   telegramReplyMessageId?: number | null;
@@ -419,14 +452,58 @@ export interface UpdateCardInput {
 // ─── Scheduler Types ────────────────────────────────────────────────
 
 export type SchedulerStatus = 'active' | 'inactive';
-export type SchedulerActionType = 'shell' | 'skill';
+export type SchedulerActionType = 'bash' | 'prompt';
+export type SchedulerScheduleMode = 'simple' | 'cron';
+export type SchedulerSimpleRepeat = 'minutes' | 'hours' | 'daily' | 'weekdays' | 'weekly';
 
-export interface SchedulerAction {
-  type: SchedulerActionType;
-  command?: string;        // for shell: the shell command to execute
-  skillName?: string;      // for skill: name of the skill to invoke
-  skillInput?: string;     // for skill: JSON string of skill arguments
+export interface SchedulerSimpleScheduleInput {
+  repeat: SchedulerSimpleRepeat;
+  interval?: number;
+  hour?: number;
+  minute?: number;
+  dayOfWeek?: number;
 }
+
+export type SchedulerScheduleInputState =
+  | {
+    mode: 'simple';
+    simple: SchedulerSimpleScheduleInput;
+  }
+  | {
+    mode: 'cron';
+    expression: string;
+  };
+
+export interface SchedulerLegacyActionSnapshot {
+  type: 'shell' | 'skill';
+  command?: string;
+  cwd?: string;
+  skillName?: string;
+  skillInput?: string;
+}
+
+interface SchedulerActionBase {
+  editState?: SchedulerEditState;
+  legacy?: SchedulerLegacyActionSnapshot;
+}
+
+export interface BashSchedulerAction extends SchedulerActionBase {
+  type: 'bash';
+  command: string;
+  cwd?: string;
+}
+
+export interface PromptSchedulerAction extends SchedulerActionBase {
+  type: 'prompt';
+  prompt: string;
+  projectDir?: string;
+  agentRuntime?: AgentRuntime;
+  model?: string;
+  codexOptions?: CodexOptions;
+  claudeOptions?: ClaudeOptions;
+}
+
+export type SchedulerAction = BashSchedulerAction | PromptSchedulerAction;
 
 export interface SchedulerRun {
   id: string;              // nanoid
@@ -434,6 +511,9 @@ export interface SchedulerRun {
   startedAt: string;       // ISO 8601
   finishedAt?: string;     // ISO 8601
   status: 'running' | 'success' | 'fail';
+  cardId?: string;         // prompt schedulers link to the created board card
+  dispatched?: boolean;    // whether a prompt scheduler reached manual dispatch acceptance
+  dispatchAcceptedAt?: string; // dispatch receipt time, distinct from card completion
   exitCode?: number;       // shell exit code
   stdout?: string;         // capped at 8KB
   stderr?: string;         // capped at 8KB
@@ -446,7 +526,8 @@ export interface SchedulerEntry {
   description: string;     // what this scheduler does
   cron: string;            // 5-field cron expression
   cronDescription?: string; // human-readable cron description
-  timezone?: string;       // IANA timezone (e.g., 'Asia/Seoul')
+  scheduleInput?: SchedulerScheduleInputState; // UI restoration metadata for schedule mode/input
+  timezone: 'Asia/Seoul';  // fixed to KST
   status: SchedulerStatus;
   action: SchedulerAction;
   lastRunAt?: string;      // ISO 8601
@@ -468,7 +549,8 @@ export interface CreateSchedulerInput {
   description: string;
   cron: string;
   cronDescription?: string;
-  timezone?: string;
+  scheduleInput?: SchedulerScheduleInputState;
+  timezone?: string;       // accepted for legacy callers, normalized to Asia/Seoul
   action: SchedulerAction;
 }
 
@@ -477,7 +559,8 @@ export interface UpdateSchedulerInput {
   description?: string;
   cron?: string;
   cronDescription?: string;
-  timezone?: string;
+  scheduleInput?: SchedulerScheduleInputState;
+  timezone?: string;       // accepted for legacy callers, normalized to Asia/Seoul
   status?: SchedulerStatus;
   action?: SchedulerAction;
 }

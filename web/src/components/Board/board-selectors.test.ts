@@ -79,4 +79,21 @@ describe('selectColumns — nested child tree', () => {
     expect(vm.workerChildCount).toBe(1);
     expect(vm.childCount).toBe(2);
   });
+
+  test('derives scheduled fields for scheduled todo cards in KST', () => {
+    const vm = getTodoCard([
+      makeCard('scheduled', {
+        scheduledDispatch: {
+          scheduledAt: '2026-07-18T00:30:00.000Z',
+          status: 'scheduled',
+          updatedAt: '2026-07-17T00:00:00.000Z',
+        },
+      }),
+    ], 'scheduled');
+
+    expect(vm.hasScheduledBadge).toBe(true);
+    expect(vm.scheduledStatus).toBe('scheduled');
+    expect(vm.scheduledAtLabel).toBe('2026-07-18 09:30 KST');
+    expect(vm.scheduledBadgeLabel).toBe('예약됨 · 2026-07-18 09:30 KST');
+  });
 });

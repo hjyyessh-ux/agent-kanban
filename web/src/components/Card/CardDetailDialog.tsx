@@ -30,7 +30,8 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { formatAgentTypeLabel } from "../../utils/agent-label";
 import { formatDuration } from "../../utils/format-duration";
 import { getAgentConfig } from "../../constants/agents";
-import { FavoriteToggleButton, formatRuntimeLabel, TelegramBadge } from "../Board/BoardCardSections";
+import { FavoriteToggleButton, formatRuntimeLabel, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
+import { formatScheduledKstLabel, getScheduledStatusLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
 
 const AGENT_ROW_COLORS: Record<string, { border: string; bg: string }> = {
@@ -132,6 +133,8 @@ export interface CardDetailDialogProps {
   onDelete: (id: string) => Promise<boolean> | boolean;
   onToggleFavorite?: (id: string) => Promise<boolean> | boolean;
   onDispatch?: (id: string) => Promise<boolean> | boolean;
+  onScheduleOpen?: (card: KanbanCard) => void;
+  onCancelSchedule?: (cardId: string) => Promise<KanbanCard> | void;
   onNavigateToCard?: (card: KanbanCard) => void;
   onQueue?: (
     cardId: string,
@@ -158,6 +161,8 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   onDelete,
   onToggleFavorite,
   onDispatch,
+  onScheduleOpen,
+  onCancelSchedule,
   onNavigateToCard,
   onQueue,
   onUnqueue,
@@ -212,6 +217,16 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
       ]
         .filter(Boolean)
         .join(" · ")
+    : null;
+  const activeScheduledReservation = card.scheduledDispatch?.status === 'scheduled' || card.scheduledDispatch?.status === 'dispatching';
+  const scheduledStatusLabel = card.scheduledDispatch
+    ? getScheduledStatusLabel(card.scheduledDispatch.status)
+    : null;
+  const scheduledAtLabel = card.scheduledDispatch?.scheduledAt
+    ? formatScheduledKstLabel(card.scheduledDispatch.scheduledAt)
+    : null;
+  const dispatchedAtLabel = card.scheduledDispatch?.dispatchedAt
+    ? formatScheduledKstLabel(card.scheduledDispatch.dispatchedAt)
     : null;
 
   useEffect(() => {
@@ -683,7 +698,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
     if (card.status === "todo" && onDispatch) {
       return (
         <button type="button" className="kv2-btn kv2-btn--primary kv2-btn--primary-strong" onClick={handleStartTask}>
-          START TASK
+          {activeScheduledReservation ? 'START NOW' : 'START TASK'}
         </button>
       );
     }
@@ -792,6 +807,14 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 className="kv2-favorite-toggle--detail"
               />
             )}
+            <ScheduledMetaBadge
+              vm={{
+                hasScheduledBadge: card.scheduledDispatch?.status === 'scheduled',
+                scheduledBadgeLabel: card.scheduledDispatch?.status === 'scheduled' && scheduledAtLabel
+                  ? `예약됨 · ${scheduledAtLabel}`
+                  : undefined,
+              }}
+            />
             <button
               type="button"
               className={`kv2-card-id-meta ${copiedId ? 'kv2-card-id-meta--copied' : ''}`}
@@ -901,11 +924,92 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 queueModeSummary={queueModeSummary}
                 queueTargetId={queueTargetId}
                 queueSessionMode={queueSessionMode}
+                disabledReason={activeScheduledReservation ? '예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.' : undefined}
                 onQueueTargetChange={setQueueTargetId}
                 onQueueSessionModeChange={setQueueSessionMode}
                 onQueue={onQueue}
                 onUnqueue={onUnqueue}
               />
+            )}
+
+            {!card.parentCardId && (card.status === 'todo' || card.scheduledDispatch) && (
+              <div className="kv2-queue-panel kv2-schedule-panel">
+                <div className="kv2-panel-heading">Scheduled Dispatch</div>
+                <div className="kv2-session-helper">
+                  KST 기준으로 한 번만 자동 dispatch됩니다.
+                </div>
+                {card.scheduledDispatch ? (
+                  <div className="kv2-queue-summary-card">
+                    <div className="kv2-queue-summary-row">
+                      <span className="kv2-queue-target-label">Status:</span>
+                      <strong>{scheduledStatusLabel}</strong>
+                    </div>
+                    {scheduledAtLabel && (
+                      <div className="kv2-queue-summary-row">
+                        <span className="kv2-queue-target-label">Scheduled:</span>
+                        <strong>{scheduledAtLabel}</strong>
+                      </div>
+                    )}
+                    {dispatchedAtLabel && (
+                      <div className="kv2-queue-summary-row">
+                        <span className="kv2-queue-target-label">Dispatched:</span>
+                        <strong>{dispatchedAtLabel}</strong>
+                      </div>
+                    )}
+                    {card.scheduledDispatch.error && (
+                      <div className="kv2-session-helper kv2-session-helper--warn" role="note">
+                        실패 원인: {card.scheduledDispatch.error}
+                      </div>
+                    )}
+                    {activeScheduledReservation && (
+                      <div className="kv2-session-helper" role="note">
+                        Start Now는 이 예약을 소비하고 즉시 한 번만 실행합니다.
+                      </div>
+                    )}
+                    <div className="kv2-schedule-panel-actions">
+                      {onScheduleOpen && activeScheduledReservation && card.status === 'todo' && (
+                        <button
+                          type="button"
+                          className="kv2-btn kv2-btn--outline"
+                          onClick={() => onScheduleOpen(card)}
+                        >
+                          Reschedule
+                        </button>
+                      )}
+                      {onCancelSchedule && activeScheduledReservation && card.status === 'todo' && (
+                        <button
+                          type="button"
+                          className="kv2-btn kv2-btn--subtle-danger"
+                          onClick={() => {
+                            void onCancelSchedule(card.id);
+                          }}
+                        >
+                          Cancel schedule
+                        </button>
+                      )}
+                      {onScheduleOpen && !activeScheduledReservation && card.status === 'todo' && (
+                        <button
+                          type="button"
+                          className="kv2-btn kv2-btn--outline"
+                          onClick={() => onScheduleOpen(card)}
+                        >
+                          Schedule
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : onScheduleOpen ? (
+                  <div className="kv2-session-config-card">
+                    <button
+                      type="button"
+                      className="kv2-btn kv2-btn--outline kv2-btn--sidebar-secondary"
+                      onClick={() => onScheduleOpen(card)}
+                    >
+                      Schedule for later
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             )}
 
             {card.status === "todo" && !card.parentCardId && onSetResumeSession && onClearResumeSession && (
