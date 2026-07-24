@@ -254,7 +254,7 @@ describe('SchedulerView kv2 scheduler UI', () => {
     expect(html).toContain('runtime-model-fields--scheduler');
     expect(html).toContain('kv2-create-agent-chip--selector-card');
     expect(html).toContain('aria-checked="true"');
-    expect(html).toContain('✓');
+    expect(html).not.toContain('kv2-create-agent-chip-check');
   });
 
   test('renders cron preview copy for valid KST parse results', () => {

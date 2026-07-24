@@ -105,6 +105,7 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     await page.locator('#create-card-title-input').fill(title);
     await page.locator('#create-card-description-input').fill('scheduled dispatch from ui [hold-open]');
     const schedule = kstScheduleAt(15);
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
     await page.getByRole('switch', { name: /예약 시작/ }).click();
     await page.locator('#create-card-schedule-datetime').fill(schedule.input);
     await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeEnabled();
@@ -139,6 +140,7 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     await page.getByRole('button', { name: 'Queue After' }).click();
     const queuePicker = page.locator('.kv2-session-config-card').last();
     await queuePicker.locator('.kv2-session-item', { hasText: queueParent.title }).getByRole('button', { name: 'SELECT', exact: true }).click();
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
     await expect(page.locator('#create-card-schedule-disabled-reason')).toContainText('Queue After가 설정되어 있어 예약 시작을 사용할 수 없습니다.');
     await expect(page.getByRole('switch', { name: /예약 시작/ })).toBeDisabled();
     await page.keyboard.press('Escape');
@@ -146,6 +148,7 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     await openCreateCardDialog(page);
     await page.locator('#create-card-title-input').fill(uniqueLabel('[E2E-SCHEDULE] create schedule-block'));
     await page.locator('#create-card-description-input').fill('schedule and queue exclusion');
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
     await page.getByRole('switch', { name: /예약 시작/ }).click();
     await expect(page.locator('#create-card-queue-disabled-reason')).toContainText('예약 시작이 설정되어 있어 Queue After를 사용할 수 없습니다.');
     await expect(page.getByRole('button', { name: 'Queue After' })).toBeDisabled();
@@ -338,6 +341,7 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
         await openCreateCardDialog(page);
         await page.locator('#create-card-title-input').fill(`Capture ${theme} ${viewport.width}`);
         await page.locator('#create-card-description-input').fill('viewport audit');
+        await page.getByRole('button', { name: 'Schedule', exact: true }).click();
         await page.getByRole('switch', { name: /예약 시작/ }).click();
         await expect(page.locator('#create-card-schedule-datetime')).toBeVisible();
         await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();

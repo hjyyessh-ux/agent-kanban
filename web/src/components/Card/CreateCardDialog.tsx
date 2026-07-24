@@ -126,6 +126,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [command, setCommand] = useState<CommandId | "">("");
   const [commandArguments, setCommandArguments] = useState("");
   const [commandExpanded, setCommandExpanded] = useState(false);
+  const [scheduleExpanded, setScheduleExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMode, setSubmitMode] = useState<CreateLaunchTiming | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -468,6 +469,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const hasPendingScreenshots = pendingPreviews.length > 0;
   const promptRequired = !command || isCommandWithPrompt;
   const commandPanelId = "create-card-command-panel";
+  const schedulePanelId = "create-card-schedule-panel";
   return (
     <DialogSkeleton onClose={onClose} width="860px" className="kv2-dialog--create kv2-dialog--status-todo" persistSizeKey="kanban-dialog-size-create">
       <div className="kv2-create-shell">
@@ -567,6 +569,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             runtimeInputId="create-card-runtime-group"
             modelInputId="create-card-model-select"
             disabled={isSubmitting}
+            selectorVariant="cards"
             onRuntimeChange={(nextRuntime) => {
               runtimeTouchedRef.current = true;
               setRuntime(nextRuntime);
@@ -758,51 +761,68 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             )}
           </div>
 
-          <div className="kv2-create-field">
-            <div className="kv2-create-label">Schedule</div>
+          <div className="kv2-create-field kv2-create-field--command">
+            <button
+              type="button"
+              id="create-card-schedule-label"
+              className={`kv2-create-command-toggle${scheduleExpanded ? " is-open" : ""}`}
+              aria-expanded={scheduleExpanded}
+              aria-controls={schedulePanelId}
+              onClick={() => setScheduleExpanded((current) => !current)}
+              disabled={isSubmitting}
+            >
+              <span className="kv2-create-command-toggle-main">
+                <span>Schedule</span>
+              </span>
+              <span className="kv2-chevron" aria-hidden="true">▼</span>
+            </button>
             <div className="kv2-session-helper">설정한 KST 시각에 이 작업을 한 번 자동으로 시작합니다.</div>
-            <div className="kv2-create-launch-grid kv2-create-launch-grid--single">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={launchTiming === "schedule"}
-                className={`kv2-create-launch-option${launchTiming === "schedule" ? " kv2-create-launch-option--active" : ""}`}
-                onClick={() => setLaunchTiming((current) => current === "schedule" ? "later" : "schedule")}
-                disabled={isSubmitting || scheduleDisabled}
-                aria-describedby={scheduleDisabled ? "create-card-schedule-disabled-reason" : undefined}
-              >
-                <span className="kv2-create-launch-option-copy">
-                  <span className="kv2-create-launch-option-title">예약 시작</span>
-                  <span className="kv2-create-launch-option-desc">
-                    {scheduleSelected
-                      ? "설정한 KST 시각에 한 번 자동 dispatch합니다."
-                      : "사용하지 않으면 todo 상태로만 생성합니다."}
-                  </span>
-                </span>
-                <span className="kv2-create-launch-switch" aria-hidden="true">
-                  <span className="kv2-create-launch-switch-knob" />
-                </span>
-              </button>
-            </div>
-            {launchUiState.scheduleDisabledReason && (
-              <div
-                id="create-card-schedule-disabled-reason"
-                className="kv2-session-helper kv2-session-helper--warn"
-                role="note"
-              >
-                {launchUiState.scheduleDisabledReason}
-              </div>
-            )}
-            {scheduleSelected && (
-              <div className="kv2-session-config-card">
-                <ScheduledDispatchEditor
-                  currentNow={currentNow}
-                  inputId="create-card-schedule-datetime"
-                  noteLabel="현재 KST보다 미래인 시각만 예약할 수 있습니다."
-                  value={scheduledAtInput}
-                  onChange={setScheduledAtInput}
-                  disabled={isSubmitting}
-                />
+            {scheduleExpanded && (
+              <div id={schedulePanelId} className="kv2-create-command-panel">
+                <div className="kv2-create-launch-grid kv2-create-launch-grid--single">
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={launchTiming === "schedule"}
+                    className={`kv2-create-launch-option${launchTiming === "schedule" ? " kv2-create-launch-option--active" : ""}`}
+                    onClick={() => setLaunchTiming((current) => current === "schedule" ? "later" : "schedule")}
+                    disabled={isSubmitting || scheduleDisabled}
+                    aria-describedby={scheduleDisabled ? "create-card-schedule-disabled-reason" : undefined}
+                  >
+                    <span className="kv2-create-launch-option-copy">
+                      <span className="kv2-create-launch-option-title">예약 시작</span>
+                      <span className="kv2-create-launch-option-desc">
+                        {scheduleSelected
+                          ? "설정한 KST 시각에 한 번 자동 dispatch합니다."
+                          : "사용하지 않으면 todo 상태로만 생성합니다."}
+                      </span>
+                    </span>
+                    <span className="kv2-create-launch-switch" aria-hidden="true">
+                      <span className="kv2-create-launch-switch-knob" />
+                    </span>
+                  </button>
+                </div>
+                {launchUiState.scheduleDisabledReason && (
+                  <div
+                    id="create-card-schedule-disabled-reason"
+                    className="kv2-session-helper kv2-session-helper--warn"
+                    role="note"
+                  >
+                    {launchUiState.scheduleDisabledReason}
+                  </div>
+                )}
+                {scheduleSelected && (
+                  <div className="kv2-session-config-card">
+                    <ScheduledDispatchEditor
+                      currentNow={currentNow}
+                      inputId="create-card-schedule-datetime"
+                      noteLabel="현재 KST보다 미래인 시각만 예약할 수 있습니다."
+                      value={scheduledAtInput}
+                      onChange={setScheduledAtInput}
+                      disabled={isSubmitting}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

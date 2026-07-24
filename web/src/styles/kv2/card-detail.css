@@ -1173,7 +1173,7 @@
 .kv2-create-agent-chip--selector-card {
   min-height: 74px;
   height: auto;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 10px;
   padding: 14px 16px;
   border-width: 1px;
@@ -1186,10 +1186,10 @@
 }
 
 .kv2-create-agent-chip--selector-card .kv2-create-agent-chip-copy {
-  flex: 1;
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 2px;
+  flex: 0 1 auto;
+  align-items: center;
+  flex-direction: row;
+  gap: 5px;
 }
 
 .kv2-create-agent-chip--selector-card .kv2-create-agent-chip-label {
@@ -1197,33 +1197,23 @@
   color: var(--kv2-text-primary);
 }
 
-.kv2-create-agent-chip-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--kv2-border);
-  border-radius: 999px;
-  background: var(--kv2-surface-sunken);
-  color: transparent;
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  flex: 0 0 22px;
-}
-
 .kv2-create-agent-chip--selector-card.kv2-create-agent-chip--active {
-  border: 2px solid var(--kv2-control-selected-border);
-  border-bottom-width: 2px;
+  border: 1px solid var(--kv2-border);
+  border-bottom: 4px solid var(--kv2-create-runtime-active-border);
   background: var(--kv2-surface-sunken);
   color: var(--kv2-text-primary);
 }
 
-.kv2-create-agent-chip--selector-card.kv2-create-agent-chip--active .kv2-create-agent-chip-check {
-  border-color: var(--kv2-control-selected-border);
-  background: var(--kv2-control-selected-bg);
-  color: var(--kv2-control-selected-fg);
+.runtime-model-fields__runtime-grid--cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kv2-sp-3);
+}
+
+@media (max-width: 48rem) {
+  .runtime-model-fields__runtime-grid--cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .kv2-create-agent-chip--selector-card:hover {

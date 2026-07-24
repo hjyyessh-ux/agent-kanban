@@ -64,6 +64,11 @@ test.describe('Card Creation', () => {
 
     await page.goto('/');
     await page.getByRole('button', { name: 'Create new card' }).click();
+    const scheduleToggle = page.getByRole('button', { name: 'Schedule', exact: true });
+    await expect(scheduleToggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByRole('switch', { name: /예약 시작/ })).toHaveCount(0);
+    await scheduleToggle.click();
+    await expect(scheduleToggle).toHaveAttribute('aria-expanded', 'true');
     const scheduleSwitch = page.getByRole('switch', { name: /예약 시작/ });
     await expect(scheduleSwitch).toHaveAttribute('aria-checked', 'false');
     await expect(page.locator('#create-card-schedule-datetime')).toHaveCount(0);
@@ -92,6 +97,7 @@ test.describe('Card Creation', () => {
     await page.goto('/');
 
     await page.getByRole('button', { name: 'Create new card' }).click();
+    await page.getByRole('button', { name: 'Schedule', exact: true }).click();
     await page.getByRole('switch', { name: /예약 시작/ }).click();
     await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();

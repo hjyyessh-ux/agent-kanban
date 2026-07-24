@@ -117,6 +117,7 @@
 }
 
 .kv2-dialog--scheduler.kv2-dialog--resizable {
+  max-width: 95vw;
   min-width: min(55rem, calc(100vw - 3rem));
 }
 

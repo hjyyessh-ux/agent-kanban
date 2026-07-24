@@ -86,6 +86,30 @@ test.describe('Scheduler dialog layout', () => {
     await expect(page.locator('#scheduler-simple-minute')).toHaveValue('30');
   });
 
+  test('dialog expands horizontally and stacks Description below Name', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await preparePage(page);
+    await page.getByRole('tab', { name: 'Scheduler' }).click();
+    await page.getByRole('button', { name: '새 Scheduler' }).click();
+
+    const dialog = page.locator('.kv2-dialog--scheduler');
+    const initialBox = await dialog.boundingBox();
+    const resizeMode = await dialog.evaluate((element) => getComputedStyle(element).resize);
+    const nameBox = await page.locator('#scheduler-name-input').boundingBox();
+    const descriptionBox = await page.locator('#scheduler-description-input').boundingBox();
+
+    expect(initialBox).not.toBeNull();
+    expect(nameBox).not.toBeNull();
+    expect(descriptionBox).not.toBeNull();
+    expect(resizeMode).toBe('both');
+    expect(descriptionBox!.y).toBeGreaterThan(nameBox!.y + nameBox!.height);
+
+    await dialog.evaluate((element) => {
+      element.style.width = '1100px';
+    });
+    await expect.poll(async () => (await dialog.boundingBox())?.width ?? 0).toBeGreaterThan(initialBox!.width + 100);
+  });
+
   test('selected action/runtime cards keep readable contrast in light and dark themes', async ({ page }) => {
     await openSchedulerPromptModal(page);
 

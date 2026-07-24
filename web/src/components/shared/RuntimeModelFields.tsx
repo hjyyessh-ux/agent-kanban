@@ -20,8 +20,6 @@ interface RuntimeModelFieldsProps {
   selectorVariant?: "chips" | "cards";
 }
 
-const CHECK_ICON = "\u2713";
-
 function getNextEnabledRuntime(
   orderedRuntimes: RuntimeCatalogEntry[],
   runtime: AgentRuntime,
@@ -115,9 +113,6 @@ export const RuntimeModelFields: React.FC<RuntimeModelFieldsProps> = ({
                 <span className="kv2-create-agent-chip-label">{entry.label}</span>
                 {unavailable && <span className="kv2-create-agent-chip-badge">Unavailable</span>}
               </span>
-              {selectorVariant === "cards" && (
-                <span className="kv2-create-agent-chip-check" aria-hidden="true">{CHECK_ICON}</span>
-              )}
             </button>
           );
         })}
