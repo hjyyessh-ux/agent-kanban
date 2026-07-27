@@ -5,6 +5,7 @@ export const RUNTIME_MODEL_PREFERENCE_KEY = 'kanban-runtime-model-preference';
 
 export const CLAUDE_MODELS = [
   { id: 'claude-fable-5', label: 'Fable 5', tier: 'fable' },
+  { id: 'claude-opus-5', label: 'Opus 5 (1M context)', tier: 'opus' },
   { id: 'claude-opus-4-8', label: 'Opus 4.8', tier: 'opus' },
   { id: 'claude-opus-4-7', label: 'Opus 4.7 (1M context)', tier: 'opus' },
   { id: 'claude-opus-4-6', label: 'Opus 4.6', tier: 'opus' },
