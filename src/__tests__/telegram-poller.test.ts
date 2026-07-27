@@ -452,6 +452,7 @@ describe('TelegramPoller', () => {
 
     expect(claudeResult?.type).toBe('reply');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-fable-5');
+    expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
     expect(codexResult?.type).toBe('reply');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.5');
@@ -477,7 +478,7 @@ describe('TelegramPoller', () => {
   });
 
   test('model commands accept exact model ids and hyphen aliases', () => {
-    const claudeResult = resolveTelegramCommand('/claude-model claude-opus-4-8', {
+    const claudeResult = resolveTelegramCommand('/claude-model claude-opus-5', {
       chatId: 12345,
       sessions: [],
     }, false);
@@ -487,7 +488,7 @@ describe('TelegramPoller', () => {
     }, false);
 
     expect(claudeResult?.type).toBe('set-defaults');
-    expect(claudeResult && 'model' in claudeResult ? claudeResult.model : undefined).toBe('claude-opus-4-8');
+    expect(claudeResult && 'model' in claudeResult ? claudeResult.model : undefined).toBe('claude-opus-5');
     expect(claudeResult && 'agentRuntime' in claudeResult ? claudeResult.agentRuntime : undefined).toBe('claude');
     expect(codexResult?.type).toBe('set-defaults');
     expect(codexResult && 'model' in codexResult ? codexResult.model : undefined).toBe('gpt-5.5');
