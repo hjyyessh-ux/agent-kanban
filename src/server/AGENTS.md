@@ -5,14 +5,14 @@
 
 ## Purpose
 
-Thin Bun server layer. `index.ts` owns `Bun.serve()` and SPA/static serving; `routes.ts` (a hot-path file, 124+ edits) owns all REST endpoints for cards, schedulers, settings, scripts, screenshots, models, pending questions, wiki, and the scope manager (`/api/scope/*`: targets, inventory, cold storage freeze/restore).
+Thin Bun server layer. `index.ts` owns `Bun.serve()` and SPA/static serving; `routes.ts` (a hot-path file, 124+ edits) owns all REST endpoints for cards, schedulers, settings, scripts, screenshots, models, pending questions, wiki, and the scope manager (`/api/scope/*`: targets, inventory, cold storage freeze/restore/detail).
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
 | `index.ts` | `createServer()` wraps `Bun.serve()`, port-retry (configured port + 3), SPA static/HTML-fallback serving, API-first routing before static lookup |
-| `routes.ts` | All REST endpoints — cards/archive/dispatch, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and runtime-aware `/api/scope/*` (targets, MCP inventory/write, cold freeze/restore) |
+| `routes.ts` | All REST endpoints — cards/archive/dispatch, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and runtime-aware `/api/scope/*` (targets, MCP inventory/write, cold freeze/restore/detail) |
 | `maintenance-runner.ts` | Update/restart maintenance flow backing `/api/maintenance/*` routes |
 
 ## For AI Agents

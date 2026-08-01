@@ -76,7 +76,9 @@ import {
   restoreMcp,
   deleteColdEntry,
   getColdManifest,
+  getColdManifestView,
   getColdMcpEntry,
+  readColdSkillContent,
 } from '../core/cold-storage-store';
 import { existsSync, mkdirSync, cpSync, statSync, readFileSync, rmSync } from 'node:fs';
 import { extname, join, basename } from 'node:path';
@@ -2503,9 +2505,9 @@ export function createRouteHandler(
 
     // ─── Cold Storage Routes (Phase 4) ───────────────────────────
 
-    // Route: GET /api/scope/cold — list cold storage manifest
+    // Route: GET /api/scope/cold — list cold storage manifest (with summaries)
     if (method === 'GET' && path === '/api/scope/cold') {
-      return json(getColdManifest());
+      return json(getColdManifestView());
     }
 
     // Route: POST /api/scope/cold/freeze — freeze a skill or MCP to cold storage
@@ -2687,8 +2689,20 @@ export function createRouteHandler(
       return errorResponse('kind must be skill or mcp', 400);
     }
 
-    // Route: DELETE /api/scope/cold/:kind/:ref — permanently delete from cold storage
+    // Route: GET|DELETE /api/scope/cold/:kind/:ref — detail / permanent delete
     const coldDeleteMatch = path.match(/^\/api\/scope\/cold\/(skill|mcp)\/(.+)$/);
+    if (coldDeleteMatch && method === 'GET') {
+      const kind = coldDeleteMatch[1] as 'skill' | 'mcp';
+      const ref = decodeURIComponent(coldDeleteMatch[2]);
+      const entry = getColdManifest().find((e) => e.kind === kind && e.ref === ref);
+      if (!entry) return errorResponse(`Cold storage entry not found: ${ref}`, 404);
+      if (kind === 'skill') {
+        const file = readColdSkillContent(ref);
+        return json({ entry, filePath: file?.filePath, content: file?.content });
+      }
+      const cold = getColdMcpEntry(ref);
+      return json({ entry, def: cold?.def });
+    }
     if (coldDeleteMatch && method === 'DELETE') {
       const kind = coldDeleteMatch[1] as 'skill' | 'mcp';
       const ref = decodeURIComponent(coldDeleteMatch[2]);

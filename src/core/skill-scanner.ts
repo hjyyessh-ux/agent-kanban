@@ -42,7 +42,7 @@ interface ParsedFrontmatter {
  * `description`, and tool/MCP keys (`allowed-tools`, `tools`, `mcp`).
  * Handles both scalar values and multiline YAML lists.
  */
-function parseFrontmatter(content: string): ParsedFrontmatter {
+export function parseFrontmatter(content: string): ParsedFrontmatter {
   const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return {};
 

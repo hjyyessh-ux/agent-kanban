@@ -18,6 +18,7 @@ import {
   type McpMoveBody,
   type VisibilityChange,
 } from '../../hooks/useScopeInventory';
+import { maskSecretDef } from './capability-format';
 
 interface McpDetailModalProps {
   item: McpInventoryItem;
@@ -28,34 +29,6 @@ interface McpDetailModalProps {
 
 type ActionMode = 'none' | 'copy' | 'move';
 type CapScope = 'user' | 'local' | 'project';
-
-function maskSecret(val: string): string {
-  if (val.length <= 8) return '***';
-  return val.slice(0, 4) + '***' + val.slice(-4);
-}
-
-function maskSecretDef(def: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...def };
-  if (result.env && typeof result.env === 'object') {
-    const masked: Record<string, string> = {};
-    for (const [k, v] of Object.entries(result.env as Record<string, string>)) {
-      masked[k] = typeof v === 'string' && v.length > 12 ? maskSecret(v) : v;
-    }
-    result.env = masked;
-  }
-  if (result.headers && typeof result.headers === 'object') {
-    const masked: Record<string, string> = {};
-    for (const [k, v] of Object.entries(result.headers as Record<string, string>)) {
-      if (/auth|token|key|secret/i.test(k) && typeof v === 'string' && v.length > 12) {
-        masked[k] = maskSecret(v);
-      } else {
-        masked[k] = v;
-      }
-    }
-    result.headers = masked;
-  }
-  return result;
-}
 
 function scopeLabel(scope: CapScope): string {
   return scope === 'user' ? 'Global (user)' : scope === 'local' ? 'Local' : 'Project';

@@ -981,6 +981,12 @@ export interface ColdManifestEntry {
   restorePolicy: 'any' | 'same-scope';
 }
 
+/** Manifest entry enriched for list rendering — what `GET /api/scope/cold` returns. */
+export interface ColdEntryView extends ColdManifestEntry {
+  /** skill: SKILL.md frontmatter `description` · mcp: command line or URL */
+  summary?: string;
+}
+
 // ─── Capabilities view model ─────────────────────────────────
 // Frontend-only merged model for the Capabilities tab. Skills and scripts
 // are keyed as `${type}:${id}` to prevent id collisions across stores.
