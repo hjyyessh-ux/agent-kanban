@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
 import type { AgentRuntime, ClaudePermissionMode, CodexSandboxMode, KanbanCard } from '../core/types';
 import { getDefaultModelForAgent, getPrimaryAgentDisplayLabel } from '../core/agent-config';
 import { normalizeAgentType } from '../core/agent-type';
+import type { TelegramInlineKeyboardMarkup } from './telegram-notifier';
 import {
   CLAUDE_MODELS,
   CODEX_MODELS,
@@ -35,6 +38,8 @@ export interface TelegramCommandContext {
   defaultClaudePermissionMode?: ClaudePermissionMode;
   defaultClaudeDangerouslySkipPermissions?: boolean;
   defaultCodexSandbox?: CodexSandboxMode;
+  /** Project directories this chat has used before, most recent first. */
+  recentProjectDirs?: string[];
 }
 
 export interface TelegramCommandDispatchPlan {
@@ -53,11 +58,12 @@ export interface TelegramCommandDispatchPlan {
 }
 
 export type TelegramCommandResult =
-  | { type: 'reply'; text: string }
+  | { type: 'reply'; text: string; keyboard?: TelegramInlineKeyboardMarkup; toast?: string }
   | { type: 'select-session'; text: string; sessionId: string; cardId: string; agentRuntime: AgentRuntime }
   | {
       type: 'set-defaults';
       text: string;
+      toast?: string;
       agentRuntime?: AgentRuntime;
       agentType?: string | null;
       model?: string | null;
@@ -75,6 +81,10 @@ interface TelegramCommandDefinition {
   helpEntry: string;
   aliases?: string[];
   agentType?: string;
+  /** One-shot model switch: sets runtime + model, or dispatches when a body follows. */
+  modelShortcut?: { runtime: Extract<AgentRuntime, 'claude' | 'codex'>; model: string };
+  /** Still routable by typing it, but kept out of the Telegram command menu. */
+  hiddenFromMenu?: boolean;
 }
 
 const RUNTIME_VALUES: AgentRuntime[] = ['opencode', 'codex', 'claude'];
@@ -193,12 +203,41 @@ const TELEGRAM_COMMAND_DEFINITIONS: readonly TelegramCommandDefinition[] = [
     helpEntry: '/codex_sandbox read-only|workspace-write|danger-full-access',
   },
   {
+    token: '/opus5',
+    command: 'opus5',
+    description: 'Claude Opus 5로 전환',
+    helpEntry: '/opus5 [작업 내용]',
+    modelShortcut: { runtime: 'claude', model: 'claude-opus-5' },
+  },
+  {
+    token: '/fable5',
+    command: 'fable5',
+    description: 'Claude Fable 5로 전환',
+    helpEntry: '/fable5 [작업 내용]',
+    modelShortcut: { runtime: 'claude', model: 'claude-fable-5' },
+  },
+  {
+    token: '/sonnet5',
+    command: 'sonnet5',
+    description: 'Claude Sonnet 5로 전환',
+    helpEntry: '/sonnet5 [작업 내용]',
+    modelShortcut: { runtime: 'claude', model: 'claude-sonnet-5' },
+  },
+  {
+    token: '/gpt56',
+    command: 'gpt56',
+    description: 'Codex GPT-5.6-Sol로 전환',
+    helpEntry: '/gpt56 [작업 내용]',
+    modelShortcut: { runtime: 'codex', model: 'gpt-5.6-sol' },
+  },
+  {
     token: '/agent_sisyphus',
     command: 'agent_sisyphus',
     description: '기본 에이전트를 Sisyphus로 설정',
     helpEntry: '/agent_sisyphus (/시시푸스)',
     aliases: ['/시시푸스'],
     agentType: 'sisyphus',
+    hiddenFromMenu: true,
   },
   {
     token: '/agent_hephaestus',
@@ -207,6 +246,7 @@ const TELEGRAM_COMMAND_DEFINITIONS: readonly TelegramCommandDefinition[] = [
     helpEntry: '/agent_hephaestus (/헤파이스토)',
     aliases: ['/헤파이스토', '/헤파이토스'],
     agentType: 'hephaestus',
+    hiddenFromMenu: true,
   },
   {
     token: '/agent_prometheus',
@@ -215,6 +255,7 @@ const TELEGRAM_COMMAND_DEFINITIONS: readonly TelegramCommandDefinition[] = [
     helpEntry: '/agent_prometheus (/프로메테우스)',
     aliases: ['/프로메테우스'],
     agentType: 'prometheus',
+    hiddenFromMenu: true,
   },
   {
     token: '/agent_atlas',
@@ -238,8 +279,16 @@ const AGENT_COMMANDS: Record<string, string> = Object.fromEntries(
   ),
 );
 
+const MODEL_SHORTCUTS: Record<string, NonNullable<TelegramCommandDefinition['modelShortcut']>> = Object.fromEntries(
+  TELEGRAM_COMMAND_DEFINITIONS.flatMap(definition =>
+    definition.modelShortcut ? [[definition.token, definition.modelShortcut] as const] : [],
+  ),
+);
+
 export function getTelegramRegisteredCommands(): Array<{ command: string; description: string }> {
-  return TELEGRAM_COMMAND_DEFINITIONS.map(({ command, description }) => ({ command, description }));
+  return TELEGRAM_COMMAND_DEFINITIONS
+    .filter(definition => !definition.hiddenFromMenu)
+    .map(({ command, description }) => ({ command, description }));
 }
 
 export function buildTelegramHelpText(): string {
@@ -258,17 +307,20 @@ export function buildTelegramHelpText(): string {
     '- /runtime codex|claude|opencode: 기본 런타임 변경',
     '- /codex 작업 내용: Codex로 새 작업 시작',
     '- /claude 작업 내용: Claude로 새 작업 시작',
-    '- /opencode [/헤파이스토] 작업 내용: Opencode로 새 작업 시작',
+    '- /opencode [/아틀라스] 작업 내용: Opencode로 새 작업 시작',
     '',
     '모델',
+    '- /opus5, /fable5, /sonnet5, /gpt56: 해당 모델로 바로 전환 (작업 내용을 붙이면 즉시 실행)',
+    '- /codex_model: Codex 모델을 버튼으로 선택',
+    '- /codex_model gpt5.6: Codex 기본 모델 설정 (짧은 이름도 인식)',
     '- /codex_model_list: Codex 모델 id 목록 보기',
-    '- /codex_model gpt-5.3-codex: Codex 기본 모델 설정',
+    '- /claude_model: Claude 모델을 버튼으로 선택',
+    '- /claude_model opus5: Claude 기본 모델 설정 (짧은 이름도 인식)',
     '- /claude_model_list: Claude 모델 id 목록 보기',
-    '- /claude_model claude-sonnet-4-6: Claude 기본 모델 설정',
     '',
     '디렉토리',
-    '- /directory: 현재 기본 디렉토리 보기',
-    '- /directory /path/to/project: 기본 디렉토리 설정',
+    '- /directory: 최근 사용한 디렉토리를 버튼으로 선택',
+    '- /directory /path/to/project: 기본 디렉토리 직접 설정',
     '- /directory clear: 기본 디렉토리 해제',
     '',
     '권한',
@@ -277,11 +329,9 @@ export function buildTelegramHelpText(): string {
     '- /codex_sandbox read-only|workspace-write|danger-full-access: Codex sandbox 설정',
     '',
     'Opencode 에이전트',
-    '- /agent_sisyphus (/시시푸스): 기본 에이전트를 Sisyphus로 설정',
-    '- /agent_hephaestus (/헤파이스토): 기본 에이전트를 Hephaestus로 설정',
-    '- /agent_prometheus (/프로메테우스): 기본 에이전트를 Prometheus로 설정',
     '- /agent_atlas (/아틀라스): 기본 에이전트를 Atlas로 설정',
-    '- 일반 메시지 끝에 /헤파이스토 같은 에이전트 명령을 붙이면 Opencode 새 작업으로 실행합니다.',
+    '- /시시푸스, /헤파이스토, /프로메테우스: 메뉴에는 없지만 직접 입력하면 동작합니다.',
+    '- 일반 메시지 끝에 /아틀라스 같은 에이전트 명령을 붙이면 Opencode 새 작업으로 실행합니다.',
   ].join('\n');
 }
 
@@ -406,6 +456,177 @@ function buildInvalidModelText(
     '',
     buildModelListText(runtimeLabel, models, command),
   ].join('\n');
+}
+
+/** Drop separators so `gpt5.6`, `GPT-5.6` and `gpt56` all compare equal. */
+function normalizeModelKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Map a loosely typed model name onto a catalog id, so `/claude_model opus5`
+ * works as well as the full `claude-opus-5`. When several models match (e.g.
+ * `gpt5.6` matching sol/terra/luna) the runtime default wins; if it is not
+ * among them the input stays ambiguous and the caller shows the list.
+ */
+export function resolveModelId(
+  input: string,
+  models: readonly { id: string }[],
+  defaultModel: string,
+): string | undefined {
+  const target = normalizeModelKey(input);
+  if (!target) return undefined;
+
+  const exact = models.find(model => normalizeModelKey(model.id) === target);
+  if (exact) return exact.id;
+
+  const matches = models.filter(model => normalizeModelKey(model.id).includes(target));
+  if (matches.length === 1) return matches[0].id;
+  return matches.find(model => model.id === defaultModel)?.id;
+}
+
+const MODEL_CALLBACK_PREFIX = 'md';
+const DIRECTORY_CALLBACK_PREFIX = 'dir';
+
+/**
+ * Recent directories are re-derived when the tap arrives, so the index alone
+ * could point at a different path than the one rendered. Pin each button to a
+ * short digest of its path and reject the tap if the list has moved.
+ */
+function directoryCallbackDigest(dir: string): string {
+  return createHash('sha1').update(dir).digest('hex').slice(0, 8);
+}
+
+function shortenDirectoryLabel(dir: string): string {
+  const home = homedir();
+  const display = home && dir.startsWith(home) ? `~${dir.slice(home.length)}` : dir;
+  // Keep the tail — the project folder is what identifies the entry.
+  return display.length > 40 ? `…${display.slice(-39)}` : display;
+}
+
+function buildModelKeyboard(
+  runtime: 'claude' | 'codex',
+  models: readonly { id: string; label: string }[],
+): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: models.map(model => [{
+      text: model.label,
+      callback_data: `${MODEL_CALLBACK_PREFIX}:${runtime}:${model.id}`,
+    }]),
+  };
+}
+
+function buildDirectoryKeyboard(dirs: string[]): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      ...dirs.map((dir, index) => [{
+        text: shortenDirectoryLabel(dir),
+        callback_data: `${DIRECTORY_CALLBACK_PREFIX}:${index}:${directoryCallbackDigest(dir)}`,
+      }]),
+      [{ text: '✖️ 디렉토리 해제', callback_data: `${DIRECTORY_CALLBACK_PREFIX}:clear` }],
+    ],
+  };
+}
+
+function buildDirectoryPrompt(context: TelegramCommandContext): TelegramCommandResult {
+  const dirs = context.recentProjectDirs ?? [];
+  if (dirs.length === 0) {
+    return {
+      type: 'reply',
+      text: [
+        `현재 기본 디렉토리: ${context.defaultProjectDir ?? 'not set'}`,
+        '아직 사용한 디렉토리 기록이 없습니다.',
+        '설정: /directory /path/to/project',
+        '해제: /directory clear',
+      ].join('\n'),
+    };
+  }
+
+  return {
+    type: 'reply',
+    text: [
+      `📁 현재 기본 디렉토리: ${context.defaultProjectDir ?? 'not set'}`,
+      '',
+      '아래에서 선택하거나 /directory /path/to/project 로 직접 지정하세요.',
+    ].join('\n'),
+    keyboard: buildDirectoryKeyboard(dirs),
+  };
+}
+
+function buildDirectorySetResult(projectDir: string): TelegramCommandResult {
+  return {
+    type: 'set-defaults',
+    text: [
+      '✅ 기본 디렉토리를 설정했습니다.',
+      `- 디렉토리: ${projectDir}`,
+      '- 다음 새 작업부터 이 디렉토리에서 실행합니다.',
+    ].join('\n'),
+    toast: `📁 ${shortenDirectoryLabel(projectDir)}`,
+    projectDir,
+  };
+}
+
+function buildModelSetResult(runtime: 'claude' | 'codex', model: string): TelegramCommandResult {
+  return {
+    type: 'set-defaults',
+    text: [
+      `✅ ${formatRuntime(runtime)} 기본 모델을 설정했습니다.`,
+      `- 모델: ${model}`,
+      `- 다음 ${formatRuntime(runtime)} 작업부터 적용됩니다.`,
+    ].join('\n'),
+    toast: `🤖 ${model}`,
+    agentRuntime: runtime,
+    agentType: null,
+    model,
+  };
+}
+
+/**
+ * Resolve an inline-keyboard tap. Returns null for callback data this build
+ * does not understand, which happens when an old message is tapped after a
+ * deploy.
+ */
+export function resolveTelegramCallback(
+  data: string,
+  context: TelegramCommandContext,
+): TelegramCommandResult | null {
+  const parts = data.split(':');
+
+  if (parts[0] === MODEL_CALLBACK_PREFIX) {
+    const [, runtime, model] = parts;
+    if (runtime === 'claude' && model && isClaudeModelValid(model)) {
+      return buildModelSetResult('claude', model);
+    }
+    if (runtime === 'codex' && model && isCodexModelValid(model)) {
+      return buildModelSetResult('codex', model);
+    }
+    return null;
+  }
+
+  if (parts[0] === DIRECTORY_CALLBACK_PREFIX) {
+    if (parts[1] === 'clear') {
+      return {
+        type: 'set-defaults',
+        text: '✅ 기본 디렉토리 설정을 해제했습니다.',
+        toast: '📁 해제됨',
+        projectDir: null,
+      };
+    }
+
+    const index = Number.parseInt(parts[1] ?? '', 10);
+    const digest = parts[2];
+    const dir = context.recentProjectDirs?.[index];
+    if (!dir || !digest || directoryCallbackDigest(dir) !== digest) {
+      return {
+        type: 'reply',
+        text: '⚠️ 디렉토리 목록이 변경되었습니다. /directory 를 다시 실행해 주세요.',
+        toast: '목록이 변경되었습니다',
+      };
+    }
+    return buildDirectorySetResult(dir);
+  }
+
+  return null;
 }
 
 function extractLeadingAgentCommand(text: string): { bodyText: string; agentType?: string; model?: string } {
@@ -600,77 +821,62 @@ export function resolveTelegramCommand(
     return {
       type: 'reply',
       text: buildModelListText('Codex', CODEX_MODELS, '/codex_model'),
+      keyboard: buildModelKeyboard('codex', CODEX_MODELS),
     };
   }
 
   if (command === '/codex_model') {
-    const model = argsText.trim();
-    if (!model) {
+    const requested = argsText.trim();
+    if (!requested) {
       return {
         type: 'reply',
         text: buildModelListText('Codex', CODEX_MODELS, '/codex_model'),
+        keyboard: buildModelKeyboard('codex', CODEX_MODELS),
       };
     }
-    if (!isCodexModelValid(model)) {
+    const model = resolveModelId(requested, CODEX_MODELS, DEFAULT_CODEX_MODEL);
+    if (!model) {
       return {
         type: 'reply',
-        text: buildInvalidModelText('Codex', model, CODEX_MODELS, '/codex_model'),
+        text: buildInvalidModelText('Codex', requested, CODEX_MODELS, '/codex_model'),
+        keyboard: buildModelKeyboard('codex', CODEX_MODELS),
       };
     }
-    return {
-      type: 'set-defaults',
-      text: [
-        '✅ Codex 기본 모델을 설정했습니다.',
-        `- 모델: ${model}`,
-        '- 다음 Codex 작업부터 적용됩니다.',
-      ].join('\n'),
-      agentRuntime: 'codex',
-      agentType: null,
-      model,
-    };
+    return buildModelSetResult('codex', model);
   }
 
   if (command === '/claude_model_list') {
     return {
       type: 'reply',
       text: buildModelListText('Claude', CLAUDE_MODELS, '/claude_model'),
+      keyboard: buildModelKeyboard('claude', CLAUDE_MODELS),
     };
   }
 
   if (command === '/claude_model') {
-    const model = argsText.trim();
-    if (!model) {
+    const requested = argsText.trim();
+    if (!requested) {
       return {
         type: 'reply',
         text: buildModelListText('Claude', CLAUDE_MODELS, '/claude_model'),
+        keyboard: buildModelKeyboard('claude', CLAUDE_MODELS),
       };
     }
-    if (!isClaudeModelValid(model)) {
+    const model = resolveModelId(requested, CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL);
+    if (!model) {
       return {
         type: 'reply',
-        text: buildInvalidModelText('Claude', model, CLAUDE_MODELS, '/claude_model'),
+        text: buildInvalidModelText('Claude', requested, CLAUDE_MODELS, '/claude_model'),
+        keyboard: buildModelKeyboard('claude', CLAUDE_MODELS),
       };
     }
-    return {
-      type: 'set-defaults',
-      text: [
-        '✅ Claude 기본 모델을 설정했습니다.',
-        `- 모델: ${model}`,
-        '- 다음 Claude 작업부터 적용됩니다.',
-      ].join('\n'),
-      agentRuntime: 'claude',
-      agentType: null,
-      model,
-    };
+    return buildModelSetResult('claude', model);
   }
 
   if (command === '/directory') {
     const projectDir = argsText.trim();
     if (!projectDir) {
-      return {
-        type: 'reply',
-        text: `현재 기본 디렉토리: ${context.defaultProjectDir ?? 'not set'}\n변경: /directory /path/to/project\n해제: /directory clear`,
-      };
+      return buildDirectoryPrompt(context);
     }
     if (projectDir.toLowerCase() === 'clear') {
       return {
@@ -679,15 +885,7 @@ export function resolveTelegramCommand(
         projectDir: null,
       };
     }
-    return {
-      type: 'set-defaults',
-      text: [
-        '✅ 기본 디렉토리를 설정했습니다.',
-        `- 디렉토리: ${projectDir}`,
-        '- 다음 새 작업부터 이 디렉토리에서 실행합니다.',
-      ].join('\n'),
-      projectDir,
-    };
+    return buildDirectorySetResult(projectDir);
   }
 
   if (command === '/claude_permission') {
@@ -735,6 +933,25 @@ export function resolveTelegramCommand(
       ].join('\n'),
       agentRuntime: 'codex',
       codexSandbox: sandbox,
+    };
+  }
+
+  const modelShortcut = MODEL_SHORTCUTS[command];
+  if (modelShortcut) {
+    const finalText = bodyText.trim();
+    if (!finalText) {
+      return buildModelSetResult(modelShortcut.runtime, modelShortcut.model);
+    }
+    return {
+      type: 'dispatch',
+      text: finalText,
+      forceNewSession: true,
+      agentRuntime: modelShortcut.runtime,
+      model: modelShortcut.model,
+      projectDir: context.defaultProjectDir,
+      claudePermissionMode: context.defaultClaudePermissionMode,
+      claudeDangerouslySkipPermissions: context.defaultClaudeDangerouslySkipPermissions,
+      codexSandbox: context.defaultCodexSandbox,
     };
   }
 

@@ -10,17 +10,29 @@ import {
   resolveAgentRuntime,
 } from '../core/runtime-config';
 import { DEFAULT_PRIMARY_MODEL, getDefaultModelForAgent, getPrimaryAgentDisplayLabel } from '../core/agent-config';
-import { getTelegramUpdates, sendTelegramMessage, setTelegramChatMenuButton, setTelegramCommands } from './telegram-notifier';
+import {
+  answerTelegramCallbackQuery,
+  getTelegramUpdates,
+  sendTelegramMessage,
+  setTelegramChatMenuButton,
+  setTelegramCommands,
+  type TelegramUpdate,
+} from './telegram-notifier';
 import { clearDispatch, trackDispatch } from './hooks/dispatch-tracker';
 import {
   getTelegramRegisteredCommands,
   extractTelegramCommand,
   extractTrailingAgentCommand,
+  resolveTelegramCallback,
   resolveTelegramCommand,
+  type TelegramCommandContext,
   type TelegramSessionSummary,
 } from './telegram-commands';
 
 const POLL_INTERVAL_MS = 5_000;
+
+/** How many past project directories the `/directory` keyboard offers. */
+const RECENT_PROJECT_DIR_LIMIT = 8;
 
 export type FollowUpFn = (
   sessionId: string,
@@ -151,6 +163,12 @@ export class TelegramPoller {
 
       for (const update of updates) {
         this.offset = update.update_id + 1;
+
+        if (update.callback_query) {
+          await this.handleCallbackQuery(token, update.callback_query);
+          continue;
+        }
+
         if (!update.message?.text) continue;
 
         const chatId = update.message.chat.id;
@@ -178,7 +196,7 @@ export class TelegramPoller {
           await sendTelegramMessage(
             token,
             chatId,
-            '사용법: 작업 내용을 함께 보내세요. 예) 로그인 버그를 수정해줘 /헤파이스토',
+            '사용법: 작업 내용을 함께 보내세요. 예) 로그인 버그를 수정해줘 /아틀라스',
           );
           continue;
         }
@@ -242,17 +260,33 @@ export class TelegramPoller {
     }
   }
 
-  private async tryHandleExplicitCommand(token: string, chatId: number, telegramMessageId: string, text: string): Promise<boolean> {
-    const { command } = extractTelegramCommand(text);
-    if (!command) return false;
+  /**
+   * Project directories seen on any card, most recently updated first. Cards
+   * are the only record of which projects are actually in play, so they double
+   * as the source for the `/directory` picker.
+   */
+  private async getRecentProjectDirs(): Promise<string[]> {
+    const cards = await this.store.getCards({ includeArchived: true });
+    const seen = new Set<string>();
+    return cards
+      .filter(card => card.projectDir)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .filter(card => {
+        if (seen.has(card.projectDir!)) return false;
+        seen.add(card.projectDir!);
+        return true;
+      })
+      .slice(0, RECENT_PROJECT_DIR_LIMIT)
+      .map(card => card.projectDir!);
+  }
 
+  private async buildCommandContext(chatId: number): Promise<TelegramCommandContext> {
     const state = this.options.telegramStateStore
       ? await this.options.telegramStateStore.getChatState(chatId)
       : null;
-    const sessions = await this.getSessionsForChat(chatId);
-    const context = {
+    return {
       chatId,
-      sessions,
+      sessions: await this.getSessionsForChat(chatId),
       selectedSessionId: state?.selectedSessionId ?? this.activeSessions.get(chatId)?.sessionId,
       selectedCardId: state?.selectedCardId ?? this.activeSessions.get(chatId)?.cardId,
       defaultAgentRuntime: state?.defaultAgentRuntime,
@@ -262,7 +296,66 @@ export class TelegramPoller {
       defaultClaudePermissionMode: state?.defaultClaudePermissionMode,
       defaultClaudeDangerouslySkipPermissions: state?.defaultClaudeDangerouslySkipPermissions,
       defaultCodexSandbox: state?.defaultCodexSandbox,
+      recentProjectDirs: await this.getRecentProjectDirs(),
     };
+  }
+
+  /**
+   * Apply an inline-keyboard tap. The button spinner only clears once
+   * `answerCallbackQuery` runs, so every path answers before returning.
+   */
+  private async handleCallbackQuery(
+    token: string,
+    query: NonNullable<TelegramUpdate['callback_query']>,
+  ): Promise<void> {
+    const chatId = query.message?.chat.id;
+    if (chatId === undefined || !query.data || !(await this.isAllowedChat(chatId))) {
+      await answerTelegramCallbackQuery(token, query.id);
+      return;
+    }
+
+    const context = await this.buildCommandContext(chatId);
+    const result = resolveTelegramCallback(query.data, context);
+    if (!result) {
+      await answerTelegramCallbackQuery(token, query.id, '지원하지 않는 버튼입니다.');
+      return;
+    }
+
+    if (result.type === 'reply') {
+      await answerTelegramCallbackQuery(token, query.id, result.toast);
+      await sendTelegramMessage(token, chatId, result.text, undefined, result.keyboard);
+      return;
+    }
+
+    if (result.type === 'set-defaults') {
+      await answerTelegramCallbackQuery(token, query.id, result.toast);
+      // Same semantics as typing the command: a new default starts fresh
+      // rather than leaking into the pinned session.
+      await this.clearSelectedSession(chatId);
+      await this.persistStickyDefaults(chatId, {
+        agentRuntime: result.agentRuntime,
+        agentType: result.agentType,
+        model: result.model,
+        projectDir: result.projectDir,
+        claudePermissionMode: result.claudePermissionMode,
+        claudeDangerouslySkipPermissions: result.claudeDangerouslySkipPermissions,
+        codexSandbox: result.codexSandbox,
+      });
+      await sendTelegramMessage(token, chatId, result.text);
+      return;
+    }
+
+    await answerTelegramCallbackQuery(token, query.id);
+  }
+
+  private async tryHandleExplicitCommand(token: string, chatId: number, telegramMessageId: string, text: string): Promise<boolean> {
+    const { command } = extractTelegramCommand(text);
+    if (!command) return false;
+
+    const state = this.options.telegramStateStore
+      ? await this.options.telegramStateStore.getChatState(chatId)
+      : null;
+    const context = await this.buildCommandContext(chatId);
     const result = resolveTelegramCommand(text, context, state?.mode === 'pinned');
     if (!result) return false;
 
@@ -273,7 +366,7 @@ export class TelegramPoller {
     }
 
     if (result.type === 'reply') {
-      await sendTelegramMessage(token, chatId, result.text);
+      await sendTelegramMessage(token, chatId, result.text, undefined, result.keyboard);
       return true;
     }
 
@@ -583,9 +676,11 @@ export class TelegramPoller {
     const resolvedToken = token ?? await this.getSettingValue('TELEGRAM_BOT_TOKEN');
     if (!resolvedToken) return;
 
+    // No `language_code`: Telegram resolves the menu per client language and
+    // only falls back to the language-neutral bucket. Registering under `ko`
+    // alone left every non-Korean client with an empty menu.
     const commandResult = await setTelegramCommands(resolvedToken, getTelegramRegisteredCommands(), {
       scope: { type: 'all_private_chats' },
-      languageCode: 'ko',
     });
     if (!commandResult.ok) {
       return;

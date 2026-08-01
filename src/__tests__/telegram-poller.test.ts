@@ -3,7 +3,12 @@ import { TelegramPoller, type FollowUpFn } from '../plugin/telegram-poller';
 import { KanbanStore } from '../core/store';
 import { SettingsStore } from '../core/settings-store';
 import { TelegramStateStore } from '../core/telegram-state-store';
-import { buildTelegramHelpText, getTelegramRegisteredCommands, resolveTelegramCommand } from '../plugin/telegram-commands';
+import {
+  buildTelegramHelpText,
+  getTelegramRegisteredCommands,
+  resolveTelegramCallback,
+  resolveTelegramCommand,
+} from '../plugin/telegram-commands';
 import { DEFAULT_CLAUDE_MODEL } from '../core/runtime-config';
 import { withTempDir } from './setup';
 
@@ -127,10 +132,11 @@ describe('TelegramPoller', () => {
       const menuCalls = calls.filter(call => call.url.includes('/setChatMenuButton'));
       expect(commandCalls).toHaveLength(1);
       expect(menuCalls).toHaveLength(1);
+      // Registered without `language_code` so the menu resolves for every
+      // client language, not just Korean ones.
       expect(commandCalls[0].body).toEqual({
         commands: getTelegramRegisteredCommands(),
         scope: { type: 'all_private_chats' },
-        language_code: 'ko',
       });
       expect(menuCalls[0].body).toEqual({
         menu_button: { type: 'commands' },
@@ -460,7 +466,7 @@ describe('TelegramPoller', () => {
   });
 
   test('model commands reject unknown ids instead of saving fallback-prone defaults', () => {
-    const claudeResult = resolveTelegramCommand('/claude_model opus4.8', {
+    const claudeResult = resolveTelegramCommand('/claude_model opus9', {
       chatId: 12345,
       sessions: [],
     }, false);
@@ -493,6 +499,293 @@ describe('TelegramPoller', () => {
     expect(codexResult?.type).toBe('set-defaults');
     expect(codexResult && 'model' in codexResult ? codexResult.model : undefined).toBe('gpt-5.5');
     expect(codexResult && 'agentRuntime' in codexResult ? codexResult.agentRuntime : undefined).toBe('codex');
+  });
+
+  // ── Model shorthand + shortcuts ─────────────────────────────────────────
+
+  function modelOf(command: string): string | undefined | null {
+    const result = resolveTelegramCommand(command, { chatId: 12345, sessions: [] }, false);
+    return result && 'model' in result ? result.model : undefined;
+  }
+
+  test('model commands resolve shorthand names to catalog ids', () => {
+    expect(modelOf('/claude_model opus5')).toBe('claude-opus-5');
+    expect(modelOf('/claude_model opus4.8')).toBe('claude-opus-4-8');
+    expect(modelOf('/claude_model fable5')).toBe('claude-fable-5');
+    expect(modelOf('/codex_model gpt5.5')).toBe('gpt-5.5');
+  });
+
+  test('ambiguous model shorthand resolves to the runtime default', () => {
+    // gpt5.6 matches sol/terra/luna — the default (sol) wins.
+    expect(modelOf('/codex_model gpt5.6')).toBe('gpt-5.6-sol');
+  });
+
+  test('ambiguous shorthand without the default among matches is rejected', () => {
+    // opus matches five models and none of them is the Claude default.
+    const result = resolveTelegramCommand('/claude_model opus', { chatId: 12345, sessions: [] }, false);
+    expect(result?.type).toBe('reply');
+    expect(result && 'text' in result ? result.text : '').toContain('지원하지 않는 Claude 모델');
+  });
+
+  test('one-shot model shortcuts set runtime and model without a body', () => {
+    const opus = resolveTelegramCommand('/opus5', { chatId: 12345, sessions: [] }, false);
+    expect(opus?.type).toBe('set-defaults');
+    expect(opus && 'model' in opus ? opus.model : undefined).toBe('claude-opus-5');
+    expect(opus && 'agentRuntime' in opus ? opus.agentRuntime : undefined).toBe('claude');
+
+    const gpt = resolveTelegramCommand('/gpt56', { chatId: 12345, sessions: [] }, false);
+    expect(gpt?.type).toBe('set-defaults');
+    expect(gpt && 'model' in gpt ? gpt.model : undefined).toBe('gpt-5.6-sol');
+    expect(gpt && 'agentRuntime' in gpt ? gpt.agentRuntime : undefined).toBe('codex');
+  });
+
+  test('one-shot model shortcut with a body dispatches a new session', () => {
+    const result = resolveTelegramCommand('/opus5 로그인 버그를 고쳐줘', {
+      chatId: 12345,
+      sessions: [],
+      defaultProjectDir: '/tmp/project',
+    }, false);
+
+    expect(result?.type).toBe('dispatch');
+    expect(result && 'text' in result ? result.text : '').toBe('로그인 버그를 고쳐줘');
+    expect(result && 'model' in result ? result.model : undefined).toBe('claude-opus-5');
+    expect(result && 'forceNewSession' in result ? result.forceNewSession : undefined).toBe(true);
+    expect(result && 'projectDir' in result ? result.projectDir : undefined).toBe('/tmp/project');
+  });
+
+  test('shortcut commands are registered in the Telegram menu', () => {
+    const commands = getTelegramRegisteredCommands().map(entry => entry.command);
+    expect(commands).toContain('opus5');
+    expect(commands).toContain('fable5');
+    expect(commands).toContain('sonnet5');
+    expect(commands).toContain('gpt56');
+  });
+
+  // ── Menu-hidden agents ──────────────────────────────────────────────────
+
+  test('sisyphus, hephaestus and prometheus are hidden from the Telegram menu', () => {
+    const commands = getTelegramRegisteredCommands().map(entry => entry.command);
+    expect(commands).not.toContain('agent_sisyphus');
+    expect(commands).not.toContain('agent_hephaestus');
+    expect(commands).not.toContain('agent_prometheus');
+    expect(commands).toContain('agent_atlas');
+  });
+
+  test('menu-hidden agent commands still route when typed', () => {
+    for (const token of ['/agent_sisyphus', '/시시푸스', '/헤파이스토', '/프로메테우스']) {
+      const result = resolveTelegramCommand(token, { chatId: 12345, sessions: [] }, false);
+      expect(result?.type).toBe('set-defaults');
+      expect(result && 'agentRuntime' in result ? result.agentRuntime : undefined).toBe('opencode');
+    }
+  });
+
+  // ── Directory picker ────────────────────────────────────────────────────
+
+  test('/directory offers recent directories as an inline keyboard', () => {
+    const result = resolveTelegramCommand('/directory', {
+      chatId: 12345,
+      sessions: [],
+      defaultProjectDir: '/tmp/current',
+      recentProjectDirs: ['/tmp/one', '/tmp/two'],
+    }, false);
+
+    expect(result?.type).toBe('reply');
+    const keyboard = result && 'keyboard' in result ? result.keyboard : undefined;
+    // Two directories plus the clear button.
+    expect(keyboard?.inline_keyboard).toHaveLength(3);
+    expect(keyboard?.inline_keyboard[0][0].text).toBe('/tmp/one');
+    expect(keyboard?.inline_keyboard[2][0].callback_data).toBe('dir:clear');
+  });
+
+  test('/directory falls back to text when no directory history exists', () => {
+    const result = resolveTelegramCommand('/directory', { chatId: 12345, sessions: [] }, false);
+
+    expect(result?.type).toBe('reply');
+    expect(result && 'keyboard' in result ? result.keyboard : undefined).toBeUndefined();
+    expect(result && 'text' in result ? result.text : '').toContain('아직 사용한 디렉토리 기록이 없습니다');
+  });
+
+  test('/directory with an explicit path still sets it directly', () => {
+    const result = resolveTelegramCommand('/directory /tmp/explicit', { chatId: 12345, sessions: [] }, false);
+
+    expect(result?.type).toBe('set-defaults');
+    expect(result && 'projectDir' in result ? result.projectDir : undefined).toBe('/tmp/explicit');
+  });
+
+  // ── Inline keyboard callbacks ───────────────────────────────────────────
+
+  test('directory callback sets the tapped directory', () => {
+    const context = { chatId: 12345, sessions: [], recentProjectDirs: ['/tmp/one', '/tmp/two'] };
+    const prompt = resolveTelegramCommand('/directory', context, false);
+    const callbackData = prompt && 'keyboard' in prompt
+      ? prompt.keyboard!.inline_keyboard[1][0].callback_data
+      : '';
+
+    const result = resolveTelegramCallback(callbackData, context);
+
+    expect(result?.type).toBe('set-defaults');
+    expect(result && 'projectDir' in result ? result.projectDir : undefined).toBe('/tmp/two');
+  });
+
+  test('directory callback is rejected when the list has shifted underneath it', () => {
+    const rendered = { chatId: 12345, sessions: [], recentProjectDirs: ['/tmp/one', '/tmp/two'] };
+    const prompt = resolveTelegramCommand('/directory', rendered, false);
+    const callbackData = prompt && 'keyboard' in prompt
+      ? prompt.keyboard!.inline_keyboard[1][0].callback_data
+      : '';
+
+    // A newer card pushed a different directory into slot 1 before the tap.
+    const shifted = { chatId: 12345, sessions: [], recentProjectDirs: ['/tmp/one', '/tmp/other'] };
+    const result = resolveTelegramCallback(callbackData, shifted);
+
+    expect(result?.type).toBe('reply');
+    expect(result && 'text' in result ? result.text : '').toContain('디렉토리 목록이 변경되었습니다');
+  });
+
+  test('directory clear callback unsets the default directory', () => {
+    const result = resolveTelegramCallback('dir:clear', { chatId: 12345, sessions: [] });
+
+    expect(result?.type).toBe('set-defaults');
+    expect(result && 'projectDir' in result ? result.projectDir : undefined).toBeNull();
+  });
+
+  test('model callback sets the tapped model and runtime', () => {
+    const claude = resolveTelegramCallback('md:claude:claude-opus-5', { chatId: 12345, sessions: [] });
+    expect(claude?.type).toBe('set-defaults');
+    expect(claude && 'model' in claude ? claude.model : undefined).toBe('claude-opus-5');
+    expect(claude && 'agentRuntime' in claude ? claude.agentRuntime : undefined).toBe('claude');
+
+    const codex = resolveTelegramCallback('md:codex:gpt-5.5', { chatId: 12345, sessions: [] });
+    expect(codex?.type).toBe('set-defaults');
+    expect(codex && 'model' in codex ? codex.model : undefined).toBe('gpt-5.5');
+  });
+
+  test('unknown callback data resolves to null', () => {
+    expect(resolveTelegramCallback('nope:1', { chatId: 12345, sessions: [] })).toBeNull();
+    expect(resolveTelegramCallback('md:claude:not-a-model', { chatId: 12345, sessions: [] })).toBeNull();
+  });
+
+  // ── poll() — inline keyboard taps ───────────────────────────────────────
+
+  describe('callback query handling', () => {
+    function makeCallbackUpdate(updateId: number, data: string, chatId = 12345) {
+      return {
+        update_id: updateId,
+        callback_query: {
+          id: `cb-${updateId}`,
+          from: { id: 1, first_name: 'Test' },
+          message: {
+            message_id: updateId,
+            chat: { id: chatId, type: 'private' as const },
+          },
+          data,
+        },
+      };
+    }
+
+    function mockTelegram(updates: unknown[], record: { urls: string[]; bodies: any[] }) {
+      globalThis.fetch = mock(async (url: RequestInfo, init?: RequestInit) => {
+        const urlStr = url instanceof URL ? url.toString() : (url as string);
+        record.urls.push(urlStr);
+        if (init?.body) record.bodies.push(JSON.parse(init.body as string));
+
+        if (urlStr.includes('/setMyCommands') || urlStr.includes('/setChatMenuButton')) {
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+        if (urlStr.includes('/getUpdates')) {
+          return new Response(JSON.stringify({ ok: true, result: updates }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
+      }) as unknown as typeof fetch;
+    }
+
+    test('tapping a directory button persists it as the chat default', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+        // A past card is what puts /tmp/project-a into the recent list.
+        await store.createCard({
+          title: 'previous work',
+          description: 'previous work',
+          projectDir: '/tmp/project-a',
+        });
+
+        const telegramStateStore = new TelegramStateStore(dir);
+        const poller = new TelegramPoller(
+          store,
+          settingsStore,
+          mock(async () => ({ sessionId: 'ses-1' })),
+          undefined,
+          { telegramStateStore },
+        );
+
+        const context = await (poller as any).buildCommandContext(12345);
+        expect(context.recentProjectDirs).toEqual(['/tmp/project-a']);
+        const prompt = resolveTelegramCommand('/directory', context, false);
+        const callbackData = prompt && 'keyboard' in prompt
+          ? prompt.keyboard!.inline_keyboard[0][0].callback_data
+          : '';
+
+        const record = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(200, callbackData)], record);
+        await runPoll(poller);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.defaultProjectDir).toBe('/tmp/project-a');
+        expect(record.urls.some((url) => url.includes('/answerCallbackQuery'))).toBe(true);
+      });
+    });
+
+    test('tapping a model button persists the model and runtime', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+
+        const telegramStateStore = new TelegramStateStore(dir);
+        const poller = new TelegramPoller(
+          store,
+          settingsStore,
+          mock(async () => ({ sessionId: 'ses-1' })),
+          undefined,
+          { telegramStateStore },
+        );
+
+        const record = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(201, 'md:claude:claude-opus-5')], record);
+        await runPoll(poller);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.defaultModel).toBe('claude-opus-5');
+        expect(state?.defaultAgentRuntime).toBe('claude');
+      });
+    });
+
+    test('a callback from a disallowed chat is answered but not applied', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore, TEST_TOKEN, '999');
+
+        const telegramStateStore = new TelegramStateStore(dir);
+        const poller = new TelegramPoller(
+          store,
+          settingsStore,
+          mock(async () => ({ sessionId: 'ses-1' })),
+          undefined,
+          { telegramStateStore },
+        );
+
+        const record = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(202, 'md:claude:claude-opus-5', 12345)], record);
+        await runPoll(poller);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.defaultModel).toBeUndefined();
+        expect(record.urls.some((url) => url.includes('/answerCallbackQuery'))).toBe(true);
+      });
+    });
   });
 
   // ── poll() — dispatch failure ──────────────────────────────────────────
