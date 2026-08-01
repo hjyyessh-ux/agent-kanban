@@ -6,6 +6,7 @@ import { RuntimeBadge } from '../Board/BoardCardSections';
 import { ScopeChip } from './ScopeChip';
 import { fetchSkillContent, saveSkillContent, duplicateSkill, createSkillCard } from '../../hooks/useSkillsApi';
 import { moveSkillApi, freezeSkillApi } from '../../hooks/useScopeInventory';
+import { stripFrontmatter } from './capability-format';
 
 interface SkillDetailModalProps {
   skill: DiscoveredSkill;
@@ -16,15 +17,6 @@ interface SkillDetailModalProps {
 }
 
 type PanelMode = 'preview' | 'edit';
-
-/**
- * Strip a leading YAML frontmatter block (`---\n…\n---`) so the preview renders
- * the SKILL.md body as markdown instead of dumping raw `name:`/`description:`
- * lines. Editing keeps the full content (frontmatter included).
- */
-function stripFrontmatter(content: string): string {
-  return content.replace(/^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n?/, '').trimStart();
-}
 
 export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose, onSaved }: SkillDetailModalProps) {
   const [mode, setMode] = useState<PanelMode>('preview');

@@ -13,9 +13,10 @@ import {
   fsyncSync,
   closeSync,
 } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve, sep } from 'node:path';
 import { createHash } from 'node:crypto';
-import { mcpPlacementIdentity, type DiscoveredSkill, type CapScope, type McpPlacement, type McpRuntime, type McpServerDef, type ColdManifestEntry } from './types';
+import { mcpPlacementIdentity, type DiscoveredSkill, type CapScope, type McpPlacement, type McpRuntime, type McpServerDef, type ColdManifestEntry, type ColdEntryView } from './types';
+import { parseFrontmatter } from './skill-scanner';
 import { FileLock } from './filelock';
 import { resolveKanbanDataDir } from './data-dir';
 import {
@@ -475,6 +476,57 @@ export async function deleteColdEntry(kind: 'skill' | 'mcp', ref: string): Promi
 
 export function getColdManifest(): ColdManifestEntry[] {
   return readManifest();
+}
+
+/** One-line "what is this" for an MCP definition: the invocation or the endpoint. */
+function summarizeMcpDef(def: McpServerDef): string | undefined {
+  if (def.command) return [def.command, ...(def.args ?? [])].join(' ');
+  if (typeof def.url === 'string') return def.url;
+  return undefined;
+}
+
+function readColdMcpDef(ref: string, entry: ColdManifestEntry): McpServerDef | undefined {
+  const registered = readMcpRegistry().servers[ref]?.def;
+  if (registered) return registered;
+  if (!entry.originalConfigJson) return undefined;
+  try {
+    return JSON.parse(entry.originalConfigJson) as McpServerDef;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Manifest plus a human-readable summary per entry, so the Cold Storage list can
+ * show what each frozen item actually is instead of a bare ref.
+ */
+export function getColdManifestView(): ColdEntryView[] {
+  return readManifest().map((entry) => {
+    if (entry.kind === 'skill') {
+      const file = readColdSkillContent(entry.ref);
+      return { ...entry, summary: file ? parseFrontmatter(file.content).description : undefined };
+    }
+    const def = readColdMcpDef(entry.ref, entry);
+    return { ...entry, summary: def ? summarizeMcpDef(def) : undefined };
+  });
+}
+
+/**
+ * Read a frozen skill's SKILL.md straight from cold storage. The ref comes from
+ * the manifest, but it is user-facing input on the API path — resolve it and
+ * reject anything that escapes the cold `skills/` directory.
+ */
+export function readColdSkillContent(ref: string): { filePath: string; content: string } | null {
+  const skillsRoot = join(resolveColdStorageDir(), 'skills');
+  const skillDir = resolve(skillsRoot, ref);
+  if (skillDir !== skillsRoot && !skillDir.startsWith(skillsRoot + sep)) return null;
+  const filePath = join(skillDir, 'SKILL.md');
+  if (!existsSync(filePath)) return null;
+  try {
+    return { filePath, content: readFileSync(filePath, 'utf8') };
+  } catch {
+    return null;
+  }
 }
 
 export function getColdMcpEntry(ref: string): {

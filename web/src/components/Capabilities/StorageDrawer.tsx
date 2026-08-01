@@ -1,15 +1,21 @@
-import { useState } from 'react';
-import type { ColdManifestEntry } from '../../hooks/useScopeInventory';
+import { useMemo, useState } from 'react';
+import type { ColdEntryView } from '../../hooks/useScopeInventory';
 import type { SkillRoot, PlacementTarget } from '../../../../src/core/types';
+import { useColdStorage } from '../../hooks/useScopeInventory';
+import { ColdDetailModal } from './ColdDetailModal';
+import { ColdEntryActions } from './ColdEntryActions';
+import { timeAgo } from './capability-format';
 import {
-  useColdStorage,
-  restoreSkillColdApi,
-  restoreMcpColdApi,
-  previewRestoreMcpColdApi,
-  deleteColdApi,
-  type VisibilityChange,
-} from '../../hooks/useScopeInventory';
-import { DiffPreview } from './DiffPreview';
+  CAPABILITY_RUNTIME_FILTERS,
+  runtimeLabel,
+  type CapabilityRuntimeFilter,
+} from './capability-filters';
+import {
+  coldKindCounts,
+  coldRuntimeCounts,
+  filterColdEntries,
+  type ColdKindFilter,
+} from './cold-filters';
 
 interface StorageDrawerProps {
   skillRoots: SkillRoot[];
@@ -17,154 +23,83 @@ interface StorageDrawerProps {
   onRefresh: () => Promise<void>;
 }
 
-function timeAgo(dateStr: string): string {
-  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+const KIND_FILTERS: ColdKindFilter[] = ['all', 'skill', 'mcp'];
+
+function kindFilterLabel(kind: ColdKindFilter): string {
+  return kind === 'all' ? 'All' : kind === 'skill' ? 'Skills' : 'MCP';
 }
 
 interface EntryCardProps {
-  entry: ColdManifestEntry;
+  entry: ColdEntryView;
   skillRoots: SkillRoot[];
   placementTargets: PlacementTarget[];
+  onOpen: () => void;
   onRestored: () => Promise<void>;
   onDeleted: () => Promise<void>;
 }
 
-function EntryCard({ entry, skillRoots, placementTargets, onRestored, onDeleted }: EntryCardProps) {
-  const [restoreTarget, setRestoreTarget] = useState('');
-  const [restoring, setRestoring] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [restoreChanges, setRestoreChanges] = useState<VisibilityChange[] | null>(null);
-
-  const handleRestore = async () => {
-    if (!restoreTarget) return;
-    setRestoring(true);
-    setError(null);
-    try {
-      if (entry.kind === 'skill') {
-        await restoreSkillColdApi(entry.ref, restoreTarget);
-      } else {
-        const target = placementTargets.find((t) => t.id === restoreTarget);
-        if (!target) throw new Error('Target not found');
-        const args = [
-          entry.ref,
-          target.kind === 'project' ? 'project' : target.kind === 'local' ? 'local' : 'user',
-          target.kind === 'local' ? target.dir : undefined,
-          target.kind === 'project' ? target.dir : undefined,
-          entry.runtime === 'codex' ? 'codex' : 'claude',
-        ] as const;
-        if (!restoreChanges) {
-          const preview = await previewRestoreMcpColdApi(...args);
-          setRestoreChanges(preview.changes);
-          return;
-        }
-        await restoreMcpColdApi(
-          ...args,
-        );
-      }
-      await onRestored();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Restore failed');
-    } finally {
-      setRestoring(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!window.confirm(`Permanently delete "${entry.ref}" from cold storage? This cannot be undone.`)) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      await deleteColdApi(entry.kind, entry.ref);
-      await onDeleted();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const skillTargets = skillRoots.filter((r) => r.enabled);
-  const mcpTargets = placementTargets.filter(
-    (t) => (t.kind === 'user' || t.kind === 'local' || t.kind === 'project') &&
-      t.runtime === (entry.runtime === 'codex' ? 'codex' : 'claude'),
-  );
-
+function EntryCard({ entry, skillRoots, placementTargets, onOpen, onRestored, onDeleted }: EntryCardProps) {
   return (
     <div className="cold-item">
-      <div className="cold-item__header">
-        <div className="cold-item__badges">
-          <span className={`kv2-badge cold-item__kind-badge cold-item__kind-badge--${entry.kind}`}>
-            {entry.kind === 'skill' ? '❄ skill' : '❄ MCP'}
-          </span>
-          {entry.runtime && (
-            <span className={`kv2-badge cap-badge--${entry.runtime}`}>{entry.runtime}</span>
-          )}
-          <span className="kv2-badge cold-item__scope-badge">{entry.sourceScope}</span>
+      <div
+        className="cold-item__main"
+        role="button"
+        tabIndex={0}
+        title="클릭하면 보관된 내용을 확인할 수 있습니다"
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+      >
+        <div className="cold-item__header">
+          <div className="cold-item__badges">
+            <span className={`kv2-badge cold-item__kind-badge cold-item__kind-badge--${entry.kind}`}>
+              {entry.kind === 'skill' ? '❄ skill' : '❄ MCP'}
+            </span>
+            {entry.runtime && (
+              <span className={`kv2-badge cap-badge--${entry.runtime}`}>{entry.runtime}</span>
+            )}
+            <span className="kv2-badge cold-item__scope-badge">{entry.sourceScope}</span>
+          </div>
+          <span className="cold-item__ref">{entry.ref}</span>
+          <span className="cold-item__age">{timeAgo(entry.createdAt)}</span>
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--ghost kv2-btn--small"
+            onClick={(e) => { e.stopPropagation(); onOpen(); }}
+            aria-label={`Open details for ${entry.ref}`}
+          >
+            Details
+          </button>
         </div>
-        <span className="cold-item__ref">{entry.ref}</span>
-        <span className="cold-item__age">{timeAgo(entry.createdAt)}</span>
+        <p className="cold-item__summary">
+          {entry.summary ?? (entry.kind === 'skill'
+            ? '설명이 없는 skill입니다 — Details에서 SKILL.md 전체를 볼 수 있습니다.'
+            : '실행 정보가 없는 MCP 서버입니다 — Details에서 정의를 볼 수 있습니다.')}
+        </p>
+        <div className="cold-item__path">{entry.sourcePath}</div>
       </div>
 
-      <div className="cold-item__actions">
-        <select
-          className="kv2-select cold-item__select"
-          value={restoreTarget}
-          onChange={(e) => { setRestoreTarget(e.target.value); setRestoreChanges(null); setError(null); }}
-        >
-          <option value="">— restore to... —</option>
-          {entry.kind === 'skill'
-            ? skillTargets.map((r) => (
-                <option key={r.id} value={r.id}>
-                  [{r.agent}] {r.dir}
-                </option>
-              ))
-            : mcpTargets.map((t) => (
-                <option key={t.id} value={t.id}>
-                  [{t.kind}] {t.label}
-                </option>
-              ))}
-        </select>
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--outline kv2-btn--small"
-          disabled={!restoreTarget || restoring}
-          onClick={() => void handleRestore()}
-        >
-          {restoring ? '…' : entry.kind === 'mcp' && restoreChanges ? 'Apply' : entry.kind === 'mcp' ? 'Preview' : 'Restore'}
-        </button>
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--subtle-danger kv2-btn--small"
-          disabled={deleting}
-          onClick={() => void handleDelete()}
-        >
-          {deleting ? '…' : 'Delete'}
-        </button>
-      </div>
-
-      {error && <p className="cap-roots-error cold-item__error">{error}</p>}
-      {restoreChanges && (
-        <DiffPreview
-          changes={restoreChanges}
-          applying={restoring}
-          error={error}
-          onApply={() => void handleRestore()}
-          onCancel={() => setRestoreChanges(null)}
-        />
-      )}
+      <ColdEntryActions
+        entry={entry}
+        skillRoots={skillRoots}
+        placementTargets={placementTargets}
+        onRestored={onRestored}
+        onDeleted={onDeleted}
+      />
     </div>
   );
 }
 
 export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: StorageDrawerProps) {
   const cold = useColdStorage(true);
+  const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<ColdKindFilter>('all');
+  const [runtimeFilter, setRuntimeFilter] = useState<CapabilityRuntimeFilter>('all');
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
 
   const handleRestored = async () => {
     await cold.refresh();
@@ -175,8 +110,19 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
     await cold.refresh();
   };
 
-  const skillEntries = cold.entries.filter((e) => e.kind === 'skill');
-  const mcpEntries = cold.entries.filter((e) => e.kind === 'mcp');
+  const filtered = useMemo(
+    () => filterColdEntries(cold.entries, { search, kind: kindFilter, runtime: runtimeFilter }),
+    [cold.entries, search, kindFilter, runtimeFilter],
+  );
+  const kindCounts = useMemo(() => coldKindCounts(cold.entries), [cold.entries]);
+  const runtimeCounts = useMemo(
+    () => coldRuntimeCounts(kindFilter === 'all' ? cold.entries : cold.entries.filter((e) => e.kind === kindFilter)),
+    [cold.entries, kindFilter],
+  );
+
+  const skillEntries = filtered.filter((e) => e.kind === 'skill');
+  const mcpEntries = filtered.filter((e) => e.kind === 'mcp');
+  const selectedEntry = cold.entries.find((e) => `${e.kind}:${e.ref}` === selectedRef) ?? null;
 
   if (cold.loading && cold.entries.length === 0) {
     return (
@@ -210,50 +156,94 @@ export function StorageDrawer({ skillRoots, placementTargets, onRefresh }: Stora
     );
   }
 
+  const renderSection = (label: string, entries: ColdEntryView[]) => (
+    <section className="cold-section">
+      <div className="cold-section__label">
+        {label}
+        <span className="kv2-badge cold-section__count">{entries.length}</span>
+      </div>
+      <div className="cold-section__list">
+        {entries.map((entry) => (
+          <EntryCard
+            key={`${entry.kind}:${entry.ref}`}
+            entry={entry}
+            skillRoots={skillRoots}
+            placementTargets={placementTargets}
+            onOpen={() => setSelectedRef(`${entry.kind}:${entry.ref}`)}
+            onRestored={handleRestored}
+            onDeleted={handleDeleted}
+          />
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <div className="cold-drawer">
       <StorageIntroduction />
 
-      {skillEntries.length > 0 && (
-        <section className="cold-section">
-          <div className="cold-section__label">
-            Skills
-            <span className="kv2-badge cold-section__count">{skillEntries.length}</span>
-          </div>
-          <div className="cold-section__list">
-            {skillEntries.map((entry) => (
-              <EntryCard
-                key={entry.ref}
-                entry={entry}
-                skillRoots={skillRoots}
-                placementTargets={placementTargets}
-                onRestored={handleRestored}
-                onDeleted={handleDeleted}
-              />
-            ))}
-          </div>
-        </section>
+      {/* ── Toolbar ─────────────────────────────────────────── */}
+      <div className="cap-toolbar">
+        <input
+          type="search"
+          className="kv2-input cap-search"
+          placeholder="Search ref, description, scope, path..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="cap-filter-group" role="group" aria-label="Filter by type">
+          {KIND_FILTERS.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className={`cap-filter-btn${kindFilter === kind ? ' cap-filter-btn--active' : ''}`}
+              onClick={() => setKindFilter(kind)}
+              aria-pressed={kindFilter === kind}
+            >
+              {kindFilterLabel(kind)} ({kindCounts[kind]})
+            </button>
+          ))}
+        </div>
+        <div className="cap-filter-group" role="group" aria-label="Filter by runtime">
+          {CAPABILITY_RUNTIME_FILTERS.map((runtime) => (
+            <button
+              key={runtime}
+              type="button"
+              className={`cap-filter-btn${runtimeFilter === runtime ? ' cap-filter-btn--active' : ''}`}
+              onClick={() => setRuntimeFilter(runtime)}
+              aria-pressed={runtimeFilter === runtime}
+            >
+              {runtimeLabel(runtime)} ({runtimeCounts[runtime]})
+            </button>
+          ))}
+        </div>
+        <span className="cap-list-count">
+          {filtered.length === cold.entries.length
+            ? `${cold.entries.length} frozen`
+            : `${filtered.length} / ${cold.entries.length}`}
+        </span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="cap-empty">
+          <p>No frozen items match your filters.</p>
+        </div>
+      ) : (
+        <>
+          {skillEntries.length > 0 && renderSection('Skills', skillEntries)}
+          {mcpEntries.length > 0 && renderSection('MCP Servers', mcpEntries)}
+        </>
       )}
 
-      {mcpEntries.length > 0 && (
-        <section className="cold-section">
-          <div className="cold-section__label">
-            MCP Servers
-            <span className="kv2-badge cold-section__count">{mcpEntries.length}</span>
-          </div>
-          <div className="cold-section__list">
-            {mcpEntries.map((entry) => (
-              <EntryCard
-                key={entry.ref}
-                entry={entry}
-                skillRoots={skillRoots}
-                placementTargets={placementTargets}
-                onRestored={handleRestored}
-                onDeleted={handleDeleted}
-              />
-            ))}
-          </div>
-        </section>
+      {selectedEntry && (
+        <ColdDetailModal
+          entry={selectedEntry}
+          skillRoots={skillRoots}
+          placementTargets={placementTargets}
+          onClose={() => setSelectedRef(null)}
+          onRestored={handleRestored}
+          onDeleted={handleDeleted}
+        />
       )}
     </div>
   );

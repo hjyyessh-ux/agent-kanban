@@ -16,7 +16,11 @@ Discovery, inventory, and lifecycle management for skills, MCP servers, and oper
 | `McpDetailModal.tsx` | Per-MCP-server detail dialog built on `Card/DialogSkeleton` (kv2-dialog): masked definition JSON preview (`maskSecretDef`), per-placement remove/freeze actions, and a Copy/Move-to-target workflow that previews a diff (`DiffPreview`) before applying, with a forced-apply path when a plaintext secret is detected. |
 | `SkillDetailModal.tsx` | Per-skill detail dialog built on `Card/DialogSkeleton` (kv2-dialog): markdown preview (via `CardMarkdown`, stripping YAML frontmatter) or raw edit mode, duplicate-to-another-root, move-to-root-or-target, freeze-to-cold-storage, "Improve with Claude" (creates a board card with an improvement prompt), and "Port to Agent" (creates a board card to translate the skill to another runtime's format). |
 | `SkillRootsModal.tsx` | CRUD for skill root directories (`SkillRoot`): add a directory + agent runtime, toggle enabled, remove. |
-| `StorageDrawer.tsx` | Cold-storage browser (`storage` view mode). Lists frozen skills/MCPs (`ColdManifestEntry`) grouped by kind, with per-entry restore-to-target and permanent-delete actions. |
+| `StorageDrawer.tsx` | Cold-storage browser (`storage` view mode). Search + kind + runtime toolbar (same `cap-toolbar` markup as the other views), frozen entries (`ColdEntryView`) grouped by kind. Each row shows the server-provided `summary` (skill description / MCP command line) + original path, is clickable (plus an explicit `Details` button) to open `ColdDetailModal`, and carries inline restore/delete via `ColdEntryActions`. |
+| `ColdDetailModal.tsx` | Per-cold-entry detail dialog on `Card/DialogSkeleton`: fetches `GET /api/scope/cold/:kind/:ref`, renders the frozen SKILL.md (markdown Preview / Raw toggle) or the masked MCP definition JSON, plus the same restore/delete controls. |
+| `ColdEntryActions.tsx` | Restore-to-target select + preview/apply (MCP restore goes through `DiffPreview`) + permanent delete for one cold entry. Shared by the list row and the detail dialog so both behave identically. |
+| `cold-filters.ts` | Search/kind/runtime predicates and count selectors for cold storage entries (covered by `cold-filters.test.ts`). |
+| `capability-format.ts` | Shared formatting helpers: `timeAgo`, `stripFrontmatter` (SKILL.md preview), `maskSecretDef` (MCP definition preview). |
 | `VisibilityControl.tsx` | Two exported controls: `SkillVisibilityControl` (skillOverrides: on/name-only/user-invocable-only/off + `disable-model-invocation`) and `McpAlwaysLoadControl` (toggle forced tool-schema preloading). Both preview a diff before the user applies. |
 | `DiffPreview.tsx` | Generic before/after diff renderer (`computeDiffLines`) shared by every mutation flow (visibility, copy/move, alwaysLoad) — always shown before a config file write, with a git-tracked-file warning banner. |
 | `DiagnosticsBar.tsx` | Context-budget health strip at the top of the inventory view: `ENABLE_TOOL_SEARCH` effective state, user-scope MCP count, alwaysLoad count, and estimated preload token cost. |
@@ -34,17 +38,17 @@ Discovery, inventory, and lifecycle management for skills, MCP servers, and oper
 - All modals in this directory use the resizable-dialog pattern (`usePersistedDialogSize` with a unique `cap-*-size` localStorage key) plus the overlay-mousedown-vs-click dismiss guard.
 
 ### Testing Requirements
-- No colocated `.test.tsx` files currently exist in this directory; new logic worth unit testing (diff computation, secret masking, name sanitization) should be extracted into a plain function and tested the way `Board/board-selectors.test.ts` tests its selectors.
+- New logic worth unit testing (diff computation, secret masking, name sanitization, filter predicates) should be extracted into a plain function and tested the way `capability-filters.test.ts` / `cold-filters.test.ts` do.
 - Manually verify against a real `~/.claude.json` / project `.mcp.json` when touching copy/move/freeze — these mutate real config files (guarded behind "new session required" messaging).
 
 ### Common Patterns
 - Token-cost estimation everywhere uses the `chars/4` heuristic (see `estSkillTokens` in `InventoryView.tsx` and the diagnostics bar).
-- `timeAgo(dateStr)` (relative time formatting) is duplicated locally in `CapabilitiesView.tsx` and `StorageDrawer.tsx` — if adding a third copy, consider hoisting to `web/src/utils/`.
+- `timeAgo(dateStr)`, `stripFrontmatter`, and `maskSecretDef` live in `capability-format.ts` — import from there instead of re-declaring them in a component.
 - Board-card-creation side effects ("Improve with Claude", "Port to Agent") build a description string and call `createSkillCard` from `useSkillsApi` rather than performing the file edit client-side.
 
 ## Dependencies
 ### Internal
-- `src/core/types.ts` — `DiscoveredSkill`, `SkillRoot`, `SkillRuntime`, `SkillVisibility`, `McpInventoryItem`, `McpPlacement`, `PlacementTarget`, `CapScope`, `ContextDiagnostics`, `ScriptEntry`, etc.
+- `src/core/types.ts` — `DiscoveredSkill`, `SkillRoot`, `SkillRuntime`, `SkillVisibility`, `McpInventoryItem`, `McpPlacement`, `PlacementTarget`, `CapScope`, `ContextDiagnostics`, `ColdManifestEntry`/`ColdEntryView`, `ScriptEntry`, etc.
 - `web/src/hooks/useScopeInventory.ts`, `useScopeTargets.ts`, `useSkillsApi.ts`, `usePolling.ts`, `usePersistedDialogSize.ts`
 - `Card/CardMarkdown.tsx`, `Card/DirectoryPicker.tsx` (reused inside skill detail / target registration)
 - `Scripts/ScriptEditModal.tsx`, `Scripts/ScriptHistoryPanel.tsx` (rendered from the `list` view mode)

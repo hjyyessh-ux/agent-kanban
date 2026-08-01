@@ -6,13 +6,15 @@ import type {
   McpInventoryItem,
   McpMoveRequest,
   McpRuntime,
+  McpServerDef,
   DiscoveredSkill,
   SkillVisibility,
   ContextDiagnostics,
   ColdManifestEntry,
+  ColdEntryView,
 } from '../../../src/core/types';
 
-export type { ColdManifestEntry };
+export type { ColdManifestEntry, ColdEntryView };
 
 const BASE_URL = '/api';
 
@@ -328,6 +330,28 @@ export async function previewRestoreMcpColdApi(
   return handleWriteResponse(res) as unknown as Promise<McpMutationPreviewResult>;
 }
 
+export interface ColdEntryDetail {
+  entry: ColdManifestEntry;
+  /** skill only — absolute path of the frozen SKILL.md */
+  filePath?: string;
+  /** skill only — SKILL.md content; absent when the frozen folder has none */
+  content?: string;
+  /** mcp only — server definition kept in the cold registry */
+  def?: McpServerDef;
+}
+
+export async function fetchColdEntryDetail(
+  kind: 'skill' | 'mcp',
+  ref: string,
+): Promise<ColdEntryDetail> {
+  const res = await fetch(`${BASE_URL}/scope/cold/${kind}/${encodeURIComponent(ref)}`);
+  if (!res.ok) {
+    const data = (await res.json()) as { error?: string };
+    throw new Error(data.error ?? res.statusText);
+  }
+  return res.json() as Promise<ColdEntryDetail>;
+}
+
 export async function deleteColdApi(kind: 'skill' | 'mcp', ref: string): Promise<void> {
   const res = await fetch(
     `${BASE_URL}/scope/cold/${kind}/${encodeURIComponent(ref)}`,
@@ -339,24 +363,24 @@ export async function deleteColdApi(kind: 'skill' | 'mcp', ref: string): Promise
   }
 }
 
-async function fetchColdManifest(): Promise<ColdManifestEntry[]> {
+async function fetchColdManifest(): Promise<ColdEntryView[]> {
   const res = await fetch(`${BASE_URL}/scope/cold`);
   if (!res.ok) {
     const data = (await res.json()) as { error?: string };
     throw new Error(data.error ?? res.statusText);
   }
-  return res.json() as Promise<ColdManifestEntry[]>;
+  return res.json() as Promise<ColdEntryView[]>;
 }
 
 export interface UseColdStorageResult {
-  entries: ColdManifestEntry[];
+  entries: ColdEntryView[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
 }
 
 export function useColdStorage(enabled: boolean): UseColdStorageResult {
-  const [entries, setEntries] = useState<ColdManifestEntry[]>([]);
+  const [entries, setEntries] = useState<ColdEntryView[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

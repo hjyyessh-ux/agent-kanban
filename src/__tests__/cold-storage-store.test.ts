@@ -23,6 +23,8 @@ import {
   restoreMcp,
   deleteColdEntry,
   getColdManifest,
+  getColdManifestView,
+  readColdSkillContent,
   resolveColdStorageDir,
 } from '../core/cold-storage-store';
 import type { DiscoveredSkill } from '../core/types';
@@ -352,6 +354,60 @@ describe('freezeSkill', () => {
       } catch (e) {
         expect((e as NodeJS.ErrnoException).code).toBe('SYMLINK_REJECTED');
       }
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('readColdSkillContent', () => {
+  beforeEach(resetColdStorage);
+
+  test('reads the frozen SKILL.md and rejects refs escaping cold storage', async () => {
+    const base = tmpDir();
+    try {
+      const skillDir = join(base, 'read-skill');
+      makeSkillDir(skillDir);
+      await freezeSkill(makeDiscoveredSkill(skillDir, { skillName: 'read-me', id: 'read-me' }));
+
+      const file = readColdSkillContent('claude/read-me');
+      expect(file?.content).toContain('name: test-skill');
+      expect(file?.filePath).toBe(
+        join(resolveColdStorageDir(), 'skills', 'claude', 'read-me', 'SKILL.md'),
+      );
+
+      expect(readColdSkillContent('claude/missing')).toBeNull();
+      expect(readColdSkillContent('../../etc')).toBeNull();
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('getColdManifestView', () => {
+  beforeEach(resetColdStorage);
+
+  test('summarizes skills from frontmatter and MCP servers from their invocation', async () => {
+    const base = tmpDir();
+    try {
+      const skillDir = join(base, 'summary-skill');
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        '---\nname: summary-skill\ndescription: Reviews pull requests\n---\nBody.',
+      );
+      await freezeSkill(makeDiscoveredSkill(skillDir, { skillName: 'summary', id: 'summary' }));
+      await freezeMcp(
+        'linear',
+        { command: 'npx', args: ['linear-mcp'] },
+        'user',
+        undefined,
+        { ts: 'summary-ts', claudeJsonPath: join(base, 'claude.json') },
+      );
+
+      const view = getColdManifestView();
+      expect(view.find((e) => e.ref === 'claude/summary')?.summary).toBe('Reviews pull requests');
+      expect(view.find((e) => e.ref === 'linear')?.summary).toBe('npx linear-mcp');
     } finally {
       rmSync(base, { recursive: true, force: true });
     }
