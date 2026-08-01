@@ -676,9 +676,11 @@ export class TelegramPoller {
     const resolvedToken = token ?? await this.getSettingValue('TELEGRAM_BOT_TOKEN');
     if (!resolvedToken) return;
 
+    // No `language_code`: Telegram resolves the menu per client language and
+    // only falls back to the language-neutral bucket. Registering under `ko`
+    // alone left every non-Korean client with an empty menu.
     const commandResult = await setTelegramCommands(resolvedToken, getTelegramRegisteredCommands(), {
       scope: { type: 'all_private_chats' },
-      languageCode: 'ko',
     });
     if (!commandResult.ok) {
       return;

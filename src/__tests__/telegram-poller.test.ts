@@ -132,10 +132,11 @@ describe('TelegramPoller', () => {
       const menuCalls = calls.filter(call => call.url.includes('/setChatMenuButton'));
       expect(commandCalls).toHaveLength(1);
       expect(menuCalls).toHaveLength(1);
+      // Registered without `language_code` so the menu resolves for every
+      // client language, not just Korean ones.
       expect(commandCalls[0].body).toEqual({
         commands: getTelegramRegisteredCommands(),
         scope: { type: 'all_private_chats' },
-        language_code: 'ko',
       });
       expect(menuCalls[0].body).toEqual({
         menu_button: { type: 'commands' },

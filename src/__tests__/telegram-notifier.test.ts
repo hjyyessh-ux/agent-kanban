@@ -439,7 +439,7 @@ describe('setTelegramCommands', () => {
     globalThis.fetch = origFetch;
   });
 
-  test('registers Telegram bot commands with scope and language', async () => {
+  test('registers Telegram bot commands with scope and no language bucket', async () => {
     const capturedUrls: string[] = [];
     const capturedBodies: unknown[] = [];
 
@@ -453,15 +453,15 @@ describe('setTelegramCommands', () => {
       { command: 'help', description: '사용 가능한 명령 보기' },
     ], {
       scope: { type: 'all_private_chats' },
-      languageCode: 'ko',
     });
 
     expect(result).toEqual({ ok: true });
     expect(capturedUrls[0]).toContain(`/bot${TEST_TOKEN}/setMyCommands`);
+    // A `language_code` here would scope the menu to one client language and
+    // leave every other client falling back to an empty bucket.
     expect(capturedBodies[0]).toEqual({
       commands: [{ command: 'help', description: '사용 가능한 명령 보기' }],
       scope: { type: 'all_private_chats' },
-      language_code: 'ko',
     });
   });
 

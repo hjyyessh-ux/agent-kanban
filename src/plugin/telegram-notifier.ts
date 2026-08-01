@@ -214,13 +214,12 @@ export async function answerTelegramCallbackQuery(
 export async function setTelegramCommands(
   token: string,
   commands: TelegramBotCommand[],
-  options?: { scope?: Record<string, unknown>; languageCode?: string },
+  options?: { scope?: Record<string, unknown> },
 ): Promise<TelegramBotApiResult> {
   appendRuntimeDebugLog('telegram.commands.register.attempt', {
     count: commands.length,
     commands: commands.map(command => command.command),
     scope: options?.scope ?? null,
-    languageCode: options?.languageCode ?? null,
   });
 
   try {
@@ -230,10 +229,6 @@ export async function setTelegramCommands(
 
     if (options?.scope) {
       payload.scope = options.scope;
-    }
-
-    if (options?.languageCode) {
-      payload.language_code = options.languageCode;
     }
 
     const data = await postTelegramApi<{ ok: boolean; description?: string }>(token, 'setMyCommands', payload);
