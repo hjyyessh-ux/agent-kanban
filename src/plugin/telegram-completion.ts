@@ -2,25 +2,23 @@ import type { KanbanStore } from '../core/store';
 import type { SettingsStore } from '../core/settings-store';
 import { sendTelegramMessage } from './telegram-notifier';
 
-const MAX_TELEGRAM_MESSAGE_LENGTH = 4096;
-
-function truncateTelegramMessage(text: string): string {
-  if (text.length <= MAX_TELEGRAM_MESSAGE_LENGTH) return text;
-  return `${text.slice(0, MAX_TELEGRAM_MESSAGE_LENGTH - 4)}\n...`;
-}
-
+/**
+ * Long results are split across messages by `sendTelegramMessage` rather than
+ * truncated here — a cut-off completion loses exactly the part the user asked
+ * for.
+ */
 function buildTelegramCompletionMessage(card: {
   id: string;
   title: string;
   sessionId?: string;
 }, result: string): string {
-  return truncateTelegramMessage([
+  return [
     '✅ 작업 완료',
     `- 카드: ${card.title} (${card.id})`,
     `- 세션: ${card.sessionId ?? 'unknown'}`,
     '',
     result,
-  ].join('\n'));
+  ].join('\n');
 }
 
 function buildTelegramReplyUpdates(status: 'sent' | 'failed', options?: {

@@ -3,10 +3,13 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  answerTelegramCallbackQuery,
   sendTelegramMessage,
+  splitTelegramMessage,
   getTelegramUpdates,
   setTelegramChatMenuButton,
   setTelegramCommands,
+  TELEGRAM_MAX_MESSAGE_LENGTH,
 } from '../plugin/telegram-notifier';
 
 // ---------------------------------------------------------------------------
@@ -136,6 +139,199 @@ describe('sendTelegramMessage', () => {
     const lines = readFileSync(logPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
     expect(lines.some((line) => line.event === 'telegram.send.attempt' && line.chatId === TEST_CHAT_ID)).toBe(true);
     expect(lines.some((line) => line.event === 'telegram.send.result' && line.ok === true && line.messageId === 99)).toBe(true);
+  });
+
+  test('attaches an inline keyboard to the message', async () => {
+    const capturedBodies: any[] = [];
+    globalThis.fetch = mock(async (_url: RequestInfo, init?: RequestInit) => {
+      capturedBodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return new Response(JSON.stringify({ ok: true, result: { message_id: 7 } }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const keyboard = { inline_keyboard: [[{ text: 'pick', callback_data: 'dir:0:abc' }]] };
+    await sendTelegramMessage(TEST_TOKEN, TEST_CHAT_ID, 'choose', undefined, keyboard);
+
+    expect(capturedBodies[0].reply_markup).toEqual(keyboard);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — splitTelegramMessage
+// ---------------------------------------------------------------------------
+
+describe('splitTelegramMessage', () => {
+  test('leaves a message within the limit untouched', () => {
+    expect(splitTelegramMessage('short')).toEqual(['short']);
+
+    const exact = 'a'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH);
+    expect(splitTelegramMessage(exact)).toEqual([exact]);
+  });
+
+  test('splits oversized text without losing any characters', () => {
+    const body = 'x'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH * 2 + 500);
+    const parts = splitTelegramMessage(body);
+
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) {
+      expect(part.length).toBeLessThanOrEqual(TELEGRAM_MAX_MESSAGE_LENGTH);
+    }
+    // Strip the `(i/n)\n` prefixes and the original must come back verbatim.
+    const rejoined = parts.map((part) => part.replace(/^\(\d+\/\d+\)\n/, '')).join('');
+    expect(rejoined).toBe(body);
+  });
+
+  test('prefers a line boundary when splitting', () => {
+    const line = `${'y'.repeat(100)}\n`;
+    const body = line.repeat(60); // ~6060 chars, well over the limit
+    const parts = splitTelegramMessage(body);
+
+    expect(parts.length).toBe(2);
+    // The first part ends on a complete line, not mid-line.
+    expect(parts[0].endsWith('y')).toBe(true);
+    const rejoined = parts.map((part) => part.replace(/^\(\d+\/\d+\)\n/, '')).join('\n');
+    expect(rejoined).toBe(body);
+  });
+
+  test('never splits a surrogate pair', () => {
+    // Emoji are two code units each; a naive slice would cut one in half.
+    const body = '😀'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH);
+    const parts = splitTelegramMessage(body);
+
+    for (const part of parts) {
+      expect(part).not.toContain('�');
+      const stripped = part.replace(/^\(\d+\/\d+\)\n/, '');
+      // A clean split leaves an even number of code units.
+      expect(stripped.length % 2).toBe(0);
+    }
+    expect(parts.map((part) => part.replace(/^\(\d+\/\d+\)\n/, '')).join('')).toBe(body);
+  });
+
+  test('numbers each part', () => {
+    const parts = splitTelegramMessage('z'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH + 10));
+    expect(parts[0].startsWith('(1/2)\n')).toBe(true);
+    expect(parts[1].startsWith('(2/2)\n')).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — sendTelegramMessage splitting
+// ---------------------------------------------------------------------------
+
+describe('sendTelegramMessage splitting', () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  test('sends long text as several messages instead of truncating', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = mock(async (_url: RequestInfo, init?: RequestInit) => {
+      bodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return new Response(JSON.stringify({ ok: true, result: { message_id: bodies.length } }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const body = 'q'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH + 1000);
+    const result = await sendTelegramMessage(TEST_TOKEN, TEST_CHAT_ID, body);
+
+    expect(result.ok).toBe(true);
+    expect(bodies.length).toBe(2);
+    // First part's id is what the card records as the reply message.
+    expect(result.messageId).toBe(1);
+    const rejoined = bodies.map((b) => b.text.replace(/^\(\d+\/\d+\)\n/, '')).join('');
+    expect(rejoined).toBe(body);
+  });
+
+  test('attaches the keyboard only to the last part', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = mock(async (_url: RequestInfo, init?: RequestInit) => {
+      bodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return new Response(JSON.stringify({ ok: true, result: { message_id: bodies.length } }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const keyboard = { inline_keyboard: [[{ text: 'ok', callback_data: 'dir:clear' }]] };
+    await sendTelegramMessage(
+      TEST_TOKEN,
+      TEST_CHAT_ID,
+      'w'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH + 100),
+      undefined,
+      keyboard,
+    );
+
+    expect(bodies.length).toBe(2);
+    expect(bodies[0].reply_markup).toBeUndefined();
+    expect(bodies[1].reply_markup).toEqual(keyboard);
+  });
+
+  test('reports the error when a later part fails', async () => {
+    let calls = 0;
+    globalThis.fetch = mock(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response(JSON.stringify({ ok: true, result: { message_id: 1 } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ ok: false, description: 'Too Many Requests' }), { status: 429 });
+    }) as unknown as typeof fetch;
+
+    const result = await sendTelegramMessage(
+      TEST_TOKEN,
+      TEST_CHAT_ID,
+      'e'.repeat(TELEGRAM_MAX_MESSAGE_LENGTH + 100),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('Too Many Requests');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests — answerTelegramCallbackQuery
+// ---------------------------------------------------------------------------
+
+describe('answerTelegramCallbackQuery', () => {
+  const origFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = origFetch;
+  });
+
+  test('answers with an optional toast', async () => {
+    const urls: string[] = [];
+    const bodies: any[] = [];
+    globalThis.fetch = mock(async (url: RequestInfo, init?: RequestInit) => {
+      urls.push(url instanceof URL ? url.toString() : (url as string));
+      bodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const result = await answerTelegramCallbackQuery(TEST_TOKEN, 'cb-1', 'done');
+
+    expect(result.ok).toBe(true);
+    expect(urls[0]).toContain(`/bot${TEST_TOKEN}/answerCallbackQuery`);
+    expect(bodies[0]).toEqual({ callback_query_id: 'cb-1', text: 'done' });
+  });
+
+  test('omits the toast when none is given', async () => {
+    const bodies: any[] = [];
+    globalThis.fetch = mock(async (_url: RequestInfo, init?: RequestInit) => {
+      bodies.push(init?.body ? JSON.parse(init.body as string) : null);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await answerTelegramCallbackQuery(TEST_TOKEN, 'cb-2');
+
+    expect(bodies[0]).toEqual({ callback_query_id: 'cb-2' });
+  });
+
+  test('returns the API error', async () => {
+    globalThis.fetch = mock(async () =>
+      new Response(JSON.stringify({ ok: false, description: 'query is too old' }), { status: 400 }),
+    ) as unknown as typeof fetch;
+
+    const result = await answerTelegramCallbackQuery(TEST_TOKEN, 'cb-3');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe('query is too old');
   });
 });
 

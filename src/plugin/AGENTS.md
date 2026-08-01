@@ -46,7 +46,8 @@ plugin/
 | Change scheduled todo auto-dispatch | `scheduled-dispatch-service.ts`, `bootstrap.ts`, `server/routes.ts` | Owner-gated due scan, stale-claim recovery, manual/auto race handling |
 | Change stale-card detection | `stale-checker.ts` | Orphan/stuck heuristics |
 | Change question ingestion or auto-answering | `question-monitor.ts` | `/event` SSE + `/question` polling |
-| Change Telegram command routing | `telegram-commands.ts` | Explicit commands and aliases |
+| Change Telegram command routing | `telegram-commands.ts` | Explicit commands, aliases, inline keyboards, callback data |
+| Change Telegram message sending or splitting | `telegram-notifier.ts` | 4096-cap part splitting, keyboards, `answerCallbackQuery` |
 | Change Telegram follow-up/reminder behavior | `telegram-poller.ts`, `telegram-reminder.ts` | Session reuse + reminders |
 | Change wiki triage/classification or vault output | `wiki/wiki-prompts.ts`, `wiki/wiki-writer.ts` | Bump `WIKI_PROMPT_VERSION` in `wiki/wiki-config.ts` on prompt changes |
 | Change wiki queue/backfill behavior | `wiki/wiki-worker.ts` | Consumes wiki-pending archived cards; singleton-runtime only |
@@ -77,6 +78,11 @@ plugin/
 - Telegram command routing must stay deterministic; explicit commands are parsed before natural message dispatch.
 - Telegram agent/model overrides must come from shared core agent config, not duplicated plugin-local constants.
 - Telegram ACK and warning messages default to plain text; only explicit parse modes should set `parse_mode`.
+- `sendTelegramMessage()` splits text over Telegram's 4096-code-unit cap into numbered parts instead of truncating. Never reintroduce a truncate helper on the completion path — a cut-off result loses exactly what the user asked for.
+- Inline keyboards go through `TelegramCommandResult.keyboard`; taps arrive as `update.callback_query` and are resolved by `resolveTelegramCallback()`. Every callback path must call `answerTelegramCallbackQuery()` or the button spins forever.
+- `/directory` callback data pins each button to a digest of its path. The recent-directory list is re-derived from cards at tap time, so a stale index must be rejected rather than silently switching to the wrong project.
+- Commands marked `hiddenFromMenu` stay routable when typed but are filtered out of `setMyCommands`. `buildTelegramHelpText()` must still mention every command that IS registered — `telegram-poller.test.ts` asserts this.
+- Model ids accept shorthand via `resolveModelId()`. An input matching nothing must stay rejected; when several match, only the runtime default may win.
 - Idle completion must stay gated by observed session activity; do not reintroduce unconditional `session.idle` completion.
 - Parent/child waiting semantics must stay aligned with stale detection so top-level parents waiting on direct child work are not flagged as orphaned.
 - Telegram selected-session reuse, sticky default agent/model behavior, and idle-completion boundaries must stay aligned with `docs/invariants.md`.
