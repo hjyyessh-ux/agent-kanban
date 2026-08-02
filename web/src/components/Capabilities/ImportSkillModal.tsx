@@ -150,8 +150,8 @@ export function ImportSkillModal({ skillRoots, onClose, onImported }: ImportSkil
 
           {error && <p className="cap-roots-error">{error}</p>}
 
-          <div className="cap-new-skill-footer">
-            <button type="button" className="kv2-btn kv2-btn--ghost" onClick={onClose}>Cancel</button>
+          <div className="cap-new-skill-footer kv2-actions-split">
+            <button type="button" className="kv2-btn kv2-btn--ghost kv2-action-cancel" onClick={onClose}>Cancel</button>
             <button
               type="submit"
               className="kv2-btn kv2-btn--primary"

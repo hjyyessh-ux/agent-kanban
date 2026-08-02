@@ -57,6 +57,35 @@ test.describe('Card Creation', () => {
     await expect(page.locator('#create-card-description-input')).toHaveAttribute('aria-invalid', 'true');
   });
 
+  test('CREATE & START creates and immediately dispatches the new task', async ({ page }) => {
+    const title = `[E2E] Create and start ${Date.now()}`;
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    await page.locator('#create-card-title-input').fill(title);
+    await page.locator('#create-card-description-input').fill('Create and dispatch in one action [hold-open]');
+
+    const startButton = page.getByRole('button', { name: 'CREATE & START', exact: true });
+    await expect(startButton).toBeVisible();
+    await startButton.click();
+
+    await expect(page.locator('.kv2-column[data-status="in_progress"] .kv2-card', { hasText: title })).toBeVisible();
+  });
+
+  test('create footer keeps Cancel left and forward actions right', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    const dialog = page.locator('.kv2-dialog').last();
+    const cancelBox = await dialog.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+    const createBox = await dialog.getByRole('button', { name: 'CREATE', exact: true }).boundingBox();
+    const startBox = await dialog.getByRole('button', { name: 'CREATE & START', exact: true }).boundingBox();
+
+    expect(cancelBox).not.toBeNull();
+    expect(createBox).not.toBeNull();
+    expect(startBox).not.toBeNull();
+    expect(cancelBox!.x).toBeLessThan(createBox!.x);
+    expect(createBox!.x).toBeLessThan(startBox!.x);
+  });
+
   test('create dialog schedules directly from the launch timing selector and shows the badge immediately', async ({ page }) => {
     const title = `[E2E] Scheduled Create ${Date.now()}`;
     const schedule = futureKstSchedule(30);
@@ -83,13 +112,14 @@ test.describe('Card Creation', () => {
 
     const todoCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
     await expect(todoCard).toBeVisible();
-    await expect(todoCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', schedule.labelPattern);
+    await expect(todoCard.locator('.kv2-scheduled-time')).toContainText(schedule.labelPattern);
 
     await page.reload();
     const reloadedCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
-    await expect(reloadedCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', schedule.labelPattern);
-    await expect(reloadedCard.getByRole('button', { name: 'Reschedule', exact: true })).toBeVisible();
-    await expect(reloadedCard.getByRole('button', { name: 'Cancel schedule', exact: true })).toBeVisible();
+    await expect(reloadedCard.locator('.kv2-scheduled-time')).toContainText(schedule.labelPattern);
+    await expect(reloadedCard.getByRole('button', { name: 'Schedule', exact: true })).toHaveCount(0);
+    await expect(reloadedCard.getByRole('button', { name: 'Reschedule', exact: true })).toHaveCount(0);
+    await expect(reloadedCard.getByRole('button', { name: 'Cancel schedule', exact: true })).toHaveCount(0);
   });
 
   test('390px create footer preserves button meaning for schedule mode', async ({ page }) => {
@@ -100,6 +130,7 @@ test.describe('Card Creation', () => {
     await page.getByRole('button', { name: 'Schedule', exact: true }).click();
     await page.getByRole('switch', { name: /예약 시작/ }).click();
     await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'CREATE', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();
   });
 });

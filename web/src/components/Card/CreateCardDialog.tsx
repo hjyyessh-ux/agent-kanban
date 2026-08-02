@@ -32,6 +32,7 @@ interface CreateCardDialogProps {
   allCards: KanbanCard[];
   onClose: () => void;
   onCreate: (input: CreateCardInput) => Promise<KanbanCard>;
+  onDispatch: (id: string) => Promise<void>;
   onQueue: (
     cardId: string,
     afterCardId: string,
@@ -81,6 +82,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   allCards,
   onClose,
   onCreate,
+  onDispatch,
   onQueue,
   onClearBoardError,
   onReportBoardAlert,
@@ -128,7 +130,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [commandExpanded, setCommandExpanded] = useState(false);
   const [scheduleExpanded, setScheduleExpanded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitMode, setSubmitMode] = useState<CreateLaunchTiming | null>(null);
+  const [submitMode, setSubmitMode] = useState<"create" | "start" | "schedule" | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string>("");
@@ -249,7 +251,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     });
   }, []);
 
-  const validateBeforeSubmit = useCallback(() => {
+  const validateBeforeSubmit = useCallback((mode: "create" | "start" | "schedule") => {
     const nextErrors: { title?: string; description?: string } = {};
 
     if (!title.trim()) {
@@ -260,7 +262,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
       nextErrors.description = 'Add the prompt details before creating this task.';
     }
 
-    if (launchTiming === "schedule" && !scheduleValidation.scheduledAtUtc) {
+    if (mode === "schedule" && !scheduleValidation.scheduledAtUtc) {
       setSubmitError({
         title: 'Invalid schedule',
         message: scheduleValidation.error ?? 'Choose a future KST date/time before scheduling this task.',
@@ -287,7 +289,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setFieldErrors({});
     setSubmitError(null);
     return true;
-  }, [command, description, isCommandWithPrompt, launchTiming, scheduleValidation.error, scheduleValidation.scheduledAtUtc, title]);
+  }, [command, description, isCommandWithPrompt, scheduleValidation.error, scheduleValidation.scheduledAtUtc, title]);
 
   useEffect(() => {
     return () => {
@@ -362,8 +364,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setPendingFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleSubmit = async (mode: CreateLaunchTiming) => {
-    if (!validateBeforeSubmit()) return;
+  const handleSubmit = async (mode: "create" | "start" | "schedule") => {
+    if (!validateBeforeSubmit(mode)) return;
 
     setIsSubmitting(true);
     setSubmitMode(mode);
@@ -446,6 +448,16 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         onClearBoardError();
         const message = err instanceof Error ? err.message : 'Queue setup failed.';
         followUpIssues.push(`Queue setup failed: ${message}`);
+      }
+    }
+
+    if (mode === "start") {
+      try {
+        await onDispatch(newCard.id);
+      } catch (err: unknown) {
+        onClearBoardError();
+        const message = err instanceof Error ? err.message : 'Start failed.';
+        followUpIssues.push(`Start failed: ${message}`);
       }
     }
 
@@ -967,33 +979,49 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
           </div>
         )}
 
-        <div className="kv2-create-footer">
+        <div className="kv2-create-footer kv2-actions-split">
           <button
             type="button"
-            className="kv2-btn kv2-btn--outline"
+            className="kv2-btn kv2-btn--ghost kv2-action-cancel"
             onClick={onClose}
             disabled={isSubmitting}
           >
             Cancel
           </button>
-          <button
-            type="button"
-            className="kv2-btn kv2-btn--primary"
-            onClick={() => handleSubmit(launchTiming)}
-            disabled={isSubmitting || (scheduleSelected && !scheduleValidation.scheduledAtUtc)}
-            aria-busy={isSubmitting && submitMode === launchTiming}
-          >
-            {isSubmitting && submitMode === launchTiming ? (
-              <>
-                <span className="kv2-action-spinner" aria-hidden="true" />
-                {launchTiming === "schedule"
-                    ? " Scheduling…"
-                    : " Creating…"}
-              </>
-            ) : (
-              launchUiState.primaryActionLabel
-            )}
-          </button>
+          <div className="kv2-actions-primary">
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--outline"
+              onClick={() => handleSubmit("create")}
+              disabled={isSubmitting}
+              aria-busy={isSubmitting && submitMode === "create"}
+            >
+              {isSubmitting && submitMode === "create" ? (
+                <>
+                  <span className="kv2-action-spinner" aria-hidden="true" /> Creating…
+                </>
+              ) : (
+                "CREATE"
+              )}
+            </button>
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--primary"
+              onClick={() => handleSubmit(scheduleSelected ? "schedule" : "start")}
+              disabled={isSubmitting || Boolean(queueAfterId) || (scheduleSelected && !scheduleValidation.scheduledAtUtc)}
+              aria-busy={isSubmitting && submitMode === (scheduleSelected ? "schedule" : "start")}
+              title={queueAfterId ? "Queue After가 설정된 작업은 즉시 시작할 수 없습니다." : undefined}
+            >
+              {isSubmitting && submitMode === (scheduleSelected ? "schedule" : "start") ? (
+                <>
+                  <span className="kv2-action-spinner" aria-hidden="true" />
+                  {scheduleSelected ? " Scheduling…" : " Starting…"}
+                </>
+              ) : (
+                scheduleSelected ? launchUiState.primaryActionLabel : "CREATE & START"
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </DialogSkeleton>

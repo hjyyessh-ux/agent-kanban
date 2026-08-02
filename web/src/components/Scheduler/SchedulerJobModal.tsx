@@ -929,8 +929,8 @@ export const SchedulerJobModal: React.FC<SchedulerJobModalProps> = ({
           />
         </div>
 
-        <div className="kv2-dialog-footer">
-          <button type="button" className="kv2-btn kv2-btn--ghost" onClick={onClose} disabled={isSubmitting}>
+        <div className="kv2-dialog-footer kv2-actions-split">
+          <button type="button" className="kv2-btn kv2-btn--ghost kv2-action-cancel" onClick={onClose} disabled={isSubmitting}>
             Cancel
           </button>
           <button

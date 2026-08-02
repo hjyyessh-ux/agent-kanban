@@ -1473,6 +1473,10 @@
     flex: 1 1 100%;
     min-width: 0;
   }
+
+  .kv2-create-footer .kv2-actions-primary {
+    width: 100%;
+  }
 }
 
 .kv2-form-group {

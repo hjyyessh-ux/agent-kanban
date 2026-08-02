@@ -266,6 +266,9 @@ export function WikiCardDialog({ card, vaultDir, busy, onReprocess, onClose }: W
         {/* Footer actions */}
         <div className="kv2-dialog-actions kv2-dialog-actions--detail">
           <div className="kv2-dialog-actions-rail">
+            <button type="button" className="kv2-btn kv2-btn--outline kv2-action-cancel" onClick={onClose}>
+              닫기
+            </button>
             <div className="kv2-dialog-actions-group kv2-dialog-actions-group--detail-priority">
               <button
                 type="button"
@@ -277,9 +280,6 @@ export function WikiCardDialog({ card, vaultDir, busy, onReprocess, onClose }: W
                   : '이 카드를 위키 분류 파이프라인에 다시 넣어 문서를 재생성합니다'}
               >
                 ↻ 다시 처리
-              </button>
-              <button type="button" className="kv2-btn kv2-btn--outline" onClick={onClose}>
-                닫기
               </button>
             </div>
           </div>

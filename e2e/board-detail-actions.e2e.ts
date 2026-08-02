@@ -24,8 +24,17 @@ test.describe('Board Detail Actions', () => {
     await expect(todoCard.locator('.kv2-card-icon-action--danger')).toBeVisible();
 
     await todoCard.click();
-    await expect(page.locator('.kv2-dialog')).toBeVisible();
-    await expect(page.locator('.kv2-dialog .kv2-btn--subtle-danger', { hasText: 'DELETE' })).toBeVisible();
+    const detailDialog = page.locator('.kv2-dialog');
+    await expect(detailDialog).toBeVisible();
+    const deleteButton = detailDialog.getByRole('button', { name: 'DELETE', exact: true });
+    const startButton = detailDialog.getByRole('button', { name: 'START TASK', exact: true });
+    await expect(deleteButton).toBeVisible();
+    await expect(startButton).toBeVisible();
+    const deleteBox = await deleteButton.boundingBox();
+    const startBox = await startButton.boundingBox();
+    expect(deleteBox).not.toBeNull();
+    expect(startBox).not.toBeNull();
+    expect(deleteBox!.x).toBeLessThan(startBox!.x);
 
     // Queue After panel is collapsed by default; expand it first.
     await page.locator('.kv2-dialog').getByRole('button', { name: 'Queue After' }).click();

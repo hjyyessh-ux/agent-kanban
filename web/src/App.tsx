@@ -7,7 +7,6 @@ import type { CompleteSessionGroup } from './components/Board/BoardCompleteSessi
 import { SessionConversationModal } from './components/Board/SessionConversationModal';
 import { CardDetailDialog } from './components/Card/CardDetailDialog';
 import { CreateCardDialog } from './components/Card/CreateCardDialog';
-import { ScheduleCardDialog } from './components/Card/ScheduleCardDialog';
 import { SchedulerView } from './components/Scheduler/SchedulerView';
 import { SettingsView } from './components/Settings/SettingsView';
 import { ErrorAlert } from './components/shared/ErrorAlert';
@@ -97,7 +96,6 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [scheduleDialogState, setScheduleDialogState] = useState<{ cardId: string; reopenDetail: boolean } | null>(null);
   useEffect(() => {
     setSelectedCard((prev) => {
       if (!prev) return prev;
@@ -249,29 +247,10 @@ export default function App() {
     handleOpenCard(card);
   };
 
-  const handleOpenScheduleDialog = (card: KanbanCard, reopenDetail = false) => {
-    if (card.queuedAfterCardId) {
-      showError(createUiAlert('Schedule unavailable', 'Queued cards cannot be scheduled. Remove it from the queue first.', 'Refresh board'));
-      return;
-    }
-    if (reopenDetail && selectedCard?.id === card.id) {
-      setSelectedCard(null);
-    }
-    setScheduleDialogState({ cardId: card.id, reopenDetail });
-  };
-
-  const closeScheduleDialog = () => {
-    const reopenCardId = scheduleDialogState?.reopenDetail ? scheduleDialogState.cardId : null;
-    setScheduleDialogState(null);
-    if (reopenCardId) {
-      void handleOpenCardById(reopenCardId);
-    }
-  };
-
   const handleSaveSchedule = async (cardId: string, scheduledAt: string) => {
     const updated = await scheduleCard(cardId, scheduledAt);
     setSelectedCard((prev) => prev?.id === updated.id ? updated : prev);
-    closeScheduleDialog();
+    return updated;
   };
 
   const handleCancelSchedule = async (cardId: string) => {
@@ -279,10 +258,6 @@ export default function App() {
     setSelectedCard((prev) => prev?.id === updated.id ? updated : prev);
     return updated;
   };
-
-  const scheduleDialogCard = scheduleDialogState
-    ? cards.find((card) => card.id === scheduleDialogState.cardId) ?? null
-    : null;
 
   return (
     <div className="app">
@@ -391,8 +366,6 @@ export default function App() {
                 onArchiveCards={(groupCards) => archiveCards(groupCards.map((card) => card.id))}
                 onCompleteAll={completeAllCards}
                 onDispatch={(card) => dispatchCard(card.id)}
-                onScheduleOpen={(card) => handleOpenScheduleDialog(card)}
-                onCancelSchedule={(card) => { void handleCancelSchedule(card.id); }}
                 onFavoriteToggle={handleToggleFavorite}
                 onDelete={(card) => deleteCard(card.id)}
                 onQueueOpen={handleQueueOpen}
@@ -468,6 +441,7 @@ export default function App() {
           allCards={cards}
           onClose={() => setShowCreateModal(false)}
           onCreate={createCard}
+          onDispatch={dispatchCard}
           onQueue={handleQueueCard}
           onClearBoardError={clearError}
           onReportBoardAlert={(title, message) => {
@@ -507,7 +481,7 @@ export default function App() {
               .catch(() => false);
           }}
           onDispatch={(id) => dispatchCard(id).then(() => true).catch(() => false)}
-          onScheduleOpen={(card) => handleOpenScheduleDialog(card, true)}
+          onScheduleSave={handleSaveSchedule}
           onCancelSchedule={handleCancelSchedule}
           onToggleFavorite={async (id) => {
             const current = cards.find((candidate) => candidate.id === id);
@@ -542,14 +516,6 @@ export default function App() {
           onScreenshotDeleted={(screenshotId) => {
             setSelectedCard(prev => prev ? { ...prev, screenshots: prev.screenshots?.filter(s => s.id !== screenshotId) || [] } : null);
           }}
-        />
-      )}
-
-      {scheduleDialogCard && (
-        <ScheduleCardDialog
-          card={scheduleDialogCard}
-          onClose={closeScheduleDialog}
-          onSave={(scheduledAt) => handleSaveSchedule(scheduleDialogCard.id, scheduledAt)}
         />
       )}
 

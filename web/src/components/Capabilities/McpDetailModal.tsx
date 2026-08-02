@@ -367,7 +367,16 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
             <p className="cap-detail-section-hint">
               Copy: 원본 유지하며 대상에 추가. Move: 원본 제거 후 대상으로 이동.
             </p>
-            <div className="cap-detail-action-row cap-detail-action-row--wrap">
+            <div className="cap-detail-action-row cap-detail-action-row--wrap kv2-actions-split">
+              {actionMode !== 'none' && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small kv2-action-cancel"
+                  onClick={resetAction}
+                >
+                  Cancel
+                </button>
+              )}
               <div className="cap-filter-group" role="group" aria-label="Action type">
                 <button
                   type="button"
@@ -426,15 +435,6 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
               >
                 Preview
               </button>
-              {actionMode !== 'none' && (
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--ghost kv2-btn--small"
-                  onClick={resetAction}
-                >
-                  Cancel
-                </button>
-              )}
             </div>
 
             {/* Secret warning */}
@@ -445,7 +445,15 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
                 <p className="cap-detail-section-hint">
                   권장: env 값을 <code>$ENV_VAR</code> 참조로 변경한 후 진행하세요.
                 </p>
-                <div className="cap-detail-action-row">
+                <div className="cap-detail-action-row kv2-actions-split">
+                  <button
+                    type="button"
+                    className="kv2-btn kv2-btn--ghost kv2-btn--small kv2-action-cancel"
+                    onClick={resetAction}
+                    disabled={applying}
+                  >
+                    취소
+                  </button>
                   <button
                     type="button"
                     className="kv2-btn kv2-btn--danger kv2-btn--small"
@@ -453,14 +461,6 @@ export function McpDetailModal({ item, placementTargets, onClose, onRefresh }: M
                     disabled={applying}
                   >
                     {applying ? '적용 중...' : '위험 감수하고 진행'}
-                  </button>
-                  <button
-                    type="button"
-                    className="kv2-btn kv2-btn--ghost kv2-btn--small"
-                    onClick={resetAction}
-                    disabled={applying}
-                  >
-                    취소
                   </button>
                 </div>
               </div>

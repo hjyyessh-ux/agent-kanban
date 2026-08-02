@@ -210,7 +210,16 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
         ))}
 
         {/* Actions */}
-        <div className="question-actions">
+        <div className="question-actions kv2-actions-split">
+          <button
+            type="button"
+            className="kv2-btn question-reject-btn kv2-action-cancel"
+            style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            onClick={() => void handleReject()}
+            disabled={isSubmitting}
+          >
+            Dismiss
+          </button>
           <button
             type="button"
             className="kv2-btn question-submit-btn"
@@ -218,15 +227,6 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
             disabled={isSubmitting || !canSubmit()}
           >
             {isSubmitting ? 'Submitting…' : 'Submit Answer'}
-          </button>
-          <button
-            type="button"
-            className="kv2-btn question-reject-btn"
-            style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            onClick={() => void handleReject()}
-            disabled={isSubmitting}
-          >
-            Dismiss
           </button>
         </div>
       </div>

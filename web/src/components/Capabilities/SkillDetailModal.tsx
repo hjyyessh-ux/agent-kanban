@@ -456,10 +456,10 @@ export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose,
                 rows={3}
                 aria-label="Improvement direction"
               />
-              <div className="cap-detail-action-row">
+              <div className="cap-detail-action-row kv2-actions-split">
                 <button
                   type="button"
-                  className="kv2-btn kv2-btn--ghost kv2-btn--small"
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small kv2-action-cancel"
                   onClick={() => { setShowImprove(false); setImprovePrompt(''); setImproveError(null); }}
                   disabled={improving}
                 >

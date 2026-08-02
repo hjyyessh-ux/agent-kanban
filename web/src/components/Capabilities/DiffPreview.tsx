@@ -111,6 +111,7 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
       <div className="diff-preview-actions">
         {resultMode ? (
           <>
+            <span className="diff-preview-hint">이미 적용된 변경입니다 — 새 세션에서 반영됩니다.</span>
             <button
               type="button"
               className="kv2-btn kv2-btn--primary kv2-btn--small"
@@ -118,10 +119,18 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
             >
               확인
             </button>
-            <span className="diff-preview-hint">이미 적용된 변경입니다 — 새 세션에서 반영됩니다.</span>
           </>
         ) : (
           <>
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--ghost kv2-btn--small kv2-action-cancel"
+              onClick={onCancel}
+              disabled={applying}
+            >
+              Cancel
+            </button>
+            <span className="diff-preview-hint">새 세션에서 반영됩니다.</span>
             <button
               type="button"
               className="kv2-btn kv2-btn--danger kv2-btn--small"
@@ -130,15 +139,6 @@ export function DiffPreview({ changes, applying, error, onApply, onCancel, resul
             >
               {applying ? '적용 중...' : 'Apply'}
             </button>
-            <button
-              type="button"
-              className="kv2-btn kv2-btn--ghost kv2-btn--small"
-              onClick={onCancel}
-              disabled={applying}
-            >
-              Cancel
-            </button>
-            <span className="diff-preview-hint">새 세션에서 반영됩니다.</span>
           </>
         )}
       </div>

@@ -70,7 +70,7 @@ describe("CardDetailDialog", () => {
         onStatusChange={mock(() => true)}
         onDelete={mock(() => true)}
         onDispatch={mock(() => true)}
-        onScheduleOpen={mock(() => undefined)}
+        onScheduleSave={mock(() => Promise.resolve(makeCard("todo")))}
         onCancelSchedule={mock(() => Promise.resolve(makeCard("todo")))}
       />,
     );

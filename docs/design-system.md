@@ -140,6 +140,7 @@ CSS 값 그대로 넘겨받아 렌더링한다(문자열 자체가 CSS 값이므
 | `kv2-badge` | 상태/카운트 배지 | `--accent`, `--queue`, `--saved`, `--session` |
 | `kv2-panel-heading`, `kv2-panel-subtitle` | 패널 제목/부제 | — |
 | `kv2-dialog-*` | 모달 구조 (아래 DialogSkeleton 참고) | 상태 variant `kv2-dialog--status-*` |
+| `kv2-actions-split` | 좌측 취소 / 우측 진행 액션 행 | 취소 버튼에 `kv2-action-cancel`, 우측 복수 액션은 `kv2-actions-primary`로 그룹화 |
 
 공용 컴포넌트: 에러 표시는 `shared/ErrorAlert`(`.error-banner`)를 사용합니다.
 
@@ -155,6 +156,13 @@ DialogSkeleton이 제공하는 계약:
 - 접근성: `useModalAccessibility` (포커스 트랩 + Escape 닫기)
 - 크기 기억: `persistSizeKey`를 주면 `usePersistedDialogSize`로 리사이즈+localStorage 저장
 - 커스텀은 `className` prop으로 `kv2-dialog--*` variant를 얹는 방식
+
+### 액션 정렬
+
+- `Cancel`, `Close`, `Dismiss`, `Reset`처럼 현재 작업을 중단하거나 빠져나가는 액션은 왼쪽에 둡니다.
+- `Start`, `Create`, `Save`, `Apply`, `Import`, `Submit`처럼 작업을 진행하는 액션은 오른쪽에 둡니다. 가장 중요한 primary action은 가장 오른쪽입니다.
+- `Delete` 같은 파괴적 액션은 왼쪽 danger 영역에 분리하고 primary action과 섞지 않습니다.
+- 구현은 `kv2-actions-split` + `kv2-action-cancel`을 사용합니다. 진행 버튼이 여러 개면 `kv2-actions-primary`로 묶습니다.
 
 ## 새 화면/기능 추가 체크리스트
 

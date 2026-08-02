@@ -64,17 +64,23 @@ async function waitForScheduledStatus(title: string, status: string) {
   }).toBe(status);
 }
 
-async function openScheduleDialogForCard(page: Page, title: string) {
+async function openSchedulePanelForCard(page: Page, title: string) {
   const card = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: 'Schedule', exact: true }).click();
-  await expect(page.locator('.kv2-dialog')).toBeVisible();
-  await expect(page.locator('#schedule-card-datetime')).toBeVisible();
+  await card.click();
+  const detailDialog = page.locator('.kv2-dialog').last();
+  await expect(detailDialog).toBeVisible();
+  const scheduleToggle = detailDialog.getByRole('button', { name: 'Scheduled Dispatch' });
+  await scheduleToggle.click();
+  await expect(detailDialog.locator('[id^="schedule-card-datetime-"]')).toBeVisible();
 }
 
-async function saveScheduleDialog(page: Page, kstDateTime: string) {
-  await page.locator('#schedule-card-datetime').fill(kstDateTime);
-  await page.getByRole('button', { name: 'Save', exact: true }).click();
+async function saveSchedulePanel(page: Page, kstDateTime: string, actionName: 'Schedule' | 'Save new time' = 'Schedule') {
+  const detailDialog = page.locator('.kv2-dialog').last();
+  await detailDialog.locator('[id^="schedule-card-datetime-"]').fill(kstDateTime);
+  await detailDialog.getByRole('button', { name: actionName, exact: true }).click();
+  await expect(detailDialog.locator('[id^="schedule-card-datetime-"]')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.locator('.kv2-dialog-overlay')).not.toBeVisible();
 }
 
@@ -112,12 +118,16 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     await page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true }).click();
 
     const todoCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
-    await expect(todoCard.locator('.kv2-scheduled-badge')).toBeVisible();
-    await expect(todoCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', schedule.labelPattern);
+    await expect(todoCard.locator('.kv2-scheduled-time')).toContainText(schedule.labelPattern);
+    await expect(todoCard.getByRole('button', { name: 'Schedule', exact: true })).toHaveCount(0);
+    await expect(todoCard.getByRole('button', { name: 'Reschedule', exact: true })).toHaveCount(0);
+    await expect(todoCard.getByRole('button', { name: 'Cancel schedule', exact: true })).toHaveCount(0);
     await todoCard.click();
     const detailDialog = page.locator('.kv2-dialog').last();
     await expect(detailDialog.getByRole('button', { name: 'Reschedule', exact: true })).toBeVisible();
     await expect(detailDialog.getByRole('button', { name: 'Cancel schedule', exact: true })).toBeVisible();
+    await detailDialog.getByRole('button', { name: 'Reschedule', exact: true }).click();
+    await expect(detailDialog.locator('[id^="schedule-card-datetime-"]')).toBeVisible();
     await page.keyboard.press('Escape');
 
     await apiE2EAdvanceClock(15 * 60_000, true);
@@ -161,24 +171,33 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
 
     await page.goto('/');
 
-    await openScheduleDialogForCard(page, title);
-    await saveScheduleDialog(page, kstScheduleAt(20).input);
+    await openSchedulePanelForCard(page, title);
+    await saveSchedulePanel(page, kstScheduleAt(20).input);
 
     const rescheduled = kstScheduleAt(30);
     const todoCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
-    await todoCard.getByRole('button', { name: 'Reschedule', exact: true }).click();
-    await saveScheduleDialog(page, rescheduled.input);
-    await expect(todoCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', rescheduled.labelPattern);
+    await todoCard.click();
+    const rescheduleDialog = page.locator('.kv2-dialog').last();
+    await rescheduleDialog.getByRole('button', { name: 'Scheduled Dispatch' }).click();
+    await rescheduleDialog.getByRole('button', { name: 'Reschedule', exact: true }).click();
+    await saveSchedulePanel(page, rescheduled.input, 'Save new time');
+    await expect(todoCard.locator('.kv2-scheduled-time')).toContainText(rescheduled.labelPattern);
 
     await page.reload();
     const reloadedCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
-    await expect(reloadedCard.locator('.kv2-scheduled-badge')).toHaveAttribute('aria-label', rescheduled.labelPattern);
+    await expect(reloadedCard.locator('.kv2-scheduled-time')).toContainText(rescheduled.labelPattern);
 
-    await reloadedCard.getByRole('button', { name: 'Cancel schedule', exact: true }).click();
-    await expect(reloadedCard.locator('.kv2-scheduled-badge')).toHaveCount(0);
+    await reloadedCard.click();
+    const cancelDialog = page.locator('.kv2-dialog').last();
+    await cancelDialog.getByRole('button', { name: 'Scheduled Dispatch' }).click();
+    await cancelDialog.getByRole('button', { name: 'Cancel schedule', exact: true }).click();
+    await expect(reloadedCard.locator('.kv2-scheduled-time')).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
-    await reloadedCard.getByRole('button', { name: 'Schedule', exact: true }).click();
-    await saveScheduleDialog(page, kstScheduleAt(5).input);
+    await reloadedCard.click();
+    const reloadedDetail = page.locator('.kv2-dialog').last();
+    await reloadedDetail.getByRole('button', { name: 'Scheduled Dispatch' }).click();
+    await saveSchedulePanel(page, kstScheduleAt(5).input);
     await waitForScheduledStatus(title, 'scheduled');
 
     await apiE2ESetClock(baseClockPlus(10));
@@ -208,12 +227,12 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     await page.getByText('SAVE QUEUE SETTINGS').click();
     const detailDialog = page.locator('.kv2-dialog').last();
     await expect(detailDialog).toBeVisible();
-    await detailDialog.getByRole('button', { name: 'Schedule for later', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('Queued cards cannot be scheduled');
+    await detailDialog.getByRole('button', { name: 'Scheduled Dispatch' }).click();
+    await expect(detailDialog.getByRole('note')).toContainText('Queued cards cannot be scheduled');
     await page.keyboard.press('Escape');
 
-    await openScheduleDialogForCard(page, scheduledTitle);
-    await saveScheduleDialog(page, kstScheduleAt(10).input);
+    await openSchedulePanelForCard(page, scheduledTitle);
+    await saveSchedulePanel(page, kstScheduleAt(10).input);
     const scheduledBoardCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: scheduledTitle });
     await scheduledBoardCard.getByRole('button', { name: 'Queue', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.');
@@ -341,11 +360,12 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
         await openCreateCardDialog(page);
         await page.locator('#create-card-title-input').fill(`Capture ${theme} ${viewport.width}`);
         await page.locator('#create-card-description-input').fill('viewport audit');
-        await page.getByRole('button', { name: 'Schedule', exact: true }).click();
-        await page.getByRole('switch', { name: /예약 시작/ }).click();
-        await expect(page.locator('#create-card-schedule-datetime')).toBeVisible();
-        await expect(page.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();
-        await page.locator('.kv2-dialog').screenshot({
+        const createDialog = page.locator('.kv2-dialog').last();
+        await createDialog.getByRole('button', { name: 'Schedule', exact: true }).click();
+        await createDialog.getByRole('switch', { name: /예약 시작/ }).click();
+        await expect(createDialog.locator('#create-card-schedule-datetime')).toBeVisible();
+        await expect(createDialog.getByRole('button', { name: 'CREATE & SCHEDULE', exact: true })).toBeVisible();
+        await createDialog.screenshot({
           path: `e2e/results/create-card-schedule-${theme}-${viewport.width}x${viewport.height}.png`,
         });
         await page.keyboard.press('Escape');

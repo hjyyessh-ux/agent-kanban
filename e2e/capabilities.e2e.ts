@@ -250,6 +250,11 @@ test.describe('Capabilities tab — modals', () => {
     const overlay = page.locator('.kv2-dialog-overlay');
     await expect(overlay).toBeVisible();
     await expect(overlay.locator('.kv2-dialog-title')).toHaveText('New Skill');
+    const cancelBox = await overlay.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+    const createBox = await overlay.getByRole('button', { name: 'Create Skill', exact: true }).boundingBox();
+    expect(cancelBox).not.toBeNull();
+    expect(createBox).not.toBeNull();
+    expect(cancelBox!.x).toBeLessThan(createBox!.x);
     await overlay.locator('.kv2-dialog-close').click();
     await expect(overlay).not.toBeVisible();
   });
@@ -345,6 +350,7 @@ test.describe('Capabilities tab — Commands section', () => {
     await expect(section.locator('.cap-commands-title')).toBeVisible();
     await expect(section.locator('.cap-command-item').first()).toBeVisible();
     await expect(section.locator('input[type="checkbox"]').first()).toBeVisible();
+    await expect(section.locator('.kv2-runtime-badge').first()).toBeVisible();
   });
 
   test('toggle-all button toggles all checkboxes off then on', async ({ page }) => {
@@ -411,6 +417,31 @@ test.describe('Capabilities tab — kv2 visual compliance', () => {
     expect(heights.size).toBe(1);
   });
 
+  test('runtime badges reuse the Board skin and follow light/dark theme tokens', async ({ page }) => {
+    const readClaudeBadgeStyle = async (theme: 'light' | 'dark') => {
+      await page.goto('/');
+      await page.evaluate((nextTheme) => localStorage.setItem('kanban-theme', nextTheme), theme);
+      await page.reload();
+      await page.locator('#app-tab-capabilities').click();
+      await page.locator('.cap-viewnav-btn', { hasText: 'Skills & Scripts' }).click();
+      const badge = page.locator('.cap-item', { hasText: 'e2e-sample-skill' }).locator('.kv2-runtime-badge--claude');
+      await expect(badge).toBeVisible();
+      return badge.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return {
+          background: style.background,
+          borderColor: style.borderColor,
+          color: style.color,
+          boxShadow: style.boxShadow,
+        };
+      });
+    };
+
+    const light = await readClaudeBadgeStyle('light');
+    const dark = await readClaudeBadgeStyle('dark');
+    expect(dark).not.toEqual(light);
+  });
+
   test('no dark fill on the rendered page surface (cream, not reference dark theme)', async ({ page }) => {
     await goToListView(page);
     // The cap-view itself is transparent; the cream surface is painted by the
@@ -435,7 +466,7 @@ test.describe('Capabilities tab — skills (fixture)', () => {
     const item = page.locator('.cap-item', { hasText: 'e2e-sample-skill' });
     await expect(item).toBeVisible();
     await expect(item.locator('.cap-badge--skill')).toBeVisible();
-    await expect(item.locator('.cap-badge--claude')).toBeVisible();
+    await expect(item.locator('.kv2-runtime-badge--claude')).toBeVisible();
     await expect(item.locator('.cap-badge--tool').first()).toBeVisible();
   });
 

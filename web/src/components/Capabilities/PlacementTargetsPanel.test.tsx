@@ -29,8 +29,8 @@ describe('PlacementTargetsPanel runtime paths', () => {
     expect(html).toContain('~/.codex/config.toml');
     expect(html).toContain('/repo/a/.codex/config.toml');
     expect(html).toContain('/repo/b/.codex/config.toml');
-    expect(html).toContain('cap-badge--claude');
-    expect((html.match(/cap-badge--codex/g) ?? [])).toHaveLength(3);
+    expect(html).toContain('kv2-runtime-badge--claude');
+    expect((html.match(/kv2-runtime-badge--codex/g) ?? [])).toHaveLength(3);
     expect(html).toContain('aria-expanded="false"');
   });
 });

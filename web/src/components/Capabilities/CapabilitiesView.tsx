@@ -455,9 +455,7 @@ export function CapabilitiesView({
                     <div className="cap-badges">
                       <span className={`kv2-badge cap-badge--${item.type}`}>{item.type}</span>
                       {item.agent && (
-                        <span className={`cap-runtime-badge cap-badge--${item.agent}`}>
-                          <RuntimeBadge runtime={item.agent} />
-                        </span>
+                        <RuntimeBadge runtime={item.agent} />
                       )}
                       {item.type === 'script' && scriptEntry?.language && (
                         <span className={`kv2-badge scripts-badge--${scriptEntry.language}`}>
@@ -574,9 +572,8 @@ export function CapabilitiesView({
                 onChange={() => toggleCommand(command.id)}
               />
               <span className="cap-command-name">{formatCommandName(command.id)}</span>
+              <RuntimeBadge runtime={command.runtime} />
               <span className="cap-command-meta">
-                {command.runtime}
-                {' · '}
                 {command.description}
                 {' · '}
                 {getCommandHint(command.id)?.executionMode === 'command_only'
