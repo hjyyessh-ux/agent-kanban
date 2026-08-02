@@ -161,9 +161,9 @@ export const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
           )}
 
           {(onCommit || onCancel) && (
-            <div className="kv2-directory-actions">
+            <div className="kv2-directory-actions kv2-actions-split">
               {onCancel && (
-                <button type="button" className="kv2-directory-action kv2-directory-action--ghost" onClick={onCancel}>
+                <button type="button" className="kv2-directory-action kv2-directory-action--ghost kv2-action-cancel" onClick={onCancel}>
                   {cancelLabel}
                 </button>
               )}

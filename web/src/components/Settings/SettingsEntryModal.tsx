@@ -176,10 +176,10 @@ export const SettingsEntryModal: React.FC<SettingsEntryModalProps> = ({
       </div>
 
       {/* Actions */}
-      <div className="kv2-dialog-actions settings-modal-actions">
+      <div className="kv2-dialog-actions settings-modal-actions kv2-actions-split">
         <button
           type="button"
-          className="kv2-btn kv2-btn--outline settings-modal-btn"
+          className="kv2-btn kv2-btn--outline settings-modal-btn kv2-action-cancel"
           onClick={onClose}
           disabled={isSubmitting}
         >

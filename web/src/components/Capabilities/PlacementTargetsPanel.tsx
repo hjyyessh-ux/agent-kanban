@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { PlacementTarget, CreatePlacementTargetInput, CapScope, McpRuntime } from '../../../../src/core/types';
 import { DirectoryPicker } from '../Card/DirectoryPicker';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 
 interface PlacementTargetsPanelProps {
   targets: PlacementTarget[];
@@ -121,7 +122,7 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
             >
               {t.kind}
             </span>
-            <span className={`kv2-badge cap-badge--${t.runtime}`}>{t.runtime}</span>
+            <RuntimeBadge runtime={t.runtime} />
             <span className="ptp-item-label">{t.label}</span>
             <span className="ptp-item-dir" title={targetConfigPath(t.runtime, t.kind, t.dir)}>
               {targetConfigPath(t.runtime, t.kind, t.dir)}

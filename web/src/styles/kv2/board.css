@@ -1814,6 +1814,45 @@
   display: block;
 }
 
+.kv2-scheduled-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--kv2-status-todo-accent) 48%, var(--kv2-border));
+  border-radius: var(--kv2-radius-sm);
+  color: var(--kv2-text-primary);
+  background: color-mix(in srgb, var(--kv2-status-todo-accent) 10%, var(--kv2-surface));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.kv2-scheduled-time .kv2-scheduled-badge {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  color: var(--kv2-status-todo-accent);
+  background: transparent;
+}
+
+.kv2-scheduled-time-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-card-scheduled-row {
+  display: flex;
+  padding: 0 14px 10px;
+}
+
+.kv2-card-scheduled-row .kv2-scheduled-time {
+  width: 100%;
+}
+
 .kv2-telegram-badge {
   display: inline-flex;
   align-items: center;
@@ -2559,18 +2598,6 @@
   border-color: var(--kv2-card-action-queue-border);
   color: var(--kv2-card-action-queue-fg);
   width: var(--kv2-btn-primary-width);
-}
-
-.kv2-card-action--schedule {
-  background: var(--kv2-surface);
-  border-color: var(--kv2-border);
-  color: var(--kv2-text-primary);
-}
-
-.kv2-card-action--schedule-cancel {
-  background: var(--kv2-danger-surface);
-  border-color: var(--kv2-danger-accent);
-  color: var(--kv2-danger-accent);
 }
 
 .kv2-card-action--no-upper {

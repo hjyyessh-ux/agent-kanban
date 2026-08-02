@@ -914,10 +914,7 @@
   margin-left: auto;
 }
 
-/* List-view badge colors (rendered via .kv2-badge) */
-.cap-badge--claude  { background: var(--kv2-runtime-claude); color: var(--kv2-text-inverse); border-color: var(--kv2-runtime-claude-border); }
-.cap-badge--codex   { background: var(--kv2-info-accent); color: var(--kv2-text-inverse); border-color: var(--kv2-info-border-strong); }
-.cap-badge--opencode { background: var(--kv2-runtime-opencode); color: var(--kv2-text-inverse); border-color: var(--kv2-runtime-opencode); }
+/* Non-runtime list-view badge colors. Runtime identity always uses the Board RuntimeBadge. */
 .cap-badge--script  { background: var(--kv2-text-primary); color: var(--kv2-surface); }
 .cap-badge--skill   { background: var(--kv2-purple-accent-deep); color: var(--kv2-text-inverse); border-color: var(--kv2-purple-border-deep); }
 .cap-badge--tool    { background: var(--kv2-bg); color: var(--kv2-text-secondary); border-color: var(--kv2-border); font-size: 10px; }
@@ -1648,11 +1645,15 @@
   gap: 8px;
 }
 
+.diff-preview-actions > .kv2-action-cancel {
+  margin-right: auto;
+}
+
 .diff-preview-hint {
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-muted);
-  margin-left: 4px;
+  margin-left: auto;
 }
 
 /* =============================================================

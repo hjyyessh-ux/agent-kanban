@@ -61,7 +61,7 @@ test.describe('Capabilities runtime MCP isolated user flow', () => {
     const row = panel.locator('.ptp-item', { hasText: 'E2E UI Codex target' });
     await expect(row).toBeVisible();
     await expect(row).toContainText(`${targetDir}/.codex/config.toml`);
-    await expect(row.locator('.cap-badge--codex')).toBeVisible();
+    await expect(row.locator('.kv2-runtime-badge--codex')).toBeVisible();
   });
 
   test('previews Codex copy/move/remove and preserves runtime-specific UI', async ({ page }) => {
@@ -130,6 +130,7 @@ test.describe('Capabilities runtime MCP isolated user flow', () => {
     await page.locator('.cap-viewnav-btn', { hasText: 'Cold Storage' }).click();
     const cold = page.locator('.cold-item', { hasText: 'codex/codex_user' });
     await expect(cold).toBeVisible();
+    await expect(cold.locator('.kv2-runtime-badge--codex')).toBeVisible();
     const coldSelect = cold.locator('select');
     const coldOption = coldSelect.locator('option').filter({ hasText: 'E2E Codex destination' });
     await coldSelect.selectOption(await coldOption.getAttribute('value') ?? '');

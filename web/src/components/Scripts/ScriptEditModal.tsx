@@ -125,10 +125,10 @@ export function ScriptEditModal({ onClose, onSave, onUpdate, editEntry }: Script
           </div>
         </div>
 
-        <div className="kv2-dialog-actions scripts-modal-actions">
+        <div className="kv2-dialog-actions scripts-modal-actions kv2-actions-split">
           <button
             type="button"
-            className="kv2-btn kv2-btn--outline scripts-modal-btn"
+            className="kv2-btn kv2-btn--outline scripts-modal-btn kv2-action-cancel"
             onClick={onClose}
             disabled={isSubmitting}
           >

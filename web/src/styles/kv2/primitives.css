@@ -288,6 +288,27 @@
   background: var(--kv2-surface);
 }
 
+/* Shared action alignment: cancellation/escape stays left, forward progress stays right. */
+.kv2-actions-split {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  width: 100%;
+}
+
+.kv2-actions-split > .kv2-action-cancel {
+  margin-right: auto;
+}
+
+.kv2-actions-primary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-left: auto;
+}
+
 .kv2-dialog-actions--detail {
 }
 
@@ -391,15 +412,15 @@
 }
 
 .kv2-dialog-actions--detail .kv2-dialog-actions-rail {
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .kv2-dialog-actions--detail .kv2-dialog-actions-group--detail-priority {
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .kv2-dialog-actions--detail .kv2-dialog-danger-row {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 /* ── Alert (ErrorAlert component) ─────────────────────────── */

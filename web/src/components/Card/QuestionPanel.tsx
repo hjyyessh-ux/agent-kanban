@@ -113,7 +113,23 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
             </div>
           );
         })}
-        <div className="kv2-question-actions">
+        <div className="kv2-question-actions kv2-actions-split">
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--ghost kv2-action-cancel"
+            onClick={async () => {
+              if (!onRejectQuestion || isQuestionSubmitting) return;
+              setIsQuestionSubmitting(true);
+              try {
+                await onRejectQuestion(question.id);
+              } catch {
+                setIsQuestionSubmitting(false);
+              }
+            }}
+            disabled={isQuestionSubmitting}
+          >
+            Dismiss
+          </button>
           <button
             type="button"
             className="kv2-btn kv2-btn--primary kv2-btn--question"
@@ -133,22 +149,6 @@ export const QuestionPanel: React.FC<QuestionPanelProps> = ({
             }
           >
             {isQuestionSubmitting ? "Submitting…" : "Submit Answer"}
-          </button>
-          <button
-            type="button"
-            className="kv2-btn kv2-btn--ghost"
-            onClick={async () => {
-              if (!onRejectQuestion || isQuestionSubmitting) return;
-              setIsQuestionSubmitting(true);
-              try {
-                await onRejectQuestion(question.id);
-              } catch {
-                setIsQuestionSubmitting(false);
-              }
-            }}
-            disabled={isQuestionSubmitting}
-          >
-            Dismiss
           </button>
         </div>
       </div>

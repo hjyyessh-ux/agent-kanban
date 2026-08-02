@@ -97,7 +97,7 @@ function makeVm(overrides: Partial<V2CardViewModel> = {}): V2CardViewModel {
 }
 
 describe('BoardCard scheduled metadata', () => {
-  test('renders the scheduled icon with aria-label and title', () => {
+  test('renders the scheduled time visibly with aria-label and title', () => {
     const html = renderToStaticMarkup(
       <BoardCard
         vm={makeVm({
@@ -112,6 +112,8 @@ describe('BoardCard scheduled metadata', () => {
     expect(html).toContain('aria-label="예약됨 · 2026-07-18 09:30 KST"');
     expect(html).toContain('title="예약됨 · 2026-07-18 09:30 KST"');
     expect(html).toContain('kv2-scheduled-badge');
+    expect(html).toContain('kv2-scheduled-time-label');
+    expect(html).toContain('예약됨 · 2026-07-18 09:30 KST</span>');
   });
 
   test('renders the scheduler origin badge when the card came from Scheduler', () => {

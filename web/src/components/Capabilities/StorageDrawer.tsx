@@ -4,6 +4,7 @@ import type { SkillRoot, PlacementTarget } from '../../../../src/core/types';
 import { useColdStorage } from '../../hooks/useScopeInventory';
 import { ColdDetailModal } from './ColdDetailModal';
 import { ColdEntryActions } from './ColdEntryActions';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import { timeAgo } from './capability-format';
 import {
   CAPABILITY_RUNTIME_FILTERS,
@@ -60,7 +61,7 @@ function EntryCard({ entry, skillRoots, placementTargets, onOpen, onRestored, on
               {entry.kind === 'skill' ? '❄ skill' : '❄ MCP'}
             </span>
             {entry.runtime && (
-              <span className={`kv2-badge cap-badge--${entry.runtime}`}>{entry.runtime}</span>
+              <RuntimeBadge runtime={entry.runtime} />
             )}
             <span className="kv2-badge cold-item__scope-badge">{entry.sourceScope}</span>
           </div>

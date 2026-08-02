@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { SkillRoot, SkillRuntime } from '../../../../src/core/types';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 
 const DEFAULT_SIZE = { width: 680, height: 540 };
 
@@ -86,7 +87,7 @@ export function SkillRootsModal({
         )}
         {roots.map((root) => (
           <div key={root.id} className="cap-root-item">
-            <span className={`kv2-badge cap-badge--${root.agent}`}>{root.agent}</span>
+            <RuntimeBadge runtime={root.agent} />
             <span className="cap-root-dir" title={root.dir}>
               {root.dir}
             </span>

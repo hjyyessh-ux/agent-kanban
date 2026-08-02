@@ -225,8 +225,6 @@ interface CardActionsProps {
   vm: V2CardViewModel;
   onStatusChange?: (newStatus: KanbanStatus) => void;
   onDispatch?: () => void | Promise<void>;
-  onScheduleOpen?: () => void;
-  onCancelSchedule?: () => void;
   onQueueOpen?: () => void;
   onUnqueue?: () => void;
 }
@@ -235,8 +233,6 @@ export const CardActions: React.FC<CardActionsProps> = ({
   vm,
   onStatusChange,
   onDispatch,
-  onScheduleOpen,
-  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
 }) => {
@@ -326,45 +322,6 @@ export const CardActions: React.FC<CardActionsProps> = ({
           onClick={onQueueOpen}
         />
 
-        {vm.hasScheduledBadge ? (
-          <>
-            {onScheduleOpen && (
-              <button
-                type="button"
-                className="kv2-card-action kv2-card-action--schedule"
-                onClick={(e) => {
-                  stop(e);
-                  onScheduleOpen();
-                }}
-              >
-                Reschedule
-              </button>
-            )}
-            {onCancelSchedule && (
-              <button
-                type="button"
-                className="kv2-card-action kv2-card-action--schedule-cancel kv2-card-action--no-upper"
-                onClick={(e) => {
-                  stop(e);
-                  onCancelSchedule();
-                }}
-              >
-                Cancel schedule
-              </button>
-            )}
-          </>
-        ) : onScheduleOpen ? (
-          <button
-            type="button"
-            className="kv2-card-action kv2-card-action--schedule"
-            onClick={(e) => {
-              stop(e);
-              onScheduleOpen();
-            }}
-          >
-            Schedule
-          </button>
-        ) : null}
       </div>
     );
   }
@@ -453,5 +410,14 @@ export const ScheduledMetaBadge: React.FC<{
   vm: Pick<V2CardViewModel, 'hasScheduledBadge' | 'scheduledBadgeLabel'>;
 }> = ({ vm }) => {
   if (!vm.hasScheduledBadge || !vm.scheduledBadgeLabel) return null;
-  return <ScheduledDispatchBadge ariaLabel={vm.scheduledBadgeLabel} />;
+  return (
+    <span
+      className="kv2-scheduled-time"
+      role="status"
+      title={vm.scheduledBadgeLabel}
+    >
+      <ScheduledDispatchBadge ariaLabel={vm.scheduledBadgeLabel} />
+      <span className="kv2-scheduled-time-label">{vm.scheduledBadgeLabel}</span>
+    </span>
+  );
 };

@@ -14,8 +14,6 @@ export interface BoardCardProps {
   onDragEnd?: (e: React.DragEvent) => void;
   onStatusChange?: (newStatus: KanbanStatus) => void;
   onDispatch?: () => void | Promise<void>;
-  onScheduleOpen?: () => void;
-  onCancelSchedule?: () => void;
   onQueueOpen?: () => void;
   onUnqueue?: () => void;
   onDelete?: () => void;
@@ -55,8 +53,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
   onDragEnd,
   onStatusChange,
   onDispatch,
-  onScheduleOpen,
-  onCancelSchedule,
   onQueueOpen,
   onUnqueue,
   onDelete,
@@ -134,7 +130,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             aria-label="Unread completion"
           />
         )}
-        <ScheduledMetaBadge vm={vm} />
         {vm.originChannel === 'scheduler' && (
           <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
         )}
@@ -190,6 +185,12 @@ export const BoardCard: React.FC<BoardCardProps> = ({
         </button>
       )}
 
+      {vm.hasScheduledBadge && (
+        <div className="kv2-card-scheduled-row">
+          <ScheduledMetaBadge vm={vm} />
+        </div>
+      )}
+
       <div className="kv2-card-footer">
         <div className="kv2-card-footer-meta">
           <div title={`Created ${formatExactTimestamp(vm.createdAt)} · Updated ${formatExactTimestamp(vm.updatedAt)}`}>
@@ -207,8 +208,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             vm={vm}
             onStatusChange={onStatusChange}
             onDispatch={onDispatch}
-            onScheduleOpen={onScheduleOpen}
-            onCancelSchedule={onCancelSchedule}
             onQueueOpen={onQueueOpen}
             onUnqueue={onUnqueue}
           />

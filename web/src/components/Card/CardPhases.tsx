@@ -222,11 +222,11 @@ const PhaseCard: React.FC<PhaseCardProps> = ({
           )}
           {isEditing && onSave && onCancel && (
             <div className="kv2-phase-edit-actions">
-              <button type="button" className="kv2-phase-action kv2-phase-action--save" onClick={onSave}>
-                Save
-              </button>
               <button type="button" className="kv2-phase-action" onClick={onCancel}>
                 Cancel
+              </button>
+              <button type="button" className="kv2-phase-action kv2-phase-action--save" onClick={onSave}>
+                Save
               </button>
             </div>
           )}
