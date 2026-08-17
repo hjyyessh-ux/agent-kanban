@@ -4,6 +4,7 @@ import { KanbanStore } from '../core/store';
 import { SchedulerStore } from '../core/scheduler-store';
 import { SettingsStore } from '../core/settings-store';
 import { ScriptStore } from '../core/script-store';
+import { QuickActionStore } from '../core/quick-action-store';
 import { SkillStore } from '../core/skill-store';
 import { SkillRootsStore } from '../core/skill-roots-store';
 import { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -24,6 +25,7 @@ import { sweepWikiInternalCards } from './wiki/wiki-sweep';
 import { appendRuntimeDebugLog } from './debug-log';
 import type { QuestionMonitor } from './question-monitor';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
+import { ScriptExecutionService } from './script-execution-service';
 
 /** Owner-gated background service started/stopped with the singleton runtime. */
 export interface SingletonService {
@@ -37,6 +39,7 @@ export interface KanbanAppStores {
   schedulerStore: SchedulerStore;
   settingsStore: SettingsStore;
   scriptStore: ScriptStore;
+  quickActionStore: QuickActionStore;
   skillStore: SkillStore;
   skillRootsStore: SkillRootsStore;
   placementTargetsStore: PlacementTargetsStore;
@@ -82,6 +85,7 @@ export interface CreateKanbanAppOptions {
 
 export interface KanbanApp extends KanbanAppStores {
   dispatchCard: (cardId: string) => Promise<DispatchResult>;
+  scriptExecutionService: ScriptExecutionService;
   wikiWorker: WikiWorker;
   peerSessionCoordinator: PeerSessionCoordinator;
   telegramPoller: TelegramPoller;
@@ -111,6 +115,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   // from the board and keep them out of the wiki processing queue.
   await sweepWikiInternalCards(store);
   const scriptStore = new ScriptStore(dataDir);
+  const quickActionStore = new QuickActionStore(dataDir, scriptStore);
   const skillStore = new SkillStore(dataDir);
   const skillRootsStore = new SkillRootsStore(dataDir);
   const placementTargetsStore = new PlacementTargetsStore(dataDir);
@@ -123,6 +128,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     schedulerStore,
     settingsStore,
     scriptStore,
+    quickActionStore,
     skillStore,
     skillRootsStore,
     placementTargetsStore,
@@ -131,6 +137,12 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   };
 
   const dispatch = await options.createDispatch(stores);
+  const scriptExecutionService = new ScriptExecutionService({
+    scriptStore,
+    cardStore: store,
+    settingsStore,
+    dispatchFn: dispatch.dispatchCard,
+  });
   schedulerEngine.setPromptDispatcher(store, dispatch.dispatchCard);
   const scheduledDispatchService = new ScheduledDispatchService({
     store,
@@ -173,6 +185,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const runtimeLock = new RuntimeLock(dataDir, 'singleton-runtime');
   let isRuntimeOwner = await runtimeLock.acquire();
   schedulerEngine.setRuntimeOwner(isRuntimeOwner);
+  if (isRuntimeOwner) {
+    await scriptExecutionService.initialize();
+  }
 
   // Wiki worker — consumes wiki-pending archived cards into the Obsidian
   // vault. Only runs on the singleton runtime owner (start/stop below).
@@ -211,6 +226,8 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     skillRootsStore,
     placementTargetsStore,
     dispatch.runStore,
+    quickActionStore,
+    scriptExecutionService,
   );
   const port = await monitor.start();
   if (port) {
@@ -242,6 +259,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const startSingleton = async (): Promise<void> => {
     if (singletonStarted) return;
     appendRuntimeDebugLog(`${options.debugLabel}.start`, { owner: true });
+    await scriptExecutionService.initialize();
     schedulerEngine.setRuntimeOwner(true);
     await schedulerEngine.start();
     await scheduledDispatchService.start();
@@ -291,6 +309,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   return {
     ...stores,
     dispatchCard: dispatch.dispatchCard,
+    scriptExecutionService,
     wikiWorker,
     peerSessionCoordinator,
     telegramPoller,

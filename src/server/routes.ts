@@ -4,6 +4,12 @@ import type { SchedulerEngine } from '../plugin/scheduler-engine';
 import { dispatchCardWithScheduledReservation } from '../plugin/scheduled-dispatch-service';
 import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
+import {
+  renderPromptQuickAction,
+  resolveQuickActionParameters,
+  type QuickActionStore,
+} from '../core/quick-action-store';
+import { ScriptExecutionService } from '../plugin/script-execution-service';
 import type { SkillStore } from '../core/skill-store';
 import type { SkillRootsStore } from '../core/skill-roots-store';
 import type { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -18,6 +24,7 @@ import { getSettingValueOrDefault } from '../core/settings-store';
 import type {
   AgentRuntime,
   DispatchResult,
+  KanbanCard,
   McpInventoryDiscoveryResult,
   McpPlacement,
   McpRuntime,
@@ -25,6 +32,7 @@ import type {
   SchedulerScheduleInputState,
   SchedulerSimpleRepeat,
   SkillRuntime,
+  RunQuickActionResponse,
   WikiArchiveCardStatusFilter,
 } from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, type RuntimeCatalogEntry } from '../core/runtime-config';
@@ -267,6 +275,89 @@ export type NativeSessionInfo = {
   sourceCwd?: string;
 };
 export type AggregateSessionsFn = () => Promise<NativeSessionInfo[]>;
+
+interface ParsedQuickActionRunInput {
+  clientRequestId: string;
+  parameterValues: Record<string, unknown>;
+}
+
+type QuickActionRunRouteBody =
+  | RunQuickActionResponse
+  | (RunQuickActionResponse & { error: string })
+  | { error: string };
+
+interface QuickActionRunRouteResult {
+  body: QuickActionRunRouteBody;
+  statusCode: number;
+}
+
+function parseQuickActionRunInput(value: unknown): ParsedQuickActionRunInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Quick action run request must be an object');
+  }
+  const body = value as Record<string, unknown>;
+  const unknownKey = Object.keys(body).find((key) => (
+    key !== 'clientRequestId' && key !== 'parameterValues'
+  ));
+  if (unknownKey) throw new Error(`Quick action run request contains unsupported field: ${unknownKey}`);
+  if (typeof body.clientRequestId !== 'string' || body.clientRequestId.trim().length === 0) {
+    throw new Error('clientRequestId must be a non-empty string');
+  }
+  if (
+    typeof body.parameterValues !== 'object'
+    || body.parameterValues === null
+    || Array.isArray(body.parameterValues)
+  ) {
+    throw new Error('parameterValues must be an object');
+  }
+  return {
+    clientRequestId: body.clientRequestId,
+    parameterValues: body.parameterValues as Record<string, unknown>,
+  };
+}
+
+function dispatchErrorStatus(error: unknown): number {
+  if (typeof error !== 'object' || error === null || !('statusCode' in error)) return 500;
+  const value = (error as { statusCode?: unknown }).statusCode;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599
+    ? value
+    : 500;
+}
+
+function quickActionRunResultFromCard(card: KanbanCard): QuickActionRunRouteResult {
+  const run = card.quickActionRun;
+  const body: RunQuickActionResponse = {
+    cardId: card.id,
+    status: card.status,
+    dispatch: run?.dispatch ?? null,
+    ...(run?.failureSummary ? { failureSummary: run.failureSummary } : {}),
+  };
+  if (run?.status === 'failed') {
+    return {
+      statusCode: run.errorStatusCode ?? 500,
+      body: { ...body, error: run.failureSummary ?? 'Quick action dispatch failed' },
+    };
+  }
+  return { statusCode: run?.status === 'accepted' ? 200 : 202, body };
+}
+
+async function scriptQuickActionRunResultFromCard(
+  card: KanbanCard,
+  scriptStore: ScriptStore,
+): Promise<QuickActionRunRouteResult> {
+  const run = card.scriptRunId ? await scriptStore.findRun(card.scriptRunId) : null;
+  const body: RunQuickActionResponse = {
+    cardId: card.id,
+    status: card.status,
+    dispatch: null,
+    ...(card.scriptRunId ? { runId: card.scriptRunId } : {}),
+    ...(run ? { runStatus: run.status } : {}),
+    ...(card.quickActionRun?.failureSummary
+      ? { failureSummary: card.quickActionRun.failureSummary }
+      : {}),
+  };
+  return { statusCode: run?.status === 'running' || !run ? 202 : 200, body };
+}
 export type LocalPeerSessionsFn = () => Promise<{ instanceId: string; sessions: NativeSessionInfo[] }>;
 export type PeerTokenFn = () => string;
 export type ScopeMcpInventoryFn = (
@@ -309,7 +400,21 @@ export function createRouteHandler(
   placementTargetsStore?: PlacementTargetsStore,
   runtimeRunStore?: RuntimeRunStore,
   scopeMcpInventoryFn?: ScopeMcpInventoryFn,
+  quickActionStore?: QuickActionStore,
+  scriptExecutionService?: ScriptExecutionService,
 ) {
+  const effectiveScriptExecutionService = scriptExecutionService ?? (
+    scriptStore
+      ? new ScriptExecutionService({
+        scriptStore,
+        cardStore: store,
+        settingsStore,
+        dispatchFn,
+      })
+      : undefined
+  );
+  const activeQuickActionRuns = new Map<string, Promise<QuickActionRunRouteResult>>();
+
   async function handleRequest(req: Request, ctx?: { clientAddress?: string }): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -774,7 +879,7 @@ export function createRouteHandler(
           queuedAfterCardId?: string;
           queuePosition?: number;
           queueSessionMode?: import('../core/types').QueueSessionMode;
-        };
+        } & Record<string, unknown>;
         const agentRuntime: import('../core/types').AgentRuntime = (
           body.agentRuntime === 'opencode'
           || body.agentRuntime === 'codex'
@@ -798,8 +903,18 @@ export function createRouteHandler(
           }
           scheduledDispatch = { scheduledAt };
         }
+        const {
+          originChannel: _originChannel,
+          executionKind: _executionKind,
+          quickActionId: _quickActionId,
+          quickActionRequestId: _quickActionRequestId,
+          scriptRunId: _scriptRunId,
+          scriptName: _scriptName,
+          parameterSnapshot: _parameterSnapshot,
+          ...publicCardInput
+        } = body;
         const card = await store.createCard({
-          ...body,
+          ...publicCardInput,
           agentRuntime,
           title: body.title,
           description: body.description ?? '',
@@ -809,6 +924,268 @@ export function createRouteHandler(
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Invalid request body';
         return errorResponse(message, 400);
+      }
+    }
+
+    // ─── Quick Action Routes ──────────────────────────────────────
+
+    if (method === 'GET' && path === '/api/quick-actions') {
+      if (!quickActionStore) return errorResponse('Quick actions not available', 503);
+      return json(await quickActionStore.getActions());
+    }
+
+    if (method === 'POST' && path === '/api/quick-actions') {
+      if (!quickActionStore) return errorResponse('Quick actions not available', 503);
+      try {
+        return json(await quickActionStore.createAction(await req.json()), 201);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
+      }
+    }
+
+    const quickActionRunMatch = path.match(/^\/api\/quick-actions\/([^/]+)\/run$/);
+    if (quickActionRunMatch && method === 'POST') {
+      if (!quickActionStore) return errorResponse('Quick actions not available', 503);
+
+      let input: ParsedQuickActionRunInput;
+      try {
+        input = parseQuickActionRunInput(await req.json());
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
+      }
+
+      const id = decodeURIComponent(quickActionRunMatch[1]);
+      const idempotencyKey = JSON.stringify([id, input.clientRequestId]);
+      const inFlight = activeQuickActionRuns.get(idempotencyKey);
+      if (inFlight) {
+        const result = await inFlight;
+        return json(result.body, result.statusCode);
+      }
+
+      const runPromise = (async (): Promise<QuickActionRunRouteResult> => {
+        const priorCard = await store.findQuickActionCard(id, input.clientRequestId);
+        if (priorCard) {
+          if (priorCard.executionKind === 'script') {
+            if (!scriptStore) {
+              return { statusCode: 503, body: { error: 'Scripts not available' } };
+            }
+            return scriptQuickActionRunResultFromCard(priorCard, scriptStore);
+          }
+          return quickActionRunResultFromCard(priorCard);
+        }
+
+        const action = await quickActionStore.getAction(id);
+        if (!action) {
+          return { statusCode: 404, body: { error: 'Quick action not found' } };
+        }
+        if (!action.enabled) {
+          return { statusCode: 409, body: { error: 'Quick action is disabled' } };
+        }
+        if (!action.available) {
+          return {
+            statusCode: 409,
+            body: { error: action.unavailableReason ?? 'Quick action is unavailable' },
+          };
+        }
+        if (action.type === 'script') {
+          if (!scriptStore || !effectiveScriptExecutionService) {
+            return { statusCode: 503, body: { error: 'Script execution not available' } };
+          }
+          let resolved: ReturnType<typeof resolveQuickActionParameters>;
+          try {
+            resolved = resolveQuickActionParameters(action, input.parameterValues);
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Quick action parameter validation failed';
+            return { statusCode: 400, body: { error: message } };
+          }
+
+          let plan: Awaited<ReturnType<ScriptExecutionService['prepareExecution']>>;
+          try {
+            plan = await effectiveScriptExecutionService.prepareExecution({
+              scriptId: action.scriptId,
+              cwdOverride: action.projectDir,
+              parameterValues: resolved.values,
+              secretParameterKeys: new Set(
+                action.parameterDefinitions
+                  .filter((definition) => definition.type === 'secret')
+                  .map((definition) => definition.key),
+              ),
+            });
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Script execution validation failed';
+            return { statusCode: dispatchErrorStatus(e), body: { error: message } };
+          }
+
+          const reservation = await store.createQuickActionCard({
+            title: action.name,
+            description: action.description || `Run script: ${plan.scriptName}`,
+            projectDir: plan.cwd,
+            originChannel: 'quick_action',
+            executionKind: 'script',
+            quickActionId: action.id,
+            quickActionRequestId: input.clientRequestId,
+            scriptRunId: plan.runId,
+            scriptName: plan.scriptName,
+            parameterSnapshot: resolved.snapshot,
+          });
+          if (!reservation.created) {
+            return scriptQuickActionRunResultFromCard(reservation.card, scriptStore);
+          }
+
+          try {
+            const accepted = await effectiveScriptExecutionService.startPreparedExecution(
+              plan,
+              reservation.card.id,
+            );
+            return {
+              statusCode: 202,
+              body: {
+                cardId: accepted.cardId,
+                status: 'in_progress',
+                dispatch: null,
+                runId: accepted.runId,
+                runStatus: accepted.status,
+              },
+            };
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Script execution failed to start';
+            const failedCard = await store.getCard(reservation.card.id);
+            return {
+              statusCode: dispatchErrorStatus(e),
+              body: {
+                error: message,
+                cardId: reservation.card.id,
+                status: failedCard?.status ?? 'complete',
+                dispatch: null,
+                runId: plan.runId,
+                runStatus: 'fail',
+                failureSummary: failedCard?.progressSummary ?? `[failed] ${message}`,
+              },
+            };
+          }
+        }
+
+        if (!action.projectDir.trim()) {
+          return { statusCode: 400, body: { error: 'Quick action projectDir is required' } };
+        }
+        try {
+          if (!existsSync(action.projectDir) || !statSync(action.projectDir).isDirectory()) {
+            return {
+              statusCode: 400,
+              body: { error: `Quick action projectDir is not a valid directory: ${action.projectDir}` },
+            };
+          }
+        } catch {
+          return {
+            statusCode: 400,
+            body: { error: `Quick action projectDir is not a valid directory: ${action.projectDir}` },
+          };
+        }
+
+        let rendered: ReturnType<typeof renderPromptQuickAction>;
+        try {
+          rendered = renderPromptQuickAction(action, input.parameterValues);
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Quick action parameter validation failed';
+          return { statusCode: 400, body: { error: message } };
+        }
+
+        const reservation = await store.createQuickActionCard({
+          title: rendered.title,
+          description: rendered.prompt,
+          projectDir: action.projectDir,
+          agentRuntime: action.agentRuntime,
+          model: action.model,
+          agentType: action.agentType,
+          command: action.command,
+          arguments: rendered.arguments,
+          codexOptions: action.codexOptions,
+          claudeOptions: action.claudeOptions,
+          originChannel: 'quick_action',
+          executionKind: 'agent',
+          quickActionId: action.id,
+          quickActionRequestId: input.clientRequestId,
+          parameterSnapshot: rendered.parameterSnapshot,
+        });
+        if (!reservation.created) return quickActionRunResultFromCard(reservation.card);
+
+        try {
+          if (!dispatchFn) {
+            throw Object.assign(new Error('Dispatch not available'), { statusCode: 503 });
+          }
+          const dispatch = await dispatchCardWithScheduledReservation({
+            store,
+            dispatchFn,
+            cardId: reservation.card.id,
+            claimScheduled: false,
+          });
+          const card = await store.finalizeQuickActionRun(reservation.card.id, {
+            status: 'accepted',
+            dispatch,
+          });
+          return quickActionRunResultFromCard(card);
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : String(e);
+          const failureSummary = `[failed] Quick action dispatch failed: ${message}`;
+          const card = await store.finalizeQuickActionRun(reservation.card.id, {
+            status: 'failed',
+            failureSummary,
+            errorStatusCode: dispatchErrorStatus(e),
+          });
+          return quickActionRunResultFromCard(card);
+        }
+      })().catch((e: unknown): QuickActionRunRouteResult => ({
+        statusCode: 500,
+        body: { error: e instanceof Error ? e.message : 'Quick action run failed' },
+      }));
+
+      activeQuickActionRuns.set(idempotencyKey, runPromise);
+      try {
+        const result = await runPromise;
+        return json(result.body, result.statusCode);
+      } finally {
+        if (activeQuickActionRuns.get(idempotencyKey) === runPromise) {
+          activeQuickActionRuns.delete(idempotencyKey);
+        }
+      }
+    }
+
+    const quickActionMatch = path.match(/^\/api\/quick-actions\/([^/]+)$/);
+    if (quickActionMatch) {
+      if (!quickActionStore) return errorResponse('Quick actions not available', 503);
+      const id = decodeURIComponent(quickActionMatch[1]);
+
+      if (method === 'GET') {
+        const action = await quickActionStore.getAction(id);
+        if (!action) return errorResponse('Quick action not found', 404);
+        return json(action);
+      }
+
+      if (method === 'PATCH') {
+        try {
+          return json(await quickActionStore.updateAction(id, await req.json()));
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Invalid request body';
+          if (message.includes('Quick action not found')) {
+            return errorResponse('Quick action not found', 404);
+          }
+          return errorResponse(message, 400);
+        }
+      }
+
+      if (method === 'DELETE') {
+        try {
+          await quickActionStore.deleteAction(id);
+          return new Response(null, { status: 204 });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Quick action delete failed';
+          if (message.includes('Quick action not found')) {
+            return errorResponse('Quick action not found', 404);
+          }
+          return errorResponse(message, 500);
+        }
       }
     }
 
@@ -993,7 +1370,18 @@ export function createRouteHandler(
               return errorResponse('Can only change runtime before dispatch', 400);
             }
           }
-          const card = await store.updateCard(id, body);
+          const {
+            originChannel: _originChannel,
+            executionKind: _executionKind,
+            quickActionId: _quickActionId,
+            quickActionRequestId: _quickActionRequestId,
+            quickActionRun: _quickActionRun,
+            scriptRunId: _scriptRunId,
+            scriptName: _scriptName,
+            parameterSnapshot: _parameterSnapshot,
+            ...publicCardUpdates
+          } = body;
+          const card = await store.updateCard(id, publicCardUpdates);
           return json(card);
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : '';
@@ -1603,67 +1991,30 @@ export function createRouteHandler(
     // Route: POST /api/scripts/:id/run
     const scriptRunMatch = path.match(/^\/api\/scripts\/([^/]+)\/run$/);
     if (scriptRunMatch && method === 'POST') {
-      if (!scriptStore) return errorResponse('Scripts not available', 503);
+      if (!scriptStore || !effectiveScriptExecutionService) {
+        return errorResponse('Script execution not available', 503);
+      }
+      if ((await req.text()).trim().length > 0) {
+        return errorResponse('Script run requests do not accept command or interpreter overrides', 400);
+      }
       const id = scriptRunMatch[1];
       try {
         const entry = await scriptStore.getEntry(id);
         if (!entry) return errorResponse('Script not found', 404);
-
-        const { nanoid } = await import('nanoid');
-        const runId = nanoid();
-        const startedAt = new Date().toISOString();
-
-        // Record initial 'running' status
-        const initialRun: import('../core/types').ScriptRun = {
-          id: runId,
-          scriptId: id,
-          startedAt,
-          status: 'running',
-        };
-        await scriptStore.addRun(id, initialRun);
-
-        // Determine shell command
-        const cmd: string[] = entry.language === 'python'
-          ? ['python3', '-c', entry.content]
-          : ['bash', '-c', entry.content];
-
-        const spawnOpts: { cmd: string[]; cwd?: string; stdout: 'pipe'; stderr: 'pipe' } = {
-          cmd,
-          stdout: 'pipe' as const,
-          stderr: 'pipe' as const,
-        };
-        if (entry.projectDir) {
-          spawnOpts.cwd = entry.projectDir;
-        }
-
-        const proc = Bun.spawn(spawnOpts.cmd, {
-          cwd: spawnOpts.cwd,
-          stdout: 'pipe',
-          stderr: 'pipe',
+        const plan = await effectiveScriptExecutionService.prepareExecution({ scriptId: id });
+        const card = await store.createCard({
+          title: entry.name,
+          description: entry.description || `Run script: ${entry.name}`,
+          projectDir: plan.cwd,
+          executionKind: 'script',
+          scriptRunId: plan.runId,
+          scriptName: plan.scriptName,
         });
-
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-        const exitCode = await proc.exited;
-
-        const finalRun: import('../core/types').ScriptRun = {
-          id: runId,
-          scriptId: id,
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          status: exitCode === 0 ? 'success' : 'fail',
-          exitCode,
-          stdout,
-          stderr,
-        };
-        await scriptStore.addRun(id, finalRun);
-
-        return json(finalRun);
+        const accepted = await effectiveScriptExecutionService.startPreparedExecution(plan, card.id);
+        return json(accepted, 202);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Run failed';
-        return errorResponse(message, 500);
+        return errorResponse(message, dispatchErrorStatus(e));
       }
     }
 
@@ -1704,8 +2055,19 @@ export function createRouteHandler(
       if (method === 'DELETE') {
         const entry = await scriptStore.getEntry(id);
         if (!entry) return errorResponse('Script not found', 404);
-        await scriptStore.deleteEntry(id);
-        return new Response(null, { status: 204 });
+        if (quickActionStore && await quickActionStore.hasScriptReference(id)) {
+          return errorResponse('Script is referenced by a quick action', 409);
+        }
+        try {
+          await scriptStore.deleteEntry(id);
+          return new Response(null, { status: 204 });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Delete failed';
+          if (message.includes('Script entry is running')) {
+            return errorResponse(message, 409);
+          }
+          return errorResponse(message, 500);
+        }
       }
     }
 

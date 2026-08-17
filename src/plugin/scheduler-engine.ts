@@ -4,8 +4,12 @@ import type { KanbanStore } from '../core/store';
 import type { DispatchResult, SchedulerEntry, SchedulerRun } from '../core/types';
 import { SchedulerStore } from '../core/scheduler-store';
 import { SettingsStore } from '../core/settings-store';
+import {
+  buildExecutionEnvironment,
+  capExecutionOutput,
+  redactSecrets,
+} from '../core/execution-environment';
 
-const MAX_STDOUT = 8192; // 8KB cap
 const RELOAD_INTERVAL_MS = 10_000;
 
 interface CronLike {
@@ -278,52 +282,34 @@ export class SchedulerEngine {
       return { exitCode: 1, stdout: '', stderr: 'Empty command' };
     }
 
-    // Inject settings as environment variables
-    let settingsEnv: Record<string, string> = {};
-    if (this.settingsStore) {
-      try {
-        const entries = await this.settingsStore.getEntries();
-        for (const entry of entries) {
-          settingsEnv[entry.key] = entry.value;
-        }
-      } catch {
-        // Settings unavailable — continue without them
-      }
+    const environment = await buildExecutionEnvironment({ settingsStore: this.settingsStore });
+    try {
+      const result = this.executeShellFn
+        ? await this.executeShellFn({ command, cwd, env: environment.env })
+        : await (async (): Promise<ShellExecutionResult> => {
+          const proc = Bun.spawn(['bash', '-lc', command], {
+            stdout: 'pipe',
+            stderr: 'pipe',
+            env: environment.env,
+            cwd,
+          });
+          const [stdout, stderr, exitCode] = await Promise.all([
+            new Response(proc.stdout).text(),
+            new Response(proc.stderr).text(),
+            proc.exited,
+          ]);
+          return { exitCode, stdout, stderr };
+        })();
+
+      return {
+        exitCode: result.exitCode,
+        stdout: capExecutionOutput(redactSecrets(result.stdout, environment.secretValues)) ?? '',
+        stderr: capExecutionOutput(redactSecrets(result.stderr, environment.secretValues)) ?? '',
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(redactSecrets(message, environment.secretValues));
     }
-
-    const env = Object.fromEntries(
-      Object.entries({ ...process.env, ...settingsEnv }).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-    );
-
-    if (this.executeShellFn) {
-      return this.executeShellFn({
-        command,
-        cwd,
-        env,
-      });
-    }
-
-    const proc = Bun.spawn(['bash', '-lc', command], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env,
-      cwd,
-    });
-
-    const stdoutReader = new Response(proc.stdout).text();
-    const stderrReader = new Response(proc.stderr).text();
-    const [stdoutText, stderrText] = await Promise.all([stdoutReader, stderrReader]);
-    const exitCode = await proc.exited;
-
-    return {
-      exitCode,
-      stdout: stdoutText.length > MAX_STDOUT
-        ? stdoutText.slice(0, MAX_STDOUT) + '\n... (truncated)'
-        : stdoutText,
-      stderr: stderrText.length > MAX_STDOUT
-        ? stderrText.slice(0, MAX_STDOUT) + '\n... (truncated)'
-        : stderrText,
-    };
   }
 
   private async executePromptEntry(entry: SchedulerEntry, run: SchedulerRun): Promise<void> {

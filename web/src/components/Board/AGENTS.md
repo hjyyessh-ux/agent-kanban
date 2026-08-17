@@ -15,7 +15,7 @@ Renders the kanban board itself: grid (column) view and list view, drag-and-drop
 | `BoardColumnHeader.test.tsx` | Tests for header count/WIP-limit rendering. |
 | `BoardCard.tsx` | Individual card rendered in grid view; wires drag handlers, status-change buttons, dispatch/queue/delete actions, and delete-confirmation logic (`confirmBoardCardDelete`, exported for testing). |
 | `BoardCard.test.tsx` | Tests `confirmBoardCardDelete`'s `window.confirm` gating. |
-| `BoardCardSections.tsx` | Shared sub-pieces reused by card/list/session views: `RuntimeBadge`/`RuntimeBadgeIcon`, `TelegramBadge`, `FavoriteToggleButton`, `CardActions`, `NestedChildAccordion`, `ActionSpinner`, `QueueTargetChip`. |
+| `BoardCardSections.tsx` | Shared sub-pieces reused by card/list/session views: runtime/Telegram/origin/execution badges, favorite/action controls, nested children, spinner, and queue target. |
 | `BoardCompleteSessionView.tsx` | Groups `done`/`complete` cards into collapsible session groups (`CompleteSessionGroup`), used instead of the flat card list for finished work. |
 | `SessionConversationModal.tsx` | Full-conversation modal opened from a completed session group; renders markdown turns and embeds `FeedbackPanel` for follow-up feedback. |
 | `BoardFilterBar.tsx` | Search/date-range/session filter bar bound to `BoardFilters`. |
@@ -32,6 +32,7 @@ Renders the kanban board itself: grid (column) view and list view, drag-and-drop
 ## For AI Agents
 ### Working In This Directory
 - View models (`V2CardViewModel`, `V2ColumnViewModel`) are the contract between selectors and rendering — add new derived fields in `board-selectors.ts`, not inline in JSX.
+- Quick Action provenance (`quickActionId`, `executionKind`, `scriptName`) is mapped by the selector and rendered by `OriginExecutionBadges` in both grid and list views.
 - Drag-and-drop is native HTML5 DnD (no external DnD library); reordering math lives in `getDragAfterElement` in `BoardColumn.tsx`.
 - Nested/subagent/worker child cards are modeled via `ChildItem`/`linkKind` and rendered through `NestedChildAccordion` in `BoardCardSections.tsx`.
 - kv2 tokens/components are loaded globally from `main.tsx`; `BoardScreen.tsx` imports no CSS itself.

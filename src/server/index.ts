@@ -5,6 +5,8 @@ import type { SchedulerStore } from '../core/scheduler-store';
 import type { SchedulerEngine } from '../plugin/scheduler-engine';
 import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
+import type { QuickActionStore } from '../core/quick-action-store';
+import type { ScriptExecutionService } from '../plugin/script-execution-service';
 import type { SkillStore } from '../core/skill-store';
 import type { SkillRootsStore } from '../core/skill-roots-store';
 import type { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -79,6 +81,8 @@ export function createServer(
   placementTargetsStore?: PlacementTargetsStore,
   runtimeRunStore?: RuntimeRunStore,
   scopeMcpInventoryFn?: ScopeMcpInventoryFn,
+  quickActionStore?: QuickActionStore,
+  scriptExecutionService?: ScriptExecutionService,
 ): ServerInstance {
   const { handleRequest } = createRouteHandler(
     store,
@@ -100,6 +104,8 @@ export function createServer(
     placementTargetsStore,
     runtimeRunStore,
     scopeMcpInventoryFn,
+    quickActionStore,
+    scriptExecutionService,
   );
 
   const fetchHandler = async (req: Request, server: ReturnType<typeof Bun.serve>) => {

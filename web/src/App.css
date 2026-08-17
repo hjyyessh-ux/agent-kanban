@@ -354,3 +354,7 @@
     padding: var(--kv2-sp-4) 0;
   }
 }
+
+.app-main--with-quick-actions {
+  padding-bottom: calc(var(--kv2-sp-10) + var(--kv2-sp-10) + env(safe-area-inset-bottom));
+}

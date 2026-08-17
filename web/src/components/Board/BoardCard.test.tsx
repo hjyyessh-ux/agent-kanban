@@ -132,4 +132,24 @@ describe('BoardCard scheduled metadata', () => {
     expect(html).toContain('title="Scheduler origin · Nightly Summary"');
     expect(html).toContain('kv2-scheduler-badge');
   });
+
+  test('renders Quick Action and Script provenance with the script snapshot', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({
+          originChannel: 'quick_action',
+          executionKind: 'script',
+          quickActionId: 'qa-deploy',
+          scriptName: 'Deploy service',
+        })}
+        draggable={false}
+        onClick={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).toContain('Quick Action');
+    expect(html).toContain('Script');
+    expect(html).toContain('Quick Action origin · qa-deploy');
+    expect(html).toContain('Script execution · Deploy service');
+  });
 });

@@ -12,7 +12,7 @@ Thin Bun server layer. `index.ts` owns `Bun.serve()` and SPA/static serving; `ro
 | File | Description |
 |------|-------------|
 | `index.ts` | `createServer()` wraps `Bun.serve()`, port-retry (configured port + 3), SPA static/HTML-fallback serving, API-first routing before static lookup |
-| `routes.ts` | All REST endpoints — cards/archive/dispatch, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and runtime-aware `/api/scope/*` (targets, MCP inventory/write, cold freeze/restore/detail) |
+| `routes.ts` | All REST endpoints — cards/archive/dispatch, Quick Actions, schedulers, settings, scripts, skills, skill-roots, models, questions, wiki proxy, and runtime-aware `/api/scope/*` (targets, MCP inventory/write, cold freeze/restore/detail) |
 | `maintenance-runner.ts` | Update/restart maintenance flow backing `/api/maintenance/*` routes |
 
 ## For AI Agents
@@ -62,6 +62,8 @@ The SPA is served same-origin, so the API grants **no cross-origin access**:
 - **Secret redaction**: `GET /api/settings` (list) and settings write responses redact masked values (`value: ''`). Plaintext is only returned by the explicit, token-protected single-entry `GET /api/settings/:id`. The scope manager applies the same discipline via `detectPlaintextSecret` (`core/mcp-config-store.ts`) and `secret-detect.ts` before surfacing MCP config values.
 
 When adding routes: classify them in `requiresLocalAuth` (mutations and secret/code/scope reads need auth) and never echo masked secret values in bulk responses.
+
+Prompt Quick Action runs validate stored definitions and directories before atomically creating a card, then call the injected shared `dispatchFn`. Script Quick Actions and `/api/scripts/:id/run` both call the injected `ScriptExecutionService`; never add route-local spawn or shell selection.
 
 ## ANTI-PATTERNS
 

@@ -198,7 +198,7 @@ cron 표현식은 5개의 필드로 구성되며, 각 필드는 공백으로 구
 
 ### bash
 
-`bash` action은 `command`를 그대로 실행한다. `cwd`가 있으면 해당 디렉토리에서 실행하고, 설정 저장소의 key/value는 환경변수로 주입된다.
+`bash` action은 `command`를 그대로 실행한다. `cwd`가 있으면 해당 디렉토리에서 실행하고, 설정 저장소의 key/value는 Script 실행기와 같은 environment helper로 주입된다. `PATH`, interpreter/system/internal key와 `AK_PARAM_*` 같은 reserved 충돌은 주입하지 않는다. masked Settings 값은 stdout/stderr/error와 history에 저장하기 전에 `[REDACTED]` 처리하며 출력은 UTF-8 기준 8KB로 제한한다.
 
 예시:
 

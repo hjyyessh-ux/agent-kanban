@@ -96,4 +96,22 @@ describe('selectColumns — nested child tree', () => {
     expect(vm.scheduledAtLabel).toBe('2026-07-18 09:30 KST');
     expect(vm.scheduledBadgeLabel).toBe('예약됨 · 2026-07-18 09:30 KST');
   });
+
+  test('preserves Quick Action execution provenance for board and list renderers', () => {
+    const vm = getTodoCard([
+      makeCard('quick-action', {
+        originChannel: 'quick_action',
+        executionKind: 'script',
+        quickActionId: 'qa-1',
+        scriptName: 'Deploy service',
+      }),
+    ], 'quick-action');
+
+    expect(vm).toMatchObject({
+      originChannel: 'quick_action',
+      executionKind: 'script',
+      quickActionId: 'qa-1',
+      scriptName: 'Deploy service',
+    });
+  });
 });

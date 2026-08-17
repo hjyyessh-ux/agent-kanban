@@ -33,6 +33,8 @@ import { createUiAlert } from './hooks/uiAlert';
 import type { BoardFilters } from './components/Board/board-filters';
 import { DEFAULT_BOARD_FILTERS } from './components/Board/board-filters';
 import { fetchCard, uploadScreenshot } from './hooks/useKanbanApi';
+import { useQuickActions } from './hooks/useQuickActions';
+import { QuickActionsDialog } from './components/QuickActions/QuickActionsDialog';
 
 const WikiView = React.lazy(async () => {
   const module = await import('./components/Wiki/WikiView');
@@ -85,7 +87,8 @@ export default function App() {
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
   const [showBoardTools, setShowBoardTools] = useState(false);
   const scheduler = useScheduler(activeTab === 'scheduler');
-  const scripts = useScripts(activeTab === 'capabilities');
+  const scripts = useScripts(activeTab === 'capabilities' || activeTab === 'board');
+  const quickActions = useQuickActions(activeTab === 'board');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
   const settings = useSettings(activeTab === 'settings');
   // Loaded eagerly (not tab-gated) so card pickers see discovered skills on open.
@@ -96,12 +99,17 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
   useEffect(() => {
     setSelectedCard((prev) => {
       if (!prev) return prev;
       return cards.find((card) => card.id === prev.id) ?? null;
     });
   }, [cards]);
+
+  useEffect(() => {
+    if (activeTab !== 'board') setShowQuickActions(false);
+  }, [activeTab]);
 
   // 객체가 아닌 key만 보관하고, 매 렌더마다 최신 카드 목록에서 세션 그룹을 다시 만든다.
   // 폴링으로 카드가 갱신되어도 모달이 최신 turn을 반영하도록 보장한다.
@@ -334,7 +342,7 @@ export default function App() {
       </header>
 
       <main
-        className="app-main"
+        className={`app-main${activeTab === 'board' ? ' app-main--with-quick-actions' : ''}`}
         id={PANEL_IDS[activeTab]}
         role="tabpanel"
         aria-labelledby={TAB_IDS[activeTab]}
@@ -516,6 +524,41 @@ export default function App() {
           onScreenshotDeleted={(screenshotId) => {
             setSelectedCard(prev => prev ? { ...prev, screenshots: prev.screenshots?.filter(s => s.id !== screenshotId) || [] } : null);
           }}
+        />
+      )}
+
+      {activeTab === 'board' && (
+        <button
+          type="button"
+          className="kv2-btn kv2-btn--primary kv2-quick-actions-launcher"
+          aria-label="Quick Actions"
+          aria-haspopup="dialog"
+          aria-expanded={showQuickActions}
+          onClick={() => setShowQuickActions(true)}
+        >
+          <span aria-hidden="true">⚡</span>
+          <span className="kv2-quick-actions-launcher-label">Quick Actions</span>
+        </button>
+      )}
+
+      {showQuickActions && (
+        <QuickActionsDialog
+          actions={quickActions.entries}
+          scripts={scripts.entries}
+          loading={quickActions.loading}
+          error={quickActions.error}
+          runningActionIds={quickActions.runningActionIds}
+          onCreate={quickActions.createEntry}
+          onUpdate={quickActions.updateEntry}
+          onDelete={quickActions.deleteEntry}
+          onRun={async (id, parameterValues) => {
+            const result = await quickActions.runEntry(id, parameterValues);
+            await refreshCards();
+            return result;
+          }}
+          onRefresh={quickActions.refreshEntries}
+          onClearError={quickActions.clearError}
+          onClose={() => setShowQuickActions(false)}
         />
       )}
 

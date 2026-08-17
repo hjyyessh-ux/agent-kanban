@@ -1,3 +1,11 @@
+import type {
+  CreateQuickActionInput,
+  QuickActionView,
+  RunQuickActionInput,
+  RunQuickActionResponse,
+  UpdateQuickActionInput,
+} from '../../src/core/types';
+
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681';
 
 async function parseJson<T>(res: Response, label: string): Promise<T> {
@@ -131,6 +139,7 @@ export async function apiCreateScript(data: {
   content: string;
   description?: string;
   language?: string;
+  projectDir?: string;
 }): Promise<ScriptEntry> {
   const res = await fetch(`${BASE}/api/scripts`, {
     method: 'POST',
@@ -153,6 +162,53 @@ export async function apiGetScripts(): Promise<ScriptEntry[]> {
 }
 
 export type { ScriptEntry };
+
+// ── Quick Actions ────────────────────────────────────────────────────────────
+
+export async function apiGetQuickActions(): Promise<QuickActionView[]> {
+  const res = await fetch(`${BASE}/api/quick-actions`);
+  return parseJson<QuickActionView[]>(res, 'Get quick actions failed');
+}
+
+export async function apiCreateQuickAction(data: CreateQuickActionInput): Promise<QuickActionView> {
+  const res = await fetch(`${BASE}/api/quick-actions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<QuickActionView>(res, 'Create quick action failed');
+}
+
+export async function apiUpdateQuickAction(
+  id: string,
+  data: UpdateQuickActionInput,
+): Promise<QuickActionView> {
+  const res = await fetch(`${BASE}/api/quick-actions/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<QuickActionView>(res, 'Update quick action failed');
+}
+
+export async function apiDeleteQuickAction(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/quick-actions/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Delete quick action failed: ${res.status}`);
+}
+
+export async function apiRunQuickAction(
+  id: string,
+  data: RunQuickActionInput,
+): Promise<RunQuickActionResponse> {
+  const res = await fetch(`${BASE}/api/quick-actions/${encodeURIComponent(id)}/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<RunQuickActionResponse>(res, 'Run quick action failed');
+}
 
 // ── Scheduler / E2E controls ────────────────────────────────────────────────
 

@@ -8,6 +8,7 @@ agent-kanban은 opencode/Codex/Claude runtime 세션, Telegram follow-up, feedba
 |------|------|
 | [시작하기](./getting-started.md) | 설치, 설정, 첫 번째 카드 만들기 |
 | [Kanban 보드](./kanban-board.md) | 컬럼 구조, 카드 lifecycle, parent-child, Telegram/feedback 흐름 |
+| [Quick Actions](./quick-actions.md) | Prompt/Script action 등록, 파라미터, 실행 추적, 실패 복구 |
 | [스케줄러](./scheduler.md) | 반복 작업 설정, cron 표현식, 자연어 입력 |
 | [플러그인 도구](./plugin-tools.md) | kanban / scheduler / settings 도구 계약 |
 | [API 레퍼런스](./api-reference.md) | cards, runtimes, sessions, schedulers, settings, scripts, screenshots, models, questions API |
@@ -32,16 +33,17 @@ agent-kanban은 opencode/Codex/Claude runtime 세션, Telegram follow-up, feedba
 
 **운영 UI / 도구**
 - Board / Scheduler / Scripts / Settings 탭 제공
+- Board의 Quick Actions launcher에서 저장된 Prompt/Script 작업을 파라미터와 함께 즉시 실행
 - pending question 배너와 question reply/reject 흐름 제공
 - kanban 7개, scheduler 6개, settings 2개 도구 제공
 
 **REST API**
 - Bun.serve() 기반 HTTP 서버 (포트 24680)
-- cards, schedulers, settings, scripts, screenshots, models, questions 엔드포인트 제공
-- CORS 지원으로 웹 UI와 외부 클라이언트 연동 가능
+- cards, quick-actions, schedulers, settings, scripts, screenshots, models, questions 엔드포인트 제공
+- same-origin CORS와 loopback 로컬 토큰으로 변경·실행 요청 보호
 
 **웹 UI**
-- neobrutalism 디자인 시스템
+- Board/Card Detail을 기준으로 한 kv2 token·primitive 디자인 시스템
 - React SPA (Vite, 포트 5173)
 - board/questions 3초 폴링, scheduler/scripts/settings 10초 폴링
 - 보드 / 스케줄러 / 스크립트 / 설정 탭 전환
@@ -66,7 +68,7 @@ bun run dev        # 개발 서버 실행 (포트 5173)
 | 플러그인 플랫폼 | opencode plugin API |
 | 스케줄러 | croner (cron 라이브러리) |
 | 영속성 | 파일시스템 JSON (`~/.agent-kanban/`) |
-| 스타일링 | 순수 CSS (neobrutalism 디자인 토큰) |
+| 스타일링 | 순수 CSS (kv2 디자인 토큰/primitive) |
 
 ## 데이터 저장 위치
 
@@ -78,6 +80,7 @@ bun run dev        # 개발 서버 실행 (포트 5173)
 ├── schedulers.json      # 스케줄러 상태와 실행 이력
 ├── settings.json        # 설정/시크릿 메타데이터
 ├── scripts.json         # 스크립트와 실행 이력
+├── quick-actions.json   # Prompt/Script Quick Action 정의와 idempotency 예약
 ├── telegram-state.json  # Telegram selected session / sticky defaults
 ├── runtime-runs/        # runtime run index와 run artifact
 ├── archive/             # done 카드 월별 아카이브

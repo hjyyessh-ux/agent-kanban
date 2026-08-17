@@ -1,7 +1,7 @@
 import React from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
-import { CardActions, FavoriteToggleButton, NestedChildAccordion, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
+import { CardActions, FavoriteToggleButton, NestedChildAccordion, OriginExecutionBadges, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { formatDuration, formatRelativeTime } from '../../utils/format-duration';
 import { buildResumeCommand } from '../../utils/resume-command';
@@ -134,6 +134,12 @@ export const BoardCard: React.FC<BoardCardProps> = ({
           <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
         )}
         {vm.originChannel === 'telegram' && <TelegramBadge />}
+        <OriginExecutionBadges
+          originChannel={vm.originChannel}
+          executionKind={vm.executionKind}
+          quickActionId={vm.quickActionId}
+          scriptName={vm.scriptName}
+        />
         {onFavoriteToggle && (
           <FavoriteToggleButton
             active={vm.favorite}

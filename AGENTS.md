@@ -42,6 +42,8 @@
 |------|----------|-------|
 | Change shared card/scheduler/script/settings schema | `src/core/types.ts` | Shared by backend, web, and tests |
 | Change board persistence or queueing | `src/core/store.ts` | `active.json`, archive, screenshots, queue helpers |
+| Change Quick Action contracts, persistence, or execution | `src/core/types.ts`, `src/core/quick-action-store.ts`, `src/plugin/script-execution-service.ts`, `src/server/routes.ts` | Prompt runs reuse dispatch; Script runs use the tracked async execution service |
+| Change script execution env/security/lifecycle | `src/core/execution-environment.ts`, `src/core/script-store.ts`, `src/plugin/script-execution-service.ts` | Fixed interpreter argv, 8KB output cap, redaction, concurrency/orphan handling |
 | Change scheduler runtime behavior | `src/plugin/scheduler-engine.ts` | Croner jobs + shell execution |
 | Change plugin startup / dispatch flow | `src/plugin/index.ts` | Stores, tools, monitors, Telegram, script sync |
 | Change plugin tool contracts | `src/plugin/tools/AGENTS.md` | Factory/registration rules live there |
@@ -49,7 +51,7 @@
 | Change REST routes / API shape | `src/server/routes.ts` | Cards, schedulers, settings, scripts, screenshots, models, questions |
 | Change server bootstrap / static SPA serving | `src/server/index.ts`, `src/plugin/server.ts` | Port retry + static dir resolution |
 | Change UI state / fetch logic | `web/src/hooks/AGENTS.md` | API wrappers, polling, reducers, modal accessibility |
-| Change board/scheduler/scripts/settings/question UI | `web/src/App.tsx`, `web/src/components/` | App shell owns tabs + modal orchestration |
+| Change board/Quick Actions/scheduler/scripts/settings/question UI | `web/src/App.tsx`, `web/src/components/` | App shell owns tabs + modal orchestration; Quick Actions reuse `DialogSkeleton` |
 | Change unit/integration expectations | `src/__tests__/AGENTS.md` | Invariant-heavy coverage map |
 | Change browser flows | `e2e/AGENTS.md` | Playwright fixtures + test server flow |
 | Change operational scripts | `scripts/AGENTS.md` | Test server, install/restart, wiki backfill/reindex |

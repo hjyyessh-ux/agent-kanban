@@ -14,6 +14,7 @@ Human-facing documentation for agent-kanban, written in Korean. Covers installat
 | `README.md` | Docs index/table of contents, feature summary, quick start, data storage layout under `~/.agent-kanban/` |
 | `getting-started.md` | Prerequisites (Bun, opencode), install steps, first card walkthrough |
 | `kanban-board.md` | Board columns, card lifecycle, parent-child cards, Telegram/feedback flows |
+| `quick-actions.md` | Prompt/Script Quick Action registration, parameter/env rules, card tracking, security, and failure recovery |
 | `scheduler.md` | `SchedulerEntry` shape, cron vs natural-language schedules, shell vs skill job types, croner engine lifecycle |
 | `plugin-tools.md` | Contract reference for the kanban + scheduler plugin tools registered via `createKanbanTools()`/`createSchedulerTools()` |
 | `api-reference.md` | REST endpoint reference for cards, schedulers, settings, scripts, screenshots, models, questions |

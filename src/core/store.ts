@@ -16,6 +16,7 @@ import type {
   WikiArchiveCardsQuery,
   WikiArchiveCardsResponse,
   WikiArchiveCardStatusFilter,
+  DispatchResult,
 } from './types';
 import { WIKI_INTERNAL_MARKER } from './types';
 import { FileLock } from './filelock';
@@ -70,6 +71,13 @@ interface WikiArchiveCursor {
   offset: number;
 }
 
+export interface FinalizeScriptExecutionCardInput {
+  runId: string;
+  outcome: 'completed' | 'failed';
+  result: string;
+  failureSummary?: string;
+}
+
 function encodeWikiArchiveCursor(cursor: WikiArchiveCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
@@ -119,6 +127,86 @@ function matchesWikiArchiveSearch(card: KanbanCard, normalizedQuery: string): bo
 
 function migrateStatuses(board: KanbanBoard): KanbanBoard {
   return { ...board, cards: board.cards.map(migrateCardStatus) };
+}
+
+function buildCard(input: CreateCardInput, now: string): KanbanCard {
+  const agentRuntime = inferAgentRuntime(input);
+  const scheduledDispatchInput = input.scheduledDispatch
+    ? validateCreateScheduledDispatchInput(input.scheduledDispatch)
+    : undefined;
+  if (scheduledDispatchInput && input.queueSessionMode) {
+    throw new Error('Queued cards cannot also be scheduled');
+  }
+  return {
+    id: nanoid(),
+    title: input.title,
+    description: input.description,
+    status: 'todo',
+    sessionId: input.sessionId,
+    projectDir: input.projectDir,
+    model: input.model,
+    agentRuntime,
+    codexOptions: input.codexOptions,
+    claudeOptions: input.claudeOptions,
+    parentCardId: input.parentCardId,
+    linkKind: input.linkKind,
+    childTaskId: input.childTaskId,
+    childToolUseId: input.childToolUseId,
+    childRunId: input.childRunId,
+    rootCardId: input.rootCardId,
+    agentType: normalizeAgentType(input.agentType),
+    messageId: input.messageId,
+    command: normalizeRuntimeCommandId(input.command, agentRuntime),
+    arguments: input.arguments,
+    skills: input.skills,
+    sourceContext: input.sourceContext,
+    sessionTitle: input.sessionTitle,
+    sessionCreatedAt: input.sessionCreatedAt,
+    feedbackForCardId: input.feedbackForCardId,
+    scheduledDispatch: scheduledDispatchInput
+      ? createScheduledDispatchState(scheduledDispatchInput.scheduledAt, now)
+      : undefined,
+    queueSessionMode: input.queueSessionMode,
+    resumeSessionId: input.resumeSessionId,
+    dispatchType: input.dispatchType,
+    telegramChatId: input.telegramChatId,
+    originChannel: input.originChannel,
+    executionKind: input.executionKind,
+    quickActionId: input.quickActionId,
+    quickActionRequestId: input.quickActionRequestId,
+    scriptRunId: input.scriptRunId,
+    scriptName: input.scriptName,
+    parameterSnapshot: input.parameterSnapshot,
+    schedulerId: input.schedulerId,
+    schedulerRunId: input.schedulerRunId,
+    schedulerName: input.schedulerName,
+    telegramMessageId: input.telegramMessageId,
+    telegramReplyStatus: input.telegramReplyStatus,
+    telegramReplyMessageId: input.telegramReplyMessageId,
+    telegramReplyError: input.telegramReplyError,
+    telegramReplyUpdatedAt: input.telegramReplyUpdatedAt,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function isWikiInternalCard(input: CreateCardInput): boolean {
+  return (
+    (input.title?.startsWith(WIKI_INTERNAL_MARKER) ?? false)
+    || (input.description?.startsWith(WIKI_INTERNAL_MARKER) ?? false)
+  );
+}
+
+export interface CreateQuickActionCardResult {
+  card: KanbanCard;
+  created: boolean;
+}
+
+export interface FinalizeQuickActionRunInput {
+  status: 'accepted' | 'failed';
+  dispatch?: DispatchResult;
+  failureSummary?: string;
+  errorStatusCode?: number;
 }
 
 export class KanbanStore {
@@ -200,58 +288,7 @@ export class KanbanStore {
   async createCard(input: CreateCardInput): Promise<KanbanCard> {
     // Pre-build card OUTSIDE the lock
     const now = new Date().toISOString();
-    const agentRuntime = inferAgentRuntime(input);
-    const scheduledDispatchInput = input.scheduledDispatch
-      ? validateCreateScheduledDispatchInput(input.scheduledDispatch)
-      : undefined;
-    if (scheduledDispatchInput && input.queueSessionMode) {
-      throw new Error('Queued cards cannot also be scheduled');
-    }
-    const card: KanbanCard = {
-      id: nanoid(),
-      title: input.title,
-      description: input.description,
-      status: 'todo',
-      sessionId: input.sessionId,
-      projectDir: input.projectDir,
-      model: input.model,
-      agentRuntime,
-      codexOptions: input.codexOptions,
-      claudeOptions: input.claudeOptions,
-      parentCardId: input.parentCardId,
-      linkKind: input.linkKind,
-      childTaskId: input.childTaskId,
-      childToolUseId: input.childToolUseId,
-      childRunId: input.childRunId,
-      rootCardId: input.rootCardId,
-      agentType: normalizeAgentType(input.agentType),
-      messageId: input.messageId,
-      command: normalizeRuntimeCommandId(input.command, agentRuntime),
-      arguments: input.arguments,
-      skills: input.skills,
-      sourceContext: input.sourceContext,
-      sessionTitle: input.sessionTitle,
-      sessionCreatedAt: input.sessionCreatedAt,
-      feedbackForCardId: input.feedbackForCardId,
-      scheduledDispatch: scheduledDispatchInput
-        ? createScheduledDispatchState(scheduledDispatchInput.scheduledAt, now)
-        : undefined,
-      queueSessionMode: input.queueSessionMode,
-      resumeSessionId: input.resumeSessionId,
-      dispatchType: input.dispatchType,
-      telegramChatId: input.telegramChatId,
-      originChannel: input.originChannel,
-      schedulerId: input.schedulerId,
-      schedulerRunId: input.schedulerRunId,
-      schedulerName: input.schedulerName,
-      telegramMessageId: input.telegramMessageId,
-      telegramReplyStatus: input.telegramReplyStatus,
-      telegramReplyMessageId: input.telegramReplyMessageId,
-      telegramReplyError: input.telegramReplyError,
-      telegramReplyUpdatedAt: input.telegramReplyUpdatedAt,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const card = buildCard(input, now);
 
     // Safety guard (defense-in-depth): wiki worker one-shot prompts carry the
     // wiki-internal sentinel. The CLI hooks set WIKI_INTERNAL_ENV to skip card
@@ -259,10 +296,7 @@ export class KanbanStore {
     // card whose title/description begins with the marker — otherwise it shows
     // on the board and accumulates in active.json. startsWith (not includes) so
     // a human card that merely quotes the marker is unaffected.
-    const isWikiInternal =
-      (input.title?.startsWith(WIKI_INTERNAL_MARKER) ?? false) ||
-      (input.description?.startsWith(WIKI_INTERNAL_MARKER) ?? false);
-    if (isWikiInternal) {
+    if (isWikiInternalCard(input)) {
       return card;
     }
 
@@ -279,6 +313,182 @@ export class KanbanStore {
     });
 
     return card;
+  }
+
+  async findQuickActionCard(quickActionId: string, clientRequestId: string): Promise<KanbanCard | null> {
+    const board = await this.load();
+    return board.cards.find((card) => (
+      card.quickActionId === quickActionId
+      && card.quickActionRequestId === clientRequestId
+    )) ?? null;
+  }
+
+  /**
+   * Atomically creates or returns the card reserved by a Quick Action
+   * idempotency key. Only the caller receiving `created: true` may dispatch it.
+   */
+  async createQuickActionCard(input: CreateCardInput & {
+    originChannel: 'quick_action';
+    quickActionId: string;
+    quickActionRequestId: string;
+  }): Promise<CreateQuickActionCardResult> {
+    const now = new Date().toISOString();
+    const card = buildCard(input, now);
+    card.quickActionRun = {
+      status: 'dispatching',
+      dispatch: null,
+      updatedAt: now,
+    };
+    if (isWikiInternalCard(input)) {
+      throw new Error('Quick action templates cannot use the internal wiki marker');
+    }
+    if (card.scheduledDispatch) {
+      throw new Error('Quick action cards cannot be scheduled');
+    }
+
+    let result: CreateQuickActionCardResult | undefined;
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const existing = board.cards.find((candidate) => (
+        candidate.quickActionId === input.quickActionId
+        && candidate.quickActionRequestId === input.quickActionRequestId
+      ));
+      if (existing) {
+        result = { card: existing, created: false };
+        return;
+      }
+      board.cards.push(card);
+      board.lastModified = now;
+      await this.save(board);
+      result = { card, created: true };
+    });
+    return result!;
+  }
+
+  async finalizeQuickActionRun(cardId: string, input: FinalizeQuickActionRunInput): Promise<KanbanCard> {
+    const now = new Date().toISOString();
+    let updated: KanbanCard | undefined;
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const index = board.cards.findIndex((card) => card.id === cardId);
+      if (index === -1) throw new Error(`Card not found: ${cardId}`);
+      const card = board.cards[index];
+      if (!card.quickActionId || !card.quickActionRequestId) {
+        throw new Error(`Card is not a Quick Action card: ${cardId}`);
+      }
+
+      if (input.status === 'accepted') {
+        if (!input.dispatch) throw new Error('Accepted Quick Action run requires a dispatch result');
+        card.quickActionRun = {
+          status: 'accepted',
+          dispatch: input.dispatch,
+          updatedAt: now,
+        };
+      } else {
+        const failureSummary = input.failureSummary ?? '[failed] Quick action dispatch failed';
+        card.status = 'todo';
+        card.progressSummary = failureSummary;
+        delete card.staleStatus;
+        delete card.staleDetectedAt;
+        card.quickActionRun = {
+          status: 'failed',
+          dispatch: null,
+          failureSummary,
+          errorStatusCode: input.errorStatusCode,
+          updatedAt: now,
+        };
+      }
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+      updated = card;
+    });
+    return updated!;
+  }
+
+  async markScriptExecutionStarted(cardId: string, runId: string): Promise<KanbanCard> {
+    const now = new Date().toISOString();
+    let updated: KanbanCard | undefined;
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((candidate) => candidate.id === cardId);
+      if (!card) throw new Error(`Card not found: ${cardId}`);
+      if (card.scriptRunId && card.scriptRunId !== runId) {
+        throw new Error(`Card is linked to a different script run: ${cardId}`);
+      }
+      card.scriptRunId = runId;
+      card.executionKind = 'script';
+      card.status = 'in_progress';
+      card.startedAt ??= now;
+      delete card.completedAt;
+      delete card.durationMs;
+      delete card.resolution;
+      delete card.progressSummary;
+      delete card.staleStatus;
+      delete card.staleDetectedAt;
+      if (card.quickActionId && card.quickActionRequestId) {
+        card.quickActionRun = {
+          status: 'running',
+          dispatch: null,
+          scriptRunId: runId,
+          updatedAt: now,
+        };
+      }
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+      updated = card;
+    });
+    return updated!;
+  }
+
+  async finalizeScriptExecutionCard(
+    cardId: string,
+    input: FinalizeScriptExecutionCardInput,
+  ): Promise<KanbanCard> {
+    const now = new Date().toISOString();
+    let updated: KanbanCard | undefined;
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const card = board.cards.find((candidate) => candidate.id === cardId);
+      if (!card) throw new Error(`Card not found: ${cardId}`);
+      if (card.scriptRunId && card.scriptRunId !== input.runId) {
+        throw new Error(`Card is linked to a different script run: ${cardId}`);
+      }
+      card.scriptRunId = input.runId;
+      card.executionKind = 'script';
+      card.status = 'complete';
+      card.resolution = input.outcome;
+      card.result = input.result;
+      card.responseAt = now;
+      card.completedAt = now;
+      if (card.startedAt) {
+        const start = new Date(card.startedAt).getTime();
+        const end = new Date(now).getTime();
+        if (Number.isFinite(start) && end >= start) card.durationMs = end - start;
+      }
+      delete card.staleStatus;
+      delete card.staleDetectedAt;
+      if (input.outcome === 'failed') {
+        card.progressSummary = input.failureSummary ?? '[failed] Script execution failed';
+      } else {
+        delete card.progressSummary;
+      }
+      if (card.quickActionId && card.quickActionRequestId) {
+        card.quickActionRun = {
+          status: input.outcome,
+          dispatch: null,
+          scriptRunId: input.runId,
+          ...(input.failureSummary ? { failureSummary: input.failureSummary } : {}),
+          updatedAt: now,
+        };
+      }
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+      updated = card;
+    });
+    return updated!;
   }
 
   async updateCard(id: string, input: UpdateCardInput): Promise<KanbanCard> {

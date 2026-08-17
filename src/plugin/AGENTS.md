@@ -15,6 +15,7 @@ plugin/
 ├── index.ts              # opencode plugin entrypoint: tools/hooks + inline dispatch + beforeExit cleanup
 ├── server.ts             # ServerMonitor: staticDir resolution + recovery
 ├── scheduler-engine.ts   # Croner-backed scheduler runtime (bash + prompt cards)
+├── script-execution-service.ts # Async fixed-interpreter script runs + tracked card lifecycle
 ├── scheduled-dispatch-service.ts # Owner-gated due-card dispatcher for scheduled todo cards
 ├── stale-checker.ts      # Detect orphaned/stuck cards
 ├── question-monitor.ts   # SSE + polling bridge for pending questions
@@ -43,6 +44,7 @@ plugin/
 | Change dispatch prompt/model/agent resolution | `index.ts` | `buildDispatchPromptBody()` + `dispatchCard()` |
 | Change static file discovery or recovery | `server.ts` | Resolves `web/dist`, restarts on failure |
 | Change cron runtime behavior | `scheduler-engine.ts` | Bash/prompt execution + next-run updates |
+| Change Script/Script Quick Action execution | `script-execution-service.ts`, `bootstrap.ts`, `server/routes.ts` | 202 acceptance, immutable snapshot, redaction, queue success-only handoff, orphan recovery |
 | Change scheduled todo auto-dispatch | `scheduled-dispatch-service.ts`, `bootstrap.ts`, `server/routes.ts` | Owner-gated due scan, stale-claim recovery, manual/auto race handling |
 | Change stale-card detection | `stale-checker.ts` | Orphan/stuck heuristics |
 | Change question ingestion or auto-answering | `question-monitor.ts` | `/event` SSE + `/question` polling |
@@ -69,6 +71,10 @@ plugin/
 - `stale-checker.ts` must stay aligned with parent/child idle guards: top-level parents waiting on direct child work are not stale/orphan candidates.
 - `buildDispatchPromptBody()` converts `provider/model` strings and resolves shared agent labels from `src/core/agent-config.ts`.
 - `createKanbanApp()` ensures the runtime `KANBAN_DATA_DIR/scripts/` directory exists and keeps ScriptStore as the source of persisted script state.
+- `createKanbanApp()` wires `QuickActionStore` beside `ScriptStore`; Prompt execution still flows through the shared injected `dispatchCard` service after the route creates an idempotent card.
+- `createKanbanApp()` also wires one `ScriptExecutionService`. The singleton owner reconciles orphan `running` rows before serving new work; live rows carry an owner PID and are not reconciled by another process.
+- Script completion advances the next queued card only after exit code 0. Spawn/nonzero/restart failures terminate the tracked card with `resolution=failed` and never call the queue helper.
+- `executionKind=script` cards bypass `StaleCardChecker`; ScriptRun owner PID and restart reconciliation own their liveness instead of agent-session heuristics.
 - `createKanbanApp()` also runs `SkillStore.sync()` (best-effort) to scan `~/.claude/skills` and `~/.codex/skills`, then `setDynamicSkillCommands()` so user-authored skills register as runtime commands. `POST /api/skills/sync` re-runs this at runtime; a scan failure must never block startup.
 - TUI navigation and toast calls are best-effort and wrapped in try/catch.
 - Every long-lived runtime started here must also be stopped in `beforeExit`. Owner-gated services (watchdogs, stale checker) go through `DispatchEngine.singletonServices` so `startSingleton()`/`stopSingleton()` manage them symmetrically.

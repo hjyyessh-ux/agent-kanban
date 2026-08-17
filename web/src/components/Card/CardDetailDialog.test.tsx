@@ -80,4 +80,25 @@ describe("CardDetailDialog", () => {
     expect(html).toContain("2026-07-18 09:30 KST");
     expect(html).toContain("Start Now는 이 예약을 소비하고 즉시 한 번만 실행합니다.");
   });
+
+  test("shows Script execution metadata and Quick Action provenance", () => {
+    const html = renderDialog({
+      ...makeCard("complete"),
+      originChannel: 'quick_action',
+      executionKind: 'script',
+      quickActionId: 'qa-deploy',
+      scriptRunId: 'run-deploy',
+      scriptName: 'Deploy service',
+      resolution: 'failed',
+      durationMs: 1250,
+      result: '[failed] Script execution failed.',
+    });
+
+    expect(html).toContain('Quick Action');
+    expect(html).toContain('Execution');
+    expect(html).toContain('Deploy service');
+    expect(html).toContain('run-deploy');
+    expect(html).toContain('failed');
+    expect(html).toContain('Result captured');
+  });
 });

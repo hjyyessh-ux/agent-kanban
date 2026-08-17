@@ -16,6 +16,7 @@ This directory itself contains no files — see Subdirectories below.
 | [Capabilities](Capabilities/AGENTS.md) | Skill/MCP/script inventory, scope (user/local/project/cold) management, visibility overrides, freeze/restore to cold storage, and diff-preview-driven config edits. Large and actively evolving. |
 | [Card](Card/AGENTS.md) | Card detail and create dialogs plus their sub-panels (meta, phases, queue, session picker, screenshots, feedback, questions). |
 | [Question](Question/AGENTS.md) | Inline question/answer banner shown when an agent session is blocked waiting on user input. |
+| `QuickActions/` | Board launcher and DialogSkeleton-based Prompt/Script action manager, editor, and parameter runner. |
 | [Scheduler](Scheduler/AGENTS.md) | Cron-style scheduled job list, create/edit modal, and run-history panel. |
 | [Scripts](Scripts/AGENTS.md) | User-defined operational script CRUD, run history, and the scripts tab view. |
 | [Settings](Settings/AGENTS.md) | Key/value settings entries CRUD plus the self-update/maintenance panel. |

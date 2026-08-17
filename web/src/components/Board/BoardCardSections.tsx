@@ -47,6 +47,35 @@ export const SchedulerBadge: React.FC<{ title?: string; size?: number }> = ({ ti
   </span>
 );
 
+export const OriginExecutionBadges: React.FC<{
+  originChannel?: V2CardViewModel['originChannel'];
+  executionKind?: V2CardViewModel['executionKind'];
+  quickActionId?: string;
+  scriptName?: string;
+}> = ({ originChannel, executionKind, quickActionId, scriptName }) => {
+  if (originChannel !== 'quick_action' && !executionKind) return null;
+  return (
+    <span className="kv2-origin-execution-badges">
+      {originChannel === 'quick_action' && (
+        <span
+          className="kv2-badge kv2-badge--accent"
+          title={quickActionId ? `Quick Action origin · ${quickActionId}` : 'Quick Action origin'}
+        >
+          Quick Action
+        </span>
+      )}
+      {executionKind && (
+        <span
+          className="kv2-badge kv2-badge--queue"
+          title={executionKind === 'script' && scriptName ? `Script execution · ${scriptName}` : `${executionKind} execution`}
+        >
+          {executionKind === 'script' ? 'Script' : 'Agent'}
+        </span>
+      )}
+    </span>
+  );
+};
+
 export function formatRuntimeLabel(runtime: V2CardViewModel['agentRuntime'] | undefined): string {
   if (runtime === 'codex') return 'Codex';
   if (runtime === 'claude') return 'Claude';

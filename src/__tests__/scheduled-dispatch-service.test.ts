@@ -223,6 +223,16 @@ describe('scheduled dispatch bootstrap lifecycle', () => {
 
       expect(dispatches).toEqual([first.id]);
       expect((await app.store.getCard(first.id))?.scheduledDispatch?.status).toBe('dispatched');
+      const quickAction = await app.quickActionStore.createAction({
+        type: 'prompt',
+        name: 'Bootstrap action',
+        description: 'Verifies shared store wiring',
+        cardTitleTemplate: 'Bootstrap action',
+        promptTemplate: 'Verify bootstrap wiring',
+        projectDir: dir,
+        agentRuntime: 'codex',
+      });
+      expect((await app.quickActionStore.getAction(quickAction.id))?.available).toBe(true);
 
       app.stopSingleton();
 

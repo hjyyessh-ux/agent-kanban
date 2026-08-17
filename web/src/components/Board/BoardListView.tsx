@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import type { V2ColumnViewModel } from './board-selectors';
 import { selectCardById } from './board-selectors';
-import { FavoriteToggleButton, QueueTargetChip, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
+import { FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
 import { BoardListRowAction } from './BoardListRowAction';
 
 interface BoardListViewProps {
@@ -160,6 +160,12 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
                               {vm.originChannel === 'scheduler' && (
                                 <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} size={18} />
                               )}
+                              <OriginExecutionBadges
+                                originChannel={vm.originChannel}
+                                executionKind={vm.executionKind}
+                                quickActionId={vm.quickActionId}
+                                scriptName={vm.scriptName}
+                              />
                               {vm.title}
                             </button>
                             <span className="kv2-list-prompt-snippet" title={vm.boardSummary}>

@@ -1,0 +1,47 @@
+{
+  "action": {
+    "type": "prompt",
+    "name": "MCP server 3-day monitor",
+    "description": "Review recent MCP server health without changing the workspace",
+    "enabled": true,
+    "pinned": true,
+    "order": 0,
+    "parameterDefinitions": [
+      {
+        "key": "days",
+        "label": "Recent days",
+        "type": "number",
+        "required": true,
+        "defaultValue": 3
+      },
+      {
+        "key": "scope",
+        "label": "Server scope",
+        "type": "select",
+        "required": true,
+        "options": ["all", "failed-only"],
+        "defaultValue": "all"
+      }
+    ],
+    "cardTitleTemplate": "MCP server monitoring — last {{days}} days",
+    "promptTemplate": "Review {{scope}} MCP servers from the last {{days}} days. Summarize availability, errors, and follow-up recommendations. Do not modify files or server configuration.",
+    "projectDir": "__PROJECT_DIR__",
+    "agentRuntime": "codex",
+    "model": "gpt-5.5",
+    "agentType": "general",
+    "codexOptions": {
+      "reasoningEffort": "high",
+      "sandbox": "read-only",
+      "skipGitRepoCheck": false,
+      "bypassApprovalsAndSandbox": false
+    }
+  },
+  "request": {
+    "clientRequestId": "mcp-monitoring-3-days-001",
+    "parameterValues": {}
+  },
+  "expected": {
+    "title": "MCP server monitoring — last 3 days",
+    "prompt": "Review all MCP servers from the last 3 days. Summarize availability, errors, and follow-up recommendations. Do not modify files or server configuration."
+  }
+}

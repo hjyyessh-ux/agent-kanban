@@ -47,6 +47,9 @@ export interface V2CardViewModel {
   parentCardId: string | undefined;
   sourceContext: string | undefined;
   originChannel: CardOriginChannel | undefined;
+  executionKind?: KanbanCard['executionKind'];
+  quickActionId?: string;
+  scriptName?: string;
   schedulerName: string | undefined;
   telegramMessageId: string | undefined;
   telegramChatId: number | undefined;
@@ -153,6 +156,9 @@ function toCardViewModel(
     parentCardId: card.parentCardId,
     sourceContext: card.sourceContext,
     originChannel: card.originChannel,
+    executionKind: card.executionKind,
+    quickActionId: card.quickActionId,
+    scriptName: card.scriptName,
     schedulerName: card.schedulerName,
     telegramMessageId: card.telegramMessageId,
     telegramChatId: card.telegramChatId,

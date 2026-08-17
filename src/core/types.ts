@@ -1,8 +1,9 @@
 // Kanban card statuses
 export type KanbanStatus = 'todo' | 'in_progress' | 'complete' | 'done';
 export type QueueSessionMode = 'new_session' | 'continue_queued_after_session';
-export type CardResolution = 'completed' | 'superseded';
-export type CardOriginChannel = 'telegram' | 'scheduler';
+export type CardResolution = 'completed' | 'superseded' | 'failed';
+export type CardOriginChannel = 'telegram' | 'scheduler' | 'quick_action';
+export type CardExecutionKind = 'agent' | 'script';
 export type TelegramReplyStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 export type AgentRuntime = 'opencode' | 'codex' | 'claude';
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
@@ -33,6 +34,17 @@ export interface DispatchResult {
   startedAt: string;
 }
 
+export type QuickActionRunStatus = 'dispatching' | 'accepted' | 'running' | 'completed' | 'failed';
+
+export interface QuickActionRunState {
+  status: QuickActionRunStatus;
+  dispatch: DispatchResult | null;
+  scriptRunId?: string;
+  failureSummary?: string;
+  errorStatusCode?: number;
+  updatedAt: string;
+}
+
 export interface CodexOptions {
   reasoningEffort?: CodexReasoningEffort;
   sandbox?: CodexSandboxMode;
@@ -43,6 +55,170 @@ export interface CodexOptions {
 export interface ClaudeOptions {
   permissionMode?: ClaudePermissionMode;
   dangerouslySkipPermissions?: boolean;
+}
+
+// ─── Quick Action Types ────────────────────────────────────────────
+
+export type QuickActionParameterValue = string | number | boolean;
+export type QuickActionParameterSnapshot = Record<string, QuickActionParameterValue>;
+
+interface QuickActionParameterDefinitionBase {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+export interface QuickActionStringParameterDefinition extends QuickActionParameterDefinitionBase {
+  type: 'string';
+  defaultValue?: string;
+  options?: never;
+}
+
+export interface QuickActionNumberParameterDefinition extends QuickActionParameterDefinitionBase {
+  type: 'number';
+  defaultValue?: number;
+  options?: never;
+}
+
+export interface QuickActionBooleanParameterDefinition extends QuickActionParameterDefinitionBase {
+  type: 'boolean';
+  defaultValue?: boolean;
+  options?: never;
+}
+
+export interface QuickActionSelectParameterDefinition extends QuickActionParameterDefinitionBase {
+  type: 'select';
+  options: string[];
+  defaultValue?: string;
+}
+
+export interface QuickActionSecretParameterDefinition extends QuickActionParameterDefinitionBase {
+  type: 'secret';
+  defaultValue?: never;
+  options?: never;
+}
+
+export type QuickActionParameterDefinition =
+  | QuickActionStringParameterDefinition
+  | QuickActionNumberParameterDefinition
+  | QuickActionBooleanParameterDefinition
+  | QuickActionSelectParameterDefinition
+  | QuickActionSecretParameterDefinition;
+
+export interface QuickActionBase {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+  pinned: boolean;
+  order: number;
+  parameterDefinitions: QuickActionParameterDefinition[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptQuickAction extends QuickActionBase {
+  type: 'prompt';
+  cardTitleTemplate: string;
+  promptTemplate: string;
+  projectDir: string;
+  agentRuntime: AgentRuntime;
+  model?: string;
+  agentType?: string;
+  command?: string;
+  argumentsTemplate?: string;
+  codexOptions?: CodexOptions;
+  claudeOptions?: ClaudeOptions;
+}
+
+export interface ScriptQuickAction extends QuickActionBase {
+  type: 'script';
+  /** Reference to ScriptStore. Script content is never copied into this object. */
+  scriptId: string;
+  /** Optional override; otherwise ScriptEntry.projectDir is used at execution time. */
+  projectDir?: string;
+}
+
+export type QuickAction = PromptQuickAction | ScriptQuickAction;
+
+export type QuickActionView = QuickAction & {
+  available: boolean;
+  unavailableReason?: string;
+  effectiveProjectDir?: string;
+  /** Resolved display snapshot for Script actions; script content is never exposed here. */
+  scriptName?: string;
+};
+
+interface CreateQuickActionBaseInput {
+  name: string;
+  description: string;
+  enabled?: boolean;
+  pinned?: boolean;
+  order?: number;
+  parameterDefinitions?: QuickActionParameterDefinition[];
+}
+
+export interface CreatePromptQuickActionInput extends CreateQuickActionBaseInput {
+  type: 'prompt';
+  cardTitleTemplate: string;
+  promptTemplate: string;
+  projectDir: string;
+  agentRuntime: AgentRuntime;
+  model?: string;
+  agentType?: string;
+  command?: string;
+  argumentsTemplate?: string;
+  codexOptions?: CodexOptions;
+  claudeOptions?: ClaudeOptions;
+}
+
+export interface CreateScriptQuickActionInput extends CreateQuickActionBaseInput {
+  type: 'script';
+  scriptId: string;
+  projectDir?: string;
+}
+
+export type CreateQuickActionInput = CreatePromptQuickActionInput | CreateScriptQuickActionInput;
+
+export interface UpdateQuickActionInput {
+  type?: 'prompt' | 'script';
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+  pinned?: boolean;
+  order?: number;
+  parameterDefinitions?: QuickActionParameterDefinition[];
+  cardTitleTemplate?: string;
+  promptTemplate?: string;
+  projectDir?: string | null;
+  agentRuntime?: AgentRuntime;
+  model?: string | null;
+  agentType?: string | null;
+  command?: string | null;
+  argumentsTemplate?: string | null;
+  codexOptions?: CodexOptions | null;
+  claudeOptions?: ClaudeOptions | null;
+  scriptId?: string;
+}
+
+export interface QuickActionStoreState {
+  version: 1;
+  entries: QuickAction[];
+  lastModified: string;
+}
+
+export interface RunQuickActionInput {
+  clientRequestId: string;
+  parameterValues: Record<string, QuickActionParameterValue>;
+}
+
+export interface RunQuickActionResponse {
+  cardId: string;
+  status: KanbanStatus;
+  dispatch: DispatchResult | null;
+  runId?: string;
+  runStatus?: ScriptRun['status'];
+  failureSummary?: string;
 }
 
 // A single inter-agent message captured from a subagent's transcript at
@@ -204,6 +380,13 @@ export interface KanbanCard {
   dispatchType?: 'instant' | 'manual';  // instant = auto-dispatch on creation (e.g., from Telegram)
   telegramChatId?: number;              // Telegram chat ID for response messages
   originChannel?: CardOriginChannel;
+  executionKind?: CardExecutionKind;
+  quickActionId?: string;
+  quickActionRequestId?: string;
+  quickActionRun?: QuickActionRunState;
+  scriptRunId?: string;
+  scriptName?: string;       // immutable execution-time ScriptEntry.name snapshot
+  parameterSnapshot?: QuickActionParameterSnapshot;
   schedulerId?: string;       // scheduler entry ID that created this card
   schedulerRunId?: string;    // scheduler run ID that created this card
   schedulerName?: string;     // scheduler name snapshot at creation time
@@ -390,6 +573,12 @@ export interface CreateCardInput {
   dispatchType?: 'instant' | 'manual';
   telegramChatId?: number;
   originChannel?: CardOriginChannel;
+  executionKind?: CardExecutionKind;
+  quickActionId?: string;
+  quickActionRequestId?: string;
+  scriptRunId?: string;
+  scriptName?: string;
+  parameterSnapshot?: QuickActionParameterSnapshot;
   schedulerId?: string;
   schedulerRunId?: string;
   schedulerName?: string;
@@ -642,16 +831,29 @@ export interface UpdateTelegramChatStateInput {
 
 // ─── Script Types ──────────────────────────────────────────────────
 
+export type SupportedScriptLanguage = 'bash' | 'python' | 'javascript' | 'typescript' | 'bun' | 'ruby';
+
 export interface ScriptRun {
   id: string;
   scriptId: string;
+  cardId?: string;
   startedAt: string;
   finishedAt?: string;
   status: 'running' | 'success' | 'fail';
+  language?: SupportedScriptLanguage;
+  cwd?: string;
+  scriptRevision?: string;
+  ownerPid?: number;
   exitCode?: number;
   stdout?: string;
   stderr?: string;
   error?: string;
+}
+
+export interface ScriptRunAcceptedResponse extends ScriptRun {
+  cardId: string;
+  runId: string;
+  status: 'running';
 }
 
 export interface ScriptEntry {
