@@ -55,6 +55,25 @@ describe("CardDetailDialog", () => {
     expect(html).not.toContain("kv2-runtime-trigger-icon");
   });
 
+  test("keeps actual runtime badges for non-script agent cards", () => {
+    for (const [runtime, label, title] of [
+      ['opencode', 'OPENCODE', 'Opencode'],
+      ['codex', 'CODEX', 'Codex'],
+      ['claude', 'CLAUDE', 'Claude'],
+    ] as const) {
+      const html = renderDialog({
+        ...makeCard("complete"),
+        agentRuntime: runtime,
+        executionKind: 'agent',
+      });
+
+      expect(html).toContain(`>${label}</span>`);
+      expect(html).toContain(`title="${title} runtime"`);
+      expect(html).toContain('>Runtime</span>');
+      expect(html).not.toContain('>SCRIPT</span>');
+    }
+  });
+
   test("shows scheduled dispatch status and Start Now copy for scheduled todo cards", () => {
     const html = renderToStaticMarkup(
       <CardDetailDialog
@@ -89,6 +108,9 @@ describe("CardDetailDialog", () => {
       quickActionId: 'qa-deploy',
       scriptRunId: 'run-deploy',
       scriptName: 'Deploy service',
+      agentRuntime: 'opencode',
+      agentType: 'sisyphus',
+      model: 'legacy-model',
       resolution: 'failed',
       durationMs: 1250,
       result: '[failed] Script execution failed.',
@@ -100,5 +122,48 @@ describe("CardDetailDialog", () => {
     expect(html).toContain('run-deploy');
     expect(html).toContain('failed');
     expect(html).toContain('Result captured');
+    expect(html).toContain('>Type</span>');
+    expect(html).toContain('>SCRIPT</span>');
+    expect(html).toContain('Script execution · Deploy service');
+    expect(html).not.toContain('OPENCODE');
+    expect(html).not.toContain('>Runtime</span>');
+    expect(html).not.toContain('kv2-meta-card--agent');
+    expect(html).not.toContain('kv2-meta-card--model');
+    expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
+  });
+
+  test("hides editable runtime, model, agent, and runtime options for Script cards", () => {
+    const html = renderToStaticMarkup(
+      <CardDetailDialog
+        card={{
+          ...makeCard("todo"),
+          executionKind: 'script',
+          scriptName: 'Deploy service',
+          agentRuntime: 'codex',
+          agentType: 'sisyphus',
+          model: 'gpt-5.6-sol',
+          codexOptions: {
+            reasoningEffort: 'high',
+            sandbox: 'workspace-write',
+            skipGitRepoCheck: true,
+            bypassApprovalsAndSandbox: false,
+          },
+        }}
+        onClose={mock(() => undefined)}
+        onStatusChange={mock(() => true)}
+        onDelete={mock(() => true)}
+        onUpdate={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).toContain('>Type</span>');
+    expect(html).toContain('>SCRIPT</span>');
+    expect(html).not.toContain('CODEX');
+    expect(html).not.toContain('kv2-runtime-trigger');
+    expect(html).not.toContain('kv2-meta-card--agent');
+    expect(html).not.toContain('kv2-meta-card--model');
+    expect(html).not.toContain('kv2-meta-card--codex-options');
+    expect(html).not.toContain('>Reasoning</span>');
+    expect(html).not.toContain('>Sandbox</span>');
   });
 });

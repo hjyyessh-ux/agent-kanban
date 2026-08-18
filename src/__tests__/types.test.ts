@@ -98,6 +98,7 @@ describe('QuickAction type', () => {
     const actions: QuickAction[] = [
       {
         id: 'prompt-1',
+        icon: '⚡',
         type: 'prompt',
         name: 'Review',
         description: 'Review changes',
@@ -115,6 +116,7 @@ describe('QuickAction type', () => {
       },
       {
         id: 'script-1',
+        icon: '🧪',
         type: 'script',
         name: 'Lint',
         description: 'Run lint',

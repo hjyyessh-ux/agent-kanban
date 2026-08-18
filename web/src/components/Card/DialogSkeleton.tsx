@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useId, useRef } from "react";
 import { useModalAccessibility } from "../../hooks/useModalAccessibility";
 import { usePersistedDialogSize } from "../../hooks/usePersistedDialogSize";
 
@@ -8,6 +8,9 @@ interface DialogSkeletonProps {
   children: React.ReactNode;
   width?: string;
   className?: string;
+  overlayClassName?: string;
+  dialogId?: string;
+  initialFocusRef?: React.RefObject<HTMLElement | null>;
   persistSizeKey?: string;
   defaultSize?: { width: number; height: number };
 }
@@ -20,13 +23,18 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
   children,
   width = "900px",
   className,
+  overlayClassName,
+  dialogId,
+  initialFocusRef,
   persistSizeKey,
   defaultSize,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const generatedTitleId = useId();
+  const titleId = title ? `${dialogId ?? generatedTitleId}-title` : undefined;
 
-  useModalAccessibility(true, modalRef, onClose);
+  useModalAccessibility(true, modalRef, onClose, undefined, initialFocusRef);
   usePersistedDialogSize(persistSizeKey, modalRef, defaultSize ?? DEFAULT_DIALOG_SIZE);
 
   const resizable = !!persistSizeKey;
@@ -36,7 +44,7 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
 
   return (
     <div
-      className="kv2-dialog-overlay"
+      className={["kv2-dialog-overlay", overlayClassName].filter(Boolean).join(" ")}
       ref={overlayRef}
       role="presentation"
     >
@@ -47,18 +55,20 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
         aria-label="Close dialog backdrop"
       />
       <div
+        id={dialogId}
         ref={modalRef}
         className={["kv2-dialog", resizable ? "kv2-dialog--resizable" : "", className].filter(Boolean).join(" ")}
         style={dialogStyle}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? "dialog-title" : undefined}
+        aria-labelledby={titleId}
         aria-label={title ? undefined : "Dialog"}
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             e.preventDefault();
+            e.stopPropagation();
             onClose();
             return;
           }
@@ -67,7 +77,7 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
       >
         <div className="kv2-dialog-header">
           {title && (
-            <h2 id="dialog-title" className="kv2-dialog-title">
+            <h2 id={titleId} className="kv2-dialog-title">
               {title}
             </h2>
           )}

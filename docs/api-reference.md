@@ -112,7 +112,7 @@ Codex `thread_id` timeout 또는 Claude `session_id` timeout은 실패 응답을
 
 ### `GET /api/quick-actions`
 
-저장된 Quick Action 목록을 pinned/order 순으로 반환합니다. 각 항목에는 `available`, `unavailableReason`, `effectiveProjectDir`가 포함될 수 있으며 Script action에는 현재 연결된 `scriptName`이 함께 반환됩니다. `available=false`인 action도 관리·복구할 수 있도록 목록에서 제거하지 않습니다.
+저장된 Quick Action 목록을 pinned/order 순으로 반환합니다. `pinned=true`는 비고정 action보다 먼저 표시하라는 정렬 표시이고, `enabled=false`는 action을 삭제하지 않은 채 실행만 막습니다. 각 항목은 단일 emoji grapheme `icon`을 가지며 `available`, `unavailableReason`, `effectiveProjectDir`가 포함될 수 있습니다. Script action에는 현재 연결된 `scriptName`이 함께 반환됩니다. `available=false`인 action과 icon 없는 legacy action도 관리·복구할 수 있도록 목록에서 제거하지 않습니다.
 
 ### `POST /api/quick-actions`
 
@@ -120,13 +120,17 @@ Prompt 또는 Script Quick Action을 생성합니다. Prompt action은 `cardTitl
 
 Prompt의 `projectDir`는 빈 값일 수 없고 실행 시 실제 absolute directory여야 합니다. Script의 `projectDir`는 선택 사항이며 없으면 연결된 script의 directory, 그마저 없으면 프로세스 cwd를 사용합니다. parameter key는 `[A-Za-z_][A-Za-z0-9_]*` 형식이고 type은 `string`, `number`, `boolean`, `select`, `secret` 중 하나입니다. `secret`에는 default를 저장할 수 없고 `select`에는 중복 없는 options가 필요합니다.
 
+`icon`은 선택 입력입니다. 생략하면 shared 기본 팔레트에서 미사용 icon을 원자적으로 배정합니다. custom 값은 표시 가능한 emoji 한 grapheme이어야 하고 전체 action에서 중복될 수 없습니다. 중복 또는 기본 팔레트 소진은 `409`, 잘못된 grapheme은 `400`입니다.
+
 ### `GET/PATCH/DELETE /api/quick-actions/:id`
 
-단일 action을 조회·수정·삭제합니다. 참조 중인 ScriptEntry를 직접 삭제하면 `409`를 반환하지만 외부 directory sync로 script가 사라진 action은 삭제하지 않고 `available=false`로 반환합니다.
+단일 action을 조회·수정·삭제합니다. `PATCH`에서 `icon`을 바꾸면 생성과 같은 emoji grapheme·전체 고유성 검증을 적용합니다. 참조 중인 ScriptEntry를 직접 삭제하면 `409`를 반환하지만 외부 directory sync로 script가 사라진 action은 삭제하지 않고 `available=false`로 반환합니다. 저장 파일에 `icon`이 없는 legacy entry도 조회에서 버리지 않고 정렬 순서에 따른 결정적 fallback icon을 반환합니다.
 
 ### `POST /api/quick-actions/:id/run`
 
 Prompt Quick Action은 카드를 만든 뒤 기존 agent dispatch 경로로 실행합니다. Script Quick Action은 같은 요청 schema를 검증한 뒤 일반 script card와 `ScriptRun`을 먼저 저장하고 비동기 실행합니다.
+
+`enabled=false`인 action의 실행 요청은 `409 Quick action is disabled`로 거부됩니다. `pinned`는 목록 정렬에만 영향을 주며 실행 권한이나 동작을 바꾸지 않습니다.
 
 요청:
 

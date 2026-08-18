@@ -59,6 +59,57 @@ export interface ClaudeOptions {
 
 // ─── Quick Action Types ────────────────────────────────────────────
 
+export const QUICK_ACTION_ICON_PALETTE = [
+  '⚡',
+  '🔍',
+  '🧪',
+  '🚀',
+  '🛠️',
+  '📊',
+  '🧹',
+  '🛡️',
+  '🔔',
+  '📦',
+] as const;
+
+/** Icons are unique across all Quick Actions, including custom emoji. */
+export const QUICK_ACTION_ICON_DUPLICATE_POLICY = 'reject' as const;
+
+/** Stable validation messages shared by the store, routes, and editor UI. */
+export const QUICK_ACTION_ICON_ERRORS = {
+  invalid: 'Quick action icon must be exactly one visible emoji grapheme',
+  duplicate: 'Quick action icon is already in use',
+  paletteExhausted: 'Quick action default icon palette is exhausted',
+} as const;
+
+const QUICK_ACTION_ICON_SEGMENTER = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+const QUICK_ACTION_RGI_EMOJI_PATTERN = new RegExp('^(?:\\p{RGI_Emoji})$', 'v');
+const QUICK_ACTION_CONTROL_PATTERN = /\p{Control}/u;
+const QUICK_ACTION_WHITESPACE_PATTERN = /\p{White_Space}/u;
+
+/**
+ * Normalizes a custom Quick Action emoji for persistence and duplicate checks.
+ * Unicode RGI emoji sequences include valid ZWJ, flag, keycap, modifier, and
+ * tag sequences; whitespace, controls, malformed sequences, and text-only
+ * graphemes are rejected.
+ */
+export function normalizeQuickActionIcon(value: unknown): string {
+  if (typeof value !== 'string') throw new Error(QUICK_ACTION_ICON_ERRORS.invalid);
+  const normalized = value.normalize('NFC');
+  const graphemes = Array.from(QUICK_ACTION_ICON_SEGMENTER.segment(normalized));
+  if (graphemes.length !== 1 || graphemes[0]?.segment !== normalized) {
+    throw new Error(QUICK_ACTION_ICON_ERRORS.invalid);
+  }
+  if (
+    QUICK_ACTION_WHITESPACE_PATTERN.test(normalized)
+    || QUICK_ACTION_CONTROL_PATTERN.test(normalized)
+    || !QUICK_ACTION_RGI_EMOJI_PATTERN.test(normalized)
+  ) {
+    throw new Error(QUICK_ACTION_ICON_ERRORS.invalid);
+  }
+  return normalized;
+}
+
 export type QuickActionParameterValue = string | number | boolean;
 export type QuickActionParameterSnapshot = Record<string, QuickActionParameterValue>;
 
@@ -107,6 +158,7 @@ export type QuickActionParameterDefinition =
 
 export interface QuickActionBase {
   id: string;
+  icon: string;
   name: string;
   description: string;
   enabled: boolean;
@@ -150,6 +202,8 @@ export type QuickActionView = QuickAction & {
 };
 
 interface CreateQuickActionBaseInput {
+  /** Omit to atomically claim the first unused icon from QUICK_ACTION_ICON_PALETTE. */
+  icon?: string;
   name: string;
   description: string;
   enabled?: boolean;
@@ -182,6 +236,7 @@ export type CreateQuickActionInput = CreatePromptQuickActionInput | CreateScript
 
 export interface UpdateQuickActionInput {
   type?: 'prompt' | 'script';
+  icon?: string;
   name?: string;
   description?: string;
   enabled?: boolean;

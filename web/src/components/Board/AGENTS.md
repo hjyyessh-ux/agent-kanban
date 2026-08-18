@@ -10,6 +10,7 @@ Renders the kanban board itself: grid (column) view and list view, drag-and-drop
 | File | Description |
 |------|-------------|
 | `BoardScreen.tsx` | Top-level board container. Builds columns via `selectColumns`, applies `BoardFilters`, and switches between grid (`BoardColumn`) and `BoardListView`. |
+| `BoardWorkspace.tsx` | Relative shell that overlays the labeled `⚡ Quick ›` edge tab in the left gutter and marks shared Board/List content inert/aria-hidden while the modal side sheet is open. |
 | `BoardColumn.tsx` | Single status column: renders `BoardCard`/`BoardCompleteSessionView` children, handles native HTML5 drag-and-drop reordering (`getDragAfterElement`). |
 | `BoardColumnHeader.tsx` | Column title, card count, WIP-limit warning (`WIP_LIMIT = 3`), "hide all sessions" / "complete all" / "archive" actions. |
 | `BoardColumnHeader.test.tsx` | Tests for header count/WIP-limit rendering. |

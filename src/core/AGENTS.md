@@ -48,6 +48,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - `ScriptStore.beginRun()` is the atomic per-script concurrency claim. Terminal updates replace the matching running row, running entries cannot be deleted, and stale running rows are reconciled after process restart.
 - Scheduled-dispatch reservations are store-owned and atomic: `scheduled -> dispatching -> dispatched/failed`, with explicit stale-claim recovery after restart.
 - Quick Action card reservation is store-owned and atomic on `(quickActionId, quickActionRequestId)`; only the caller receiving `created: true` may dispatch it.
+- Quick Action icon palette, duplicate policy, validation messages, and grapheme normalization live in `types.ts`. Omitted icons are claimed under the QuickActionStore dual lock; icon-less legacy entries receive deterministic, distinct fallbacks in display sort order.
 - Primary-agent defaults live here; UI and plugin must not fork model/label maps.
 - Clearing selected Telegram session/card state must not implicitly clear sticky default agent/model fields.
 - `feedbackForCardId`, `telegramChatId`, and Telegram selected-session fields are part of fragile workflow contracts tracked in `docs/invariants.md`.

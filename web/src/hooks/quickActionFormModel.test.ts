@@ -29,6 +29,7 @@ type PromptQuickActionView = Extract<QuickActionView, { type: 'prompt' }>;
 function promptAction(overrides: Partial<PromptQuickActionView> = {}): PromptQuickActionView {
   return {
     id: 'prompt-action',
+    icon: '⚡',
     type: 'prompt',
     name: 'Prompt action',
     description: '',
@@ -170,6 +171,7 @@ describe('buildQuickActionFormModel', () => {
   test('expresses an unavailable Script reference and effective projectDir', () => {
     const action: QuickActionView = {
       id: 'script-action',
+      icon: '🧪',
       type: 'script',
       name: 'Script action',
       description: '',

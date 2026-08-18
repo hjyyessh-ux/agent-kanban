@@ -20,9 +20,9 @@ curl -fsSL https://bun.sh/install | bash
 bun --version
 ```
 
-### Node.js (v18 이상)
+### Node.js (v20.19 이상 또는 v22.12 이상)
 
-일부 도구(Playwright 등)가 Node.js를 필요로 합니다.
+Playwright와 Vite production build가 Node.js를 사용합니다. Node 18에서는 현재 Vite가 지원 버전 경고를 내므로 위 버전을 사용합니다.
 
 ```bash
 node --version
@@ -141,7 +141,7 @@ AI 작업 카드들을 칸반 보드 형식으로 표시합니다. 카드는 다
 
 카드를 클릭하면 상세 정보를 확인하고 상태를 변경할 수 있습니다. 상단의 "새 카드" 버튼으로 카드를 직접 생성할 수도 있습니다. Telegram에서 들어온 후속 메시지, feedback 재작업 카드, subagent child card도 이 보드에서 함께 추적됩니다.
 
-화면 아래의 **Quick Actions** 버튼에서는 반복 Prompt나 Script를 등록하고 즉시 실행할 수 있습니다. Prompt action은 실행할 absolute project directory가 필수이고, Script action의 파라미터는 명령 인수가 아니라 `AK_PARAM_*` 환경변수로 전달됩니다. 실행은 일반 Board 카드로 추적되며 자세한 등록·파라미터·실패 복구 규칙은 [Quick Actions](./quick-actions.md)를 참고하세요.
+Board의 TODO 왼쪽 여백에 있는 **⚡ Quick ›** edge tab을 누르면 반복 Prompt나 Script를 modal side sheet에서 등록하고 즉시 실행할 수 있습니다. desktop launcher는 icon·이름·열림 방향을 가로로 보여 주면서 Board 폭을 차지하지 않고, mobile에서는 Board 위의 가로형 tab으로 표시됩니다. sheet가 열려도 Board/List의 폭과 컬럼 위치는 유지되고, 오른쪽 배경은 dim 처리되어 클릭과 focus가 차단됩니다. 각 action에는 서로 겹치지 않는 기본 icon이 자동 배정되며 custom emoji도 지정할 수 있습니다. 새 Prompt는 **New Task**와 같은 Runtime/Model 기본값을 사용합니다. Script action의 파라미터는 명령 인수가 아니라 `AK_PARAM_*` 환경변수로 전달되고, production/elevated action은 확인 checkbox를 선택하기 전에는 실행할 수 없습니다. 실행은 일반 Board 카드로 추적되며 Script 카드는 Board/List/Detail에서 runtime 대신 `SCRIPT`로 표시됩니다. 자세한 등록·파라미터·실패 복구 규칙은 [Quick Actions](./quick-actions.md)를 참고하세요.
 
 ### Scheduler 탭
 

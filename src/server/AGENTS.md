@@ -65,6 +65,8 @@ When adding routes: classify them in `requiresLocalAuth` (mutations and secret/c
 
 Prompt Quick Action runs validate stored definitions and directories before atomically creating a card, then call the injected shared `dispatchFn`. Script Quick Actions and `/api/scripts/:id/run` both call the injected `ScriptExecutionService`; never add route-local spawn or shell selection.
 
+Quick Action create/update routes surface the shared icon validation messages. Duplicate icons and exhausted automatic palette claims are conflicts (`409`); malformed custom emoji are invalid requests (`400`).
+
 ## ANTI-PATTERNS
 
 - Express/Hono/Koa or middleware chains

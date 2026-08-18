@@ -17,6 +17,11 @@ import type {
   ScriptQuickAction,
   UpdateQuickActionInput,
 } from './types';
+import {
+  QUICK_ACTION_ICON_ERRORS,
+  QUICK_ACTION_ICON_PALETTE,
+  normalizeQuickActionIcon,
+} from './types';
 import { resolveDir } from './data-dir';
 import { FileLock } from './filelock';
 import { parameterEnvironmentKey } from './execution-environment';
@@ -36,6 +41,7 @@ const CLAUDE_PERMISSION_MODES = new Set(['acceptEdits', 'bypassPermissions', 'pl
 
 const COMMON_INPUT_KEYS = [
   'type',
+  'icon',
   'name',
   'description',
   'enabled',
@@ -292,7 +298,11 @@ function parseParameterDefinitions(value: unknown): QuickActionParameterDefiniti
   });
 }
 
-function parseActionDraft(value: unknown, fallbackOrder: number): QuickActionDraft {
+function parseActionDraft(
+  value: unknown,
+  fallbackOrder: number,
+  fallbackIcon?: string,
+): QuickActionDraft {
   const input = assertRecord(value, 'quick action');
   if (input.type !== 'prompt' && input.type !== 'script') {
     throw new Error('quick action type must be prompt or script');
@@ -300,6 +310,10 @@ function parseActionDraft(value: unknown, fallbackOrder: number): QuickActionDra
   const allowedKeys = input.type === 'prompt' ? PROMPT_INPUT_KEYS : SCRIPT_INPUT_KEYS;
   assertAllowedKeys(input, allowedKeys, 'quick action');
 
+  const icon = input.icon === undefined
+    ? fallbackIcon
+    : normalizeQuickActionIcon(input.icon);
+  if (icon === undefined) throw new Error(QUICK_ACTION_ICON_ERRORS.invalid);
   const name = readRequiredString(input, 'name', 'quick action');
   if (typeof input.description !== 'string') {
     throw new Error('quick action.description must be a string');
@@ -321,6 +335,7 @@ function parseActionDraft(value: unknown, fallbackOrder: number): QuickActionDra
   if (input.type === 'script') {
     return {
       type: 'script',
+      icon,
       name,
       description: input.description,
       enabled,
@@ -352,6 +367,7 @@ function parseActionDraft(value: unknown, fallbackOrder: number): QuickActionDra
 
   return {
     type: 'prompt',
+    icon,
     name,
     description: input.description,
     enabled,
@@ -377,6 +393,7 @@ function toInputRecord(action: QuickAction, patch: UnknownRecord): UnknownRecord
   );
   const common = {
     type: action.type,
+    icon: patched('icon', action.icon),
     name: patched('name', action.name),
     description: patched('description', action.description),
     enabled: patched('enabled', action.enabled),
@@ -410,18 +427,27 @@ function toInputRecord(action: QuickAction, patch: UnknownRecord): UnknownRecord
   };
 }
 
-function parsePersistedAction(value: unknown, index: number): QuickAction | null {
+interface ParsedPersistedAction {
+  action: QuickAction;
+  needsIconFallback: boolean;
+}
+
+function parsePersistedAction(value: unknown, index: number): ParsedPersistedAction | null {
   if (!isRecord(value)) return null;
   try {
     const { id, createdAt, updatedAt, ...draft } = value;
-    const parsed = parseActionDraft(draft, index);
+    const needsIconFallback = draft.icon === undefined;
+    const parsed = parseActionDraft(draft, index, QUICK_ACTION_ICON_PALETTE[0]);
     const now = new Date().toISOString();
     return {
-      ...parsed,
-      id: typeof id === 'string' && id.length > 0 ? id : nanoid(),
-      createdAt: typeof createdAt === 'string' ? createdAt : now,
-      updatedAt: typeof updatedAt === 'string' ? updatedAt : now,
-    } as QuickAction;
+      action: {
+        ...parsed,
+        id: typeof id === 'string' && id.length > 0 ? id : nanoid(),
+        createdAt: typeof createdAt === 'string' ? createdAt : now,
+        updatedAt: typeof updatedAt === 'string' ? updatedAt : now,
+      } as QuickAction,
+      needsIconFallback,
+    };
   } catch {
     return null;
   }
@@ -434,6 +460,57 @@ function sortActions(actions: QuickAction[]): QuickAction[] {
     const createdOrder = left.createdAt.localeCompare(right.createdAt);
     return createdOrder !== 0 ? createdOrder : left.id.localeCompare(right.id);
   });
+}
+
+function nextLegacyOverflowIcon(usedIcons: ReadonlySet<string>): string {
+  for (let codePoint = 0x1f300; codePoint <= 0x1faff; codePoint += 1) {
+    const candidate = String.fromCodePoint(codePoint);
+    if (usedIcons.has(candidate)) continue;
+    try {
+      return normalizeQuickActionIcon(candidate);
+    } catch {
+      // Sparse Unicode ranges contain non-emoji code points; keep scanning.
+    }
+  }
+
+  let pictographCount = 2;
+  while (true) {
+    const candidate = Array.from({ length: pictographCount }, () => '⚡').join('\u200d');
+    if (!usedIcons.has(candidate)) return candidate;
+    pictographCount += 1;
+  }
+}
+
+/**
+ * Legacy entries have no persisted icon. Preserve every valid entry and assign
+ * icons in the same deterministic order exposed by getActions(). Explicit
+ * stored icons take precedence; duplicate stored icons after the first are
+ * repaired through the same fallback path. The ZWJ overflow is only a legacy
+ * compatibility escape hatch once all ten default icons are occupied.
+ */
+function resolvePersistedIcons(parsedEntries: ParsedPersistedAction[]): QuickAction[] {
+  const ordered = sortActions(parsedEntries.map(({ action }) => action));
+  const parsedByAction = new Map(parsedEntries.map((entry) => [entry.action, entry]));
+  const usedIcons = new Set<string>();
+  const fallbackActions: QuickAction[] = [];
+
+  for (const action of ordered) {
+    const parsed = parsedByAction.get(action);
+    if (!parsed || parsed.needsIconFallback || usedIcons.has(action.icon)) {
+      fallbackActions.push(action);
+      continue;
+    }
+    usedIcons.add(action.icon);
+  }
+
+  for (const action of fallbackActions) {
+    const icon = QUICK_ACTION_ICON_PALETTE.find((candidate) => !usedIcons.has(candidate))
+      ?? nextLegacyOverflowIcon(usedIcons);
+    action.icon = icon;
+    usedIcons.add(icon);
+  }
+
+  return parsedEntries.map(({ action }) => action);
 }
 
 function assertParameterValue(
@@ -630,9 +707,10 @@ export class QuickActionStore {
           : isRecord(parsed) && Array.isArray(parsed.actions)
             ? parsed.actions
             : [];
-      const entries = rawEntries
+      const parsedEntries = rawEntries
         .map((entry, index) => parsePersistedAction(entry, index))
-        .filter((entry): entry is QuickAction => entry !== null);
+        .filter((entry): entry is ParsedPersistedAction => entry !== null);
+      const entries = resolvePersistedIcons(parsedEntries);
       const lastModified = isRecord(parsed) && typeof parsed.lastModified === 'string'
         ? parsed.lastModified
         : new Date().toISOString();
@@ -652,6 +730,23 @@ export class QuickActionStore {
     if (!await this.scriptStore.getEntry(scriptId)) {
       throw new Error(`Referenced script not found: ${scriptId}`);
     }
+  }
+
+  private requireAvailableIcon(
+    icon: string,
+    entries: readonly QuickAction[],
+    excludedActionId?: string,
+  ): void {
+    if (entries.some((entry) => entry.id !== excludedActionId && entry.icon === icon)) {
+      throw new Error(QUICK_ACTION_ICON_ERRORS.duplicate);
+    }
+  }
+
+  private nextDefaultIcon(entries: readonly QuickAction[]): string {
+    const usedIcons = new Set(entries.map((entry) => entry.icon));
+    const icon = QUICK_ACTION_ICON_PALETTE.find((candidate) => !usedIcons.has(candidate));
+    if (!icon) throw new Error(QUICK_ACTION_ICON_ERRORS.paletteExhausted);
+    return icon;
   }
 
   private async toView(action: QuickAction): Promise<QuickActionView> {
@@ -691,7 +786,12 @@ export class QuickActionStore {
     await this.withDualLock(async () => {
       const state = await this.load();
       const nextOrder = state.entries.reduce((max, action) => Math.max(max, action.order), -1) + 1;
-      const draft = parseActionDraft(input, nextOrder);
+      const inputRecord = assertRecord(input, 'quick action');
+      const fallbackIcon = inputRecord.icon === undefined
+        ? this.nextDefaultIcon(state.entries)
+        : undefined;
+      const draft = parseActionDraft(inputRecord, nextOrder, fallbackIcon);
+      this.requireAvailableIcon(draft.icon, state.entries);
       if (draft.type === 'script') await this.requireScript(draft.scriptId);
       const now = new Date().toISOString();
       created = { ...draft, id: nanoid(), createdAt: now, updatedAt: now } as QuickAction;
@@ -716,6 +816,7 @@ export class QuickActionStore {
       const allowed = existing.type === 'prompt' ? PROMPT_INPUT_KEYS : SCRIPT_INPUT_KEYS;
       assertAllowedKeys(patch, allowed, 'quick action update');
       const draft = parseActionDraft(toInputRecord(existing, patch), existing.order);
+      this.requireAvailableIcon(draft.icon, state.entries, existing.id);
       if (draft.type === 'script' && draft.scriptId !== (existing as ScriptQuickAction).scriptId) {
         await this.requireScript(draft.scriptId);
       }

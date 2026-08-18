@@ -21,6 +21,7 @@ type PromptQuickActionView = Extract<QuickActionView, { type: 'prompt' }>;
 function promptAction(overrides: Partial<PromptQuickActionView> = {}): PromptQuickActionView {
   return {
     id: 'action/one',
+    icon: '🚀',
     type: 'prompt',
     name: 'Deploy',
     description: 'Deploy a service',
@@ -65,6 +66,7 @@ describe('Quick Actions API', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const createInput: CreateQuickActionInput = {
+      icon: action.icon,
       type: 'prompt',
       name: action.name,
       description: action.description,
@@ -77,7 +79,7 @@ describe('Quick Actions API', () => {
     expect(await fetchQuickActions()).toEqual([action]);
     expect(await fetchQuickAction(action.id)).toEqual(action);
     expect(await createQuickAction(createInput)).toEqual(action);
-    expect(await updateQuickAction(action.id, { pinned: false })).toEqual(action);
+    expect(await updateQuickAction(action.id, { icon: '🧪', pinned: false })).toEqual(action);
     await expect(deleteQuickAction(action.id)).resolves.toBeUndefined();
     await expect(runQuickAction(action.id, {
       clientRequestId: 'request-1',
@@ -92,6 +94,14 @@ describe('Quick Actions API', () => {
       ['/api/quick-actions/action%2Fone', 'DELETE'],
       ['/api/quick-actions/action%2Fone/run', 'POST'],
     ]);
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      icon: '🚀',
+      type: 'prompt',
+    });
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      icon: '🧪',
+      pinned: false,
+    });
     expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({
       clientRequestId: 'request-1',
       parameterValues: {},

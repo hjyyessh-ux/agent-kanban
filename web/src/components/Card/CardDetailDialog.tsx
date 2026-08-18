@@ -821,9 +821,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
             />
             <OriginExecutionBadges
               originChannel={card.originChannel}
-              executionKind={card.executionKind}
               quickActionId={card.quickActionId}
-              scriptName={card.scriptName}
             />
             <button
               type="button"

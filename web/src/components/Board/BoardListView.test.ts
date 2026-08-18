@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { KanbanCard } from '../../../../src/core/types';
 import { BoardListView, orderColumnsForList } from './BoardListView';
-import type { V2ColumnViewModel } from './board-selectors';
+import { selectColumns, type V2ColumnViewModel } from './board-selectors';
 
 function makeColumn(status: V2ColumnViewModel['status']): V2ColumnViewModel {
   return {
@@ -114,5 +114,37 @@ describe('BoardListView', () => {
 
     expect(html).toContain('aria-label="예약됨 · 2026-07-18 09:30 KST"');
     expect(html).toContain('Scheduled card');
+  });
+
+  test('shows Script instead of the legacy runtime in the runtime column', () => {
+    const card: KanbanCard = {
+      id: 'script-card',
+      title: 'Deploy from Quick Action',
+      description: 'Deploy the service',
+      status: 'todo',
+      agentRuntime: 'opencode',
+      originChannel: 'quick_action',
+      executionKind: 'script',
+      quickActionId: 'qa-deploy',
+      scriptName: 'Deploy service',
+      createdAt: '2026-07-17T00:00:00.000Z',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(BoardListView, {
+        columns: selectColumns([card]),
+        allCards: [card],
+        onCardClick: mock(() => undefined),
+        onStatusChange: mock(() => undefined),
+        onFavoriteToggle: mock(() => undefined),
+      }),
+    );
+
+    expect(html).toContain('>SCRIPT</span>');
+    expect(html).toContain('Script execution · Deploy service');
+    expect(html).toContain('Quick Action origin · qa-deploy');
+    expect(html).not.toContain('OPENCODE');
+    expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
   });
 });

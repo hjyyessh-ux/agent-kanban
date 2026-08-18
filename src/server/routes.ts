@@ -35,6 +35,7 @@ import type {
   RunQuickActionResponse,
   WikiArchiveCardStatusFilter,
 } from '../core/types';
+import { QUICK_ACTION_ICON_ERRORS } from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
 import { extractAgentThread } from '../core/subagent-transcript';
@@ -322,6 +323,13 @@ function dispatchErrorStatus(error: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599
     ? value
     : 500;
+}
+
+function quickActionWriteErrorStatus(message: string): number {
+  return message === QUICK_ACTION_ICON_ERRORS.duplicate
+    || message === QUICK_ACTION_ICON_ERRORS.paletteExhausted
+    ? 409
+    : 400;
 }
 
 function quickActionRunResultFromCard(card: KanbanCard): QuickActionRunRouteResult {
@@ -940,7 +948,7 @@ export function createRouteHandler(
         return json(await quickActionStore.createAction(await req.json()), 201);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Invalid request body';
-        return errorResponse(message, 400);
+        return errorResponse(message, quickActionWriteErrorStatus(message));
       }
     }
 
@@ -1171,7 +1179,7 @@ export function createRouteHandler(
           if (message.includes('Quick action not found')) {
             return errorResponse('Quick action not found', 404);
           }
-          return errorResponse(message, 400);
+          return errorResponse(message, quickActionWriteErrorStatus(message));
         }
       }
 

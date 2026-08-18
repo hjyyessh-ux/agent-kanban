@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentRuntime, KanbanCard } from '../../../../src/core/types';
-import { FavoriteToggleButton, RuntimeBadge } from './BoardCardSections';
+import type { AgentRuntime, CardExecutionKind, KanbanCard } from '../../../../src/core/types';
+import { ExecutionTypeBadge, FavoriteToggleButton } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
 
@@ -23,6 +23,8 @@ export interface CompleteSessionGroup {
   sessionId: string | undefined;
   title: string;
   agentRuntime: AgentRuntime | undefined;
+  executionKind: CardExecutionKind | undefined;
+  scriptName: string | undefined;
   projectDir: string | undefined;
   startedAt: string;
   lastUpdatedAt: string;
@@ -120,6 +122,8 @@ export function groupCompleteCardsBySession(cards: KanbanCard[]): CompleteSessio
         sessionId: sortedCards[0]?.sessionId,
         title: getSessionTitle(sortedCards),
         agentRuntime: sortedCards[0]?.agentRuntime,
+        executionKind: sortedCards[0]?.executionKind,
+        scriptName: sortedCards[0]?.scriptName,
         projectDir: sortedCards[0]?.projectDir,
         startedAt: sortedCards[0]?.createdAt ?? '',
         lastUpdatedAt,
@@ -231,7 +235,11 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
             >
               <div className="kv2-complete-session-heading">
                 <div className="kv2-complete-session-runtime-row">
-                  <RuntimeBadge runtime={group.agentRuntime} />
+                  <ExecutionTypeBadge
+                    runtime={group.agentRuntime}
+                    executionKind={group.executionKind}
+                    scriptName={group.scriptName}
+                  />
                   <span className="kv2-complete-session-count">{group.cards.length} cards</span>
                   {group.unreadCount > 0 && (
                     <span className="kv2-complete-session-unread">{group.unreadCount} unread</span>

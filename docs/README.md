@@ -33,7 +33,7 @@ agent-kanban은 opencode/Codex/Claude runtime 세션, Telegram follow-up, feedba
 
 **운영 UI / 도구**
 - Board / Scheduler / Scripts / Settings 탭 제공
-- Board의 Quick Actions launcher에서 저장된 Prompt/Script 작업을 파라미터와 함께 즉시 실행
+- Board 왼쪽 여백의 `⚡ Quick ›` edge tab에서 여는 modal Quick Actions side sheet로 저장된 Prompt/Script 작업을 파라미터와 함께 즉시 실행
 - pending question 배너와 question reply/reject 흐름 제공
 - kanban 7개, scheduler 6개, settings 2개 도구 제공
 

@@ -39,7 +39,12 @@ test.describe('Responsive Layout', () => {
     expect(uniqueX.size).toBe(1);
   });
 
-  test('mobile: header stays compact and board tools expand on demand', async ({ page }) => {
+  test('mobile: header stays compact and board tools expand on demand', async ({ page, seedCard }) => {
+    await seedCard({
+      title: '[E2E] Mobile board tools',
+      description: 'Project switcher visibility',
+      projectDir: '/workspace/mobile-tools',
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
 
@@ -68,12 +73,18 @@ test.describe('Responsive Layout', () => {
     await page.locator('#app-tab-capabilities').click();
     await expect(page.locator('.diag-bar')).toBeVisible();
 
-    const overflow = await page.locator('#app-panel-capabilities').evaluate((panel) => {
-      return Array.from(panel.querySelectorAll<HTMLElement>('*')).some((element) => {
+    const overflowingElements = await page.locator('#app-panel-capabilities').evaluate((panel) => {
+      return Array.from(panel.querySelectorAll<HTMLElement>('*')).flatMap((element) => {
         const rect = element.getBoundingClientRect();
-        return rect.left < -1 || rect.right > window.innerWidth + 1;
+        if (rect.left >= -1 && rect.right <= window.innerWidth + 1) return [];
+        return [{
+          className: element.className,
+          left: Math.round(rect.left),
+          right: Math.round(rect.right),
+          text: element.textContent?.trim().slice(0, 80) ?? '',
+        }];
       });
     });
-    expect(overflow).toBe(false);
+    expect(overflowingElements).toEqual([]);
   });
 });

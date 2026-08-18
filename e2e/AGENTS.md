@@ -29,7 +29,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `foldable-ui.e2e.ts` | Foldable/collapsible UI section behavior |
 | `polling.e2e.ts` | Board polling / eventual-consistency assertions |
 | `progress-result.e2e.ts` | Progress summary and result field rendering |
-| `quick-actions.e2e.ts` | Quick Action CRUD, Prompt dispatch, MCP monitoring prompt, Script parameters/redaction/status, mobile dialog, light/dark visual audit |
+| `quick-actions.e2e.ts` | Quick Action CRUD/run, compact non-pushing launcher, desktop Board/List geometry + modal scrim/inert sheet, Prompt/Script execution, mobile full-screen accessibility, light/dark visual audit |
 | `responsive.e2e.ts`, `responsive-columns.e2e.ts` | Responsive layout and column behavior across viewport sizes |
 | `runtime-integration.e2e.ts` | Cross-runtime (opencode/Codex/Claude) integration behavior |
 | `screenshot.e2e.ts` | Screenshot upload/attachment UI |
