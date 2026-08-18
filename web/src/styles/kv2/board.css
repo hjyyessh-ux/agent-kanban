@@ -22,6 +22,472 @@
   display: none;
 }
 
+/* ── Board workspace + Quick Actions modal side sheet ─────── */
+.kv2-board-workspace {
+  position: relative;
+  min-width: 0;
+  padding: 0 calc(5% + 30px);
+}
+
+.kv2-board-workspace-content {
+  min-width: 0;
+  container-name: board-content;
+  container-type: inline-size;
+}
+
+.kv2-board-workspace-content .kv2-board,
+.kv2-board-workspace-content .kv2-board-list {
+  padding-inline: 0;
+}
+
+.kv2-quick-actions-drawer {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--kv2-sp-5));
+  z-index: 3;
+  min-width: 0;
+}
+
+.kv2-quick-actions-drawer--collapsed {
+  width: auto;
+}
+
+.kv2-quick-actions-rail {
+  max-width: 100%;
+}
+
+.kv2-quick-actions-rail[hidden] {
+  display: none;
+}
+
+.kv2-quick-actions-rail-icon,
+.kv2-quick-actions-rail-cue {
+  font-size: var(--kv2-text-lg);
+  line-height: 1;
+}
+
+.kv2-quick-actions-rail-cue {
+  margin-left: var(--kv2-sp-1);
+}
+
+.kv2-quick-actions-sheet-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kv2-sp-3);
+  margin-bottom: var(--kv2-sp-4);
+}
+
+.kv2-quick-actions-drawer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--kv2-sp-4) var(--kv2-sp-4) max(var(--kv2-sp-4), env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+.kv2-dialog--quick-actions-sheet .kv2-dialog-content {
+  display: flex;
+  overflow: hidden;
+}
+
+.kv2-quick-actions-add {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.kv2-quick-action-run-title {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-quick-action-drawer-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kv2-quick-action-drawer-row {
+  position: relative;
+  min-width: 0;
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-card-border-color);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-card-bg);
+  box-shadow: var(--kv2-shadow-sm);
+  overflow: visible;
+}
+
+.kv2-btn.kv2-quick-action-drawer-select {
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-4) calc(var(--kv2-sp-10) + var(--kv2-sp-6)) var(--kv2-sp-4) var(--kv2-sp-4);
+  text-align: left;
+  white-space: normal;
+}
+
+.kv2-quick-action-run-affordance {
+  align-self: center;
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.kv2-quick-action-item-meta.kv2-quick-action-drawer-meta {
+  justify-content: flex-start;
+}
+
+.kv2-quick-action-row-menu {
+  position: absolute;
+  top: var(--kv2-sp-3);
+  right: var(--kv2-sp-3);
+  z-index: 2;
+}
+
+.kv2-quick-action-row-menu > summary {
+  min-width: var(--kv2-btn-height);
+  padding-inline: var(--kv2-sp-2);
+  list-style: none;
+}
+
+.kv2-quick-action-row-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kv2-quick-action-row-menu[open] > summary {
+  background: var(--kv2-surface-raised);
+}
+
+.kv2-quick-action-row-menu .kv2-quick-action-manage-actions {
+  position: absolute;
+  top: calc(100% + var(--kv2-sp-2));
+  right: 0;
+  display: grid;
+  min-width: 8rem;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface-raised);
+  box-shadow: var(--kv2-shadow-md);
+}
+
+.kv2-quick-action-row-menu .kv2-btn {
+  justify-content: center;
+}
+
+.kv2-quick-action-run-title {
+  align-items: flex-start;
+}
+
+.kv2-quick-action-run-panel .kv2-quick-action-summary > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--kv2-sp-1);
+}
+
+@container board-content (max-width: 56rem) {
+  .kv2-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container board-content (max-width: 38rem) {
+  .kv2-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Quick Action editor DialogSkeleton content ───────────── */
+.kv2-dialog--quick-actions {
+  max-height: calc(100dvh - var(--kv2-sp-8));
+}
+
+.kv2-quick-actions-shell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-5);
+  min-width: 0;
+}
+
+.kv2-quick-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.kv2-quick-action-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kv2-sp-4);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-card-border-color);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-card-bg);
+  color: var(--kv2-text-primary);
+  box-shadow: var(--kv2-shadow-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kv2-quick-action-item:hover:not(:disabled) {
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-quick-action-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.kv2-quick-action-item--manage {
+  cursor: default;
+}
+
+.kv2-quick-action-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+  flex: 1;
+}
+
+.kv2-quick-action-item-icon {
+  flex: 0 0 auto;
+  font-size: var(--kv2-text-xl);
+  line-height: 1;
+}
+
+.kv2-quick-action-item-title {
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-md);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.kv2-quick-action-item-description,
+.kv2-quick-action-copy,
+.kv2-quick-action-field-meta,
+.kv2-quick-action-no-default,
+.kv2-quick-actions-empty {
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.kv2-quick-action-item-meta,
+.kv2-quick-action-manage-actions,
+.kv2-quick-action-checkbox,
+.kv2-quick-action-section-heading,
+.kv2-origin-execution-badges {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-origin-execution-badges {
+  flex-wrap: wrap;
+}
+
+.kv2-quick-action-item-meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-xs);
+}
+
+.kv2-quick-action-summary {
+  display: grid;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-quick-action-summary > div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.4fr) minmax(0, 1fr);
+  gap: var(--kv2-sp-3);
+}
+
+.kv2-quick-action-summary dt {
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kv2-quick-action-summary dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--kv2-text-primary);
+}
+
+.kv2-quick-action-fields,
+.kv2-quick-action-parameters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.kv2-quick-action-field-meta {
+  margin-top: var(--kv2-sp-1);
+}
+
+.kv2-quick-action-confirmation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-danger-accent);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-danger-surface);
+  color: var(--kv2-danger-text-deep);
+  font-weight: 700;
+}
+
+.kv2-quick-action-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kv2-sp-4);
+}
+
+.kv2-quick-action-editor-wide {
+  grid-column: 1 / -1;
+}
+
+.kv2-quick-action-behavior-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kv2-sp-3);
+}
+
+.kv2-quick-action-behavior-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kv2-quick-action-icon-picker {
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-quick-action-icon-heading,
+.kv2-quick-action-icon-options,
+.kv2-quick-action-custom-icon-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-quick-action-icon-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.kv2-quick-action-icon-options {
+  flex-wrap: wrap;
+}
+
+.kv2-quick-action-icon-option {
+  min-width: var(--kv2-btn-height);
+  padding-inline: var(--kv2-sp-3);
+  font-size: var(--kv2-text-lg);
+}
+
+.kv2-quick-action-icon-preview {
+  display: grid;
+  place-items: center;
+  min-width: calc(var(--kv2-btn-height) + var(--kv2-sp-2));
+  min-height: calc(var(--kv2-btn-height) + var(--kv2-sp-2));
+  padding: var(--kv2-sp-2);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface-raised);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-xl);
+  line-height: 1;
+}
+
+.kv2-quick-action-custom-icon-row .kv2-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.kv2-quick-action-parameters {
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  border-radius: var(--kv2-radius-lg);
+}
+
+.kv2-quick-action-section-heading {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.kv2-quick-action-parameter-row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.8fr) minmax(7rem, 1fr) minmax(6rem, 0.7fr) minmax(7rem, 1fr) auto auto;
+  gap: var(--kv2-sp-2);
+  align-items: center;
+}
+
+@media (max-width: 720px) {
+  .kv2-quick-action-item,
+  .kv2-quick-action-section-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kv2-quick-action-item-meta,
+  .kv2-quick-action-manage-actions {
+    justify-content: flex-start;
+  }
+
+  .kv2-quick-action-editor-grid,
+  .kv2-quick-action-parameter-row,
+  .kv2-quick-action-behavior-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kv2-quick-action-custom-icon-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kv2-quick-action-editor-wide {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .kv2-dialog--quick-actions {
+    width: 100%;
+    max-width: 100%;
+    max-height: calc(100dvh - (2 * var(--kv2-sp-3)));
+  }
+
+  .kv2-quick-action-summary > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--kv2-sp-1);
+  }
+}
+
 .kv2-filter {
   display: flex;
   flex-direction: column;
@@ -1207,6 +1673,24 @@
 }
 
 @media (max-width: 768px) {
+  .kv2-board-workspace {
+    padding-inline: var(--kv2-sp-3);
+  }
+
+  .kv2-quick-actions-drawer,
+  .kv2-quick-actions-drawer--collapsed {
+    position: static;
+    width: auto;
+  }
+
+  .kv2-quick-actions-drawer--collapsed {
+    margin-bottom: var(--kv2-sp-4);
+  }
+
+  .kv2-board-workspace-content .kv2-board-list {
+    margin-inline: 0;
+  }
+
   .kv2-board-mobile-nav {
     display: flex;
     gap: var(--kv2-sp-2);

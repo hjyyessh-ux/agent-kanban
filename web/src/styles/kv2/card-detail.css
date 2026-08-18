@@ -1671,3 +1671,39 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* Quick Action Script execution provenance uses the existing sidebar panel look. */
+.kv2-execution-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-4);
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-execution-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-execution-meta > div {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.6fr) minmax(0, 1fr);
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-execution-meta dt {
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kv2-execution-meta dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--kv2-text-primary);
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { KanbanStatus } from '../../../../src/core/types';
+import type { AgentRuntime, CardExecutionKind, KanbanStatus } from '../../../../src/core/types';
 import codexIconUrl from '../../assets/codex-icon-transparent.png';
 import { ScheduledDispatchBadge } from '../shared/ScheduledDispatchUi';
 import type { ChildItem, V2CardViewModel } from './board-selectors';
@@ -47,20 +47,56 @@ export const SchedulerBadge: React.FC<{ title?: string; size?: number }> = ({ ti
   </span>
 );
 
-export function formatRuntimeLabel(runtime: V2CardViewModel['agentRuntime'] | undefined): string {
+export const OriginExecutionBadges: React.FC<{
+  originChannel?: V2CardViewModel['originChannel'];
+  quickActionId?: string;
+}> = ({ originChannel, quickActionId }) => {
+  if (originChannel !== 'quick_action') return null;
+  return (
+    <span className="kv2-origin-execution-badges">
+      <span
+        className="kv2-badge kv2-badge--accent"
+        title={quickActionId ? `Quick Action origin · ${quickActionId}` : 'Quick Action origin'}
+      >
+        Quick Action
+      </span>
+    </span>
+  );
+};
+
+export function formatRuntimeLabel(runtime: AgentRuntime | undefined): string {
   if (runtime === 'codex') return 'Codex';
   if (runtime === 'claude') return 'Claude';
   return 'Opencode';
 }
 
-export const RuntimeBadge: React.FC<{ runtime: V2CardViewModel['agentRuntime'] | undefined }> = ({ runtime }) => (
+export const RuntimeBadge: React.FC<{ runtime: AgentRuntime | undefined }> = ({ runtime }) => (
   <span className={`kv2-runtime-badge kv2-runtime-badge--${runtime ?? 'opencode'}`} title={`${formatRuntimeLabel(runtime)} runtime`}>
     <RuntimeBadgeIcon runtime={runtime ?? 'opencode'} />
     <span className="kv2-runtime-badge-text">{formatRuntimeLabel(runtime).toUpperCase()}</span>
   </span>
 );
 
-export const RuntimeBadgeIcon: React.FC<{ runtime: NonNullable<V2CardViewModel['agentRuntime']> }> = ({ runtime }) => {
+export const ExecutionTypeBadge: React.FC<{
+  runtime: AgentRuntime | undefined;
+  executionKind?: CardExecutionKind;
+  scriptName?: string;
+}> = ({ runtime, executionKind, scriptName }) => {
+  if (executionKind !== 'script') {
+    return <RuntimeBadge runtime={runtime} />;
+  }
+
+  return (
+    <span
+      className="kv2-runtime-badge kv2-runtime-badge--script"
+      title={scriptName ? `Script execution · ${scriptName}` : 'Script execution'}
+    >
+      <span className="kv2-runtime-badge-text">SCRIPT</span>
+    </span>
+  );
+};
+
+export const RuntimeBadgeIcon: React.FC<{ runtime: AgentRuntime }> = ({ runtime }) => {
   if (runtime === 'codex') {
     return (
       <span className="kv2-runtime-badge-icon kv2-runtime-badge-icon--codex" aria-hidden="true">

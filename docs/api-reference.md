@@ -68,7 +68,7 @@
 - `queuedAfterCardId`
 - `queuePosition`
 - `queueSessionMode`
-- `resolution` (`completed` | `superseded`)
+- `resolution` (`completed` | `superseded` | `failed`; `failed`는 terminal Script 실행 실패)
 - `supersededByCardId`
 - `supersededAt`
 
@@ -107,6 +107,82 @@ soft-delete된 카드의 `deletedAt`을 제거하고 active view로 복구합니
 Codex `thread_id` timeout 또는 Claude `session_id` timeout은 실패 응답을 반환합니다. 이때 card는 `todo`로 돌아가고 `progressSummary`에는 `[failed] ...` 요약이 남습니다.
 
 예약된 카드(`scheduledDispatch.status='scheduled'`)에 이 엔드포인트를 호출하면 같은 예약 claim wrapper를 사용해 **Start Now**가 된다. background due scan과 경합해도 dispatch는 한 번만 허용된다.
+
+## Quick Actions API
+
+### `GET /api/quick-actions`
+
+저장된 Quick Action 목록을 pinned/order 순으로 반환합니다. `pinned=true`는 비고정 action보다 먼저 표시하라는 정렬 표시이고, `enabled=false`는 action을 삭제하지 않은 채 실행만 막습니다. 각 항목은 단일 emoji grapheme `icon`을 가지며 `available`, `unavailableReason`, `effectiveProjectDir`가 포함될 수 있습니다. Script action에는 현재 연결된 `scriptName`이 함께 반환됩니다. `available=false`인 action과 icon 없는 legacy action도 관리·복구할 수 있도록 목록에서 제거하지 않습니다.
+
+### `POST /api/quick-actions`
+
+Prompt 또는 Script Quick Action을 생성합니다. Prompt action은 `cardTitleTemplate`, `promptTemplate`, `projectDir`, `agentRuntime`이 필수이며 일반 카드와 같은 `model`, `agentType`, `command`, `argumentsTemplate`, `codexOptions`, `claudeOptions`를 저장할 수 있습니다. `argumentsTemplate`은 `command`가 있을 때만 허용되며 실행 파라미터로 렌더링됩니다.
+
+Prompt의 `projectDir`는 빈 값일 수 없고 실행 시 실제 absolute directory여야 합니다. Script의 `projectDir`는 선택 사항이며 없으면 연결된 script의 directory, 그마저 없으면 프로세스 cwd를 사용합니다. parameter key는 `[A-Za-z_][A-Za-z0-9_]*` 형식이고 type은 `string`, `number`, `boolean`, `select`, `secret` 중 하나입니다. `secret`에는 default를 저장할 수 없고 `select`에는 중복 없는 options가 필요합니다.
+
+`icon`은 선택 입력입니다. 생략하면 shared 기본 팔레트에서 미사용 icon을 원자적으로 배정합니다. custom 값은 표시 가능한 emoji 한 grapheme이어야 하고 전체 action에서 중복될 수 없습니다. 중복 또는 기본 팔레트 소진은 `409`, 잘못된 grapheme은 `400`입니다.
+
+### `GET/PATCH/DELETE /api/quick-actions/:id`
+
+단일 action을 조회·수정·삭제합니다. `PATCH`에서 `icon`을 바꾸면 생성과 같은 emoji grapheme·전체 고유성 검증을 적용합니다. 참조 중인 ScriptEntry를 직접 삭제하면 `409`를 반환하지만 외부 directory sync로 script가 사라진 action은 삭제하지 않고 `available=false`로 반환합니다. 저장 파일에 `icon`이 없는 legacy entry도 조회에서 버리지 않고 정렬 순서에 따른 결정적 fallback icon을 반환합니다.
+
+### `POST /api/quick-actions/:id/run`
+
+Prompt Quick Action은 카드를 만든 뒤 기존 agent dispatch 경로로 실행합니다. Script Quick Action은 같은 요청 schema를 검증한 뒤 일반 script card와 `ScriptRun`을 먼저 저장하고 비동기 실행합니다.
+
+`enabled=false`인 action의 실행 요청은 `409 Quick action is disabled`로 거부됩니다. `pinned`는 목록 정렬에만 영향을 주며 실행 권한이나 동작을 바꾸지 않습니다.
+
+요청:
+
+```json
+{
+  "clientRequestId": "stable-id-for-this-click-and-retries",
+  "parameterValues": {
+    "days": 3,
+    "scope": "all"
+  }
+}
+```
+
+parameter는 저장된 `parameterDefinitions`의 required/type/select/unknown-key 규칙으로 검증합니다. template은 정확한 `{{parameterKey}}` placeholder만 지원하며, 값이 없거나 형식이 잘못된 placeholder가 남으면 실행하지 않습니다. 저장된 `projectDir`가 실제 directory가 아니거나 action이 disabled/unavailable여도 실행하지 않습니다.
+
+required `string`/`secret`은 공백만 있는 값을 허용하지 않습니다. 서로 다른 parameter key가 환경변수 정규화 후 같은 이름이 되는 경우(예: `fooBar`, `foo_bar` → `AK_PARAM_FOO_BAR`) action 등록을 거부합니다.
+
+Script parameter는 명령 문자열에 렌더링하지 않고 `AK_PARAM_<UPPER_SNAKE_KEY>` 환경변수로만 전달합니다. camelCase 경계는 `_`로 바뀌며 영숫자가 아닌 문자는 `_`로 정규화됩니다. Settings entry 중 유효한 env key는 script environment에 전달하지만 system/interpreter/internal reserved key와 `AK_PARAM_*` key는 무시합니다. secret parameter와 masked Settings 값은 card/run/history/stdout/stderr/error에서 `[REDACTED]` 처리되며 `parameterSnapshot`에도 secret은 포함되지 않습니다. stored language는 고정 interpreter argv allowlist로만 해석하고 요청에서 interpreter를 받지 않습니다.
+
+성공 응답:
+
+```json
+{
+  "cardId": "card-id",
+  "status": "in_progress",
+  "dispatch": {
+    "sessionId": "thread-or-session-id",
+    "runId": "runtime-run-id",
+    "startedAt": "2026-08-16T00:00:00.000Z"
+  }
+}
+```
+
+`quickActionId + clientRequestId`가 idempotency key입니다. 같은 요청을 동시에 보내거나 재시도해도 새 카드/dispatch를 만들지 않고 동일한 저장 결과를 반환합니다. dispatch 접수 실패 시에도 응답에는 `cardId`, `status: "todo"`, `dispatch: null`, `failureSummary`, `error`가 포함되고 카드는 삭제되지 않습니다.
+
+Script 접수 응답은 `202 Accepted`입니다.
+
+```json
+{
+  "cardId": "card-id",
+  "runId": "script-run-id",
+  "status": "in_progress",
+  "runStatus": "running",
+  "dispatch": null
+}
+```
+
+이후 `GET /api/cards/:cardId`와 script history를 polling합니다. exit code 0이면 card는 `complete`/`resolution=completed`, spawn 또는 nonzero exit이면 `complete`/`resolution=failed`가 됩니다. 실패는 다음 queue card를 자동 실행하지 않습니다.
+
+Quick Action 실행 카드는 `originChannel=quick_action`, `quickActionId`, `executionKind`를 기록합니다. Script 실행 카드는 실행 당시의 `scriptName`, `scriptRunId`, secret을 제외한 `parameterSnapshot`도 기록하므로, 원본 script 이름이 바뀌거나 사라져도 Card Detail에서 실행 대상을 확인할 수 있습니다.
+
+변경 및 실행 endpoint는 서버가 발급한 loopback 로컬 토큰을 요구합니다. 읽기 endpoint는 non-secret read 정책을 유지하며 wildcard CORS는 허용하지 않습니다.
 
 ### `PUT /api/cards/:id/schedule`
 
@@ -338,7 +414,18 @@ runtime UI는 다음 key를 사용합니다.
 
 ### `POST /api/scripts/:id/run`
 
-스크립트를 실행하고 실행 결과를 history에 남깁니다.
+Script Quick Action과 동일한 `ScriptExecutionService`로 실행합니다. effective cwd와 stored language를 검증하고 content/language revision·cwd를 snapshot으로 고정한 뒤 일반 card와 `ScriptRun(status=running)`을 저장합니다. HTTP 요청은 완료를 기다리지 않고 `202`와 다음 응답을 반환합니다.
+
+```json
+{
+  "cardId": "card-id",
+  "runId": "script-run-id",
+  "status": "running",
+  "startedAt": "2026-08-16T00:00:00.000Z"
+}
+```
+
+같은 script의 동시 실행은 `409`이며, running entry는 삭제할 수 없습니다. 완료 상태는 `GET /api/cards/:cardId` 또는 `GET /api/scripts/:id/history`로 polling합니다.
 
 ### `GET /api/scripts/:id/history`
 

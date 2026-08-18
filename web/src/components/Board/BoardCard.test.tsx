@@ -97,6 +97,26 @@ function makeVm(overrides: Partial<V2CardViewModel> = {}): V2CardViewModel {
 }
 
 describe('BoardCard scheduled metadata', () => {
+  test('keeps each agent runtime badge for non-script cards', () => {
+    for (const [runtime, label] of [
+      ['opencode', 'OPENCODE'],
+      ['codex', 'CODEX'],
+      ['claude', 'CLAUDE'],
+    ] as const) {
+      const html = renderToStaticMarkup(
+        <BoardCard
+          vm={makeVm({ agentRuntime: runtime, executionKind: 'agent' })}
+          draggable={false}
+          onClick={mock(() => undefined)}
+        />,
+      );
+
+      expect(html).toContain(`>${label}</span>`);
+      expect(html).toContain(`title="${label[0]}${label.slice(1).toLowerCase()} runtime"`);
+      expect(html).not.toContain('>SCRIPT</span>');
+    }
+  });
+
   test('renders the scheduled time visibly with aria-label and title', () => {
     const html = renderToStaticMarkup(
       <BoardCard
@@ -131,5 +151,27 @@ describe('BoardCard scheduled metadata', () => {
     expect(html).toContain('aria-label="Scheduler"');
     expect(html).toContain('title="Scheduler origin · Nightly Summary"');
     expect(html).toContain('kv2-scheduler-badge');
+  });
+
+  test('renders Quick Action and Script provenance with the script snapshot', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({
+          originChannel: 'quick_action',
+          executionKind: 'script',
+          quickActionId: 'qa-deploy',
+          scriptName: 'Deploy service',
+        })}
+        draggable={false}
+        onClick={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).toContain('Quick Action');
+    expect(html).toContain('>SCRIPT</span>');
+    expect(html).toContain('Quick Action origin · qa-deploy');
+    expect(html).toContain('Script execution · Deploy service');
+    expect(html).not.toContain('OPENCODE');
+    expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
   });
 });

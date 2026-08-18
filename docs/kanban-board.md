@@ -68,6 +68,18 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 | `skills` | `string[]` (선택) | 도구나 수동 생성 경로에서 명시적으로 기록한 스킬 목록이다. `chat.message` 자동 생성 경로에서 항상 채워지는 필드는 아니다. |
 | `sourceContext` | `string` (선택) | 소스 컨텍스트. 카드가 어떤 맥락에서 만들어졌는지 기록한다. |
 
+### 실행 출처 필드
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `originChannel` | `quick_action \| scheduler \| ...` (선택) | 카드를 만든 실행 경로다. Quick Action 카드는 `quick_action`을 기록한다. |
+| `quickActionId` | `string` (선택) | 원본 Quick Action id다. |
+| `executionKind` | `agent \| script` (선택) | agent dispatch인지 로컬 Script process인지 구분한다. |
+| `scriptName` / `scriptRunId` | `string` (선택) | Script 실행 시점의 이름 snapshot과 실행 이력 id다. |
+| `parameterSnapshot` | `Record<string, unknown>` (선택) | 실행에 사용한 non-secret parameter snapshot이다. secret 값은 포함하지 않는다. |
+
+Board 카드, List 행, Card Detail은 같은 실행 표시 규칙을 사용한다. `executionKind=script`이면 저장 호환용 `agentRuntime`이 `opencode`여도 runtime badge를 노출하지 않고 `SCRIPT`를 표시한다. agent 카드는 실제 `OPENCODE`/`CODEX`/`CLAUDE` runtime을 표시한다. Quick Action/Scheduler 같은 출처 badge는 이 실행 badge와 별도로 유지된다.
+
 ### 계층 구조 필드
 
 | 필드 | 타입 | 설명 |

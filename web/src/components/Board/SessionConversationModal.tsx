@@ -3,7 +3,7 @@ import type { KanbanCard } from '../../../../src/core/types';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { FeedbackPanel } from '../Card/FeedbackPanel';
 import { CardMarkdown } from '../Card/CardMarkdown';
-import { RuntimeBadge } from './BoardCardSections';
+import { ExecutionTypeBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
 import type { CompleteSessionGroup } from './BoardCompleteSessionView';
@@ -323,7 +323,11 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     >
       <header className="session-conversation-stickyHeader">
         <div className="session-conversation-stickyTopRow">
-          <RuntimeBadge runtime={group.agentRuntime} />
+          <ExecutionTypeBadge
+            runtime={group.agentRuntime}
+            executionKind={group.executionKind}
+            scriptName={group.scriptName}
+          />
           <span className="session-conversation-turnCount">{orderedTurns.length} turns</span>
           {group.sessionId && (
             <button

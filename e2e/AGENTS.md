@@ -29,6 +29,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `foldable-ui.e2e.ts` | Foldable/collapsible UI section behavior |
 | `polling.e2e.ts` | Board polling / eventual-consistency assertions |
 | `progress-result.e2e.ts` | Progress summary and result field rendering |
+| `quick-actions.e2e.ts` | Quick Action CRUD/run, compact non-pushing launcher, desktop Board/List geometry + modal scrim/inert sheet, Prompt/Script execution, mobile full-screen accessibility, light/dark visual audit |
 | `responsive.e2e.ts`, `responsive-columns.e2e.ts` | Responsive layout and column behavior across viewport sizes |
 | `runtime-integration.e2e.ts` | Cross-runtime (opencode/Codex/Claude) integration behavior |
 | `screenshot.e2e.ts` | Screenshot upload/attachment UI |
@@ -50,11 +51,11 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 
 ### Working In This Directory
 
-- Import `test` and `expect` from `./fixtures/kanban`, not directly from `@playwright/test` — the custom fixture adds `seedCard`, `seedCardWithStatus`, and `trackCard` (auto-cleanup via `apiDeleteCard`) on top of the base test.
-- Seed data through `e2e/helpers/api.ts` (`apiCreateCard`, `apiUpdateCard`, `apiDeleteCard`, `apiGetCards`, `apiArchiveCards`, `apiUploadScreenshot`, `apiGetScreenshotUrl`, `apiCreateScript`, `apiDeleteScript`, `apiGetScripts`) rather than clicking through creation forms, unless the UI path itself is what's under test.
+- Import `test` and `expect` from `./fixtures/kanban`, not directly from `@playwright/test` — the custom fixture adds card, script, and Quick Action seed/track helpers with automatic cleanup.
+- Seed data through `e2e/helpers/api.ts` (`apiCreateCard`, `apiUpdateCard`, `apiDeleteCard`, `apiGetCards`, `apiCreateScript`, `apiDeleteScript`, `apiCreateQuickAction`, `apiRunQuickAction`, and related helpers) rather than clicking through creation forms, unless the UI path itself is what's under test.
 - Base URL for API helpers defaults to `http://127.0.0.1:24681`, overridable via `E2E_BASE_URL`.
 - Rely on Playwright auto-waiting and locator assertions; avoid `page.waitForTimeout()` as a synchronization mechanism.
-- Track every card you create for cleanup (the `trackCard`/`seedCard` fixtures do this automatically — use them instead of raw `apiCreateCard` calls where possible).
+- Track every card, script, and Quick Action you create for cleanup (`trackCard`, `trackScript`, `trackQuickAction`, or the matching seed fixture). `trackQuickAction` depends on `trackScript` so teardown removes references before deleting ScriptEntries; preserve that ordering.
 
 ### Testing Requirements
 

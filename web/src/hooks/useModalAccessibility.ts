@@ -56,6 +56,7 @@ export function useModalAccessibility(
   containerRef: RefObject<HTMLElement | null>,
   onClose: () => void,
   restoreFocusRef?: HTMLElement | null,
+  initialFocusRef?: RefObject<HTMLElement | null>,
 ): void {
   const onCloseRef = useRef(onClose);
 
@@ -73,13 +74,18 @@ export function useModalAccessibility(
 
     const focusables = getFocusableElements(container);
 
-    const firstFocusable = focusables[0] ?? container;
-    const lastFocusable = focusables[focusables.length - 1] ?? container;
+    const requestedInitialFocus = initialFocusRef?.current;
+    const firstFocusable = requestedInitialFocus
+      && container.contains(requestedInitialFocus)
+      && isVisibleFocusableElement(requestedInitialFocus)
+      ? requestedInitialFocus
+      : focusables[0] ?? container;
 
     container.focus();
     if (firstFocusable !== container) firstFocusable.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (shouldCloseModalOnKey(event.key)) {
         event.preventDefault();
         onCloseRef.current();
@@ -109,5 +115,5 @@ export function useModalAccessibility(
       window.removeEventListener('keydown', handleKeyDown);
       previousActiveElement?.focus();
     };
-  }, [enabled, containerRef, restoreFocusRef]);
+  }, [enabled, containerRef, initialFocusRef, restoreFocusRef]);
 }

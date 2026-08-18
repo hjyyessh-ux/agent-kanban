@@ -104,6 +104,29 @@ describe('StaleCardChecker', () => {
     });
   });
 
+  test('does not mark long-running tracked script cards as opencode stale work', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const checker = new StaleCardChecker(store, createMockInput([]));
+      const card = await store.createCard({
+        title: 'Long deployment',
+        description: 'Tracked by ScriptExecutionService',
+        executionKind: 'script',
+        scriptRunId: 'script-run-long',
+      });
+      await store.updateCard(card.id, { status: 'in_progress' });
+      const board = await store.load();
+      board.cards[0].updatedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      await store.save(board);
+
+      await checker.check();
+
+      const updated = await store.getCard(card.id);
+      expect(updated).toMatchObject({ status: 'in_progress', executionKind: 'script' });
+      expect(updated?.staleStatus).toBeUndefined();
+    });
+  });
+
   test('clears stale flags when a card is re-dispatched to in_progress', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);

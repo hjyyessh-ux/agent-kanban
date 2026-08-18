@@ -99,6 +99,10 @@ export class StaleCardChecker {
     activeSessions: Set<string>,
     now: number,
   ): 'orphan' | 'stuck' | null {
+    if (card.executionKind === 'script') {
+      return null;
+    }
+
     if (isTopLevelParentWaitingOnDirectChild(card, inProgressCards)) {
       return null;
     }

@@ -15,6 +15,8 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 | Change scheduler action/history schema | `types.ts`, `scheduler-store.ts` | Scheduler JSON lives in `schedulers.json` |
 | Change settings secrets/toggles storage | `settings-store.ts` | Persists `settings.json` |
 | Change synced script storage/history | `script-store.ts` | Persists `scripts.json`, syncs `KANBAN_DATA_DIR/scripts/` |
+| Change settings/parameter env injection or redaction | `execution-environment.ts` | Shared by scheduler and ScriptExecutionService; `AK_PARAM_*` is reserved for validated parameters |
+| Change Quick Action schema, validation, templates, or persistence | `types.ts`, `quick-action-store.ts` | `quick-actions.json`; Prompt run idempotency state is stored on the generated card |
 | Change board/archive/screenshot persistence | `store.ts` | `active.json`, archive files, screenshot paths, queue helpers, scheduled-dispatch claim/recovery |
 | Change wiki state stamping/queueing on archived cards | `store.ts`, `types.ts` | `CardWikiState`; archive stamps `wiki.status='pending'`; `markWikiPending()` drives backfill |
 | Change Telegram chat/session pinning | `telegram-state-store.ts` | Persists `telegram-state.json` |
@@ -41,8 +43,12 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - `description` is required on cards.
 - `findCardBySessionId()` returns the newest matching card.
 - `UpdateTelegramChatStateInput` uses `null` to clear persisted optional fields.
-- Script and scheduler stdout/stderr are capped to 8KB.
+- Script and scheduler stdout/stderr are capped to 8KB by UTF-8 bytes.
+- Execution settings env cannot replace interpreter/system/internal reserved keys. Script Quick Action parameters use only normalized `AK_PARAM_<UPPER_SNAKE_KEY>` names; masked settings and secret parameters must be redacted before persistence.
+- `ScriptStore.beginRun()` is the atomic per-script concurrency claim. Terminal updates replace the matching running row, running entries cannot be deleted, and stale running rows are reconciled after process restart.
 - Scheduled-dispatch reservations are store-owned and atomic: `scheduled -> dispatching -> dispatched/failed`, with explicit stale-claim recovery after restart.
+- Quick Action card reservation is store-owned and atomic on `(quickActionId, quickActionRequestId)`; only the caller receiving `created: true` may dispatch it.
+- Quick Action icon palette, duplicate policy, validation messages, and grapheme normalization live in `types.ts`. Omitted icons are claimed under the QuickActionStore dual lock; icon-less legacy entries receive deterministic, distinct fallbacks in display sort order.
 - Primary-agent defaults live here; UI and plugin must not fork model/label maps.
 - Clearing selected Telegram session/card state must not implicitly clear sticky default agent/model fields.
 - `feedbackForCardId`, `telegramChatId`, and Telegram selected-session fields are part of fragile workflow contracts tracked in `docs/invariants.md`.

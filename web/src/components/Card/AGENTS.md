@@ -9,7 +9,7 @@ Card detail and card creation dialogs, plus every sub-panel they compose: runtim
 ## Key Files
 | File | Description |
 |------|-------------|
-| `CardDetailDialog.tsx` | Full detail/edit view for an existing card: inline field editing, model/runtime pickers (via `useRuntimes`/`useModelCatalog`), screenshot upload, queue settings, session resume, and question/feedback panels. Largest file in the component tree. |
+| `CardDetailDialog.tsx` | Full detail/edit view for an existing card: inline field editing, runtime metadata, Script execution provenance/status, screenshots, queue settings, session resume, and question/feedback panels. Largest file in the component tree. |
 | `CardDetailDialog.test.tsx` | Tests for the detail dialog. |
 | `CreateCardDialog.tsx` | New-card form: runtime/model/permission selection, directory picker, command picker, queue-session-mode setup, resume-session picker. Mirrors much of `CardDetailDialog`'s field logic for the not-yet-created case. |
 | `CardMetaPanel.tsx` | Shared metadata editing panel (runtime, model, Claude permission mode, Codex reasoning effort/sandbox) used by the detail dialog; exports the `EditingField` type and `CommandMetaRow` used across Card components. |

@@ -31,7 +31,7 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { formatAgentTypeLabel } from "../../utils/agent-label";
 import { formatDuration } from "../../utils/format-duration";
 import { getAgentConfig } from "../../constants/agents";
-import { FavoriteToggleButton, formatRuntimeLabel, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
+import { FavoriteToggleButton, formatRuntimeLabel, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
 import { formatScheduledKstLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
 
@@ -222,6 +222,15 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   const activeScheduledReservation = card.scheduledDispatch?.status === 'scheduled' || card.scheduledDispatch?.status === 'dispatching';
   const scheduledAtLabel = card.scheduledDispatch?.scheduledAt
     ? formatScheduledKstLabel(card.scheduledDispatch.scheduledAt)
+    : null;
+  const scriptExecutionStatus = card.executionKind === 'script'
+    ? (card.quickActionRun?.status
+      ?? (card.status === 'in_progress' ? 'running' : card.resolution === 'failed' ? 'failed' : card.status === 'complete' ? 'completed' : 'pending'))
+    : null;
+  const scriptOutputSummary = card.executionKind === 'script'
+    ? (card.result
+      ? `Result captured (${card.result.length.toLocaleString()} characters)`
+      : card.progressSummary || 'No output captured yet')
     : null;
 
   useEffect(() => {
@@ -810,6 +819,10 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                   : undefined,
               }}
             />
+            <OriginExecutionBadges
+              originChannel={card.originChannel}
+              quickActionId={card.quickActionId}
+            />
             <button
               type="button"
               className={`kv2-card-id-meta ${copiedId ? 'kv2-card-id-meta--copied' : ''}`}
@@ -894,6 +907,18 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
           </div>
 
           <div className="kv2-detail-sidebar">
+            {card.executionKind === 'script' && (
+              <section className="kv2-execution-panel" aria-labelledby={`execution-heading-${card.id}`}>
+                <h3 id={`execution-heading-${card.id}`} className="kv2-panel-heading">Execution</h3>
+                <dl className="kv2-execution-meta">
+                  <div><dt>Script</dt><dd>{card.scriptName ?? 'Unknown script'}</dd></div>
+                  <div><dt>Run status</dt><dd>{scriptExecutionStatus}</dd></div>
+                  {card.scriptRunId && <div><dt>Run ID</dt><dd><code>{card.scriptRunId}</code></dd></div>}
+                  {durationLabel && <div><dt>Elapsed</dt><dd>{durationLabel}</dd></div>}
+                  <div><dt>Output</dt><dd>{scriptOutputSummary}</dd></div>
+                </dl>
+              </section>
+            )}
             {!card.parentCardId && (
               <ScreenshotPanel
                 cardId={card.id}

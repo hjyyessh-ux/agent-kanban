@@ -15,8 +15,8 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 | `base.css` | Applies kv2 tokens to `html`/`body` (fonts, scrollbar, selection, focus ring); imports `reset.css`. |
 | `kanban-v2.tokens.css` | Global (`:root`) kv2 design tokens — every token carries the `--kv2-` prefix (status/agent colors, surfaces, typography, `--kv2-font-scale`-scaled text sizes). |
 | `kanban-v2.components.css` | `@import` barrel over `kv2/*.css`. Import order preserves the cascade — **do not reorder**. |
-| `kv2/board.css` | Board layout, columns, done-session groups, cards, card actions, container queries. |
-| `kv2/primitives.css` | Dialog shell, form elements (`kv2-input/select/textarea`), buttons (`kv2-btn` + variants), dialog footer/actions. |
+| `kv2/board.css` | Board workspace/Quick Actions side sheet, responsive/container-query columns, done-session groups, cards, and card actions. |
+| `kv2/primitives.css` | Dialog shell and modal side-sheet variant, form elements (`kv2-input/select/textarea`), buttons (`kv2-btn` + variants), dialog footer/actions. |
 | `kv2/card-detail.css` | Detail/create dialog layouts, agent selector, radio group, badge, queue mode, children. |
 | `kv2/panels.css` | Detail sidebar panels: session resume, meta, phases, run metadata/progress, question, feedback, screenshot, queue settings. |
 | `kv2/conversation.css` | Session conversation modal speaker blocks. |

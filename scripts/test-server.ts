@@ -5,6 +5,7 @@ import { SettingsStore } from '../src/core/settings-store';
 import { SchedulerStore } from '../src/core/scheduler-store';
 import { SchedulerEngine } from '../src/plugin/scheduler-engine';
 import { ScriptStore } from '../src/core/script-store';
+import { QuickActionStore } from '../src/core/quick-action-store';
 import { SkillStore } from '../src/core/skill-store';
 import { SkillRootsStore } from '../src/core/skill-roots-store';
 import { PlacementTargetsStore } from '../src/core/placement-targets-store';
@@ -17,6 +18,7 @@ import { resolveAgentRuntime } from '../src/core/runtime-config';
 import { isRecentlyFailed, dispatchNextQueuedTodoCard } from '../src/plugin/hooks/event-handler';
 import { RuntimeDispatchError } from '../src/plugin/runtimes/types';
 import { buildDispatchPromptText } from '../src/plugin/dispatch-prompt';
+import { ScriptExecutionService } from '../src/plugin/script-execution-service';
 
 const port = Number.parseInt(process.env.E2E_PORT ?? '24681', 10);
 const dataDir = resolve(process.cwd(), '.e2e-data');
@@ -89,6 +91,7 @@ const schedulerEngine = new SchedulerEngine(schedulerStore, {
   now: () => fakeClock.now(),
 });
 const scriptStore = new ScriptStore(dataDir);
+const quickActionStore = new QuickActionStore(dataDir, scriptStore);
 const runtimeRunStore = new RuntimeRunStore(dataDir);
 const wikiWorker = new WikiWorker(store, settingsStore);
 
@@ -375,6 +378,13 @@ async function fakeDispatch(cardId: string): Promise<DispatchResult> {
   return { sessionId, runId, startedAt };
 }
 
+const scriptExecutionService = new ScriptExecutionService({
+  scriptStore,
+  settingsStore,
+  cardStore: store,
+  dispatchFn: fakeDispatch,
+});
+
 const scheduledDispatchService = new ScheduledDispatchService({
   store,
   dispatchFn: fakeDispatch,
@@ -420,6 +430,9 @@ const innerServer = createServer(
   skillRootsStore,
   placementTargetsStore,
   runtimeRunStore,
+  undefined, // scopeMcpInventoryFn
+  quickActionStore,
+  scriptExecutionService,
 );
 
 async function restartBackgroundServices(): Promise<void> {

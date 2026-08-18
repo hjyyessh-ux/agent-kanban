@@ -2,6 +2,7 @@ import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { BoardFilterBar } from './components/Board/BoardFilterBar';
 import { BoardProjectSwitcher } from './components/Board/BoardProjectSwitcher';
 import { BoardScreen } from './components/Board/BoardScreen';
+import { BoardWorkspace } from './components/Board/BoardWorkspace';
 import { groupCompleteCardsBySession } from './components/Board/BoardCompleteSessionView';
 import type { CompleteSessionGroup } from './components/Board/BoardCompleteSessionView';
 import { SessionConversationModal } from './components/Board/SessionConversationModal';
@@ -33,6 +34,8 @@ import { createUiAlert } from './hooks/uiAlert';
 import type { BoardFilters } from './components/Board/board-filters';
 import { DEFAULT_BOARD_FILTERS } from './components/Board/board-filters';
 import { fetchCard, uploadScreenshot } from './hooks/useKanbanApi';
+import { useQuickActions } from './hooks/useQuickActions';
+import { QuickActionsDrawer } from './components/QuickActions/QuickActionsDrawer';
 
 const WikiView = React.lazy(async () => {
   const module = await import('./components/Wiki/WikiView');
@@ -85,7 +88,8 @@ export default function App() {
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
   const [showBoardTools, setShowBoardTools] = useState(false);
   const scheduler = useScheduler(activeTab === 'scheduler');
-  const scripts = useScripts(activeTab === 'capabilities');
+  const scripts = useScripts(activeTab === 'capabilities' || activeTab === 'board');
+  const quickActions = useQuickActions(activeTab === 'board');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
   const settings = useSettings(activeTab === 'settings');
   // Loaded eagerly (not tab-gated) so card pickers see discovered skills on open.
@@ -96,12 +100,17 @@ export default function App() {
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   useEffect(() => {
     setSelectedCard((prev) => {
       if (!prev) return prev;
       return cards.find((card) => card.id === prev.id) ?? null;
     });
   }, [cards]);
+
+  useEffect(() => {
+    if (activeTab !== 'board') setQuickActionsOpen(false);
+  }, [activeTab]);
 
   // 객체가 아닌 key만 보관하고, 매 렌더마다 최신 카드 목록에서 세션 그룹을 다시 만든다.
   // 폴링으로 카드가 갱신되어도 모달이 최신 turn을 반영하도록 보장한다.
@@ -261,7 +270,11 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
+      <header
+        className="app-header"
+        inert={activeTab === 'board' && quickActionsOpen}
+        aria-hidden={(activeTab === 'board' && quickActionsOpen) || undefined}
+      >
         <div className="app-header-inner">
           <h1 className="app-title">Agent Kanban</h1>
           <AppTabs activeTab={activeTab} onActivate={setActiveTab} />
@@ -340,7 +353,31 @@ export default function App() {
         aria-labelledby={TAB_IDS[activeTab]}
       >
         {activeTab === 'board' ? (
-          <>
+          <BoardWorkspace
+            leadingPanelExpanded={quickActionsOpen}
+            leadingPanel={(
+              <QuickActionsDrawer
+                open={quickActionsOpen}
+                actions={quickActions.entries}
+                scripts={scripts.entries}
+                loading={quickActions.loading}
+                error={quickActions.error}
+                runningActionIds={quickActions.runningActionIds}
+                onOpen={() => setQuickActionsOpen(true)}
+                onClose={() => setQuickActionsOpen(false)}
+                onCreate={quickActions.createEntry}
+                onUpdate={quickActions.updateEntry}
+                onDelete={quickActions.deleteEntry}
+                onRun={async (id, parameterValues) => {
+                  const result = await quickActions.runEntry(id, parameterValues);
+                  await refreshCards();
+                  return result;
+                }}
+                onRefresh={quickActions.refreshEntries}
+                onClearError={quickActions.clearError}
+              />
+            )}
+          >
             {error && (
               <ErrorAlert
                 className="error-banner"
@@ -378,7 +415,7 @@ export default function App() {
                 filters={boardFilters}
               />
             )}
-          </>
+          </BoardWorkspace>
         ) : activeTab === 'wiki' ? (
           <Suspense fallback={<div className="loading-spinner" role="status" aria-label="Loading wiki..." />}>
             <WikiView />
@@ -519,7 +556,11 @@ export default function App() {
         />
       )}
 
-      <footer className="app-footer">
+      <footer
+        className="app-footer"
+        inert={activeTab === 'board' && quickActionsOpen}
+        aria-hidden={(activeTab === 'board' && quickActionsOpen) || undefined}
+      >
         <span>agent-kanban v0.1.0</span>
       </footer>
 

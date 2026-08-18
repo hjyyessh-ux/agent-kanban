@@ -35,7 +35,7 @@ web/src/
 | Task | Location | Notes |
 |------|----------|-------|
 | Change app shell / tabs / modal wiring | `App.tsx` | Owns top-level composition |
-| Change board UI | `components/Board/`, `components/Card/` | Kanban columns, detail modal, create modal |
+| Change board UI | `components/Board/`, `components/Card/`, `components/QuickActions/` | Kanban columns, Board/List modal side sheet, detail modal, create/edit modal |
 | Change scheduler UI | `components/Scheduler/` | Entries, modal, run history |
 | Change scripts UI | `components/Scripts/` | Script CRUD, sync, history |
 | Change settings UI | `components/Settings/` | Secrets, network toggle, model visibility |
@@ -68,3 +68,4 @@ web/src/
 - `QuestionBanner` is always mounted at the app root so pending questions can interrupt any tab.
 - Scripts and settings are first-class tabs now; do not let docs or UI assumptions drift back to board-only behavior.
 - Capabilities and Wiki are also first-class tabs (Wiki is lazy-loaded); keep this list in sync as new top-level tabs are added.
+- The Board tab composes `BoardWorkspace` with a labeled left-edge Quick Actions launcher and modal side sheet. The desktop `⚡ Quick ›` edge tab overlays the Board gutter instead of consuming a grid column; mobile shows the same horizontal launcher above the Board and a full-viewport sheet.

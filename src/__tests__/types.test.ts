@@ -5,6 +5,7 @@ import type {
   KanbanStatus,
   CreateCardInput,
   UpdateCardInput,
+  QuickAction,
   SchedulerAction,
 } from '../core/types';
 
@@ -49,6 +50,19 @@ describe('KanbanCard type', () => {
       schedulerId: 'scheduler-1',
       schedulerRunId: 'run-1',
       schedulerName: 'Morning sync',
+      executionKind: 'agent',
+      quickActionId: 'qa-1',
+      quickActionRequestId: 'request-1',
+      quickActionRun: {
+        status: 'accepted',
+        dispatch: {
+          sessionId: 'session-123',
+          runId: 'run-123',
+          startedAt: '2026-08-16T00:00:00.000Z',
+        },
+        updatedAt: '2026-08-16T00:00:00.000Z',
+      },
+      parameterSnapshot: { scope: 'src', strict: true },
     };
     expect(card.sessionId).toBe('session-123');
     expect(card.progressSummary).toBe('Working on it');
@@ -57,6 +71,66 @@ describe('KanbanCard type', () => {
     expect(card.supersededByCardId).toBe('card-newest');
     expect(card.scheduledDispatch?.status).toBe('scheduled');
     expect(card.originChannel).toBe('scheduler');
+  });
+
+  test('accepts quick action provenance', () => {
+    const card: KanbanCard = {
+      id: 'quick-card',
+      title: 'Quick action card',
+      description: 'Created from a quick action',
+      status: 'todo',
+      originChannel: 'quick_action',
+      executionKind: 'script',
+      quickActionId: 'qa-1',
+      quickActionRequestId: 'request-1',
+      scriptRunId: 'script-run-1',
+      parameterSnapshot: { target: 'src' },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    expect(card.originChannel).toBe('quick_action');
+    expect(card.executionKind).toBe('script');
+  });
+});
+
+describe('QuickAction type', () => {
+  test('is discriminated between prompt and script actions', () => {
+    const actions: QuickAction[] = [
+      {
+        id: 'prompt-1',
+        icon: '⚡',
+        type: 'prompt',
+        name: 'Review',
+        description: 'Review changes',
+        enabled: true,
+        pinned: true,
+        order: 0,
+        parameterDefinitions: [],
+        cardTitleTemplate: 'Review',
+        promptTemplate: 'Review all changes',
+        projectDir: '/repo',
+        agentRuntime: 'codex',
+        codexOptions: { reasoningEffort: 'high' },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'script-1',
+        icon: '🧪',
+        type: 'script',
+        name: 'Lint',
+        description: 'Run lint',
+        enabled: true,
+        pinned: false,
+        order: 1,
+        parameterDefinitions: [],
+        scriptId: 'stored-script-id',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    expect(actions.map((action) => action.type)).toEqual(['prompt', 'script']);
   });
 });
 

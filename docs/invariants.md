@@ -18,6 +18,7 @@
 | Telegram agent/model | sticky default나 override가 예상과 다르게 바뀜 | `src/plugin/telegram-commands.ts`, `src/core/agent-config.ts`, `src/core/telegram-state-store.ts` | `src/__tests__/telegram-poller.test.ts`, `src/__tests__/telegram-state-store.test.ts` |
 | Feedback 카드 | feedback wrapper가 sanitize되거나 원본 session 재사용이 깨짐 | `src/plugin/index.ts`, `src/plugin/hooks/event-handler.ts` | `src/__tests__/feedback-session-reuse.test.ts`, `src/__tests__/plugin-hooks.test.ts` |
 | Runtime dispatch | runtime별 session id나 실패 복구 계약이 깨짐 | `src/core/types.ts`, `src/core/runtime-config.ts`, `src/plugin/runtimes/*`, `src/plugin/index.ts` | `src/__tests__/runtime-registry.test.ts`, `src/__tests__/dispatch-routing.test.ts`, `src/__tests__/codex-cli-adapter.test.ts`, `src/__tests__/claude-adapter.test.ts` |
+| Quick Action dispatch | 재시도에서 카드/run이 중복 생성되거나 Script 파라미터·secret이 실행 경계를 우회함 | `src/core/quick-action-store.ts`, `src/core/store.ts`, `src/plugin/script-execution-service.ts`, `src/server/routes.ts`, `web/src/components/QuickActions/` | `src/__tests__/quick-action-store.test.ts`, `src/__tests__/quick-action-routes.test.ts`, `src/__tests__/script-execution-service.test.ts`, `e2e/quick-actions.e2e.ts` |
 | 예약/스케줄 dispatch | due 카드가 중복 실행되거나 run↔card 연결이 끊김 | `src/core/store.ts`, `src/plugin/scheduled-dispatch-service.ts`, `src/plugin/scheduler-engine.ts`, `src/server/routes.ts` | `src/__tests__/scheduled-dispatch-service.test.ts`, `src/__tests__/scheduler-engine.test.ts`, `src/__tests__/store.test.ts` |
 
 ## 불변식 목록
@@ -99,6 +100,36 @@
 - scheduled dispatch 접수 실패는 card를 `todo`로 남기고 `[failed] ...` 흔적과 `scheduledDispatch.status='failed'` / `error`를 기록하며 자동 재시도하지 않는다.
 - scheduler prompt run은 먼저 `SchedulerRun.id`를 만들고, 그 id를 `card.schedulerRunId`에 박은 scheduler-origin `todo` 카드를 생성한 뒤 기존 dispatch를 호출한다.
 - scheduler run의 성공은 dispatch acceptance 기준이며, 실제 작업 완료/실패 추적은 run의 `cardId`로 이어진 board card가 담당한다.
+
+### Prompt Quick Action dispatch
+
+- Quick Action의 `icon`은 shared contract의 단일 grapheme emoji다. 기본 팔레트(`⚡`, `🔍`, `🧪`, `🚀`, `🛠️`, `📊`, `🧹`, `🛡️`, `🔔`, `📦`)와 중복 거부 정책/오류 문자열은 `src/core/types.ts` 한 곳에서 관리한다. icon을 생략한 생성은 store lock 안에서 미사용 기본값을 claim하고, icon 없는 legacy entry는 목록 정렬 순서에 따라 결정적인 서로 다른 fallback을 받아 누락되지 않는다.
+- Quick Action 실행/관리는 Board의 TODO 왼쪽 gutter에 overlay되는 `⚡ Quick ›` edge tab과 왼쪽 modal side sheet를 사용한다. desktop launcher는 icon·이름·열림 방향을 가로로 표시하고 document flow 폭을 소비하거나 세로 글씨를 표시하지 않는다. mobile에서는 같은 가로형 launcher를 Board 위에 배치한다. 열린 desktop sheet는 Board/List geometry를 바꾸지 않고 오른쪽 배경을 semantic scrim으로 dim 처리하며 Board/List content를 `inert`/`aria-hidden`으로 만든다. mobile sheet는 `100vw × 100dvh` 전체 화면을 덮고 safe-area 하단 여백을 둔다. launcher는 `aria-haspopup`/`aria-expanded`/`aria-controls`, sheet는 `aria-modal`, focus trap, backdrop/Escape 닫기, launcher focus 복귀를 보장한다.
+- Quick Action Add/Edit는 side-sheet runner와 분리된 `DialogSkeleton` editor를 사용한다. editor가 열릴 때 runner sheet를 언마운트해 중첩 modal/focus trap을 만들지 않고, 닫은 뒤 Add 또는 해당 행의 overflow-menu 진입점으로 focus를 돌린다. 새 Prompt의 Runtime은 `useRuntimeDefaults().prefs.runtime ?? 'opencode'`, Model은 `useRuntimeModelSelection().getDefaultModelForRuntime()`을 적용해 Create Card와 일치시킨다. 비동기 설정/model 목록은 각 필드를 사용자가 직접 바꾼 뒤 덮어쓰지 않으며, 기존 Prompt는 저장된 Runtime/Model/Icon을 우선하고 Script editor는 Runtime/Model을 노출하지 않는다.
+- `POST /api/quick-actions/:id/run`은 저장된 action 정의만 신뢰한다. 요청은 `clientRequestId`와 `parameterValues`만 받고, required/type/select/unknown key를 서버에서 다시 검증한다.
+- template placeholder는 정확한 `{{parameterKey}}` 형식만 허용한다. malformed/unknown/value-less placeholder가 하나라도 있으면 카드를 만들기 전에 거부한다.
+- 저장된 prompt action의 `projectDir`가 실제 directory가 아니거나 action이 disabled/unavailable이면 카드를 만들거나 dispatch하지 않는다.
+- 검증이 끝나면 `quick_action` provenance를 가진 `todo` 카드를 먼저 저장한 뒤 기존 `dispatchFn`을 호출한다. 별도 runtime/agent 실행기를 만들지 않으며 기존 session, git/usage, idle completion 경로를 그대로 사용한다.
+- 저장된 `agentRuntime`, `model`, `agentType`, `codexOptions`, `claudeOptions`, `projectDir`는 일반 카드 dispatch 계약과 같은 필드로 카드에 복사하며 route가 임의 default를 덮어쓰지 않는다.
+- `(quickActionId, clientRequestId)`는 store 잠금 안에서 원자적으로 예약한다. 동시 double tap과 이후 retry는 새 카드나 새 dispatch를 만들지 않고 저장된 `quickActionRun` 결과를 반환한다.
+- dispatch 접수 실패는 이미 만든 카드를 삭제하지 않는다. 카드는 `todo`로 돌아가고 `progressSummary`와 `quickActionRun.failureSummary`에 `[failed] ...` 흔적을 남기며 같은 idempotency key의 retry도 그 실패를 그대로 반환한다.
+- 일반 `POST/PATCH /api/cards`는 Quick Action provenance와 `quickActionRun` 상태를 주입하거나 위조할 수 없다.
+- UI는 Prompt의 필수 `projectDir`, parameter schema, production/elevated permission 확인을 실행 전에 검증하되 서버 검증을 대체하지 않는다. 접수 성공 뒤 실제 카드를 refetch하고, 별도 낙관적 fake card/status를 만들지 않는다.
+- 서버가 `cardId`를 포함한 terminal 실패를 반환하면 UI는 실패 카드를 refetch하고 다음 클릭용 idempotency key를 발급한다. card가 저장됐는지 알 수 없는 transport 실패는 같은 key를 유지해 중복 실행을 막는다.
+
+### Script Quick Action 실행
+
+- Script Quick Action도 `(quickActionId, clientRequestId)`를 store 잠금 안에서 한 번만 예약한다. 중복 요청은 새 카드/ScriptRun/process를 만들지 않고 같은 `cardId`/`runId`를 반환한다.
+- 요청 body는 `clientRequestId`, `parameterValues`만 허용한다. stored `parameterDefinitions`로 required/type/select/unknown key를 검증하고, 실행 값은 명령 문자열/argv에 보간하지 않는다. 정규화한 `AK_PARAM_<UPPER_SNAKE_KEY>` 환경변수로만 전달한다.
+- Settings env와 parameter env는 `execution-environment.ts` 한 경계를 사용한다. system/interpreter/internal reserved key와 `AK_PARAM_*` Settings 충돌은 무시하며, masked Settings 값과 secret parameter 값은 card/result/history/stdout/stderr/error에 쓰기 전에 모두 `[REDACTED]` 처리한다.
+- interpreter는 저장된 language를 고정 allowlist(`bash`, `python3`, `bun`, `ruby`) argv로 매핑한다. run 요청이 shell/interpreter/command를 지정할 수 없다.
+- 실행 접수 전에 effective cwd가 실제 directory인지 검증한다. `ScriptExecutionService.prepareExecution()`은 content/language revision, argv, cwd, env를 snapshot으로 고정하므로 이후 script 편집이나 source file 삭제가 현재 process에 영향을 주지 않는다. running ScriptEntry의 직접/sync 삭제는 보류한다.
+- `ScriptRun(status=running)`과 일반 card(`status=in_progress`, `executionKind=script`)를 먼저 저장한 후 HTTP `202`로 `cardId`/`runId`를 반환한다. stdout/stderr는 각각 UTF-8 8192 byte까지만 보존한다.
+- Script card에는 실행 시점 `scriptName` snapshot을 저장한다. 일반 card 생성/수정 API가 `scriptName`, `executionKind`, `quickActionId`, `quickActionRun`을 위조할 수 없어야 한다.
+- `executionKind=script` card는 Board/List/Card Detail에서 항상 `SCRIPT`로 표시하고 저장 호환용 `agentRuntime` fallback을 `OPENCODE`로 잘못 노출하지 않는다. agent card는 실제 runtime badge를 유지하며 origin badge는 별도 provenance로 표시한다.
+- exit code 0은 `ScriptRun.success`와 card `complete/completed`로 종결한 뒤 queue helper를 호출한다. spawn/nonzero/restart orphan은 exit/error를 남기고 card `complete/failed`로 종결하며 queue helper를 절대 호출하지 않는다.
+- per-script `beginRun()` claim은 동시 실행을 거절한다. singleton owner 시작 시 owner PID가 살아 있지 않은 orphan `running` row를 `fail`로 reconcile하고 연결 card도 terminal failed로 닫는다.
+- `executionKind=script` card는 agent session이 없으므로 `StaleCardChecker`의 opencode orphan/stuck 판정에서 제외한다. process liveness와 복구는 ScriptRun owner PID/reconcile 계약이 담당한다.
 
 ### Git/Usage 캡처
 

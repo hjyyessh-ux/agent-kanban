@@ -81,6 +81,11 @@ describe('SchedulerEngine', () => {
         value: 'secret',
         description: 'token',
       });
+      await settingsStore.createEntry({
+        key: 'PATH',
+        value: '/attacker/bin',
+        description: 'reserved',
+      });
 
       const entry = await schedulerStore.createEntry({
         name: 'Bash',
@@ -98,8 +103,8 @@ describe('SchedulerEngine', () => {
           receivedCwd = cwd;
           return {
             exitCode: 7,
-            stdout: 'x'.repeat(9000),
-            stderr: 'stderr line',
+            stdout: `secret:${'x'.repeat(9000)}`,
+            stderr: 'secret stderr line',
           };
         },
       });
@@ -108,11 +113,14 @@ describe('SchedulerEngine', () => {
       const history = await schedulerStore.getHistory(entry.id);
 
       expect(receivedEnv?.API_TOKEN).toBe('secret');
+      expect(receivedEnv?.PATH).not.toBe('/attacker/bin');
       expect(receivedCwd).toBe('/repo');
       expect(run.exitCode).toBe(7);
       expect(run.status).toBe('fail');
       expect(history[0].stdout?.length).toBe(8192 + '\n... (truncated)'.length);
-      expect(history[0].stderr).toBe('stderr line');
+      expect(history[0].stdout).not.toContain('secret');
+      expect(history[0].stderr).toBe('[REDACTED] stderr line');
+      expect(history[0].error).toBeUndefined();
     });
   });
 

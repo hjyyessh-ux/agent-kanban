@@ -1,6 +1,6 @@
 # Test Fixtures
 
-파서 테스트의 근거 데이터 — 실제 CLI 캡처본.
+파서 테스트의 실제 CLI 캡처와 실행 계약 테스트의 고정 예시 데이터.
 
 ---
 
@@ -49,3 +49,20 @@ tool 이름은 `Agent`(구 `Task`), `session_id`는 parent와 동일, child 중�
 - `session_id`가 parent(`aa0b8f03-...`)와 child 모두 동일함 → 분리 불가, `task_id`로 child 구분
 - child 중간 transcript(assistant turns)는 스트림에 노출되지 않음
 - `task_started` → `task_updated` → `task_notification` 순서 보장
+
+---
+
+## quick-action-mcp-monitoring.json
+
+최근 3일 MCP server 상태를 읽기 전용 Codex runtime으로 점검하는 Prompt Quick Action 계약 fixture입니다. 실제 CLI 캡처가 아니며, 다음 항목을 route 테스트에서 고정합니다.
+
+- default parameter가 `{{days}}`, `{{scope}}` placeholder에 한 번만 렌더링됨
+- 필수 `projectDir`가 생성 카드와 dispatch 입력에 유지됨
+- `agentRuntime=codex`, model/agent와 `sandbox=read-only` options가 그대로 유지됨
+- 성공 응답의 `cardId`, card status, `{ sessionId, runId, startedAt }` dispatch 결과
+
+---
+
+## quick-action-script-deployment.json
+
+string, number, boolean, select, secret 파라미터를 모두 사용하는 배포 Script Quick Action 계약 fixture입니다. 파라미터는 불변 script snapshot에 `AK_PARAM_*` 환경변수로만 전달되며, secret은 card/run 영속 데이터에서 제외되어야 합니다.

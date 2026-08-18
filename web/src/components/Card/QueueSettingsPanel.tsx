@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { KanbanCard, QueueSessionMode } from '../../../../src/core/types';
-import { RuntimeBadge } from '../Board/BoardCardSections';
+import { ExecutionTypeBadge } from '../Board/BoardCardSections';
 
 const queueStatusLabel = (status: string): string =>
   status === 'in_progress' ? 'In Progress' : 'Todo';
@@ -57,7 +57,11 @@ export const QueueTargetList: React.FC<QueueTargetListProps> = ({
             className={`kv2-session-item${selected ? ' kv2-session-item--selected' : ''}`}
           >
             <div className="kv2-session-item-info">
-              <RuntimeBadge runtime={candidate.agentRuntime ?? 'opencode'} />
+              <ExecutionTypeBadge
+                runtime={candidate.agentRuntime}
+                executionKind={candidate.executionKind}
+                scriptName={candidate.scriptName}
+              />
               <div className="kv2-session-item-text">
                 <span className="kv2-session-item-title">{candidate.title}</span>
                 <div className="kv2-session-item-meta">

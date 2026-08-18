@@ -16,11 +16,12 @@ AI CLI 작업은 터미널 출력, 세션 히스토리, 후속 메시지, 결과
 - **Runtime dispatch**: 수동 카드 실행 시 opencode, Codex, Claude runtime을 선택합니다.
 - **Session continuity**: runtime별 session id를 보존해 follow-up과 retry를 이어갑니다.
 - **Queueing**: TODO 카드를 순차 실행하고, 필요하면 이전 카드 세션을 이어받습니다.
+- **Quick Actions**: 반복 Prompt와 Script를 파라미터화해 Board에서 즉시 실행하고 일반 카드로 결과를 추적합니다. 자세한 계약은 [Quick Actions 문서](./docs/quick-actions.md)를 참고하세요.
 - **Capabilities**: Codex, Claude, opencode skills와 로컬 scripts를 한 탭에서 검색, 동기화, 생성, 실행합니다.
 - **Scheduler**: 반복 작업을 cron 또는 자연어 일정으로 등록해 실행합니다.
 - **Telegram follow-up**: Telegram 메시지를 선택된 세션으로 다시 라우팅합니다. 봇 생성과 토큰 등록 절차는 [Getting started의 Telegram 연동](./docs/getting-started.md#telegram-연동)을 참고하세요.
 - **LLM Wiki**: 아카이브된 DONE 카드를 재사용 가능한 Markdown 지식으로 요약합니다.
-- **Neo-brutalism UI**: 굵은 테두리, 강한 그림자, 선명한 상태 색상을 유지합니다.
+- **kv2 UI**: Board/Card Detail을 기준으로 한 token과 primitive로 light/dark 화면을 일관되게 유지합니다.
 
 ## 스크린샷
 
@@ -105,8 +106,9 @@ Vite 앱은 `http://localhost:5173`에서 실행되고 API 요청을 `http://loc
 3. 수동 task는 `opencode`, `codex`, `claude` 중 하나의 runtime을 선택합니다.
 4. AI 실행이 끝난 카드는 검토 후 `COMPLETE`에서 `DONE`으로 옮깁니다.
 5. 보드에서 치우고 싶은 `DONE` 카드는 archive합니다.
-6. 반복해서 쓰는 skill이나 script는 Capabilities에서 동기화하고 관리합니다.
-7. 완료 작업을 지식 문서로 남기고 싶으면 LLM Wiki를 활성화합니다.
+6. 반복 Prompt나 Script는 Board 아래의 **Quick Actions**에서 등록하고 실행합니다.
+7. 반복해서 쓰는 skill이나 script는 Capabilities에서 동기화하고 관리합니다.
+8. 완료 작업을 지식 문서로 남기고 싶으면 LLM Wiki를 활성화합니다.
 
 ## LLM Wiki
 

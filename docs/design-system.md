@@ -134,7 +134,7 @@ CSS 값 그대로 넘겨받아 렌더링한다(문자열 자체가 CSS 값이므
 
 | 클래스 | 용도 | Variants |
 |--------|------|----------|
-| `kv2-btn` | 모든 버튼 | `--primary`, `--primary-strong`, `--success`, `--danger`, `--subtle-danger`, `--ghost`, `--outline`, `--small`, `--full` |
+| `kv2-btn` | 모든 버튼 | `--primary`, `--primary-strong`, `--success`, `--danger`, `--subtle-danger`, `--ghost`, `--outline`, `--small`, `--full`, `--edge-tab` |
 | `kv2-input` / `kv2-select` / `kv2-textarea` | 폼 컨트롤 | — |
 | `kv2-label`, `kv2-form-group` | 필드 라벨/그룹 | `kv2-form-group--embedded` |
 | `kv2-badge` | 상태/카운트 배지 | `--accent`, `--queue`, `--saved`, `--session` |
@@ -156,6 +156,9 @@ DialogSkeleton이 제공하는 계약:
 - 접근성: `useModalAccessibility` (포커스 트랩 + Escape 닫기)
 - 크기 기억: `persistSizeKey`를 주면 `usePersistedDialogSize`로 리사이즈+localStorage 저장
 - 커스텀은 `className` prop으로 `kv2-dialog--*` variant를 얹는 방식
+- 왼쪽 modal side sheet는 `overlayClassName="kv2-dialog-overlay--side-sheet"`와
+  `className="kv2-dialog--side-sheet"` 조합을 사용한다. desktop은 배경 geometry를 유지한 채 overlay하고 mobile은 full viewport가 된다.
+- `dialogId`는 launcher의 `aria-controls` 대상에 사용하고, `initialFocusRef`는 sheet가 열릴 때 첫 업무 action으로 focus를 보낼 때 사용한다.
 
 ### 액션 정렬
 

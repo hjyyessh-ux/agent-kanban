@@ -16,6 +16,8 @@ All web-side data flow lives here: raw `/api` wrappers, reducer-based domain hoo
 | Change shared list-CRUD state (entries/polling/errors) | `useCrudResource.ts` | Generic reducer behind the three hooks below |
 | Change scheduler data flow | `useSchedulerApi.ts`, `useScheduler.ts` | Thin wrapper over `useCrudResource` + toggle/run |
 | Change scripts data flow | `useScriptsApi.ts`, `useScripts.ts` | Thin wrapper over `useCrudResource` + run/sync |
+| Change Quick Actions data flow | `useQuickActionsApi.ts`, `useQuickActions.ts` | Shared CRUD wrapper + validated/idempotent execution |
+| Change Quick Actions run form rules | `quickActionFormModel.ts` | Pure default merge, validation, secret-safe form model |
 | Change settings data flow | `useSettingsApi.ts`, `useSettings.ts` | Thin wrapper over `useCrudResource` |
 | Change question overlay data flow | `useQuestionsApi.ts`, `useQuestions.ts` | 3s polling, reply/reject |
 | Change skills data flow | `useSkillsApi.ts`, `useSkills.ts` | Discovery + sync; registers dynamic skill commands via `src/core/commands.ts` |
@@ -53,5 +55,6 @@ All web-side data flow lives here: raw `/api` wrappers, reducer-based domain hoo
 
 - `useKanbanApi.ts` is broader than its name: it also exposes models, screenshots, and question endpoints used elsewhere in the app.
 - Scheduler/scripts/settings hooks all share the same reducer + active-tab polling pattern; keep them consistent when extending one domain.
+- Quick Actions follows the same CRUD/polling pattern; transient secret values must stay out of the returned form model and stored hook state.
 - `useScopeInventory.ts` and `useScopeTargets.ts` back the Capabilities tab's scope-manager UI (inventory browsing + placement-target registration); they are newer additions and don't yet follow the exact reducer pattern of scheduler/scripts/settings — check both before assuming one is canonical.
 - `useRuntimes.ts` depends on `useModelCatalog.ts` (`mergeSyncedModels`) to reconcile the static `RUNTIME_CATALOG` with server-synced models — keep that merge one-directional (server data augments, never silently drops static entries).

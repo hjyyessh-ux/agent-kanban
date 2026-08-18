@@ -1,0 +1,35 @@
+{
+  "script": {
+    "name": "deploy-release",
+    "description": "Deploy a release from an immutable script snapshot",
+    "language": "bash",
+    "content": "printf '%s\\n' \"$AK_PARAM_SERVICE|$AK_PARAM_REPLICAS|$AK_PARAM_DRY_RUN|$AK_PARAM_REGION|$AK_PARAM_DEPLOY_TOKEN|$DEPLOY_ENV\"",
+    "projectDir": "__TEST_DIR__"
+  },
+  "action": {
+    "type": "script",
+    "name": "Deploy release",
+    "description": "Deploy the selected service",
+    "enabled": true,
+    "pinned": true,
+    "order": 0,
+    "scriptId": "__SCRIPT_ID__",
+    "parameterDefinitions": [
+      { "key": "service", "label": "Service", "type": "string", "required": true },
+      { "key": "replicas", "label": "Replicas", "type": "number", "required": true },
+      { "key": "dryRun", "label": "Dry run", "type": "boolean", "required": true },
+      { "key": "region", "label": "Region", "type": "select", "required": true, "options": ["ap-northeast-2", "us-east-1"] },
+      { "key": "deployToken", "label": "Deploy token", "type": "secret", "required": true }
+    ]
+  },
+  "request": {
+    "clientRequestId": "deploy-fixture-001",
+    "parameterValues": {
+      "service": "billing api; $(touch should-not-run)",
+      "replicas": 3,
+      "dryRun": false,
+      "region": "ap-northeast-2",
+      "deployToken": "fixture-secret-token"
+    }
+  }
+}

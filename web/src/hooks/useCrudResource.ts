@@ -3,13 +3,13 @@ import { usePolling } from './usePolling';
 
 export type CrudAction = 'fetch' | 'create' | 'update' | 'delete';
 
-interface CrudState<T, E> {
+export interface CrudState<T, E> {
   entries: T[];
   loading: boolean;
   error: E | null;
 }
 
-type CrudReducerAction<T, E> =
+export type CrudReducerAction<T, E> =
   | { type: 'LOAD'; entries: T[] }
   | { type: 'CREATE'; entry: T }
   | { type: 'UPDATE'; entry: T }
@@ -17,7 +17,7 @@ type CrudReducerAction<T, E> =
   | { type: 'SET_ERROR'; error: E }
   | { type: 'CLEAR_ERROR' };
 
-function crudReducer<T extends { id: string }, E>(
+export function crudReducer<T extends { id: string }, E>(
   state: CrudState<T, E>,
   action: CrudReducerAction<T, E>,
 ): CrudState<T, E> {

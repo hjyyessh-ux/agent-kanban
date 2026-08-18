@@ -11,15 +11,9 @@ import type {
 } from './types';
 import { FileLock } from './filelock';
 import { resolveDir } from './data-dir';
+import { capExecutionOutput } from './execution-environment';
 
 const MAX_HISTORY = 20;
-const MAX_OUTPUT_BYTES = 8192; // 8KB cap for stdout/stderr
-
-function capOutput(output: string | undefined): string | undefined {
-  if (!output) return output;
-  if (output.length <= MAX_OUTPUT_BYTES) return output;
-  return output.slice(0, MAX_OUTPUT_BYTES) + '\n... (truncated)';
-}
 
 const LANGUAGE_MAP: Record<string, string> = {
   '.sh': 'bash',
@@ -144,6 +138,9 @@ export class ScriptStore {
       if (index === -1) {
         throw new Error(`Script entry not found: ${id}`);
       }
+      if (state.entries[index].history.some((run) => run.status === 'running')) {
+        throw new Error(`Script entry is running: ${id}`);
+      }
       state.entries = state.entries.filter(e => e.id !== id);
       state.lastModified = new Date().toISOString();
       await this.save(state);
@@ -164,8 +161,9 @@ export class ScriptStore {
     // Cap stdout/stderr
     const cappedRun: ScriptRun = {
       ...run,
-      stdout: capOutput(run.stdout),
-      stderr: capOutput(run.stderr),
+      stdout: capExecutionOutput(run.stdout),
+      stderr: capExecutionOutput(run.stderr),
+      error: capExecutionOutput(run.error),
     };
 
     await this.withDualLock(async () => {
@@ -174,8 +172,12 @@ export class ScriptStore {
       if (index === -1) return; // silently skip if entry was deleted
 
       const entry = state.entries[index];
-      // Prepend (most recent first), cap at MAX_HISTORY
-      entry.history = [cappedRun, ...entry.history].slice(0, MAX_HISTORY);
+      // Replace the initial `running` row when the same run reaches a terminal
+      // state. Legacy callers that add a one-shot terminal row still prepend.
+      entry.history = [
+        cappedRun,
+        ...entry.history.filter((candidate) => candidate.id !== cappedRun.id),
+      ].slice(0, MAX_HISTORY);
       entry.lastRunAt = cappedRun.startedAt;
       if (cappedRun.status !== 'running') {
         entry.lastRunStatus = cappedRun.status;
@@ -184,6 +186,114 @@ export class ScriptStore {
       state.lastModified = new Date().toISOString();
       await this.save(state);
     });
+  }
+
+  async beginRun(scriptId: string, run: ScriptRun): Promise<void> {
+    if (run.status !== 'running') {
+      throw new Error('A new script run must start in running status');
+    }
+
+    await this.withDualLock(async () => {
+      const state = await this.load();
+      const entry = state.entries.find((candidate) => candidate.id === scriptId);
+      if (!entry) throw new Error(`Script entry not found: ${scriptId}`);
+      const active = entry.history.find((candidate) => candidate.status === 'running');
+      if (active) {
+        throw new Error(`Script already has a running execution: ${active.id}`);
+      }
+      entry.history = [run, ...entry.history.filter((candidate) => candidate.id !== run.id)]
+        .slice(0, MAX_HISTORY);
+      entry.lastRunAt = run.startedAt;
+      entry.updatedAt = new Date().toISOString();
+      state.lastModified = entry.updatedAt;
+      await this.save(state);
+    });
+  }
+
+  async finishRun(
+    scriptId: string,
+    runId: string,
+    update: Omit<ScriptRun, 'id' | 'scriptId' | 'startedAt'>,
+  ): Promise<ScriptRun | null> {
+    let finished: ScriptRun | null = null;
+    await this.withDualLock(async () => {
+      const state = await this.load();
+      const entry = state.entries.find((candidate) => candidate.id === scriptId);
+      if (!entry) return;
+      const runIndex = entry.history.findIndex((candidate) => candidate.id === runId);
+      if (runIndex === -1) return;
+      const current = entry.history[runIndex];
+      const next: ScriptRun = {
+        ...current,
+        ...update,
+        stdout: capExecutionOutput(update.stdout),
+        stderr: capExecutionOutput(update.stderr),
+        error: capExecutionOutput(update.error),
+      };
+      entry.history = [next, ...entry.history.filter((_, index) => index !== runIndex)]
+        .slice(0, MAX_HISTORY);
+      entry.lastRunAt = next.startedAt;
+      if (next.status !== 'running') entry.lastRunStatus = next.status;
+      entry.updatedAt = new Date().toISOString();
+      state.lastModified = entry.updatedAt;
+      await this.save(state);
+      finished = next;
+    });
+    return finished;
+  }
+
+  async getRun(scriptId: string, runId: string): Promise<ScriptRun | null> {
+    const entry = await this.getEntry(scriptId);
+    return entry?.history.find((run) => run.id === runId) ?? null;
+  }
+
+  async findRun(runId: string): Promise<ScriptRun | null> {
+    const entries = await this.getEntries();
+    for (const entry of entries) {
+      const run = entry.history.find((candidate) => candidate.id === runId);
+      if (run) return run;
+    }
+    return null;
+  }
+
+  async getRunningRun(scriptId: string): Promise<ScriptRun | null> {
+    const entry = await this.getEntry(scriptId);
+    return entry?.history.find((run) => run.status === 'running') ?? null;
+  }
+
+  async reconcileRunningRuns(
+    error: string,
+    finishedAt: string,
+    shouldReconcile: (run: ScriptRun) => boolean = () => true,
+  ): Promise<ScriptRun[]> {
+    const reconciled: ScriptRun[] = [];
+    await this.withDualLock(async () => {
+      const state = await this.load();
+      for (const entry of state.entries) {
+        let changed = false;
+        entry.history = entry.history.map((run) => {
+          if (run.status !== 'running' || !shouldReconcile(run)) return run;
+          const failed: ScriptRun = {
+            ...run,
+            status: 'fail',
+            finishedAt,
+            error: capExecutionOutput(error),
+          };
+          reconciled.push(failed);
+          changed = true;
+          return failed;
+        });
+        if (changed) {
+          entry.lastRunStatus = 'fail';
+          entry.updatedAt = finishedAt;
+        }
+      }
+      if (reconciled.length > 0) {
+        state.lastModified = finishedAt;
+        await this.save(state);
+      }
+    });
+    return reconciled;
   }
 
   async getHistory(id: string): Promise<ScriptRun[]> {
@@ -229,7 +339,9 @@ export class ScriptStore {
 
       // Remove file-synced entries whose backing files are gone
       const toRemove = state.entries.filter(e =>
-        e.description.startsWith('Synced from data scripts/') && !fileNames.has(e.name)
+        e.description.startsWith('Synced from data scripts/')
+        && !fileNames.has(e.name)
+        && !e.history.some((run) => run.status === 'running')
       );
       if (toRemove.length > 0) {
         const removeIds = new Set(toRemove.map(e => e.id));

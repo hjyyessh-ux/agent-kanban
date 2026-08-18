@@ -26,7 +26,7 @@ import {
   groupCompleteCardsBySession,
   type CompleteSessionGroup,
 } from '../Board/BoardCompleteSessionView';
-import { RuntimeBadge } from '../Board/BoardCardSections';
+import { ExecutionTypeBadge } from '../Board/BoardCardSections';
 import { getDirectoryProjectName } from '../Board/directory-display';
 import './Wiki.css';
 
@@ -686,7 +686,11 @@ export function WikiView() {
                     </div>
                     {prompt && <p className="wiki-archive-desc">{prompt}</p>}
                     <div className="wiki-archive-meta">
-                      <RuntimeBadge runtime={group.agentRuntime} />
+                      <ExecutionTypeBadge
+                        runtime={group.agentRuntime}
+                        executionKind={group.executionKind}
+                        scriptName={group.scriptName}
+                      />
                       {group.projectDir && (
                         <span className="wiki-archive-project" title={group.projectDir}>
                           {getDirectoryProjectName(group.projectDir)}
