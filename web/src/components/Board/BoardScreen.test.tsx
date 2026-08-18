@@ -413,6 +413,28 @@ describe('BoardScreen', () => {
     expect(html).not.toContain('DONE');
   });
 
+  test('shows Script instead of the legacy runtime in grouped done cards', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        cards={[
+          makeCard({
+            id: 'done-script',
+            title: 'Archived script run',
+            status: 'done',
+            agentRuntime: 'opencode',
+            executionKind: 'script',
+            scriptName: 'Deploy service',
+          }),
+        ]}
+      />,
+    );
+
+    expect(html).toContain('>SCRIPT</span>');
+    expect(html).toContain('Script execution · Deploy service');
+    expect(html).not.toContain('OPENCODE');
+  });
+
   test('keeps cards without a session as separate complete session groups', () => {
     const groups = groupCompleteCardsBySession([
       makeCard({

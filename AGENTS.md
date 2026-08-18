@@ -51,7 +51,7 @@
 | Change REST routes / API shape | `src/server/routes.ts` | Cards, schedulers, settings, scripts, screenshots, models, questions |
 | Change server bootstrap / static SPA serving | `src/server/index.ts`, `src/plugin/server.ts` | Port retry + static dir resolution |
 | Change UI state / fetch logic | `web/src/hooks/AGENTS.md` | API wrappers, polling, reducers, modal accessibility |
-| Change board/Quick Actions/scheduler/scripts/settings/question UI | `web/src/App.tsx`, `web/src/components/` | App shell owns tabs + modal orchestration; Quick Actions reuse `DialogSkeleton` |
+| Change board/Quick Actions/scheduler/scripts/settings/question UI | `web/src/App.tsx`, `web/src/components/` | App shell owns tabs + modal orchestration; Quick Actions use a left modal side sheet and reuse `DialogSkeleton` for Add/Edit |
 | Change unit/integration expectations | `src/__tests__/AGENTS.md` | Invariant-heavy coverage map |
 | Change browser flows | `e2e/AGENTS.md` | Playwright fixtures + test server flow |
 | Change operational scripts | `scripts/AGENTS.md` | Test server, install/restart, wiki backfill/reindex |
@@ -84,6 +84,7 @@
 - Telegram follow-ups reuse the selected session, while `/new_session` clears only the selected session and keeps sticky default agent/model.
 - Telegram follow-up cards inherit the selected session `projectDir`; `/directory` remains sticky until changed or cleared, and new-session/follow-up ACKs show the effective path.
 - Feedback dispatch reuses the original session strictly via `feedbackForCardId`, not by description text shape.
+- Quick Action icons use the shared ten-emoji palette, reject duplicate/custom non-grapheme values, and give icon-less legacy entries deterministic sorted fallbacks without dropping them. Board/List use a non-layout-consuming labeled `⚡ Quick ›` left-edge tab and left modal side sheet that preserves desktop geometry, dims/inerts the background, and becomes full-screen on mobile; Add/Edit stays in a separate DialogSkeleton editor, and new Prompt drafts share Create Card runtime/model defaults and stop applying asynchronous defaults after the matching field is touched.
 - Tool factories must keep string return values; route handlers must keep CORS.
 - Cards, schedulers, settings, scripts, and Telegram chat state persist in separate JSON stores.
 - Any change to `chat-message.ts`, `event-handler.ts`, `telegram-poller.ts`, `telegram-commands.ts`, `telegram-state-store.ts`, or `plugin/index.ts` must update docs/tests together.

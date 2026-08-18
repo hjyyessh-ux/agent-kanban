@@ -7,7 +7,12 @@ import {
 } from '../core/quick-action-store';
 import { KanbanStore } from '../core/store';
 import { ScriptStore } from '../core/script-store';
-import type { CreateQuickActionInput, PromptQuickAction } from '../core/types';
+import {
+  QUICK_ACTION_ICON_ERRORS,
+  QUICK_ACTION_ICON_PALETTE,
+  type CreateQuickActionInput,
+  type PromptQuickAction,
+} from '../core/types';
 import { withTempDir } from './setup';
 
 function promptInput(overrides: Record<string, unknown> = {}): CreateQuickActionInput {
@@ -36,16 +41,22 @@ describe('QuickActionStore', () => {
       const scripts = new ScriptStore(dir);
       const store = new QuickActionStore(dir, scripts);
       const created = await store.createAction(promptInput());
+      expect(created.icon).toBe(QUICK_ACTION_ICON_PALETTE[0]);
 
       const reloaded = new QuickActionStore(dir, scripts);
-      expect((await reloaded.getAction(created.id))?.name).toBe('Review changes');
+      expect(await reloaded.getAction(created.id)).toMatchObject({
+        name: 'Review changes',
+        icon: QUICK_ACTION_ICON_PALETTE[0],
+      });
 
       const updated = await reloaded.updateAction(created.id, {
+        icon: '🧑‍💻',
         name: 'Review repository',
         enabled: false,
         order: 3,
       });
       expect(updated.name).toBe('Review repository');
+      expect(updated.icon).toBe('🧑‍💻');
       expect(updated.enabled).toBe(false);
       expect(updated.order).toBe(3);
 
@@ -76,13 +87,19 @@ describe('QuickActionStore', () => {
       const first = new QuickActionStore(dir, scripts);
       const second = new QuickActionStore(dir, scripts);
 
-      await first.createAction(promptInput({ name: 'first' }));
-      await second.createAction(promptInput({ name: 'second' }));
+      const [firstCreated, secondCreated] = await Promise.all([
+        first.createAction(promptInput({ name: 'first' })),
+        second.createAction(promptInput({ name: 'second' })),
+      ]);
 
       expect((await first.getActions()).map((action) => action.name).sort()).toEqual([
         'first',
         'second',
       ]);
+      expect(new Set([firstCreated.icon, secondCreated.icon])).toEqual(new Set([
+        QUICK_ACTION_ICON_PALETTE[0],
+        QUICK_ACTION_ICON_PALETTE[1],
+      ]));
     });
   });
 
@@ -117,11 +134,79 @@ describe('QuickActionStore', () => {
       expect(actions).toHaveLength(1);
       expect(actions[0]).toMatchObject({
         id: 'legacy-action',
+        icon: QUICK_ACTION_ICON_PALETTE[0],
         name: 'Legacy action',
         enabled: true,
         pinned: false,
         order: 0,
       });
+    });
+  });
+
+  test('assigns deterministic distinct legacy fallback icons in display sort order', async () => {
+    await withTempDir(async (dir) => {
+      const timestamp = '2026-01-01T00:00:00.000Z';
+      const legacyEntries = [
+        { id: 'later', ...promptInput({ name: 'later', order: 20 }), createdAt: timestamp, updatedAt: timestamp },
+        { id: 'pinned', ...promptInput({ name: 'pinned', pinned: true, order: 99 }), createdAt: timestamp, updatedAt: timestamp },
+        { id: 'earlier', ...promptInput({ name: 'earlier', order: 1 }), createdAt: timestamp, updatedAt: timestamp },
+      ];
+      await Bun.write(join(dir, 'quick-actions.json'), JSON.stringify({
+        version: 1,
+        entries: legacyEntries,
+        lastModified: timestamp,
+      }));
+
+      const store = new QuickActionStore(dir, new ScriptStore(dir));
+      const firstRead = await store.getActions();
+      const secondRead = await store.getActions();
+      expect(firstRead.map(({ name, icon }) => ({ name, icon }))).toEqual([
+        { name: 'pinned', icon: QUICK_ACTION_ICON_PALETTE[0] },
+        { name: 'earlier', icon: QUICK_ACTION_ICON_PALETTE[1] },
+        { name: 'later', icon: QUICK_ACTION_ICON_PALETTE[2] },
+      ]);
+      expect(secondRead.map((action) => action.icon)).toEqual(firstRead.map((action) => action.icon));
+    });
+  });
+
+  test('validates one visible emoji grapheme and rejects duplicate custom icons', async () => {
+    await withTempDir(async (dir) => {
+      const store = new QuickActionStore(dir, new ScriptStore(dir));
+      const custom = await store.createAction(promptInput({ icon: '🧑‍💻' }));
+      expect(custom.icon).toBe('🧑‍💻');
+
+      for (const icon of ['', ' ', '\n', '\u0000', 'A', '⚡⚡', '⚡\u200d', '⚡\u0301']) {
+        await expect(store.createAction(promptInput({ icon }))).rejects.toThrow(
+          QUICK_ACTION_ICON_ERRORS.invalid,
+        );
+      }
+
+      await expect(store.createAction(promptInput({ icon: '🧑‍💻' }))).rejects.toThrow(
+        QUICK_ACTION_ICON_ERRORS.duplicate,
+      );
+      const second = await store.createAction(promptInput({ icon: '🇰🇷' }));
+      await expect(store.updateAction(second.id, { icon: custom.icon })).rejects.toThrow(
+        QUICK_ACTION_ICON_ERRORS.duplicate,
+      );
+      expect((await store.getAction(second.id))?.icon).toBe('🇰🇷');
+    });
+  });
+
+  test('claims every default icon once and rejects an omitted icon after palette exhaustion', async () => {
+    await withTempDir(async (dir) => {
+      const store = new QuickActionStore(dir, new ScriptStore(dir));
+      const icons: string[] = [];
+      for (const [index] of QUICK_ACTION_ICON_PALETTE.entries()) {
+        const action = await store.createAction(promptInput({ name: `action-${index}` }));
+        icons.push(action.icon);
+      }
+
+      expect(icons).toEqual([...QUICK_ACTION_ICON_PALETTE]);
+      expect(new Set(icons).size).toBe(QUICK_ACTION_ICON_PALETTE.length);
+      await expect(store.createAction(promptInput({ name: 'overflow' }))).rejects.toThrow(
+        QUICK_ACTION_ICON_ERRORS.paletteExhausted,
+      );
+      expect(await store.getActions()).toHaveLength(QUICK_ACTION_ICON_PALETTE.length);
     });
   });
 

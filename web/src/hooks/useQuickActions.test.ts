@@ -10,6 +10,7 @@ import {
 function promptAction(): QuickActionView {
   return {
     id: 'action-1',
+    icon: '🚀',
     type: 'prompt',
     name: 'Deploy',
     description: '',

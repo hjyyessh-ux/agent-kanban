@@ -45,6 +45,31 @@
   overflow: hidden;
 }
 
+.kv2-dialog-overlay--side-sheet {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.kv2-dialog--side-sheet {
+  width: min(28rem, calc(100vw - var(--kv2-sp-6)));
+  height: 100dvh;
+  max-height: 100dvh;
+  border-block: 0;
+  border-left: 0;
+  border-radius: 0 var(--kv2-radius-lg) var(--kv2-radius-lg) 0;
+  box-shadow: var(--kv2-sp-2) 0 0 var(--kv2-dialog-shadow-color);
+}
+
+.kv2-dialog--side-sheet .kv2-dialog-header {
+  flex: 0 0 auto;
+  background: var(--kv2-surface-raised);
+}
+
+.kv2-dialog--side-sheet .kv2-dialog-content {
+  padding: 0;
+}
+
 .kv2-dialog-header {
   display: flex;
   align-items: center;
@@ -135,6 +160,20 @@
 
 .kv2-dialog--status-done {
   --kv2-dialog-accent: var(--kv2-status-done-display);
+}
+
+@media (max-width: 640px) {
+  .kv2-dialog-overlay.kv2-dialog-overlay--side-sheet {
+    padding: 0;
+  }
+
+  .kv2-dialog--side-sheet {
+    width: 100vw;
+    max-width: 100vw !important;
+    border-right: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
 }
 
 /* ── Form Elements ────────────────────────────────────────── */
@@ -256,6 +295,12 @@
 
 .kv2-btn--full {
   width: 100%;
+}
+
+.kv2-btn--edge-tab {
+  min-width: 0;
+  gap: var(--kv2-sp-1);
+  padding-inline: var(--kv2-sp-2);
 }
 
 .kv2-btn--sidebar-secondary {

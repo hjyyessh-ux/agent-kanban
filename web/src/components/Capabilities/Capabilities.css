@@ -2002,6 +2002,20 @@
     padding: 0 var(--kv2-sp-4);
   }
 
+  .cap-filter-group {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cap-filter-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: var(--kv2-sp-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
   /* Header: view tabs / primary actions / gear each get their own line
      instead of being forced onto one row that clips at narrow widths. */
   .cap-header {

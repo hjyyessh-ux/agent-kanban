@@ -28,7 +28,7 @@ All Bun-based test coverage lives here as `*.test.ts` files (60+ suites). The su
 | `skill-frontmatter.test.ts` | `disable-model-invocation` frontmatter add/update/preserve-body logic for `core/skill-frontmatter.ts` |
 | `dispatch-tracker.test.ts`, `integration.test.ts` | Cross-module dispatch flows |
 | `scheduled-dispatch-service.test.ts` | Owner-gated due-card dispatch scans, stale-claim recovery, manual/timer race, bootstrap lifecycle |
-| `quick-action-store.test.ts`, `quick-action-routes.test.ts` | Quick Action persistence/templates plus idempotent Prompt dispatch and async Script card/run acceptance |
+| `quick-action-store.test.ts`, `quick-action-routes.test.ts` | Quick Action persistence/templates/icons (grapheme validation, uniqueness, legacy fallback, palette exhaustion) plus idempotent Prompt dispatch and async Script card/run acceptance |
 | `execution-environment.test.ts`, `script-execution-service.test.ts`, `script-run-routes.test.ts` | Reserved env/secret redaction, fixed argv/cwd/snapshot, output cap, failure/queue/concurrency/orphan recovery, and legacy 202 runner contract |
 | `scheduler-engine.test.ts` | Injected Bash/Prompt scheduler execution, env/cwd/output handling, run↔card linkage |
 | `question-monitor.test.ts`, `question-routes.test.ts` | SSE/poll proxy behavior |

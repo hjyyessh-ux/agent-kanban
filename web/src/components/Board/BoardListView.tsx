@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import type { V2ColumnViewModel } from './board-selectors';
 import { selectCardById } from './board-selectors';
-import { FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, RuntimeBadge, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
+import { ExecutionTypeBadge, FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
 import { BoardListRowAction } from './BoardListRowAction';
 
 interface BoardListViewProps {
@@ -162,9 +162,7 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
                               )}
                               <OriginExecutionBadges
                                 originChannel={vm.originChannel}
-                                executionKind={vm.executionKind}
                                 quickActionId={vm.quickActionId}
-                                scriptName={vm.scriptName}
                               />
                               {vm.title}
                             </button>
@@ -173,7 +171,11 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
                             </span>
                           </span>
                           <span className="kv2-list-col-agent">
-                            <RuntimeBadge runtime={vm.agentRuntime} />
+                            <ExecutionTypeBadge
+                              runtime={vm.agentRuntime}
+                              executionKind={vm.executionKind}
+                              scriptName={vm.scriptName}
+                            />
                           </span>
                           <span className="kv2-list-col-action">
                             <BoardListRowAction

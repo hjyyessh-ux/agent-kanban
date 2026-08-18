@@ -6,7 +6,12 @@ import { QuickActionStore } from '../core/quick-action-store';
 import { ScriptStore } from '../core/script-store';
 import { SettingsStore } from '../core/settings-store';
 import { createRouteHandler } from '../server/routes';
-import type { DispatchResult, KanbanCard } from '../core/types';
+import {
+  QUICK_ACTION_ICON_ERRORS,
+  QUICK_ACTION_ICON_PALETTE,
+  type DispatchResult,
+  type KanbanCard,
+} from '../core/types';
 import {
   ScriptExecutionService,
   type ScriptSpawnInput,
@@ -125,29 +130,100 @@ describe('quick action routes', () => {
         body: JSON.stringify(promptBody()),
       });
       expect(createdResponse.status).toBe(201);
-      const created = await createdResponse.json() as { id: string; available: boolean };
+      const created = await createdResponse.json() as { id: string; icon: string; available: boolean };
       expect(created.available).toBe(true);
+      expect(created.icon).toBe(QUICK_ACTION_ICON_PALETTE[0]);
 
       const listResponse = await request('/api/quick-actions');
       expect(listResponse.status).toBe(200);
-      expect((await listResponse.json()) as unknown[]).toHaveLength(1);
+      expect(await listResponse.json()).toMatchObject([{ id: created.id, icon: created.icon }]);
 
       const singleResponse = await request(`/api/quick-actions/${created.id}`);
       expect(singleResponse.status).toBe(200);
+      expect(await singleResponse.json()).toMatchObject({ id: created.id, icon: created.icon });
 
       const patchResponse = await request(`/api/quick-actions/${created.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: false, order: 7 }),
+        body: JSON.stringify({ icon: '🧑‍💻', enabled: false, order: 7 }),
       });
       expect(patchResponse.status).toBe(200);
-      expect(await patchResponse.json()).toMatchObject({ enabled: false, order: 7 });
+      expect(await patchResponse.json()).toMatchObject({ icon: '🧑‍💻', enabled: false, order: 7 });
 
       const deleteResponse = await request(`/api/quick-actions/${created.id}`, {
         method: 'DELETE',
       });
       expect(deleteResponse.status).toBe(204);
       expect((await request(`/api/quick-actions/${created.id}`)).status).toBe(404);
+    });
+  });
+
+  test('returns shared icon validation and duplicate-policy errors', async () => {
+    await withQuickActionServer(async ({ request }) => {
+      const first = await createPromptAction(request, '/workspace/project', { icon: '🧑‍💻' });
+      const duplicateCreate = await request('/api/quick-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...promptBody(), name: 'Duplicate', icon: '🧑‍💻' }),
+      });
+      expect(duplicateCreate.status).toBe(409);
+      expect(await duplicateCreate.json()).toEqual({ error: QUICK_ACTION_ICON_ERRORS.duplicate });
+
+      const second = await createPromptAction(request, '/workspace/project', { icon: '🇰🇷' });
+      const duplicateUpdate = await request(`/api/quick-actions/${second.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icon: '🧑‍💻' }),
+      });
+      expect(duplicateUpdate.status).toBe(409);
+      expect(await duplicateUpdate.json()).toEqual({ error: QUICK_ACTION_ICON_ERRORS.duplicate });
+
+      const invalidUpdate = await request(`/api/quick-actions/${first.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ icon: '  ' }),
+      });
+      expect(invalidUpdate.status).toBe(400);
+      expect(await invalidUpdate.json()).toEqual({ error: QUICK_ACTION_ICON_ERRORS.invalid });
+    });
+  });
+
+  test('reads deterministic legacy icons and reports default palette exhaustion', async () => {
+    await withQuickActionServer(async ({ request, dataDir }) => {
+      const timestamp = '2026-01-01T00:00:00.000Z';
+      await Bun.write(join(dataDir, 'quick-actions.json'), JSON.stringify({
+        version: 1,
+        entries: [
+          { id: 'legacy-later', ...promptBody(), name: 'later', order: 2, createdAt: timestamp, updatedAt: timestamp },
+          { id: 'legacy-first', ...promptBody(), name: 'first', order: 1, createdAt: timestamp, updatedAt: timestamp },
+        ],
+        lastModified: timestamp,
+      }));
+
+      const legacyRead = await request('/api/quick-actions');
+      expect(legacyRead.status).toBe(200);
+      expect(await legacyRead.json()).toMatchObject([
+        { id: 'legacy-first', icon: QUICK_ACTION_ICON_PALETTE[0] },
+        { id: 'legacy-later', icon: QUICK_ACTION_ICON_PALETTE[1] },
+      ]);
+
+      for (let index = 2; index < QUICK_ACTION_ICON_PALETTE.length; index += 1) {
+        const response = await request('/api/quick-actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...promptBody(), name: `fill-${index}` }),
+        });
+        expect(response.status).toBe(201);
+        expect(await response.json()).toMatchObject({ icon: QUICK_ACTION_ICON_PALETTE[index] });
+      }
+
+      const exhausted = await request('/api/quick-actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...promptBody(), name: 'overflow' }),
+      });
+      expect(exhausted.status).toBe(409);
+      expect(await exhausted.json()).toEqual({ error: QUICK_ACTION_ICON_ERRORS.paletteExhausted });
     });
   });
 

@@ -66,6 +66,36 @@ describe("QueueSettingsPanel", () => {
     expect(html).toContain('checked=""');
   });
 
+  test("shows a Script type for Script queue targets", () => {
+    const html = renderToStaticMarkup(
+      <QueueSettingsPanel
+        card={makeCard({ id: "source", title: "Source card" })}
+        allCards={[
+          makeCard({ id: "source", title: "Source card" }),
+          makeCard({
+            id: "target",
+            title: "Script target",
+            status: "in_progress",
+            agentRuntime: "opencode",
+            executionKind: "script",
+            scriptName: "Deploy service",
+          }),
+        ]}
+        queueModeSummary={{ title: "Start a new session", description: "" }}
+        queueTargetId=""
+        queueSessionMode="new_session"
+        onQueueTargetChange={mock(() => undefined)}
+        onQueueSessionModeChange={mock(() => undefined)}
+        onQueue={mock(() => undefined)}
+        defaultExpanded
+      />,
+    );
+
+    expect(html).toContain(">SCRIPT</span>");
+    expect(html).toContain("Script execution · Deploy service");
+    expect(html).not.toContain("OPENCODE");
+  });
+
   test("shows a schedule conflict message when queueing is blocked by a reservation", () => {
     const html = renderToStaticMarkup(
       <QueueSettingsPanel

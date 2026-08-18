@@ -22,7 +22,7 @@ import {
 import { ModelInfo } from "../../hooks/useKanbanApi";
 import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
 import { formatAgentTypeLabel } from "../../utils/agent-label";
-import { RuntimeBadge, RuntimeBadgeIcon } from "../Board/BoardCardSections";
+import { ExecutionTypeBadge, RuntimeBadge, RuntimeBadgeIcon } from "../Board/BoardCardSections";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { CommandPicker } from "./CommandPicker";
 import { MetaPopoverPortal, MetaSelect, useAnchoredPopover, type MetaSelectOption } from "./MetaDropdown";
@@ -291,9 +291,10 @@ export const CardMetaPanel: React.FC<CardMetaPanelProps> = ({
 }) => {
   const editInputRef = useRef<HTMLInputElement>(null);
   const cardRuntime = card.agentRuntime ?? 'opencode';
-  const showAgentMeta = cardRuntime === 'opencode';
-  const showCodexMeta = cardRuntime === 'codex';
-  const showClaudeMeta = cardRuntime === 'claude';
+  const isScriptExecution = card.executionKind === 'script';
+  const showAgentMeta = !isScriptExecution && cardRuntime === 'opencode';
+  const showCodexMeta = !isScriptExecution && cardRuntime === 'codex';
+  const showClaudeMeta = !isScriptExecution && cardRuntime === 'claude';
   const showRuntimeOptions = showCodexMeta || showClaudeMeta;
   const {
     prefs,
@@ -408,7 +409,18 @@ export const CardMetaPanel: React.FC<CardMetaPanelProps> = ({
   return (
     <div className="kv2-meta-band">
       <div className={`kv2-meta-panel${showAgentMeta ? " kv2-meta-panel--with-agent" : ""}${showRuntimeOptions ? " kv2-meta-panel--with-options" : ""}${showCodexMeta ? " kv2-meta-panel--with-codex-options" : ""}`}>
-        {isTodo && canEdit ? (
+        {isScriptExecution ? (
+          <div className="kv2-meta-card kv2-meta-card--type">
+            <span className="kv2-meta-label">Type</span>
+            <span className="kv2-meta-value kv2-meta-value--runtime">
+              <ExecutionTypeBadge
+                runtime={cardRuntime}
+                executionKind={card.executionKind}
+                scriptName={card.scriptName}
+              />
+            </span>
+          </div>
+        ) : isTodo && canEdit ? (
           <div className={`kv2-meta-card kv2-meta-card--runtime kv2-meta-card--runtime-${cardRuntime} kv2-meta-editable`}>
             <span className="kv2-meta-label">Runtime</span>
             <RuntimePicker
@@ -453,7 +465,7 @@ export const CardMetaPanel: React.FC<CardMetaPanelProps> = ({
           </div>
         ))}
 
-        {isTodo && canEdit ? (
+        {!isScriptExecution && (isTodo && canEdit ? (
           <div className="kv2-meta-card kv2-meta-card--model kv2-meta-editable">
             <span className="kv2-meta-label">Model</span>
             <MetaSelect
@@ -475,7 +487,7 @@ export const CardMetaPanel: React.FC<CardMetaPanelProps> = ({
             <span className="kv2-meta-label">Model</span>
             <span className="kv2-meta-value">{modelValue}</span>
           </div>
-        )}
+        ))}
 
         {showCodexMeta && (
           <>

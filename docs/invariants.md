@@ -103,6 +103,9 @@
 
 ### Prompt Quick Action dispatch
 
+- Quick Action의 `icon`은 shared contract의 단일 grapheme emoji다. 기본 팔레트(`⚡`, `🔍`, `🧪`, `🚀`, `🛠️`, `📊`, `🧹`, `🛡️`, `🔔`, `📦`)와 중복 거부 정책/오류 문자열은 `src/core/types.ts` 한 곳에서 관리한다. icon을 생략한 생성은 store lock 안에서 미사용 기본값을 claim하고, icon 없는 legacy entry는 목록 정렬 순서에 따라 결정적인 서로 다른 fallback을 받아 누락되지 않는다.
+- Quick Action 실행/관리는 Board의 TODO 왼쪽 gutter에 overlay되는 `⚡ Quick ›` edge tab과 왼쪽 modal side sheet를 사용한다. desktop launcher는 icon·이름·열림 방향을 가로로 표시하고 document flow 폭을 소비하거나 세로 글씨를 표시하지 않는다. mobile에서는 같은 가로형 launcher를 Board 위에 배치한다. 열린 desktop sheet는 Board/List geometry를 바꾸지 않고 오른쪽 배경을 semantic scrim으로 dim 처리하며 Board/List content를 `inert`/`aria-hidden`으로 만든다. mobile sheet는 `100vw × 100dvh` 전체 화면을 덮고 safe-area 하단 여백을 둔다. launcher는 `aria-haspopup`/`aria-expanded`/`aria-controls`, sheet는 `aria-modal`, focus trap, backdrop/Escape 닫기, launcher focus 복귀를 보장한다.
+- Quick Action Add/Edit는 side-sheet runner와 분리된 `DialogSkeleton` editor를 사용한다. editor가 열릴 때 runner sheet를 언마운트해 중첩 modal/focus trap을 만들지 않고, 닫은 뒤 Add 또는 해당 행의 overflow-menu 진입점으로 focus를 돌린다. 새 Prompt의 Runtime은 `useRuntimeDefaults().prefs.runtime ?? 'opencode'`, Model은 `useRuntimeModelSelection().getDefaultModelForRuntime()`을 적용해 Create Card와 일치시킨다. 비동기 설정/model 목록은 각 필드를 사용자가 직접 바꾼 뒤 덮어쓰지 않으며, 기존 Prompt는 저장된 Runtime/Model/Icon을 우선하고 Script editor는 Runtime/Model을 노출하지 않는다.
 - `POST /api/quick-actions/:id/run`은 저장된 action 정의만 신뢰한다. 요청은 `clientRequestId`와 `parameterValues`만 받고, required/type/select/unknown key를 서버에서 다시 검증한다.
 - template placeholder는 정확한 `{{parameterKey}}` 형식만 허용한다. malformed/unknown/value-less placeholder가 하나라도 있으면 카드를 만들기 전에 거부한다.
 - 저장된 prompt action의 `projectDir`가 실제 directory가 아니거나 action이 disabled/unavailable이면 카드를 만들거나 dispatch하지 않는다.
@@ -123,6 +126,7 @@
 - 실행 접수 전에 effective cwd가 실제 directory인지 검증한다. `ScriptExecutionService.prepareExecution()`은 content/language revision, argv, cwd, env를 snapshot으로 고정하므로 이후 script 편집이나 source file 삭제가 현재 process에 영향을 주지 않는다. running ScriptEntry의 직접/sync 삭제는 보류한다.
 - `ScriptRun(status=running)`과 일반 card(`status=in_progress`, `executionKind=script`)를 먼저 저장한 후 HTTP `202`로 `cardId`/`runId`를 반환한다. stdout/stderr는 각각 UTF-8 8192 byte까지만 보존한다.
 - Script card에는 실행 시점 `scriptName` snapshot을 저장한다. 일반 card 생성/수정 API가 `scriptName`, `executionKind`, `quickActionId`, `quickActionRun`을 위조할 수 없어야 한다.
+- `executionKind=script` card는 Board/List/Card Detail에서 항상 `SCRIPT`로 표시하고 저장 호환용 `agentRuntime` fallback을 `OPENCODE`로 잘못 노출하지 않는다. agent card는 실제 runtime badge를 유지하며 origin badge는 별도 provenance로 표시한다.
 - exit code 0은 `ScriptRun.success`와 card `complete/completed`로 종결한 뒤 queue helper를 호출한다. spawn/nonzero/restart orphan은 exit/error를 남기고 card `complete/failed`로 종결하며 queue helper를 절대 호출하지 않는다.
 - per-script `beginRun()` claim은 동시 실행을 거절한다. singleton owner 시작 시 owner PID가 살아 있지 않은 orphan `running` row를 `fail`로 reconcile하고 연결 card도 terminal failed로 닫는다.
 - `executionKind=script` card는 agent session이 없으므로 `StaleCardChecker`의 opencode orphan/stuck 판정에서 제외한다. process liveness와 복구는 ScriptRun owner PID/reconcile 계약이 담당한다.
