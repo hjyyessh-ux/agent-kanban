@@ -96,3 +96,8 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# Local-only files (internal decks, agent workspace state)
+.agents/
+nskills-lock.json
+*.pptx
