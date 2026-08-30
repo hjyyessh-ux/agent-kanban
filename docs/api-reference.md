@@ -236,9 +236,27 @@ top-level `todo` 카드를 **KST 기준 미래 시각**에 한 번만 자동 dis
 
 아카이브된 카드를 Obsidian 위키 문서로 분류·생성하는 파이프라인의 API입니다. 실제 처리는 플러그인의 `WikiWorker`가 비동기로 수행합니다.
 
+### `GET /api/wiki/config`
+
+현재 위키 설정을 반환합니다. 응답에는 `configured`, `enabled`, `model`, `route`(`codex` 또는 `claude`), `effort`, `vaultDir`가 포함됩니다.
+
+### `POST /api/wiki/config`
+
+위키 설정을 부분 갱신합니다. 모델을 바꿀 때는 실행할 CLI가 모델 이름에 의해 잘못 추론되지 않도록 `model`과 `route`를 함께 보내는 것을 권장합니다.
+
+```json
+{
+  "model": "gpt-5.6-sol",
+  "route": "codex",
+  "effort": "medium",
+  "vaultDir": "/path/to/obsidian/AgentKanbanWiki",
+  "enabled": true
+}
+```
+
 ### `GET /api/wiki/status`
 
-워커 상태(`WikiWorkerStatus`)를 반환합니다: `enabled`, `running`, `pendingCount`, `processedInRun`, `totalInRun`, `promptVersion`, `vaultDir`, `lastError`, `lastFinishedAt`.
+워커 상태(`WikiWorkerStatus`)를 반환합니다: `enabled`, `running`, `pendingCount`, `processedInRun`, `totalInRun`, `promptVersion`, `vaultDir`, `model`, `route`, `effort`, `lastError`, `lastFinishedAt`.
 
 추가로 전체 아카이브 집계(`stats`: `total`/`kept`/`skipped`/`failed`/`pending`/`unprocessed`/`docCount`/`byType`)와 최근 워커 활동 로그(`recentLogs`: 최대 50줄, `{ at, level, message }`)를 포함합니다.
 

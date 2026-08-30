@@ -14,7 +14,12 @@ import {
   CODEX_REASONING_EFFORT_VALUES,
   DEFAULT_CODEX_REASONING_EFFORT,
 } from '../../core/runtime-config';
-import { loadWikiConfig, WIKI_PROMPT_VERSION, WIKI_SETTING_KEYS } from './wiki-config';
+import {
+  inferWikiLlmRoute,
+  loadWikiConfig,
+  WIKI_PROMPT_VERSION,
+  WIKI_SETTING_KEYS,
+} from './wiki-config';
 import {
   buildTriagePrompt,
   buildClassifyPrompt,
@@ -22,7 +27,7 @@ import {
   parseClassifyResult,
   type WikiSourceGroup,
 } from './wiki-prompts';
-import { createWikiLlm, resolveWikiLlmRoute, type WikiLlmRunner } from './wiki-llm';
+import { createWikiLlm, type WikiLlmRunner } from './wiki-llm';
 import { WikiVaultWriter } from './wiki-writer';
 import { loadClaudeTranscript } from './wiki-transcript';
 
@@ -123,7 +128,7 @@ export class WikiWorker {
   private runMetadata(config: Awaited<ReturnType<typeof loadWikiConfig>>): WikiRunMetadata {
     return {
       model: config.model,
-      route: resolveWikiLlmRoute(config.model),
+      route: config.route,
       effort: config.effort,
     };
   }
@@ -206,6 +211,7 @@ export class WikiWorker {
     const configured = entries.some(e =>
       e.key === WIKI_SETTING_KEYS.enabled
       || e.key === WIKI_SETTING_KEYS.model
+      || e.key === WIKI_SETTING_KEYS.route
       || e.key === WIKI_SETTING_KEYS.effort
       || e.key === WIKI_SETTING_KEYS.vaultDir,
     );
@@ -240,7 +246,16 @@ export class WikiWorker {
     if (typeof input.model === 'string' && input.model.trim()) {
       await this.settingsStore.upsertByKey(WIKI_SETTING_KEYS.model, input.model.trim(), {
         ...wikiOpts,
-        description: 'Model for wiki triage/classification (gpt-* → codex CLI, otherwise claude CLI)',
+        description: 'Model for wiki triage/classification',
+      });
+    }
+    if (input.route !== undefined || (typeof input.model === 'string' && input.model.trim())) {
+      const route = input.route === 'codex' || input.route === 'claude'
+        ? input.route
+        : inferWikiLlmRoute(input.model?.trim() || existing.model);
+      await this.settingsStore.upsertByKey(WIKI_SETTING_KEYS.route, route, {
+        ...wikiOpts,
+        description: 'CLI route for wiki LLM runs: codex | claude',
       });
     }
     if (input.effort !== undefined) {

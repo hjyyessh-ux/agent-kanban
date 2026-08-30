@@ -1,7 +1,7 @@
 import type { SettingsStore } from '../../core/settings-store';
 import { getSettingValueOrDefault } from '../../core/settings-store';
 import { resolveDir } from '../../core/data-dir';
-import type { CodexReasoningEffort } from '../../core/types';
+import type { CodexReasoningEffort, WikiLlmRoute } from '../../core/types';
 import {
   CODEX_REASONING_EFFORT_VALUES,
   DEFAULT_CODEX_REASONING_EFFORT,
@@ -18,6 +18,7 @@ export const WIKI_SETTING_KEYS = {
   enabled: 'wiki.enabled',
   vaultDir: 'wiki.vault_dir',
   model: 'wiki.model',
+  route: 'wiki.route',
   effort: 'wiki.effort',
 } as const;
 
@@ -28,6 +29,7 @@ export const WIKI_SETTING_DEFAULTS = {
   enabled: 'false',
   vaultDir: '',
   model: 'gpt-5.5',
+  route: 'codex',
   effort: DEFAULT_CODEX_REASONING_EFFORT,
 } as const;
 
@@ -35,8 +37,14 @@ export interface WikiConfig {
   enabled: boolean;
   vaultDir: string;
   model: string;
+  route: WikiLlmRoute;
   /** Reasoning effort passed to Codex and Claude routes when supported. */
   effort: CodexReasoningEffort;
+}
+
+/** Backward-compatible route inference for configs saved before wiki.route existed. */
+export function inferWikiLlmRoute(model: string): WikiLlmRoute {
+  return model.startsWith('gpt') || /^o\d/.test(model) ? 'codex' : 'claude';
 }
 
 export async function loadWikiConfig(settingsStore: SettingsStore): Promise<WikiConfig> {
@@ -55,6 +63,11 @@ export async function loadWikiConfig(settingsStore: SettingsStore): Promise<Wiki
     WIKI_SETTING_KEYS.model,
     WIKI_SETTING_DEFAULTS.model,
   );
+  const storedRoute = await getSettingValueOrDefault(
+    settingsStore,
+    WIKI_SETTING_KEYS.route,
+    '',
+  );
   const storedEffort = await getSettingValueOrDefault(
     settingsStore,
     WIKI_SETTING_KEYS.effort,
@@ -67,6 +80,9 @@ export async function loadWikiConfig(settingsStore: SettingsStore): Promise<Wiki
     enabled: enabled === 'true',
     vaultDir: resolveDir(vaultDir),
     model,
+    route: storedRoute === 'codex' || storedRoute === 'claude'
+      ? storedRoute
+      : inferWikiLlmRoute(model),
     effort,
   };
 }

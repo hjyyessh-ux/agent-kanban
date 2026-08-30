@@ -480,7 +480,7 @@ export interface CardWikiState {
   processedAt?: string;      // ISO 8601 — 처리 완료 시각
   promptVersion?: number;    // 처리에 사용한 프롬프트 버전
   model?: string;            // 처리에 사용한 wiki LLM model (신규 처리분부터 기록)
-  route?: WikiLlmRoute;      // model routing: gpt-* → codex, otherwise claude
+  route?: WikiLlmRoute;      // 처리에 사용한 CLI route
   effort?: CodexReasoningEffort; // 처리에 사용한 effort (route가 지원하는 shared subset)
   error?: string;            // status=failed일 때 마지막 오류
 }
@@ -564,6 +564,7 @@ export interface WikiConfigDto {
 export interface WikiConfigInput {
   enabled?: boolean;
   model?: string;
+  route?: WikiLlmRoute;
   effort?: CodexReasoningEffort;
   vaultDir?: string;
 }
