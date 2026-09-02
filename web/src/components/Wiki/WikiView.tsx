@@ -18,6 +18,7 @@ import {
   runWikiBackfill,
   saveWikiConfig,
 } from '../../hooks/useWikiApi';
+import { useRuntimes } from '../../hooks/useRuntimes';
 import { WikiConfigPanel } from './WikiConfigPanel';
 import { WikiCardDialog } from './WikiCardDialog';
 import { WikiGraph } from './WikiGraph';
@@ -139,6 +140,7 @@ function collapseByDoc(cards: KanbanCard[]): WikiTile[] {
 }
 
 export function WikiView() {
+  const { runtimes } = useRuntimes();
   const [status, setStatus] = useState<WikiWorkerStatus | null>(null);
   const [config, setConfig] = useState<WikiConfigDto | null>(null);
   const [loadedMonths, setLoadedMonths] = useState<string[]>([]);
@@ -487,7 +489,12 @@ export function WikiView() {
               </span>
             </div>
             {config && (
-              <WikiConfigPanel config={config} busy={busy} onSave={handleSaveConfig} />
+              <WikiConfigPanel
+                config={config}
+                runtimes={runtimes}
+                busy={busy}
+                onSave={handleSaveConfig}
+              />
             )}
 
             <div className="wiki-worker-actions">

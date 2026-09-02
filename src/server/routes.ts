@@ -786,6 +786,9 @@ export function createRouteHandler(
         if (body.effort !== undefined && typeof body.effort !== 'string') {
           return errorResponse('effort must be a string', 400);
         }
+        if (body.route !== undefined && body.route !== 'codex' && body.route !== 'claude') {
+          return errorResponse('route must be codex or claude', 400);
+        }
         if (body.enabled !== undefined && typeof body.enabled !== 'boolean') {
           return errorResponse('enabled must be a boolean', 400);
         }

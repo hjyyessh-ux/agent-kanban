@@ -68,6 +68,20 @@ describe('archive wiki stamping', () => {
 
       expect(config.enabled).toBe(false);
       expect(config.vaultDir).toBe('');
+      expect(config.model).toBe('gpt-5.5');
+      expect(config.route).toBe('codex');
+    });
+  });
+
+  test('loadWikiConfig infers a legacy model route when wiki.route is missing', async () => {
+    await withTempDir(async (dir) => {
+      const settingsStore = new SettingsStore(dir);
+      await settingsStore.upsertByKey(WIKI_SETTING_KEYS.model, 'sonnet');
+
+      expect((await loadWikiConfig(settingsStore)).route).toBe('claude');
+
+      await settingsStore.upsertByKey(WIKI_SETTING_KEYS.model, 'o3');
+      expect((await loadWikiConfig(settingsStore)).route).toBe('codex');
     });
   });
 
@@ -205,6 +219,29 @@ describe('groupCardsBySession', () => {
 });
 
 describe('WikiWorker', () => {
+  test('persists an explicit CLI route independently of the model id', async () => {
+    await withTempDir(async (dir) => {
+      const { store, settingsStore } = await setupStores(dir);
+      const optionsSeen: WikiLlmCallOptions[] = [];
+      const worker = new WikiWorker(store, settingsStore, {
+        llmRunner: fakeLlm({ triage: SKIP_TRIAGE }, undefined, optionsSeen),
+      });
+
+      const config = await worker.saveConfig({ model: 'future-model', route: 'codex' });
+      await archiveDoneCard(store, { title: 'explicit route' });
+      await worker.processQueue();
+
+      expect(config.model).toBe('future-model');
+      expect(config.route).toBe('codex');
+      expect((await loadWikiConfig(settingsStore)).route).toBe('codex');
+      expect(optionsSeen[0]).toEqual({
+        model: 'future-model',
+        route: 'codex',
+        effort: 'medium',
+      });
+    });
+  });
+
   test('skip decision records skipped state and logs it', async () => {
     await withTempDir(async (dir) => {
       const { store, settingsStore, vaultDir } = await setupStores(dir);

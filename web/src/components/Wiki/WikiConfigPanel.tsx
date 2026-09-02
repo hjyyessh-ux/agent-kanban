@@ -1,28 +1,27 @@
 import { useEffect, useState } from 'react';
-import type { CodexReasoningEffort, WikiConfigDto, WikiConfigInput } from '../../../../src/core/types';
+import type { RuntimeCatalogEntry } from '../../../../src/core/runtime-config';
+import type {
+  CodexReasoningEffort,
+  WikiConfigDto,
+  WikiConfigInput,
+  WikiLlmRoute,
+} from '../../../../src/core/types';
+import {
+  buildWikiModelGroups,
+  findWikiModelSelection,
+  wikiModelSelectionKey,
+} from './wiki-model-options';
 
-/**
- * Curated model presets with route + description. `gpt-*` runs through the codex
- * CLI, everything else through the claude CLI (see wiki-llm.ts). "직접 입력"
- * falls back to a free-text field for any other model id.
- */
-const MODEL_PRESETS: { value: string; desc: string }[] = [
-  { value: 'gpt-5.5', desc: 'codex · 최고 품질, 느림 (기본값)' },
-  { value: 'opus', desc: 'claude · 최고 성능, 느리고 비쌈' },
-  { value: 'sonnet', desc: 'claude · 품질·속도 균형 (권장)' },
-  { value: 'haiku', desc: 'claude · 가장 빠르고 저렴, 대량 백필용' },
-];
-const MODEL_VALUES = MODEL_PRESETS.map((m) => m.value);
 const EFFORTS: CodexReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
 const CUSTOM = '__custom__';
 
 function routeLabel(config: WikiConfigDto): string {
-  const route = config.route ?? (config.model.startsWith('gpt') ? 'codex' : 'claude');
-  return route === 'codex' ? 'codex' : 'claude';
+  return config.route === 'codex' ? 'codex' : 'claude';
 }
 
 interface WikiConfigPanelProps {
   config: WikiConfigDto;
+  runtimes: RuntimeCatalogEntry[];
   busy: boolean;
   onSave: (input: WikiConfigInput) => Promise<void>;
 }
@@ -34,9 +33,13 @@ interface WikiConfigPanelProps {
  * form inside the page-level options drawer. Enabling triggers the worker
  * immediately (server-side kick).
  */
-export function WikiConfigPanel({ config, busy, onSave }: WikiConfigPanelProps) {
+export function WikiConfigPanel({ config, runtimes, busy, onSave }: WikiConfigPanelProps) {
+  const modelGroups = buildWikiModelGroups(runtimes);
   const [model, setModel] = useState(config.model);
-  const [modelMode, setModelMode] = useState(MODEL_VALUES.includes(config.model) ? config.model : CUSTOM);
+  const [route, setRoute] = useState<WikiLlmRoute>(config.route);
+  const [modelMode, setModelMode] = useState(
+    findWikiModelSelection(modelGroups, config.route, config.model) ?? CUSTOM,
+  );
   const [effort, setEffort] = useState<CodexReasoningEffort>(config.effort);
   const [vaultDir, setVaultDir] = useState(config.vaultDir);
   const [saving, setSaving] = useState(false);
@@ -44,20 +47,25 @@ export function WikiConfigPanel({ config, busy, onSave }: WikiConfigPanelProps) 
   // Resync the form when the saved config changes (e.g. after a successful save).
   useEffect(() => {
     setModel(config.model);
-    setModelMode(MODEL_VALUES.includes(config.model) ? config.model : CUSTOM);
+    setRoute(config.route);
+    setModelMode(findWikiModelSelection(modelGroups, config.route, config.model) ?? CUSTOM);
     setEffort(config.effort);
     setVaultDir(config.vaultDir);
-  }, [config.model, config.effort, config.vaultDir]);
+  }, [config.model, config.route, config.effort, config.vaultDir]);
 
-  const effectiveModel = (modelMode === CUSTOM ? model : modelMode).trim();
+  const effectiveModel = model.trim();
   const disabled = busy || saving;
   const canSave = !disabled && !!effectiveModel && !!vaultDir.trim();
+  const selectedModel = modelGroups
+    .find((group) => group.route === route)
+    ?.models.find((entry) => entry.id === model);
 
   const handleSave = async (enabledOverride?: boolean) => {
     setSaving(true);
     try {
       await onSave({
         model: effectiveModel,
+        route,
         effort,
         vaultDir: vaultDir.trim(),
         ...(enabledOverride !== undefined ? { enabled: enabledOverride } : {}),
@@ -75,26 +83,58 @@ export function WikiConfigPanel({ config, busy, onSave }: WikiConfigPanelProps) 
           className="wiki-config-input"
           value={modelMode}
           onChange={(e) => {
-            setModelMode(e.target.value);
-            if (e.target.value !== CUSTOM) setModel(e.target.value);
+            const selection = e.target.value;
+            setModelMode(selection);
+            if (selection === CUSTOM) return;
+            const next = modelGroups
+              .flatMap((group) => group.models.map((entry) => ({ route: group.route, model: entry.id })))
+              .find((entry) => wikiModelSelectionKey(entry.route, entry.model) === selection);
+            if (!next) return;
+            setRoute(next.route);
+            setModel(next.model);
           }}
           disabled={disabled}
         >
-          {MODEL_PRESETS.map((m) => <option key={m.value} value={m.value}>{`${m.value} — ${m.desc}`}</option>)}
+          {modelGroups.map((group) => (
+            <optgroup key={group.route} label={`${group.label} CLI`}>
+              {group.models.map((entry) => (
+                <option
+                  key={entry.id}
+                  value={wikiModelSelectionKey(group.route, entry.id)}
+                >
+                  {entry.label === entry.id ? entry.id : `${entry.label} — ${entry.id}`}
+                </option>
+              ))}
+            </optgroup>
+          ))}
           <option value={CUSTOM}>직접 입력…</option>
         </select>
         {modelMode === CUSTOM && (
-          <input
-            className="wiki-config-input"
-            type="text"
-            value={model}
-            placeholder="예: gpt-5.5, opus, sonnet"
-            onChange={(e) => setModel(e.target.value)}
-            disabled={disabled}
-          />
+          <>
+            <select
+              className="wiki-config-input"
+              value={route}
+              onChange={(e) => setRoute(e.target.value as WikiLlmRoute)}
+              disabled={disabled}
+              aria-label="직접 입력 모델 실행 경로"
+            >
+              <option value="codex">Codex CLI</option>
+              <option value="claude">Claude CLI</option>
+            </select>
+            <input
+              className="wiki-config-input"
+              type="text"
+              value={model}
+              placeholder="모델 ID를 입력하세요"
+              onChange={(e) => setModel(e.target.value)}
+              disabled={disabled}
+            />
+          </>
         )}
         <span className="wiki-config-hint">
-          {MODEL_PRESETS.find((m) => m.value === modelMode)?.desc ?? 'gpt-* → codex CLI, 그 외 → claude CLI'}
+          {selectedModel
+            ? `${route === 'codex' ? 'Codex' : 'Claude'} CLI${selectedModel.tier ? ` · ${selectedModel.tier}` : ''}`
+            : `${route === 'codex' ? 'Codex' : 'Claude'} CLI로 실행됩니다`}
         </span>
       </label>
 

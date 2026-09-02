@@ -7,6 +7,7 @@ import type { CodexReasoningEffort, WikiLlmRoute } from '../../core/types';
 import { DEFAULT_CODEX_REASONING_EFFORT } from '../../core/runtime-config';
 import { createClaudeBinaryResolver } from '../runtimes/claude-binary';
 import { WIKI_INTERNAL_ENV } from '../../core/types';
+import { inferWikiLlmRoute } from './wiki-config';
 
 /** One-shot prompt → raw response text. Injectable for tests. */
 export interface WikiLlmCallOptions {
@@ -20,7 +21,7 @@ export type WikiLlmRunner = (prompt: string, options?: WikiLlmCallOptions) => Pr
 const DEFAULT_TIMEOUT_MS = 240_000;
 
 export function resolveWikiLlmRoute(model: string): WikiLlmRoute {
-  return model.startsWith('gpt') ? 'codex' : 'claude';
+  return inferWikiLlmRoute(model);
 }
 
 interface OneShotResult {
