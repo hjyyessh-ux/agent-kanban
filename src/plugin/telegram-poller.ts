@@ -32,7 +32,7 @@ import {
 const POLL_INTERVAL_MS = 5_000;
 
 /** How many past project directories the `/directory` keyboard offers. */
-const RECENT_PROJECT_DIR_LIMIT = 8;
+const RECENT_PROJECT_DIR_LIMIT = 20;
 
 export type FollowUpFn = (
   sessionId: string,

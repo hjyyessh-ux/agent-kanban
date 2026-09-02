@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 
 export const DIR_HISTORY_KEY = "kanban-dir-history";
-const DIR_HISTORY_MAX = 10;
+const DIR_HISTORY_MAX = 20;
 
 function readDirectoryHistory(): string[] {
   try {
