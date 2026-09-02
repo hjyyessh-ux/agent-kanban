@@ -145,24 +145,41 @@ describe('Archive API routes', () => {
     });
   });
 
-  test('POST /api/archive with parent cardIds archives direct done children only', async () => {
+  test('POST /api/archive with parent cardIds cascades to the whole subtree regardless of child status', async () => {
     await withTestServer(async (url, store) => {
       const parent = await store.createCard({ title: 'Parent', description: 'D' });
-      const directChild = await store.createCard({
+      const doneChild = await store.createCard({
         title: 'Explore#1',
-        description: 'Child',
+        description: 'Done child',
         parentCardId: parent.id,
         agentType: 'explore',
       });
-      const unrelatedChild = await store.createCard({
+      // In-progress child: the bug — this used to be left behind on the board
+      // and re-driven back to in_progress by the still-live parent runtime.
+      const inProgressChild = await store.createCard({
         title: 'Explore#2',
+        description: 'In-progress child',
+        parentCardId: parent.id,
+        agentType: 'explore',
+      });
+      // Grandchild (child of a subagent) must also be swept in.
+      const grandChild = await store.createCard({
+        title: 'Explore#3',
+        description: 'Grandchild',
+        parentCardId: inProgressChild.id,
+        agentType: 'explore',
+      });
+      const unrelatedChild = await store.createCard({
+        title: 'Explore#4',
         description: 'Other child',
         parentCardId: 'other-parent',
         agentType: 'explore',
       });
 
       await store.updateCard(parent.id, { status: 'done' });
-      await store.updateCard(directChild.id, { status: 'done' });
+      await store.updateCard(doneChild.id, { status: 'done' });
+      await store.updateCard(inProgressChild.id, { status: 'in_progress' });
+      await store.updateCard(grandChild.id, { status: 'in_progress' });
       await store.updateCard(unrelatedChild.id, { status: 'done' });
 
       const res = await fetch(`${url}/api/archive`, {
@@ -173,25 +190,43 @@ describe('Archive API routes', () => {
 
       expect(res.status).toBe(200);
       const body = await res.json() as { archivedCount: number };
-      expect(body.archivedCount).toBe(2);
+      // parent + doneChild + inProgressChild + grandChild
+      expect(body.archivedCount).toBe(4);
 
       const remaining = await store.getCards();
       expect(remaining.map((card) => card.id)).toEqual([unrelatedChild.id]);
     });
   });
 
-  test('POST /api/archive with parent cardIds skips favorite direct children', async () => {
+  test('POST /api/archive with parent cardIds keeps favorite children (and their subtree) regardless of status', async () => {
     await withTestServer(async (url, store) => {
       const parent = await store.createCard({ title: 'Parent', description: 'D' });
+      // Favorite child that is still in_progress — must stay on the board.
       const favoriteChild = await store.createCard({
         title: 'Explore#1',
         description: 'Favorite child',
         parentCardId: parent.id,
         agentType: 'explore',
       });
+      // Grandchild under the favorite is pruned from the sweep too.
+      const favoriteGrandChild = await store.createCard({
+        title: 'Explore#2',
+        description: 'Grandchild of favorite',
+        parentCardId: favoriteChild.id,
+        agentType: 'explore',
+      });
+      // Non-favorite in_progress sibling still gets archived with the parent.
+      const otherChild = await store.createCard({
+        title: 'Explore#3',
+        description: 'Non-favorite sibling',
+        parentCardId: parent.id,
+        agentType: 'explore',
+      });
 
       await store.updateCard(parent.id, { status: 'done' });
-      await store.updateCard(favoriteChild.id, { status: 'done', favorite: true });
+      await store.updateCard(favoriteChild.id, { status: 'in_progress', favorite: true });
+      await store.updateCard(favoriteGrandChild.id, { status: 'in_progress' });
+      await store.updateCard(otherChild.id, { status: 'in_progress' });
 
       const res = await fetch(`${url}/api/archive`, {
         method: 'POST',
@@ -201,10 +236,13 @@ describe('Archive API routes', () => {
 
       expect(res.status).toBe(200);
       const body = await res.json() as { archivedCount: number };
-      expect(body.archivedCount).toBe(1);
+      // parent + otherChild (favoriteChild and its grandchild stay)
+      expect(body.archivedCount).toBe(2);
 
       const remaining = await store.getCards();
-      expect(remaining.map((card) => card.id)).toEqual([favoriteChild.id]);
+      expect(remaining.map((card) => card.id).sort()).toEqual(
+        [favoriteChild.id, favoriteGrandChild.id].sort(),
+      );
     });
   });
 

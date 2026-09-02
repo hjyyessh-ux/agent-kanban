@@ -343,7 +343,7 @@ async function waitForSessionId(input: {
       status: 'failed',
       error: message,
     });
-    await input.deps.store.updateCard(input.cardId, {
+    await updateCardIfPresent(input.deps.store, input.cardId, {
       status: 'todo',
       progressSummary: `[failed] ${message}`,
       staleStatus: null,
@@ -387,6 +387,14 @@ async function handleClaudeCompletion(input: {
       status: 'completed',
       exitCode,
     });
+    // If the parent card was archived mid-run, archive wins: don't resurrect the
+    // card or fire completion side effects (status write, Telegram, queue dispatch).
+    const parentStillPresent = await input.deps.store.getCard(input.input.card.id, {
+      includeDeleted: true,
+    });
+    if (!parentStillPresent) {
+      return { outcome: 'completed', result: finalResult, durationMs };
+    }
     await input.deps.store.updateCard(input.input.card.id, {
       status: 'complete',
       resolution: 'completed',
@@ -425,7 +433,7 @@ async function handleClaudeCompletion(input: {
     exitCode,
     error: message,
   });
-  await input.deps.store.updateCard(input.input.card.id, {
+  await updateCardIfPresent(input.deps.store, input.input.card.id, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
     result: finalResult || message,
@@ -440,6 +448,24 @@ async function handleClaudeCompletion(input: {
     error: message,
     durationMs,
   };
+}
+
+/**
+ * Update a card only if it is still on the active board. Once a card is archived
+ * it is physically removed from the board, so a late runtime finalization writing
+ * to it would either throw "Card not found" or resurrect state the user archived
+ * away. Archive wins: the runtime silently drops the write. Soft-deleted cards
+ * (still on the board with `deletedAt`) are intentionally NOT skipped — passing
+ * `includeDeleted` narrows the guard to genuinely-archived cards.
+ */
+async function updateCardIfPresent(
+  store: KanbanStore,
+  cardId: string,
+  input: Parameters<KanbanStore['updateCard']>[1],
+): Promise<void> {
+  const existing = await store.getCard(cardId, { includeDeleted: true });
+  if (!existing) return;
+  await store.updateCard(cardId, input);
 }
 
 async function finalizeChildrenOnParentFail(parentCardId: string, store: KanbanStore): Promise<void> {

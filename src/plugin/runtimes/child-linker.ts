@@ -11,6 +11,14 @@ export class ChildLinker {
   constructor(private readonly store: KanbanStore) {}
 
   async onChildEvent(parentCardId: string, runId: string, ev: ClaudeStreamEvent): Promise<void> {
+    // Once the parent card is archived it is physically removed from the active
+    // board, but its runtime may still be streaming subagent events. Without this
+    // guard those late events would recreate child cards (subagent_started) or
+    // re-stamp surviving children back to in_progress (subagent_updated) after the
+    // user archived the whole session. If the parent is gone, so is its subtree.
+    const parent = await this.store.getCard(parentCardId);
+    if (!parent) return;
+
     if (ev.type === 'subagent_started') {
       // Claude CLI emits task_started for BOTH real subagents (task_type 'local_agent',
       // carrying subagent_type + prompt) and background shell commands (task_type

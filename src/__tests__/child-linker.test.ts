@@ -157,6 +157,55 @@ describe('ChildLinker', () => {
     });
   });
 
+  test('after parent is archived, late subagent events do not recreate or revive children', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const parent = await store.createCard({ title: 'Parent', description: 'p' });
+      const linker = new ChildLinker(store);
+      const RUN_ID = 'run-archive';
+      const TASK_ID = 'task-live';
+
+      // A subagent starts and goes in_progress while the session is live.
+      await linker.onChildEvent(parent.id, RUN_ID, {
+        type: 'subagent_started',
+        taskId: TASK_ID,
+        agentType: 'explore',
+        description: 'Live child',
+        prompt: 'Work',
+        taskType: 'local_agent',
+      });
+      await linker.onChildEvent(parent.id, RUN_ID, {
+        type: 'subagent_updated',
+        taskId: TASK_ID,
+        status: 'in_progress',
+      });
+
+      // User archives the done parent — the in_progress child cascades out too.
+      await store.updateCard(parent.id, { status: 'done' });
+      const { archivedCount } = await store.archiveCards([parent.id]);
+      expect(archivedCount).toBe(2);
+
+      // Late events from the still-live runtime must NOT resurrect the child…
+      await linker.onChildEvent(parent.id, RUN_ID, {
+        type: 'subagent_updated',
+        taskId: TASK_ID,
+        status: 'in_progress',
+      });
+      // …nor create a brand-new todo card for a subagent starting after archive.
+      await linker.onChildEvent(parent.id, RUN_ID, {
+        type: 'subagent_started',
+        taskId: 'task-new',
+        agentType: 'explore',
+        description: 'New child after archive',
+        prompt: 'Work',
+        taskType: 'local_agent',
+      });
+
+      const active = await store.getCards();
+      expect(active.filter(c => c.parentCardId === parent.id)).toHaveLength(0);
+    });
+  });
+
   test('findCardBySessionId prefers top-level card over linkKind=subagent child', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
