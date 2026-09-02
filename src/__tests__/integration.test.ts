@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { chmodSync } from 'node:fs';
+import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createServer } from '../server/index';
 import { KanbanStore } from '../core/store';
@@ -579,6 +579,85 @@ process.exit(0);
       expect(children).toHaveLength(1);
       expect(children[0].childTaskId).toBe('a6419ba278a83071e');
       expect(children[0].status).toBe('complete');
+    });
+  });
+
+  // Regression for the archive bug: archiving a done parent while its runtime is
+  // still streaming used to (a) leave in_progress subagents behind on the board and
+  // (b) let late stream events re-drive them to in_progress / recreate them as fresh
+  // cards. This drives a REAL runtime that blocks mid-stream, archives the parent
+  // during that window, then releases the tail of the stream.
+  test('archiving a done parent mid-run cascades in_progress children out and late events do not revive them', async () => {
+    await withTempDir(async (dir) => {
+      const readyMarker = join(dir, 'ready.marker');
+      const goMarker = join(dir, 'go.marker');
+      const fakeBinaryPath = join(dir, 'fake-claude-liverace.js');
+      await Bun.write(fakeBinaryPath, `#!/usr/bin/env bun
+const { existsSync, writeFileSync } = require('node:fs');
+const sid = 'sess-live-race';
+const emit = (o) => process.stdout.write(JSON.stringify(o) + '\\n');
+emit({ type: 'system', subtype: 'init', session_id: sid });
+// A subagent starts and goes in_progress while the session is live.
+emit({ type: 'system', subtype: 'task_started', task_id: 'task-A', tool_use_id: 'tu-A', subagent_type: 'explore', description: 'Child A', prompt: 'work A', task_type: 'local_agent', session_id: sid });
+emit({ type: 'system', subtype: 'task_updated', task_id: 'task-A', patch: { status: 'in_progress' }, session_id: sid });
+// Signal the test that Child A is streaming, then block until it has archived the parent.
+writeFileSync(${JSON.stringify(readyMarker)}, '1');
+while (!existsSync(${JSON.stringify(goMarker)})) { Bun.sleepSync(20); }
+// Late events after archive: re-stamp Child A, and start a brand-new subagent.
+emit({ type: 'system', subtype: 'task_updated', task_id: 'task-A', patch: { status: 'in_progress' }, session_id: sid });
+emit({ type: 'system', subtype: 'task_started', task_id: 'task-B', tool_use_id: 'tu-B', subagent_type: 'explore', description: 'Child B after archive', prompt: 'work B', task_type: 'local_agent', session_id: sid });
+emit({ type: 'system', subtype: 'task_updated', task_id: 'task-B', patch: { status: 'in_progress' }, session_id: sid });
+emit({ type: 'result', result: 'done', session_id: sid });
+process.exit(0);
+`);
+      chmodSync(fakeBinaryPath, 0o755);
+
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const host = await createStandaloneRuntimeHost({
+        store,
+        settingsStore,
+        dataDir: dir,
+        cwd: dir,
+        claudeCommandOverride: [fakeBinaryPath],
+        claudeSessionIdTimeoutMs: 3000,
+      });
+
+      const parent = await store.createCard({
+        title: 'Live-race Parent',
+        description: 'Do work',
+        agentRuntime: 'claude',
+        projectDir: dir,
+      });
+
+      const adapter = host.registry.pickAdapter('claude');
+      const handle = await adapter.start({ card: parent, prompt: parent.description, cwd: dir });
+
+      // Wait until Child A exists and is in_progress (runtime is now blocked on goMarker).
+      const deadline = Date.now() + 5000;
+      let childA: Awaited<ReturnType<typeof store.findByChildLink>> = null;
+      while (Date.now() < deadline) {
+        childA = await store.findByChildLink(parent.id, handle.runId, 'task-A');
+        if (childA?.status === 'in_progress') break;
+        await Bun.sleep(20);
+      }
+      expect(childA?.status).toBe('in_progress');
+
+      // User archives the done parent while the run is still live.
+      await store.updateCard(parent.id, { status: 'done' });
+      const { archivedCount } = await store.archiveCards([parent.id]);
+      // parent + in_progress Child A cascade out together.
+      expect(archivedCount).toBe(2);
+
+      // Release the tail of the stream (late updates + a new subagent start).
+      writeFileSync(goMarker, '1');
+      const result = await handle.done;
+      expect(result.outcome).toBe('completed');
+
+      // Neither the surviving Child A nor a freshly-started Child B may reappear active.
+      const active = await store.getCards();
+      expect(active.filter(c => c.parentCardId === parent.id)).toHaveLength(0);
+      expect(active.find(c => c.id === parent.id)).toBeUndefined();
     });
   });
 });

@@ -474,7 +474,7 @@ describe('KanbanStore', () => {
     });
   });
 
-  test('archiveCards with parent cardIds also archives direct done children only', async () => {
+  test('archiveCards with parent cardIds cascades to the whole subtree regardless of child status', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const parent = await store.createCard({ title: 'Parent', description: 'D' });
@@ -484,6 +484,7 @@ describe('KanbanStore', () => {
         parentCardId: parent.id,
         agentType: 'explore',
       });
+      // Grandchild left in_progress — the whole subtree must be archived with the parent.
       const grandChild = await store.createCard({
         title: 'Oracle#1',
         description: 'Grandchild',
@@ -499,18 +500,16 @@ describe('KanbanStore', () => {
 
       await store.updateCard(parent.id, { status: 'done' });
       await store.updateCard(directChild.id, { status: 'done' });
-      await store.updateCard(grandChild.id, { status: 'done' });
+      await store.updateCard(grandChild.id, { status: 'in_progress' });
       await store.updateCard(unrelatedChild.id, { status: 'done' });
 
       const result = await store.archiveCards([parent.id]);
 
-      expect(result.archivedCount).toBe(2);
+      // parent + directChild + grandChild (subtree), unrelatedChild untouched
+      expect(result.archivedCount).toBe(3);
 
       const remaining = await store.getCards();
-      expect(remaining.map((card) => card.id).sort()).toEqual([
-        grandChild.id,
-        unrelatedChild.id,
-      ].sort());
+      expect(remaining.map((card) => card.id)).toEqual([unrelatedChild.id]);
     });
   });
 
