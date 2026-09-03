@@ -1261,3 +1261,149 @@ export interface CapabilityItem {
   tools?: string[];
   filePath?: string;
 }
+
+// ─── Works & Timeline Types ─────────────────────────────────────────
+// A Work is a first-class, human-intent unit that groups one or more sessions
+// (1:N — a session belongs to at most one Work). Sessions are joined by
+// `sessionId`; the card model is untouched. Persisted to `~/.agent-kanban/works.json`.
+// Works are never auto-created: new sessions surface in the Inbox until the user
+// assigns or ignores them. `ignoredSessionIds` persists the Inbox "ignore" action.
+
+export type WorkStatus = 'active' | 'done' | 'discarded';
+export type WorkResolution = 'completed' | 'superseded' | 'abandoned';
+export type WorkSessionRole = 'dev' | 'review' | 'debug';
+
+export interface WorkSessionLink {
+  sessionId: string;
+  projectDir?: string;
+  linkedAt: string;      // ISO 8601 — when the session was linked to this Work
+  role?: WorkSessionRole;
+}
+
+export interface WorkSummary {
+  lines: string[];       // 3~5 lines, Korean (LLM-generated)
+  generatedAt: string;   // ISO 8601
+  model: string;         // model used to generate the summary
+}
+
+export interface Work {
+  id: string;            // nanoid
+  title: string;
+  status: WorkStatus;
+  resolution?: WorkResolution;
+  sessionLinks: WorkSessionLink[];
+  projectDir?: string;
+  startedAt: string;     // ISO 8601 — first linked session's earliest card startedAt
+  resolvedAt?: string;   // ISO 8601 — done/discard time → end of the Timeline bar
+  summary?: WorkSummary;
+  archivedAt?: string;   // ISO 8601 — set when the Work's cards were bulk-archived
+  createdAt: string;     // ISO 8601
+  updatedAt: string;     // ISO 8601
+}
+
+export interface WorkStoreState {
+  version: 1;
+  works: Work[];
+  ignoredSessionIds: string[]; // Inbox "ignore" persistence — survives refresh
+  lastModified: string;        // ISO 8601
+}
+
+export interface CreateWorkInput {
+  title: string;
+  projectDir?: string;
+  startedAt?: string;                 // defaults to now when omitted
+  sessionLinks?: WorkSessionLink[];   // optional initial links (must obey the 1:N invariant)
+}
+
+export interface UpdateWorkInput {
+  title?: string;
+  status?: WorkStatus;
+  resolution?: WorkResolution | null;
+  projectDir?: string | null;
+  startedAt?: string;
+  resolvedAt?: string | null;
+  summary?: WorkSummary | null;
+  archivedAt?: string | null;
+}
+
+/**
+ * PATCH /api/works/:id body — the store update input plus the route-only
+ * `confirmArchive` flag. When `works.done_confirm` is on, the client shows the
+ * bulk-archive confirmation and re-sends the `done` transition with this flag;
+ * without it the server records the status transition but skips the destructive
+ * bulk done→archive side effect. Never persisted on the Work.
+ */
+export interface WorkPatchInput extends UpdateWorkInput {
+  confirmArchive?: boolean;
+}
+
+export interface AddWorkSessionInput {
+  sessionId: string;
+  projectDir?: string;
+  role?: WorkSessionRole;
+  /**
+   * Earliest `startedAt` among the session's cards. Applied to the Work's own
+   * `startedAt` only when this is its *first* link, so the Timeline bar starts
+   * when the work actually began rather than when the user got around to
+   * triaging it. Ignored on later links; falls back to the link time.
+   */
+  startedAt?: string;
+}
+
+/**
+ * Inbox DTO — an unassigned, non-ignored session surfaced for triage. Derived
+ * from the same session aggregation that backs `GET /api/sessions`; the UI (card
+ * 2) reads this list to drive inline assignment. `projectDir` powers the
+ * "same-directory Work" recommendation.
+ */
+export interface WorkInboxSession {
+  sessionId: string;
+  sessionTitle?: string;
+  cardTitle: string;
+  cardId: string;
+  cardStatus: string;
+  projectDir?: string;
+  agentRuntime: AgentRuntime;
+  agentType?: string;
+  model?: string;
+  relatedCardCount: number;
+  updatedAt: string;      // ISO 8601
+}
+
+// ─── Works settings (card 4/7) ──────────────────────────────────────
+// Works-scoped configuration, independent of the wiki's LLM settings. Persisted
+// as `works.*` keys in the shared settings store. The Summary LLM route (codex
+// vs claude) is derived from `summaryModel` the same way the wiki does it.
+
+export interface WorksConfig {
+  summaryModel: string;               // works.summary_model — model id (runtime derivable from prefix)
+  summaryLines: number;               // works.summary_lines — 3 | 4 | 5
+  assignPreferSameDir: boolean;       // works.assign_prefer_same_dir
+  assignSuggestResumeChain: boolean;  // works.assign_suggest_resume_chain
+  staleDays: number;                  // works.stale_days — active Work "⚠ stale" threshold
+  doneConfirm: boolean;               // works.done_confirm — confirm before bulk archive on complete
+}
+
+/** Works config as surfaced to the Works tab settings panel. */
+export interface WorksConfigDto extends WorksConfig {
+  configured: boolean;   // true once any works.* setting has been explicitly saved
+  route: WikiLlmRoute;   // derived from summaryModel (gpt-* → codex, otherwise claude)
+}
+
+/** Partial works config update from the settings panel; only provided fields are saved. */
+export interface WorksConfigInput {
+  summaryModel?: string;
+  summaryLines?: number;
+  assignPreferSameDir?: boolean;
+  assignSuggestResumeChain?: boolean;
+  staleDays?: number;
+  doneConfirm?: boolean;
+}
+
+/** Response of POST /api/works/:id/summary — the updated Work plus per-session outcome. */
+export interface WorkSummaryResponse {
+  work: Work;
+  summary: WorkSummary;
+  generatedSessions: string[];                              // sessionIds that contributed
+  skippedSessions: { sessionId: string; reason: string }[]; // e.g. transcript unavailable
+}

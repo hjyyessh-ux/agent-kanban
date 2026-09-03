@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Works + Timeline 목업 — Agent Kanban</title>
+<style>
+/* ============================================================
+   목업 전용 스타일 — kv2 토큰 값을 복제해 실제 앱과 동일한 룩을
+   재현한다. 실제 구현 시에는 kanban-v2.tokens.css 의 토큰과
+   primitives.css 의 kv2-btn / kv2-badge / DialogSkeleton 을 사용.
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --bg: #FFF8E7;
+  --frame: #1A1A2E;
+  --surface: #FFFFFF;
+  --surface-sunken: #f8fafc;
+  --surface-hover: #f3f4f6;
+  --surface-warm-soft: #fffdf5;
+  --text-primary: #1A1A2E;
+  --text-secondary: #536074;
+  --text-muted: #8190a8;
+  --text-inverse: #ffffff;
+  --border: #D7DCE6;
+  --border-strong: #1f2233;
+  --border-subtle: #e2e8f0;
+  --ink-pure: #000000;
+  --shadow-color: rgba(31, 34, 51, 0.85);
+  --scrim: rgba(0, 0, 0, 0.5);
+
+  --status-todo: #3b82f6;
+  --status-progress: #facc15;
+  --status-complete: #ff3b6b;
+  --status-done: #22c55e;
+  --runtime-claude: #d97757;
+
+  --info-surface: #eff6ff;
+  --info-border: #93c5fd;
+  --info-text: #1d4ed8;
+  --success-surface: #f0fdf4;
+  --success-border: #86efac;
+  --success-text: #166534;
+  --warn-surface: #fef3c7;
+  --warn-border: #fcd34d;
+  --warn-text: #b45309;
+  --danger-surface: #fef2f2;
+  --danger-border: #fca5a5;
+  --danger-text: #b91c1c;
+  --danger-accent: #dc2626;
+  --purple-surface: #f5f3ff;
+  --purple-border: #c4b5fd;
+  --purple-text: #4c1d95;
+  --neutral-chip-bg: #f1f5f9;
+  --neutral-chip-text: #475569;
+
+  --btn-primary-bg: #1668e8;
+  --btn-primary-fg: #fffdf7;
+
+  --font-sans: 'Work Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --font-heading: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  --radius-card: 2px;
+  --shadow-sm: 3px 3px 0 var(--shadow-color);
+  --shadow-md: 4px 4px 0 var(--shadow-color);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b1d20;
+  --frame: #0e0e15;
+  --surface: #272a2e;
+  --surface-sunken: #202327;
+  --surface-hover: #30343a;
+  --surface-warm-soft: #292c2d;
+  --text-primary: #d4d7db;
+  --text-secondary: #a3a8ae;
+  --text-muted: #737a82;
+  --border: #34383d;
+  --border-strong: #454a50;
+  --border-subtle: #30343a;
+  --ink-pure: #454a50;
+  --shadow-color: rgba(8, 10, 12, 0.55);
+  --scrim: rgba(0, 0, 0, 0.72);
+  --info-surface: #29303a;
+  --info-border: #3d4a5e;
+  --info-text: #8fa9d6;
+  --success-surface: #283229;
+  --success-border: #3d5a44;
+  --success-text: #9bc0a4;
+  --warn-surface: #322e22;
+  --warn-border: #5a5031;
+  --warn-text: #c9ad72;
+  --danger-surface: #322627;
+  --danger-border: #5a3a3d;
+  --danger-text: #cf8f95;
+  --danger-accent: #b05b62;
+  --purple-surface: #2e2a35;
+  --purple-border: #4a4059;
+  --purple-text: #b3a1cf;
+  --neutral-chip-bg: #2d3135;
+  --neutral-chip-text: #a3a8ae;
+  --btn-primary-bg: #3a4a5d;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+
+/* ── 목업 툴바 (실제 앱에는 없음) ─────────────────────────── */
+.mock-toolbar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--frame); color: #f9fafb;
+  font-size: 12px;
+}
+.mock-toolbar .mk-note { opacity: .65; margin-right: 8px; }
+.mock-toolbar button {
+  font: inherit; cursor: pointer;
+  padding: 5px 12px;
+  background: transparent; color: #f9fafb;
+  border: 2px solid #4b5563; border-radius: 999px;
+}
+.mock-toolbar button.active { background: #f9fafb; color: #1A1A2E; border-color: #f9fafb; font-weight: 700; }
+.mock-toolbar .spacer { flex: 1; }
+
+/* ── 앱 크롬 (탭 헤더) ────────────────────────────────────── */
+.app { max-width: 1180px; margin: 0 auto; padding: 20px 24px 80px; }
+.app-header {
+  display: flex; align-items: center; gap: 20px;
+  padding-bottom: 14px; margin-bottom: 20px;
+  border-bottom: 3px solid var(--border-strong);
+}
+.app-logo { font-family: var(--font-heading); font-weight: 900; font-size: 20px; letter-spacing: .5px; }
+.app-tabs { display: flex; gap: 6px; }
+.app-tab {
+  padding: 6px 14px; border: 2px solid transparent; border-radius: 999px;
+  color: var(--text-secondary); font-weight: 600; cursor: default;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.app-tab.active { background: var(--frame); color: #fffdf7; border-color: var(--frame); }
+.app-tab .count-badge {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--status-complete); color: #fff;
+  font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
+}
+.screen { display: none; }
+.screen.visible { display: block; }
+.screen-caption {
+  margin: 0 0 16px; padding: 10px 14px;
+  background: var(--info-surface); border: 2px dashed var(--info-border);
+  color: var(--info-text); font-size: 13px; border-radius: 6px;
+}
+.screen-caption b { font-weight: 800; }
+
+/* ── 공용 프리미티브 모사 ─────────────────────────────────── */
+.btn {
+  font: inherit; font-weight: 700; cursor: pointer;
+  padding: 7px 14px;
+  background: var(--surface); color: var(--text-primary);
+  border: 2px solid var(--ink-pure); border-radius: 4px;
+  box-shadow: 2px 2px 0 var(--shadow-color);
+}
+.btn:active { transform: translate(2px,2px); box-shadow: none; }
+.btn--primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); }
+.btn--success { background: var(--status-done); color: #fff; }
+.btn--danger  { background: var(--surface); color: var(--danger-accent); border-color: var(--danger-accent); }
+.btn--ghost   { border-color: transparent; box-shadow: none; background: transparent; color: var(--text-secondary); }
+.btn--small   { padding: 4px 10px; font-size: 12px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 700;
+  background: var(--neutral-chip-bg); color: var(--neutral-chip-text);
+  border: 1px solid var(--border);
+}
+.chip--role-dev    { background: var(--info-surface);    color: var(--info-text);    border-color: var(--info-border); }
+.chip--role-review { background: var(--purple-surface);  color: var(--purple-text);  border-color: var(--purple-border); }
+.chip--role-debug  { background: var(--warn-surface);    color: var(--warn-text);    border-color: var(--warn-border); }
+.chip--runtime { background: var(--surface-sunken); border: 2px solid var(--border-strong); color: var(--text-primary); border-radius: 4px; }
+.chip--sessions { background: var(--surface); border: 2px solid var(--frame); border-radius: 4px; box-shadow: 2px 2px 0 var(--shadow-color); }
+.mono { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+.section-heading {
+  display: flex; align-items: center; gap: 10px;
+  margin: 26px 0 12px;
+  font-family: var(--font-heading); font-weight: 900; font-size: 15px;
+  text-transform: uppercase; letter-spacing: .8px;
+}
+.section-heading:first-of-type { margin-top: 0; }
+.section-heading .rule { flex: 1; border-top: 2px dashed var(--border); }
+.section-heading .hint { font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+
+/* ── Inbox (미배정 세션) ──────────────────────────────────── */
+.inbox {
+  border: 3px solid var(--ink-pure); border-radius: var(--radius-card);
+  background: var(--surface); box-shadow: var(--shadow-md);
+}
+.inbox-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--warn-surface);
+  border-bottom: 3px solid var(--ink-pure);
+  font-weight: 800;
+}
+.inbox-header .sub { font-weight: 500; font-size: 12px; color: var(--warn-text); }
+.inbox-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 2px solid var(--border-subtle);
+}
+.inbox-row:last-child { border-bottom: 0; }
+.inbox-row .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--status-progress); border: 2px solid var(--ink-pure); flex: none; }
+.inbox-row .dot--idle { background: var(--text-muted); }
+.inbox-row .body { flex: 1; min-width: 0; }
+.inbox-row .title { font-weight: 700; }
+.inbox-row .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: flex; gap: 10px; flex-wrap: wrap; }
+.inbox-row .actions { display: flex; gap: 8px; flex: none; }
+
+/* 가안 A: 인라인 확장 배정 패널 */
+.assign-inline {
+  margin: 0 14px 14px 36px;
+  border: 2px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface-warm-soft);
+  padding: 12px;
+}
+.assign-inline .lead { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; }
+.assign-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.assign-option {
+  border: 2px solid var(--border); border-radius: 6px;
+  background: var(--surface); padding: 10px 12px; cursor: pointer;
+}
+.assign-option:hover { border-color: var(--info-border); background: var(--info-surface); }
+.assign-option.selected { border-color: var(--border-strong); background: var(--info-surface); box-shadow: 2px 2px 0 var(--shadow-color); }
+.assign-option .opt-title { font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.assign-option .opt-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.assign-work-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.assign-work-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 2px solid var(--border); border-radius: 6px;
+  background: var(--surface); cursor: pointer; font-size: 13px;
+}
+.assign-work-item:hover { border-color: var(--info-border); background: var(--info-surface); }
+.assign-work-item.selected { border-color: var(--border-strong); background: var(--info-surface); font-weight: 700; }
+.assign-work-item .bar { width: 6px; height: 18px; border-radius: 2px; background: var(--status-todo); flex: none; }
+.assign-work-item .ago { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.assign-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.assign-footer .left { margin-right: auto; }
+
+/* ── Work 카드 리스트 ─────────────────────────────────────── */
+.work-list { display: flex; flex-direction: column; gap: 12px; }
+.work-card {
+  position: relative;
+  display: flex; align-items: center; gap: 14px;
+  border: 3px solid var(--ink-pure); border-radius: var(--radius-card);
+  background: var(--surface); box-shadow: var(--shadow-md);
+  padding: 14px 16px 14px 24px;
+}
+.work-card::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px;
+  background: var(--accent, var(--status-todo));
+}
+.work-card .body { flex: 1; min-width: 0; }
+.work-card .title { font-family: var(--font-heading); font-weight: 800; font-size: 16px; }
+.work-card .meta { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 5px; font-size: 12px; color: var(--text-secondary); }
+.work-card .meta .warn { color: var(--warn-text); font-weight: 700; }
+.work-card .side { display: flex; align-items: center; gap: 8px; flex: none; }
+.work-card.resolved { opacity: .82; }
+.work-card .summary-snip {
+  margin-top: 8px; padding: 6px 10px; border-left: 3px solid var(--success-border);
+  background: var(--success-surface); color: var(--success-text);
+  font-size: 12px; border-radius: 0 4px 4px 0;
+}
+
+/* ── 다이얼로그 (DialogSkeleton 모사) ─────────────────────── */
+.dialog-stage { position: relative; min-height: 560px; }
+.dialog-stage .backdrop-content { filter: blur(1px); opacity: .45; pointer-events: none; }
+.dialog-overlay {
+  position: absolute; inset: 0; z-index: 10;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 30px 16px;
+  background: var(--scrim); border-radius: 4px;
+}
+.dialog {
+  width: 640px; max-width: 100%;
+  background: var(--surface);
+  border: 3px solid var(--ink-pure); border-radius: var(--radius-card);
+  box-shadow: 6px 6px 0 var(--border-strong);
+}
+.dialog--wide { width: 760px; }
+.dialog-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-bottom: 3px solid var(--ink-pure);
+  font-family: var(--font-heading); font-weight: 900; font-size: 16px;
+}
+.dialog-header .x { margin-left: auto; font-weight: 900; color: var(--text-muted); cursor: pointer; }
+.dialog-content { padding: 18px; }
+.dialog-footer {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 18px; border-top: 2px solid var(--border-subtle);
+}
+.dialog-footer .grow { flex: 1; }
+
+/* 가안 B: 트리아지 스택 */
+.triage-progress { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.triage-session {
+  border: 2px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface-sunken); padding: 12px 14px; margin-bottom: 14px;
+}
+.triage-session .prompt {
+  margin-top: 8px; padding: 8px 10px;
+  border-left: 3px solid var(--status-todo);
+  background: var(--info-surface); font-size: 12.5px; color: var(--text-secondary);
+  border-radius: 0 4px 4px 0;
+  font-family: var(--font-mono);
+}
+.kbd {
+  display: inline-block; padding: 1px 6px; border: 1px solid var(--border-strong);
+  border-bottom-width: 3px; border-radius: 4px; background: var(--surface);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+}
+
+/* ── Work 상세 ────────────────────────────────────────────── */
+.detail-grid { display: grid; grid-template-columns: 1fr 240px; gap: 16px; }
+.summary-hero {
+  border: 2px solid var(--success-border); border-left: 6px solid var(--status-done);
+  border-radius: 6px; background: var(--success-surface);
+  padding: 12px 16px; margin-bottom: 16px;
+}
+.summary-hero .hero-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+  color: var(--success-text);
+}
+.summary-hero ul { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.65; color: var(--text-primary); }
+.summary-hero .hero-meta { margin-top: 8px; font-size: 11px; color: var(--text-muted); display: flex; gap: 10px; align-items: center; }
+
+/* ── Works 설정 ───────────────────────────────────────────── */
+.settings-card {
+  border: 3px solid var(--ink-pure); border-radius: var(--radius-card);
+  background: var(--surface); box-shadow: var(--shadow-md);
+  max-width: 720px;
+}
+.settings-card .sc-header {
+  padding: 12px 16px; border-bottom: 3px solid var(--ink-pure);
+  font-family: var(--font-heading); font-weight: 900;
+  display: flex; align-items: center; gap: 8px;
+}
+.settings-card .sc-body { padding: 18px; }
+.form-row { display: grid; grid-template-columns: 190px 1fr; gap: 14px; align-items: start; margin-bottom: 18px; }
+.form-row .f-label { font-weight: 800; font-size: 13px; padding-top: 7px; }
+.form-row .f-label .f-sub { display: block; font-weight: 500; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.form-row .f-control { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.select {
+  font: inherit; padding: 7px 30px 7px 10px;
+  border: 2px solid var(--border-strong); border-radius: 4px;
+  background: var(--surface); color: var(--text-primary);
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-primary) 50%), linear-gradient(135deg, var(--text-primary) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+.toggle-pill {
+  display: inline-flex; border: 2px solid var(--border-strong); border-radius: 999px; overflow: hidden;
+  font-size: 12px; font-weight: 700;
+}
+.toggle-pill span { padding: 5px 14px; color: var(--text-secondary); }
+.toggle-pill span.on { background: var(--frame); color: #fffdf7; }
+.session-item {
+  display: flex; align-items: center; gap: 10px;
+  border: 2px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface-sunken); padding: 10px 12px; margin-bottom: 10px;
+}
+.session-item .sbody { flex: 1; min-width: 0; }
+.session-item .stitle { font-weight: 700; font-size: 13px; }
+.session-item .smeta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.panel {
+  border: 2px solid var(--border-strong); border-radius: 6px;
+  background: var(--surface-warm-soft); padding: 12px; margin-bottom: 12px;
+}
+.panel .panel-title { font-weight: 900; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-secondary); margin-bottom: 8px; }
+.panel ul { margin: 0; padding-left: 18px; font-size: 12.5px; }
+.panel li { margin-bottom: 4px; }
+.archive-note {
+  margin-top: 10px; padding: 8px 10px; font-size: 12px;
+  background: var(--success-surface); border: 1px dashed var(--success-border);
+  color: var(--success-text); border-radius: 4px;
+}
+
+/* ── Timeline ─────────────────────────────────────────────── */
+.tl-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.tl-seg { display: inline-flex; border: 2px solid var(--border-strong); border-radius: 999px; overflow: hidden; }
+.tl-seg span { padding: 5px 14px; font-weight: 700; font-size: 12px; color: var(--text-secondary); }
+.tl-seg span.on { background: var(--frame); color: #fffdf7; }
+.tl-legend { margin-left: auto; display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+.tl-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid var(--ink-pure); }
+.timeline {
+  position: relative;
+  border: 3px solid var(--ink-pure); border-radius: var(--radius-card);
+  background: var(--surface); box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.tl-grid { display: grid; grid-template-columns: 180px repeat(7, 1fr); }
+.tl-head {
+  padding: 10px 8px; text-align: center; font-weight: 800; font-size: 12px;
+  border-bottom: 3px solid var(--ink-pure); border-left: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+}
+.tl-head .dow { display: block; font-size: 10px; color: var(--text-muted); font-weight: 600; }
+.tl-head.today { background: var(--frame); color: #fffdf7; }
+.tl-head.today .dow { color: #fca5a5; }
+.tl-head.weekend { color: var(--text-muted); }
+.tl-label {
+  padding: 12px 12px; font-weight: 700; font-size: 13px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; gap: 3px; justify-content: center;
+}
+.tl-label .sub { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.tl-cell { border-left: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); position: relative; min-height: 54px; }
+.tl-cell.weekend { background: repeating-linear-gradient(45deg, transparent, transparent 6px, var(--surface-hover) 6px, var(--surface-hover) 8px); }
+.tl-row { display: contents; }
+.tl-bar {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  left: 6px; right: 6px; height: 30px;
+  border: 2px solid var(--ink-pure); border-radius: 6px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; font-size: 12px; font-weight: 800; color: #fff;
+  box-shadow: 2px 2px 0 var(--shadow-color);
+  white-space: nowrap; overflow: hidden;
+}
+.tl-bar--active { background: var(--status-todo); }
+.tl-bar--done { background: var(--status-done); }
+.tl-bar--discarded { background: #94a3b8; color: #1e293b; }
+.tl-bar--ongoing { border-right-style: dashed; border-right-width: 3px; }
+.tl-bar--ongoing::after { content: "▸ 진행중"; font-size: 10px; font-weight: 900; opacity: .9; margin-left: auto; }
+.tl-bar--clipped-left { border-left-style: dashed; border-radius: 0 6px 6px 0; }
+.tl-bar .cnt {
+  background: rgba(255,255,255,.28); border-radius: 999px;
+  padding: 0 6px; font-size: 10px; height: 16px; display: inline-flex; align-items: center;
+}
+.tl-today-line {
+  position: absolute; top: 46px; bottom: 0; width: 2px;
+  background: #ef4444; z-index: 5; pointer-events: none;
+}
+.tl-today-line::before {
+  content: ""; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  border: 6px solid transparent; border-top-color: #ef4444;
+}
+.tl-head.today .date-pill {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  background: #ef4444; color: #fff; border-radius: 999px;
+}
+.tl-footnote { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="mock-toolbar">
+  <span class="mk-note">📐 최종안 목업 — 클릭/폴링 동작 없음</span>
+  <button data-screen="works" class="active">① Works 탭</button>
+  <button data-screen="triage">② 모두 배정 모달</button>
+  <button data-screen="detail">③ Work 상세</button>
+  <button data-screen="settings">④ Works 설정</button>
+  <button data-screen="timeline">⑤ Timeline 탭</button>
+  <span class="spacer"></span>
+  <button id="theme-toggle">🌙 다크</button>
+</div>
+
+<div class="app">
+  <header class="app-header">
+    <div class="app-logo">AGENT KANBAN</div>
+    <nav class="app-tabs" id="app-tabs">
+      <span class="app-tab">Board</span>
+      <span class="app-tab active" data-tab="works">Works <span class="count-badge">3</span></span>
+      <span class="app-tab" data-tab="timeline">Timeline</span>
+      <span class="app-tab">Wiki</span>
+      <span class="app-tab">Capabilities</span>
+      <span class="app-tab">Scheduler</span>
+      <span class="app-tab">Settings</span>
+    </nav>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       ① WORKS 탭 — 가안 A: Inbox 인라인 확장 배정
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen visible" id="screen-works">
+    <p class="screen-caption"><b>Works 탭 (확정안).</b>
+      미배정 세션이 상단 Inbox에 쌓이고, 행의 [배정] 버튼으로 그 자리에서 인라인 배정.
+      여러 개가 쌓이면 헤더의 <b>[⚡ 모두 배정하기]</b>로 일괄 배정 모달(화면 ②) 진입.
+      탭 뱃지 <b>3</b>이 미배정 개수. 두 번째 행이 펼쳐진 상태의 예시.</p>
+
+    <div class="section-heading">📥 Inbox — 미배정 세션 <span class="hint">모든 세션은 하나의 Work에 소속되어야 합니다</span><span class="rule"></span></div>
+    <div class="inbox">
+      <div class="inbox-header">미배정 세션 3개 <span class="sub">· 오래된 것부터</span>
+        <span style="margin-left:auto"><button class="btn btn--small btn--primary">⚡ 모두 배정하기</button></span>
+      </div>
+
+      <div class="inbox-row">
+        <span class="dot"></span>
+        <div class="body">
+          <div class="title">"quick action 실행 시 git 브랜치가 안 만들어지는 문제 봐줘"</div>
+          <div class="meta">
+            <span class="chip chip--runtime">claude</span>
+            <span>📁 agent-kanban</span>
+            <span class="mono">a3f8c2…e1</span>
+            <span>카드 4 · 12분 전 활동</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--small btn--primary">배정</button>
+          <button class="btn btn--small btn--ghost">대화 보기</button>
+        </div>
+      </div>
+
+      <div class="inbox-row" style="border-bottom:0">
+        <span class="dot dot--idle"></span>
+        <div class="body">
+          <div class="title">"ArgoCD ACL 정책 리뷰해줘. 어제 만든 브랜치 기준으로"</div>
+          <div class="meta">
+            <span class="chip chip--runtime">claude</span>
+            <span>📁 zepetoful-infra</span>
+            <span class="mono">7bd910…4c</span>
+            <span>카드 2 · 어제</span>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--small">접기 ▲</button>
+        </div>
+      </div>
+      <!-- 인라인 확장: 배정 패널 -->
+      <div class="assign-inline">
+        <div class="lead">이 세션을 어디에 연결할까요?</div>
+        <div class="assign-options">
+          <div class="assign-option">
+            <div class="opt-title">＋ 새 Work 만들기</div>
+            <div class="opt-desc">제목 자동 제안: "ArgoCD ACL 정책 리뷰"</div>
+          </div>
+          <div class="assign-option selected">
+            <div class="opt-title">↳ 기존 Work에 연결</div>
+            <div class="opt-desc">같은 projectDir의 active Work를 우선 추천</div>
+          </div>
+        </div>
+        <div class="assign-work-list">
+          <div class="assign-work-item selected">
+            <span class="bar"></span> ArgoCD ACL 개선
+            <span class="chip chip--role-review">역할: 리뷰 ▾</span>
+            <span class="ago">추천 · 같은 디렉토리 · 5일째</span>
+          </div>
+          <div class="assign-work-item">
+            <span class="bar"></span> CDA 토큰 권한 추가
+            <span class="ago">2일째</span>
+          </div>
+          <div class="assign-work-item">
+            <span class="bar" style="background:#94a3b8"></span> Quick Actions QA 폴리시
+            <span class="ago">오늘 시작</span>
+          </div>
+        </div>
+        <div class="assign-footer">
+          <button class="btn btn--small btn--ghost left">이 세션 무시 (Work 없이 보관)</button>
+          <button class="btn btn--small">취소</button>
+          <button class="btn btn--small btn--primary">"ArgoCD ACL 개선"에 연결</button>
+        </div>
+      </div>
+
+      <div class="inbox-row">
+        <span class="dot dot--idle"></span>
+        <div class="body">
+          <div class="title">"bun macro로 빌드타임 상수 넣을 수 있는지 실험"</div>
+          <div class="meta">
+            <span class="chip chip--runtime">claude</span>
+            <span>📁 scratch</span>
+            <span class="mono">c91e77…0a</span>
+            <span>카드 1 · 2주 전 <b style="color:var(--warn-text)">⚠ 오래됨</b></span>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn--small btn--primary">배정</button>
+          <button class="btn btn--small btn--danger">폐기</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-heading">🔵 Active Works <span class="rule"></span></div>
+    <div class="work-list">
+      <div class="work-card" style="--accent: var(--status-todo)">
+        <div class="body">
+          <div class="title">ArgoCD ACL 개선</div>
+          <div class="meta">
+            <span>📁 zepetoful-infra</span>
+            <span>세션 3 (개발 2 · 리뷰 1)</span>
+            <span>시작 8/26</span>
+            <span class="warn">⚠ 5일째 미완료</span>
+          </div>
+        </div>
+        <div class="side">
+          <span class="chip chip--sessions">세션 3</span>
+          <button class="btn btn--small btn--success">완료</button>
+          <button class="btn btn--small">상세</button>
+        </div>
+      </div>
+      <div class="work-card" style="--accent: var(--status-todo)">
+        <div class="body">
+          <div class="title">CDA 토큰 권한 추가</div>
+          <div class="meta"><span>📁 zepetoful-infra</span><span>세션 1</span><span>시작 8/31</span></div>
+        </div>
+        <div class="side">
+          <span class="chip chip--sessions">세션 1</span>
+          <button class="btn btn--small btn--success">완료</button>
+          <button class="btn btn--small">상세</button>
+        </div>
+      </div>
+      <div class="work-card" style="--accent: var(--status-progress)">
+        <div class="body">
+          <div class="title">Quick Actions QA 폴리시</div>
+          <div class="meta"><span>📁 agent-kanban</span><span>세션 1 · <b>지금 실행 중</b></span><span>시작 9/1</span></div>
+        </div>
+        <div class="side">
+          <span class="chip chip--sessions">세션 1</span>
+          <button class="btn btn--small">상세</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-heading">✅ Resolved <span class="hint">최근 7일 · done 시 산하 카드 일괄 archive</span><span class="rule"></span></div>
+    <div class="work-list">
+      <div class="work-card resolved" style="--accent: var(--status-done)">
+        <div class="body">
+          <div class="title">Telegram poller 중복 dispatch 수정</div>
+          <div class="meta"><span>📁 agent-kanban</span><span>세션 2</span><span>8/27 → 8/29 완료</span><span>카드 6개 archive됨 · wiki 문서 1</span></div>
+          <div class="summary-snip">① poller가 재부팅 직후 오프셋을 유실해 중복 dispatch 발생 ② offset 영속화 + dedup 가드 추가 ③ 회귀 테스트 2건 추가</div>
+        </div>
+        <div class="side"><button class="btn btn--small btn--ghost">wiki 보기</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ② 가안 B — 트리아지 모달 (한 장씩 처리)
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-triage">
+    <p class="screen-caption"><b>모두 배정하기 모달 (확정안).</b>
+      Inbox 헤더의 [⚡ 모두 배정하기]로 진입, 미배정 세션을 <b>한 장씩 카드 스택처럼</b> 처리.
+      키보드 단축키(N=새 Work, 1~9=추천 Work, S=건너뛰기, X=폐기)로 빠르게 소화.
+      쌓인 세션이 많을 때(출근 직후 등)에 최적화된 흐름. 인라인 배정(화면 ①)과 동일한 배정 로직 공유.</p>
+
+    <div class="dialog-stage">
+      <div class="backdrop-content">
+        <div class="section-heading">📥 Inbox — 미배정 세션</div>
+        <div class="inbox"><div class="inbox-header">미배정 세션 3개</div></div>
+        <div class="section-heading" style="margin-top:20px">🔵 Active Works</div>
+        <div class="work-list"><div class="work-card"><div class="body"><div class="title">ArgoCD ACL 개선</div></div></div></div>
+      </div>
+
+      <div class="dialog-overlay">
+        <div class="dialog">
+          <div class="dialog-header">세션 배정 <span class="triage-progress">1 / 3</span><span class="x">✕</span></div>
+          <div class="dialog-content">
+            <div class="triage-session">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span class="chip chip--runtime">claude</span>
+                <b>📁 zepetoful-infra</b>
+                <span class="mono">7bd910…4c</span>
+                <span style="font-size:12px;color:var(--text-muted)">어제 · 카드 2</span>
+              </div>
+              <div class="prompt">"ArgoCD ACL 정책 리뷰해줘. 어제 만든 브랜치 기준으로 배포 권한 쪽 위주로 봐줘"</div>
+            </div>
+
+            <div class="assign-options" style="margin-bottom:10px">
+              <div class="assign-option">
+                <div class="opt-title"><span class="kbd">N</span> 새 Work 만들기</div>
+                <div class="opt-desc">"ArgoCD ACL 정책 리뷰" (제목 수정 가능)</div>
+              </div>
+              <div class="assign-option selected">
+                <div class="opt-title"><span class="kbd">1</span> ArgoCD ACL 개선 <span class="chip chip--role-review">리뷰</span></div>
+                <div class="opt-desc">추천 · 같은 projectDir + 시간 근접</div>
+              </div>
+              <div class="assign-option">
+                <div class="opt-title"><span class="kbd">2</span> CDA 토큰 권한 추가</div>
+                <div class="opt-desc">같은 projectDir</div>
+              </div>
+              <div class="assign-option">
+                <div class="opt-title"><span class="kbd">3</span> Quick Actions QA 폴리시</div>
+                <div class="opt-desc">다른 projectDir</div>
+              </div>
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn--small btn--ghost"><span class="kbd">S</span> 건너뛰기</button>
+            <button class="btn btn--small btn--danger"><span class="kbd">X</span> 폐기</button>
+            <span class="grow"></span>
+            <button class="btn btn--primary">연결하고 다음 →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ③ WORK 상세 다이얼로그
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-detail">
+    <p class="screen-caption"><b>Work 상세 (확정안 · DialogSkeleton).</b>
+      <b>Summary(3~5줄)를 타이틀 바로 아래 전폭 히어로 블록</b>으로 배치 — 이 Work가 뭘 했는지 열자마자 보인다.
+      요약은 Works 설정(화면 ④)에서 선택한 LLM 모델로 생성. 아래는 세션 타임라인(좌) + 산출물(우).
+      푸터: 폐기는 왼쪽 분리, <b>완료 시 산하 카드 일괄 done→archive + wiki 파이프라인 자동 트리거</b>.</p>
+
+    <div class="dialog-stage">
+      <div class="backdrop-content">
+        <div class="section-heading">🔵 Active Works</div>
+        <div class="work-list">
+          <div class="work-card"><div class="body"><div class="title">ArgoCD ACL 개선</div></div></div>
+          <div class="work-card"><div class="body"><div class="title">CDA 토큰 권한 추가</div></div></div>
+        </div>
+      </div>
+
+      <div class="dialog-overlay">
+        <div class="dialog dialog--wide">
+          <div class="dialog-header">
+            ArgoCD ACL 개선
+            <span class="chip" style="background:var(--info-surface);color:var(--info-text);border-color:var(--info-border)">ACTIVE · 5일째</span>
+            <span class="x">✕</span>
+          </div>
+          <div class="dialog-content">
+            <div class="summary-hero">
+              <div class="hero-head">📝 Summary <span class="chip" style="margin-left:auto">claude · sonnet</span></div>
+              <ul>
+                <li>appproject별 role 분리로 배포 권한을 최소화하고 sync 권한은 CI 토큰에만 부여</li>
+                <li>dev/stage/prod 환경별 ACL 정책을 분리해 <code>feat/acl-split</code> 브랜치에 적용</li>
+                <li>리뷰에서 wildcard 권한 2건 지적 — 반영 대기 중</li>
+                <li>남은 일: prod 적용 전 drift 검증 + 롤백 시나리오 문서화</li>
+              </ul>
+              <div class="hero-meta">
+                <span>세션 3개 transcript 기반 · 9/2 10:14 생성</span>
+                <button class="btn btn--small" style="margin-left:auto">↻ 다시 생성</button>
+              </div>
+            </div>
+
+            <div class="detail-grid">
+              <div>
+                <div class="panel-title" style="font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-secondary);margin-bottom:8px">연결된 세션 3</div>
+                <div class="session-item">
+                  <span class="chip chip--role-dev">개발</span>
+                  <div class="sbody">
+                    <div class="stitle">"ArgoCD ACL 개선 시작. 현재 정책 파악부터"</div>
+                    <div class="smeta">8/26 · zepetoful-infra · 카드 5 · <span class="mono">f21a…</span></div>
+                  </div>
+                  <button class="btn btn--small btn--ghost">대화</button>
+                </div>
+                <div class="session-item">
+                  <span class="chip chip--role-dev">개발</span>
+                  <div class="sbody">
+                    <div class="stitle">"어제 이어서. appproject별 role 분리 적용"</div>
+                    <div class="smeta">8/28 · zepetoful-infra · 카드 3 · <span class="mono">9c44…</span></div>
+                  </div>
+                  <button class="btn btn--small btn--ghost">대화</button>
+                </div>
+                <div class="session-item" style="border-style:dashed">
+                  <span class="chip chip--role-review">리뷰</span>
+                  <div class="sbody">
+                    <div class="stitle">"ArgoCD ACL 정책 리뷰해줘. 어제 만든 브랜치 기준"</div>
+                    <div class="smeta">9/1 · 방금 Inbox에서 연결됨 · <span class="mono">7bd9…</span></div>
+                  </div>
+                  <button class="btn btn--small btn--ghost">대화</button>
+                </div>
+                <button class="btn btn--small" style="margin-top:2px">＋ 세션 연결</button>
+              </div>
+
+              <div>
+                <div class="panel">
+                  <div class="panel-title">산출물</div>
+                  <ul>
+                    <li>카드 10개 (done 8 · in_progress 2)</li>
+                    <li>wiki 문서: 아직 없음</li>
+                    <li>브랜치: feat/acl-split</li>
+                  </ul>
+                </div>
+                <div class="panel">
+                  <div class="panel-title">타임라인</div>
+                  <ul>
+                    <li>시작 8/26</li>
+                    <li>마지막 활동 오늘 09:41</li>
+                    <li>5일째 active</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="archive-note">
+              ✅ <b>완료</b> 시: 산하 카드 10개 일괄 done 처리 후 archive → wiki 파이프라인이
+              세션 3개 transcript를 종합해 문서 1개 생성 (Obsidian vault)
+            </div>
+          </div>
+          <div class="dialog-footer">
+            <button class="btn btn--danger">폐기…</button>
+            <span class="grow"></span>
+            <button class="btn">📚 Wiki 정리</button>
+            <button class="btn btn--success">✔ 완료 (일괄 archive)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ④ WORKS 설정
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-settings">
+    <p class="screen-caption"><b>Works 설정 (확정안).</b>
+      Wiki의 <code>WikiConfigPanel</code> 패턴을 그대로 따라 Works 탭 안에 ⚙ 설정 패널을 둔다.
+      Summary 생성용 LLM 모델은 <b>wiki와 독립적으로 works 전용 설정</b>으로 관리
+      (settings store의 <code>works.*</code> 키). 요약 줄 수는 3~5줄 선택.</p>
+
+    <div class="section-heading">⚙ Works 설정 <span class="hint">Works 탭 우상단 기어 아이콘으로 진입</span><span class="rule"></span></div>
+    <div class="settings-card">
+      <div class="sc-header">⚙ Works 설정</div>
+      <div class="sc-body">
+        <div class="form-row">
+          <div class="f-label">Summary 모델
+            <span class="f-sub">works.summary_model — wiki 모델과 독립</span>
+          </div>
+          <div class="f-control">
+            <select class="select"><option>claude</option></select>
+            <select class="select"><option>claude-sonnet-5</option></select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="f-label">Summary 줄 수
+            <span class="f-sub">works.summary_lines · 3~5줄</span>
+          </div>
+          <div class="f-control">
+            <span class="toggle-pill"><span>3줄</span><span class="on">4줄</span><span>5줄</span></span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="f-label">배정 추천
+            <span class="f-sub">Inbox에서 기존 Work 추천 기준</span>
+          </div>
+          <div class="f-control" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" checked> 같은 projectDir의 active Work 우선</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" checked> resume 체인(<code class="mono">resumeSessionId</code>)이면 같은 Work 자동 추천</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="f-label">완료 시 동작
+            <span class="f-sub">Work done → 산하 카드 처리</span>
+          </div>
+          <div class="f-control" style="flex-direction:column;align-items:flex-start;gap:6px">
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="radio" name="done" checked> 일괄 done→archive + wiki 파이프라인 트리거</label>
+            <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="radio" name="done"> archive 전 확인 다이얼로그 표시</label>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:0">
+          <div class="f-label">오래된 Work 경고
+            <span class="f-sub">works.stale_days</span>
+          </div>
+          <div class="f-control">
+            <select class="select"><option>5일 이상 미완료 시 ⚠ 표시</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <span class="grow"></span>
+        <button class="btn btn--primary">저장</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ⑤ TIMELINE 탭 — 주간 뷰
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-timeline">
+    <p class="screen-caption"><b>Timeline 탭 — 주간 뷰 (ClickUp 스타일).</b>
+      행 = Work, 바 = <code>startedAt → resolvedAt</code>.
+      <b>미완료 Work는 바가 오늘까지 계속 연장</b>되고 오른쪽 끝이 점선(▸ 진행중).
+      지난주에 시작한 Work는 왼쪽이 점선으로 클리핑. 바 클릭 → Work 상세.</p>
+
+    <div class="tl-controls">
+      <button class="btn btn--small">◀</button>
+      <b style="font-family:var(--font-heading);font-size:16px">2026년 8월 31일 – 9월 6일</b>
+      <button class="btn btn--small">▶</button>
+      <button class="btn btn--small btn--ghost">오늘</button>
+      <span class="tl-seg"><span class="on">주간</span><span>월간</span></span>
+      <div class="tl-legend">
+        <span><i style="background:var(--status-todo)"></i>active</span>
+        <span><i style="background:var(--status-done)"></i>done</span>
+        <span><i style="background:#94a3b8"></i>discarded</span>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="tl-today-line" style="left: calc(180px + (100% - 180px) / 7 * 2.5)"></div>
+      <div class="tl-grid">
+        <div class="tl-head" style="border-left:0;text-align:left;padding-left:14px">Work</div>
+        <div class="tl-head"><span class="dow">월</span>8/31</div>
+        <div class="tl-head"><span class="dow">화</span>9/1</div>
+        <div class="tl-head today"><span class="dow">수</span><span class="date-pill">9/2</span></div>
+        <div class="tl-head"><span class="dow">목</span>9/3</div>
+        <div class="tl-head"><span class="dow">금</span>9/4</div>
+        <div class="tl-head weekend"><span class="dow">토</span>9/5</div>
+        <div class="tl-head weekend"><span class="dow">일</span>9/6</div>
+
+        <!-- row 1: 지난주 시작, 미완료 → 오늘까지 연장 -->
+        <div class="tl-label">ArgoCD ACL 개선 <span class="sub">zepetoful-infra · 8/26 시작</span></div>
+        <div class="tl-cell" style="position:relative">
+          <div class="tl-bar tl-bar--active tl-bar--ongoing tl-bar--clipped-left" style="left:0; width: calc(300% - 6px); right:auto">◂ 8/26부터 &nbsp;ArgoCD ACL 개선 <span class="cnt">세션 3</span></div>
+        </div>
+        <div class="tl-cell"></div><div class="tl-cell"></div><div class="tl-cell"></div>
+        <div class="tl-cell"></div><div class="tl-cell weekend"></div><div class="tl-cell weekend"></div>
+
+        <!-- row 2: 월~화 완료 -->
+        <div class="tl-label">CDA 토큰 권한 추가 <span class="sub">zepetoful-infra</span></div>
+        <div class="tl-cell" style="position:relative">
+          <div class="tl-bar tl-bar--done" style="width: calc(200% - 12px); right:auto">CDA 토큰 권한 추가 <span class="cnt">세션 1</span></div>
+        </div>
+        <div class="tl-cell"></div><div class="tl-cell"></div><div class="tl-cell"></div>
+        <div class="tl-cell"></div><div class="tl-cell weekend"></div><div class="tl-cell weekend"></div>
+
+        <!-- row 3: 화 시작, 미완료 → 오늘까지 -->
+        <div class="tl-label">Quick Actions QA 폴리시 <span class="sub">agent-kanban</span></div>
+        <div class="tl-cell"></div>
+        <div class="tl-cell" style="position:relative">
+          <div class="tl-bar tl-bar--active tl-bar--ongoing" style="width: calc(200% - 12px); right:auto">Quick Actions QA <span class="cnt">세션 1</span></div>
+        </div>
+        <div class="tl-cell"></div><div class="tl-cell"></div>
+        <div class="tl-cell"></div><div class="tl-cell weekend"></div><div class="tl-cell weekend"></div>
+
+        <!-- row 4: 수요일 폐기 -->
+        <div class="tl-label">bun macro 실험 <span class="sub">scratch · 8/19 시작</span></div>
+        <div class="tl-cell" style="position:relative">
+          <div class="tl-bar tl-bar--discarded tl-bar--clipped-left" style="left:0; width: calc(300% - 6px); right:auto">◂ 8/19부터 &nbsp;bun macro 실험 · 9/2 폐기</div>
+        </div>
+        <div class="tl-cell"></div><div class="tl-cell"></div><div class="tl-cell"></div>
+        <div class="tl-cell"></div><div class="tl-cell weekend"></div><div class="tl-cell weekend"></div>
+      </div>
+    </div>
+    <p class="tl-footnote">
+      · 미배정 세션은 타임라인에 나타나지 않음 → Inbox 배정을 유도. 폐기된 Work는 폐기일에 바가 끊기고 회색 처리.<br>
+      · 월간 뷰는 동일 그리드를 4~5주로 확장, 바 높이 축소. 행 정렬: 미완료(오래된 순) → 완료(최근 순).
+    </p>
+  </section>
+</div>
+
+<script>
+  const buttons = document.querySelectorAll('.mock-toolbar button[data-screen]');
+  const screens = document.querySelectorAll('.screen');
+  const tabWorks = document.querySelector('[data-tab="works"]');
+  const tabTimeline = document.querySelector('[data-tab="timeline"]');
+  buttons.forEach(btn => btn.addEventListener('click', () => {
+    buttons.forEach(b => b.classList.toggle('active', b === btn));
+    screens.forEach(s => s.classList.toggle('visible', s.id === 'screen-' + btn.dataset.screen));
+    const isTimeline = btn.dataset.screen === 'timeline';
+    tabWorks.classList.toggle('active', !isTimeline);
+    tabTimeline.classList.toggle('active', isTimeline);
+  }));
+  const themeBtn = document.getElementById('theme-toggle');
+  themeBtn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.getAttribute('data-theme') !== 'dark';
+    root.setAttribute('data-theme', dark ? 'dark' : 'light');
+    themeBtn.textContent = dark ? '☀️ 라이트' : '🌙 다크';
+  });
+</script>
+</body>
+</html>

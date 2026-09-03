@@ -1,5 +1,6 @@
 import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
+import type { WorkStore } from '../../core/work-store';
 import type {
   CardWikiState,
   CodexReasoningEffort,
@@ -33,7 +34,31 @@ const CHECK_INTERVAL = 60_000;
 const LOG_CAP = 200;
 
 function groupLabel(group: WikiSourceGroup): string {
-  return group.sessionTitle?.trim() || group.cards[0]?.title || group.key;
+  return group.workTitle?.trim() || group.sessionTitle?.trim() || group.cards[0]?.title || group.key;
+}
+
+/**
+ * Best-effort transcript enrichment (claude runtime only). A session group uses
+ * its first claude card; a Work group concatenates one transcript per
+ * contributing session so the single document covers the whole Work.
+ */
+function loadGroupTranscript(group: WikiSourceGroup): string | undefined {
+  if (!group.workId) {
+    const source = group.cards.find(c => c.agentRuntime === 'claude');
+    return source ? loadClaudeTranscript(source) : undefined;
+  }
+
+  const seen = new Set<string>();
+  const sections: string[] = [];
+  for (const card of group.cards) {
+    if (card.agentRuntime !== 'claude' || !card.sessionId || seen.has(card.sessionId)) continue;
+    seen.add(card.sessionId);
+    const transcript = loadClaudeTranscript(card);
+    if (transcript) {
+      sections.push(`#### 세션: ${card.sessionTitle?.trim() || card.title}\n${transcript}`);
+    }
+  }
+  return sections.length > 0 ? sections.join('\n\n') : undefined;
 }
 
 interface WikiRunMetadata {
@@ -42,23 +67,62 @@ interface WikiRunMetadata {
   effort: CodexReasoningEffort;
 }
 
-/** Group pending cards by session so one work stream becomes one document. */
-export function groupCardsBySession(cards: KanbanCard[]): WikiSourceGroup[] {
+/** A session's owning Work, as needed for wiki grouping. */
+export interface WorkGroupInfo {
+  workId: string;
+  title: string;
+  projectDir?: string;
+}
+
+/** sessionId → the Work that owns it. Sessions outside any Work are absent. */
+export type WorkSessionIndex = Map<string, WorkGroupInfo>;
+
+/**
+ * Group pending cards so one work stream becomes one document.
+ *
+ * Default (and the behaviour whenever `workIndex` is omitted or the session is
+ * not in a Work): one group per `sessionId`, sessionless cards on their own.
+ * When a card's session belongs to a Work, every session of that Work collapses
+ * into a single `work:<id>` group, so a completed Work yields one document
+ * titled after the Work.
+ */
+export function groupCardsBySession(
+  cards: KanbanCard[],
+  workIndex?: WorkSessionIndex,
+): WikiSourceGroup[] {
   const groups = new Map<string, WikiSourceGroup>();
   for (const card of cards) {
-    const key = card.sessionId ?? `card:${card.id}`;
+    const work = card.sessionId ? workIndex?.get(card.sessionId) : undefined;
+    const key = work ? `work:${work.workId}` : card.sessionId ?? `card:${card.id}`;
     let group = groups.get(key);
     if (!group) {
-      group = { key, sessionId: card.sessionId, cards: [] };
+      group = work
+        ? { key, workId: work.workId, workTitle: work.title, sessionIds: [], cards: [], projectDir: work.projectDir }
+        : { key, sessionId: card.sessionId, cards: [] };
       groups.set(key, group);
     }
     group.cards.push(card);
-    group.sessionTitle = group.sessionTitle ?? card.sessionTitle;
+    // Work groups span sessions, so `sessionId`/`sessionTitle` stay unset and
+    // the contributing sessions are recorded as a list below instead.
+    if (!group.workId) {
+      group.sessionTitle = group.sessionTitle ?? card.sessionTitle;
+    }
     group.projectDir = group.projectDir ?? card.projectDir;
   }
   const result = [...groups.values()];
   for (const group of result) {
     group.cards.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (group.workId) {
+      // Derived after sorting so the session list is chronological and
+      // deterministic, independent of the order pending cards came back in.
+      const sessionIds: string[] = [];
+      for (const card of group.cards) {
+        if (card.sessionId && !sessionIds.includes(card.sessionId)) {
+          sessionIds.push(card.sessionId);
+        }
+      }
+      group.sessionIds = sessionIds;
+    }
   }
   return result;
 }
@@ -88,11 +152,14 @@ export class WikiWorker {
   private readonly concurrency: number;
   private writeChain: Promise<void> = Promise.resolve();
 
+  private readonly workStore?: WorkStore;
+
   constructor(
     private readonly store: KanbanStore,
     private readonly settingsStore: SettingsStore,
-    options?: { llmRunner?: WikiLlmRunner; concurrency?: number },
+    options?: { llmRunner?: WikiLlmRunner; concurrency?: number; workStore?: WorkStore },
   ) {
+    this.workStore = options?.workStore;
     this.concurrency = Math.max(1, options?.concurrency ?? 1);
     this.llmRunner = options?.llmRunner ?? createWikiLlm({
       settingsStore,
@@ -313,16 +380,28 @@ export class WikiWorker {
       const pending = await this.store.getWikiPendingCards();
       if (pending.length === 0) return;
 
+      const { index: workIndex, discardedSessionIds } = await this.loadWorkGrouping();
+      // A discarded Work's cards leave the queue without an LLM call.
+      const excluded = discardedSessionIds.size > 0
+        ? pending.filter(c => c.sessionId !== undefined && discardedSessionIds.has(c.sessionId))
+        : [];
+      if (excluded.length > 0) {
+        await this.skipDiscardedWorkCards(excluded);
+      }
+      const excludedIds = new Set(excluded.map(c => c.id));
+      const queueable = excludedIds.size > 0 ? pending.filter(c => !excludedIds.has(c.id)) : pending;
+      if (queueable.length === 0) return;
+
       const writer = new WikiVaultWriter(config.vaultDir);
       writer.ensureVaultDir();
 
       const metadata = this.runMetadata(config);
-      const groups = groupCardsBySession(pending);
-      this.totalInRun = pending.length;
+      const groups = groupCardsBySession(queueable, workIndex);
+      this.totalInRun = queueable.length;
       this.processedInRun = 0;
       this.log(
         'info',
-        `처리 시작 — ${pending.length}개 카드, ${groups.length}개 세션 그룹 (concurrency ${this.concurrency}) · ${metadata.route}/${metadata.model} · effort ${metadata.effort}`,
+        `처리 시작 — ${queueable.length}개 카드, ${groups.length}개 그룹 (concurrency ${this.concurrency}) · ${metadata.route}/${metadata.model} · effort ${metadata.effort}`,
         metadata,
       );
 
@@ -349,11 +428,7 @@ export class WikiWorker {
   }
 
   private async processGroup(group: WikiSourceGroup, writer: WikiVaultWriter, metadata: WikiRunMetadata): Promise<void> {
-    // Best-effort transcript enrichment (claude runtime only).
-    const transcriptSource = group.cards.find(c => c.agentRuntime === 'claude');
-    if (transcriptSource) {
-      group.transcript = loadClaudeTranscript(transcriptSource);
-    }
+    group.transcript = loadGroupTranscript(group);
     const sourceDepth = group.transcript ? 'transcript' as const : 'card' as const;
     const now = new Date().toISOString();
 
@@ -378,6 +453,11 @@ export class WikiWorker {
     }
 
     const doc = parseClassifyResult(await this.llmRunner(buildClassifyPrompt(group), metadata));
+    // A Work group is one document named after the Work itself, so the user
+    // finds it under the title they gave the work.
+    if (group.workTitle?.trim()) {
+      doc.title = group.workTitle.trim();
+    }
     // Reprocessing overwrites the previous document instead of orphaning it.
     const overwritePath = group.cards.find(c => c.wiki?.docPath)?.wiki?.docPath;
     await this.withVaultWriteLock(async () => {
@@ -387,6 +467,8 @@ export class WikiWorker {
           cardIds: group.cards.map(c => c.id),
           sessionId: group.sessionId,
           sessionTitle: group.sessionTitle,
+          workId: group.workId,
+          sessionIds: group.sessionIds,
           projectDir: group.projectDir,
           processedAt: now,
           promptVersion: WIKI_PROMPT_VERSION,
@@ -413,6 +495,60 @@ export class WikiWorker {
       }));
     });
     this.log('info', `keep | ${doc.type} · ${doc.title} (cards: ${group.cards.length})`, metadata);
+  }
+
+  /**
+   * Build the session → Work index for grouping, plus the sessions of discarded
+   * Works. Grouping is an enhancement layered on the session default: when no
+   * `WorkStore` is wired (or reading it fails) the pipeline keeps its exact
+   * per-session behaviour rather than stalling.
+   */
+  private async loadWorkGrouping(): Promise<{ index: WorkSessionIndex; discardedSessionIds: Set<string> }> {
+    const index: WorkSessionIndex = new Map();
+    const discardedSessionIds = new Set<string>();
+    if (!this.workStore) return { index, discardedSessionIds };
+
+    try {
+      for (const work of await this.workStore.getWorks()) {
+        for (const link of work.sessionLinks) {
+          if (work.status === 'discarded') {
+            discardedSessionIds.add(link.sessionId);
+            continue;
+          }
+          index.set(link.sessionId, {
+            workId: work.id,
+            title: work.title,
+            projectDir: work.projectDir ?? link.projectDir,
+          });
+        }
+      }
+    } catch (e) {
+      this.log('warn', `Work 그룹핑 정보를 읽지 못해 세션 단위로 처리합니다 — ${e instanceof Error ? e.message : String(e)}`);
+      return { index: new Map(), discardedSessionIds: new Set() };
+    }
+    return { index, discardedSessionIds };
+  }
+
+  /**
+   * Retire the cards of a discarded Work: the user abandoned that work, so there
+   * is nothing worth preserving. Recorded as a terminal `skipped` state (not
+   * left `pending`) so the queue stops re-evaluating them every pass.
+   */
+  private async skipDiscardedWorkCards(cards: KanbanCard[]): Promise<void> {
+    const now = new Date().toISOString();
+    const updates: Record<string, CardWikiState> = {};
+    for (const card of cards) {
+      updates[card.id] = {
+        ...card.wiki,
+        status: 'processed',
+        decision: 'skipped',
+        skipReason: 'Work discarded',
+        processedAt: now,
+        promptVersion: WIKI_PROMPT_VERSION,
+      };
+    }
+    await this.store.updateArchivedCardsWiki(updates);
+    this.log('info', `skip | 폐기된 Work의 카드 ${cards.length}개 — wiki 대상에서 제외`);
   }
 
   private async recordFailure(group: WikiSourceGroup, message: string, metadata: WikiRunMetadata): Promise<void> {

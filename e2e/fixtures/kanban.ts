@@ -1,12 +1,19 @@
 import { test as base } from '@playwright/test';
-import type { CreateQuickActionInput, QuickActionView } from '../../src/core/types';
+import type {
+  CreateQuickActionInput,
+  CreateWorkInput,
+  QuickActionView,
+  Work,
+} from '../../src/core/types';
 import {
   apiCreateCard,
   apiCreateQuickAction,
   apiCreateScript,
+  apiCreateWork,
   apiDeleteCard,
   apiDeleteQuickAction,
   apiDeleteScript,
+  apiDeleteWork,
   apiUpdateCard,
   type ScriptEntry,
 } from '../helpers/api';
@@ -27,6 +34,8 @@ export const test = base.extend<{
   seedCardWithStatus: (data: { title: string; description: string } & Record<string, unknown>, status: string, extras?: Record<string, unknown>) => Promise<Card>;
   seedQuickAction: (data: CreateQuickActionInput) => Promise<QuickActionView>;
   seedScript: (data: { name: string; content: string; description?: string; language?: string; projectDir?: string }) => Promise<ScriptEntry>;
+  trackWork: (id: string) => void;
+  seedWork: (data: CreateWorkInput) => Promise<Work>;
 }>({
   trackCard: async ({}, use) => {
     const ids: string[] = [];
@@ -89,6 +98,24 @@ export const test = base.extend<{
       const script = await apiCreateScript(data);
       trackScript(script.id);
       return script;
+    });
+  },
+
+  trackWork: async ({}, use) => {
+    const ids: string[] = [];
+    await use((id: string) => { ids.push(id); });
+    // Deleting a Work releases its sessions back into the Inbox, so teardown
+    // order relative to trackCard does not matter — the cards go away too.
+    for (const id of ids.reverse()) {
+      try { await apiDeleteWork(id); } catch { /* ignore */ }
+    }
+  },
+
+  seedWork: async ({ trackWork }, use) => {
+    await use(async (data) => {
+      const work = await apiCreateWork(data);
+      trackWork(work.id);
+      return work;
     });
   },
 });

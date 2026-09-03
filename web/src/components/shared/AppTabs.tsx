@@ -1,12 +1,14 @@
 import React, { useRef } from 'react';
 
-export type MainTab = 'board' | 'wiki' | 'scheduler' | 'capabilities' | 'settings';
+export type MainTab = 'board' | 'works' | 'timeline' | 'wiki' | 'scheduler' | 'capabilities' | 'settings';
 
 /** Render + keyboard order of the main tab strip. */
-export const MAIN_TABS: MainTab[] = ['board', 'wiki', 'capabilities', 'scheduler', 'settings'];
+export const MAIN_TABS: MainTab[] = ['board', 'works', 'timeline', 'wiki', 'capabilities', 'scheduler', 'settings'];
 
 export const TAB_IDS = {
   board: 'app-tab-board',
+  works: 'app-tab-works',
+  timeline: 'app-tab-timeline',
   wiki: 'app-tab-wiki',
   scheduler: 'app-tab-scheduler',
   capabilities: 'app-tab-capabilities',
@@ -15,6 +17,8 @@ export const TAB_IDS = {
 
 export const PANEL_IDS = {
   board: 'app-panel-board',
+  works: 'app-panel-works',
+  timeline: 'app-panel-timeline',
   wiki: 'app-panel-wiki',
   scheduler: 'app-panel-scheduler',
   capabilities: 'app-panel-capabilities',
@@ -23,6 +27,8 @@ export const PANEL_IDS = {
 
 const TAB_LABELS: Record<MainTab, string> = {
   board: 'Board',
+  works: 'Works',
+  timeline: 'Timeline',
   wiki: 'Wiki',
   capabilities: 'Capabilities',
   scheduler: 'Scheduler',
@@ -32,12 +38,16 @@ const TAB_LABELS: Record<MainTab, string> = {
 interface AppTabsProps {
   activeTab: MainTab;
   onActivate: (tab: MainTab) => void;
+  /** Optional count badges rendered next to a tab label (e.g. unassigned Works Inbox). */
+  badges?: Partial<Record<MainTab, number>>;
 }
 
 /** Main section tab strip with roving-tabindex keyboard navigation. */
-export function AppTabs({ activeTab, onActivate }: AppTabsProps) {
+export function AppTabs({ activeTab, onActivate, badges }: AppTabsProps) {
   const tabRefs = useRef<Record<MainTab, HTMLButtonElement | null>>({
     board: null,
+    works: null,
+    timeline: null,
     wiki: null,
     scheduler: null,
     capabilities: null,
@@ -86,25 +96,36 @@ export function AppTabs({ activeTab, onActivate }: AppTabsProps) {
 
   return (
     <div className="app-tabs" role="tablist" aria-label="Main sections">
-      {MAIN_TABS.map((tab) => (
-        <button
-          key={tab}
-          type="button"
-          ref={(element) => {
-            tabRefs.current[tab] = element;
-          }}
-          id={TAB_IDS[tab]}
-          role="tab"
-          aria-selected={activeTab === tab}
-          aria-controls={PANEL_IDS[tab]}
-          tabIndex={activeTab === tab ? 0 : -1}
-          className={`app-tab${activeTab === tab ? ' app-tab--active' : ''}`}
-          onClick={() => activateTab(tab)}
-          onKeyDown={(event) => handleTabKeyDown(event, tab)}
-        >
-          {TAB_LABELS[tab]}
-        </button>
-      ))}
+      {MAIN_TABS.map((tab) => {
+        const badgeCount = badges?.[tab] ?? 0;
+        return (
+          <button
+            key={tab}
+            type="button"
+            ref={(element) => {
+              tabRefs.current[tab] = element;
+            }}
+            id={TAB_IDS[tab]}
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={PANEL_IDS[tab]}
+            tabIndex={activeTab === tab ? 0 : -1}
+            className={`app-tab${activeTab === tab ? ' app-tab--active' : ''}`}
+            onClick={() => activateTab(tab)}
+            onKeyDown={(event) => handleTabKeyDown(event, tab)}
+          >
+            {TAB_LABELS[tab]}
+            {badgeCount > 0 && (
+              <span
+                className="app-tab-badge"
+                aria-label={`${badgeCount} unassigned`}
+              >
+                {badgeCount}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

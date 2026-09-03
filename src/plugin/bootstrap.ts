@@ -5,6 +5,7 @@ import { SchedulerStore } from '../core/scheduler-store';
 import { SettingsStore } from '../core/settings-store';
 import { ScriptStore } from '../core/script-store';
 import { QuickActionStore } from '../core/quick-action-store';
+import { WorkStore } from '../core/work-store';
 import { SkillStore } from '../core/skill-store';
 import { SkillRootsStore } from '../core/skill-roots-store';
 import { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -40,6 +41,7 @@ export interface KanbanAppStores {
   settingsStore: SettingsStore;
   scriptStore: ScriptStore;
   quickActionStore: QuickActionStore;
+  workStore: WorkStore;
   skillStore: SkillStore;
   skillRootsStore: SkillRootsStore;
   placementTargetsStore: PlacementTargetsStore;
@@ -116,6 +118,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   await sweepWikiInternalCards(store);
   const scriptStore = new ScriptStore(dataDir);
   const quickActionStore = new QuickActionStore(dataDir, scriptStore);
+  const workStore = new WorkStore(dataDir);
   const skillStore = new SkillStore(dataDir);
   const skillRootsStore = new SkillRootsStore(dataDir);
   const placementTargetsStore = new PlacementTargetsStore(dataDir);
@@ -129,6 +132,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     settingsStore,
     scriptStore,
     quickActionStore,
+    workStore,
     skillStore,
     skillRootsStore,
     placementTargetsStore,
@@ -191,7 +195,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
 
   // Wiki worker — consumes wiki-pending archived cards into the Obsidian
   // vault. Only runs on the singleton runtime owner (start/stop below).
-  const wikiWorker = new WikiWorker(store, settingsStore);
+  // The WorkStore lets the wiki group a Work's sessions into one document and
+  // skip the cards of discarded Works.
+  const wikiWorker = new WikiWorker(store, settingsStore, { workStore });
 
   // Discover skills from disk and register them so user-authored skills
   // surface as runtime commands without a code change. Best-effort: a scan
@@ -228,6 +234,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     dispatch.runStore,
     quickActionStore,
     scriptExecutionService,
+    workStore,
   );
   const port = await monitor.start();
   if (port) {

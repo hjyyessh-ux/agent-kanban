@@ -8,6 +8,8 @@ export interface WikiDocMeta {
   sessionId?: string;
   sessionTitle?: string;
   projectDir?: string;
+  workId?: string;        // Work-grouped documents: the owning Work
+  sessionIds?: string[];  // Work-grouped documents: every contributing session
   processedAt: string;
   promptVersion: number;
   sourceDepth: 'card' | 'transcript';
@@ -90,6 +92,10 @@ export class WikiVaultWriter {
       `cards: [${meta.cardIds.map(id => `"${id}"`).join(', ')}]`,
       ...(meta.sessionId ? [`session: "${escapeYaml(meta.sessionId)}"`] : []),
       ...(meta.sessionTitle ? [`session_title: "${escapeYaml(meta.sessionTitle)}"`] : []),
+      ...(meta.workId ? [`work: "${escapeYaml(meta.workId)}"`] : []),
+      ...(meta.sessionIds?.length
+        ? [`sessions: [${meta.sessionIds.map(id => `"${escapeYaml(id)}"`).join(', ')}]`]
+        : []),
       ...(meta.projectDir ? [`project: "${escapeYaml(meta.projectDir)}"`] : []),
       `processed: ${meta.processedAt}`,
       `prompt_version: ${meta.promptVersion}`,

@@ -1,9 +1,17 @@
 import type {
+  AddWorkSessionInput,
   CreateQuickActionInput,
+  CreateWorkInput,
   QuickActionView,
   RunQuickActionInput,
   RunQuickActionResponse,
   UpdateQuickActionInput,
+  Work,
+  WorkInboxSession,
+  WorkPatchInput,
+  WorkStatus,
+  WorksConfigDto,
+  WorksConfigInput,
 } from '../../src/core/types';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:24681';
@@ -67,6 +75,12 @@ export async function apiDeleteCard(id: string): Promise<void> {
 export async function apiGetCards(): Promise<Card[]> {
   const res = await fetch(`${BASE}/api/cards`);
   return parseJson<Card[]>(res, 'Get cards failed');
+}
+
+/** Board cards plus archived ones — used to assert an archive actually happened. */
+export async function apiGetCardsIncludingArchived(): Promise<Card[]> {
+  const res = await fetch(`${BASE}/api/cards?include_archived=true`);
+  return parseJson<Card[]>(res, 'Get cards (archived) failed');
 }
 
 export async function apiArchiveCards(cardIds?: string[]): Promise<{ archivedCount: number; archiveMonth: string }> {
@@ -295,3 +309,95 @@ export async function apiE2EGetDispatchAttempts(cardId: string): Promise<number>
 }
 
 export type { SchedulerEntry, SchedulerRun };
+
+// ── Works ────────────────────────────────────────────────────────────────────
+
+export async function apiGetWorks(status?: WorkStatus): Promise<Work[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${BASE}/api/works${query}`);
+  return parseJson<Work[]>(res, 'Get works failed');
+}
+
+export async function apiGetWork(id: string): Promise<Work> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}`);
+  return parseJson<Work>(res, 'Get work failed');
+}
+
+export async function apiCreateWork(data: CreateWorkInput): Promise<Work> {
+  const res = await fetch(`${BASE}/api/works`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<Work>(res, 'Create work failed');
+}
+
+export async function apiUpdateWork(id: string, data: WorkPatchInput): Promise<Work> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<Work>(res, 'Update work failed');
+}
+
+export async function apiDeleteWork(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok && res.status !== 404) throw new Error(`Delete work failed: ${res.status}`);
+}
+
+export async function apiAddWorkSession(id: string, data: AddWorkSessionInput): Promise<Work> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<Work>(res, 'Add work session failed');
+}
+
+export async function apiGetWorkInbox(): Promise<WorkInboxSession[]> {
+  const res = await fetch(`${BASE}/api/works/inbox`);
+  return parseJson<WorkInboxSession[]>(res, 'Get work inbox failed');
+}
+
+export async function apiIgnoreWorkSession(sessionId: string): Promise<string[]> {
+  const res = await fetch(`${BASE}/api/works/ignore-session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+  });
+  const body = await parseJson<{ ignoredSessionIds: string[] }>(res, 'Ignore session failed');
+  return body.ignoredSessionIds;
+}
+
+export async function apiGetWorksConfig(): Promise<WorksConfigDto> {
+  const res = await fetch(`${BASE}/api/works/config`);
+  return parseJson<WorksConfigDto>(res, 'Get works config failed');
+}
+
+export async function apiSaveWorksConfig(data: WorksConfigInput): Promise<WorksConfigDto> {
+  const res = await fetch(`${BASE}/api/works/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return parseJson<WorksConfigDto>(res, 'Save works config failed');
+}
+
+/**
+ * Put the Works domain into a known-empty state: every Work is deleted (which
+ * releases its sessions back into the Inbox), then every Inbox session left over
+ * from other specs is ignored. Specs run sequentially against one shared server
+ * and the Works tab reads global state, so without this the Inbox/Active lists
+ * and the tab badge would carry foreign sessions from earlier spec files.
+ */
+export async function apiResetWorksState(): Promise<void> {
+  for (const work of await apiGetWorks()) {
+    await apiDeleteWork(work.id);
+  }
+  for (const session of await apiGetWorkInbox()) {
+    await apiIgnoreWorkSession(session.sessionId);
+  }
+}

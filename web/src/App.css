@@ -20,6 +20,13 @@
   display: flex;
   gap: 0;
   margin-left: 24px;
+  /* The strip must shrink and scroll rather than widen the document: seven tabs
+     no longer fit a 768px viewport, and a flex item defaults to min-width: auto,
+     which would push `documentElement.scrollWidth` past the window. Keep both
+     declarations together when adding a tab. */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .app-tab {
@@ -45,6 +52,24 @@
 .app-tab--active {
   color: var(--kv2-text-primary);
   border-bottom-color: var(--kv2-status-todo-accent);
+}
+
+.app-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-status-complete-accent);
+  color: var(--kv2-text-inverse);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0;
+  vertical-align: middle;
 }
 
 .app-header-inner {

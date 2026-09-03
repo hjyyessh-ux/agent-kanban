@@ -232,6 +232,96 @@ top-level `todo` 카드를 **KST 기준 미래 시각**에 한 번만 자동 dis
 { "cardIds": ["optional-card-id"] }
 ```
 
+## Works API
+
+여러 세션을 하나로 묶는 작업 단위(`Work`) API입니다. 세션 : Work = N : 1이며, Work는 자동 생성되지 않고 Inbox triage를 통해서만 만들어집니다. 도메인 전체 설명은 [`./works.md`](./works.md)를 참고하세요.
+
+서버에 `workStore`가 주입되지 않은 환경에서는 아래 모든 엔드포인트가 `503 Works not available`을 반환합니다.
+
+### `GET /api/works`
+
+Work 목록을 `updatedAt` 내림차순으로 반환합니다.
+
+쿼리:
+
+- `status=active|done|discarded` (잘못된 값은 `400`)
+
+### `POST /api/works`
+
+Work를 생성합니다. 항상 `status: 'active'`로 시작합니다.
+
+필드:
+
+- `title` (required)
+- `projectDir`
+- `startedAt` (기본값: 생성 시각)
+
+### `GET /api/works/:id`
+
+단일 Work를 반환합니다.
+
+### `PATCH /api/works/:id`
+
+`WorkPatchInput`을 받습니다: `title`, `status`, `resolution`, `projectDir`, `startedAt`, `resolvedAt`, `summary`, `archivedAt`, `confirmArchive`.
+
+- `status: 'done'`은 산하 모든 세션의 카드를 `done`으로 바꾼 뒤 일괄 archive합니다(→ Wiki 처리 큐로 넘어감). 카드 전이는 순수 store 쓰기이므로 큐 자동 dispatch를 트리거하지 않습니다.
+- `works.done_confirm`이 켜져 있으면 `confirmArchive: true` 없이는 상태만 기록하고 archive는 보류합니다.
+- `archivedAt`이 이미 있으면 재sweep하지 않습니다(idempotent).
+- `status: 'discarded'`는 카드를 건드리지 않습니다. 대신 `WikiWorker`가 해당 세션을 건너뜁니다.
+- `startedAt` / `resolvedAt`만 담긴 날짜 전용 PATCH는 상태를 바꾸지 않으므로 완료 부수효과가 전혀 걸리지 않습니다. Timeline의 바 끝 드래그와 Work 상세의 날짜 입력이 이 경로를 씁니다.
+- `active` Work에도 `resolvedAt`을 넣을 수 있습니다(종료 예정일). 이후 `status: 'done'` PATCH는 그 값을 유지하며, `resolvedAt: null`로 지우면 Timeline 바가 다시 오늘까지 이어집니다.
+- 파싱 불가능한 날짜는 `400 Invalid startedAt` / `400 Invalid resolvedAt`, 결과가 `resolvedAt < startedAt`이 되는 편집은 `400`입니다(기존에 뒤집혀 저장된 레코드는 다시 정상 범위로 고칠 수 있도록, 호출자가 날짜를 건드린 경우에만 검사합니다).
+
+### `DELETE /api/works/:id`
+
+`204`. 카드는 그대로 남고, 연결됐던 세션은 Inbox로 돌아옵니다.
+
+### `GET /api/works/inbox`
+
+미배정·비무시 세션(`WorkInboxSession[]`)을 최근 활동순으로 반환합니다. `GET /api/sessions`와 세션 집계 헬퍼를 공유합니다.
+
+### `POST /api/works/:id/sessions`
+
+세션을 Work에 연결합니다.
+
+- `sessionId` (required) — 이미 다른 Work에 연결돼 있으면 `409`
+- `role` — `dev` | `review` | `debug`
+- `projectDir`
+
+Work의 첫 연결일 때는 그 세션의 가장 이른 카드 `startedAt`으로 Work의 `startedAt`을 back-date합니다.
+
+### `DELETE /api/works/:id/sessions/:sessionId`
+
+연결을 해제합니다. 해당 세션은 다시 Inbox에 나타납니다.
+
+### `POST /api/works/ignore-session`
+
+세션을 Inbox에서 영구 제외합니다.
+
+```json
+{ "sessionId": "claude-abc123" }
+```
+
+응답: `{ "ignoredSessionIds": ["..."] }`
+
+### `POST /api/works/:id/summary`
+
+연결된 모든 세션의 트랜스크립트를 모아 `works.summary_model` LLM으로 3~5줄 Summary를 생성해 저장합니다. 응답은 `WorkSummaryResponse`(`work`, `summary`, `generatedSessions`, `skippedSessions`)이며, 읽을 트랜스크립트가 없으면 `422`입니다.
+
+### `GET /api/works/config`
+
+`WorksConfigDto`(`works.*` 설정값 + `configured` + 파생 `route`)를 반환합니다.
+
+### `POST /api/works/config`
+
+`WorksConfigInput`의 제공된 필드만 저장합니다. 검증 실패는 `400`입니다.
+
+- `summaryModel`, `summaryLines`(`3`|`4`|`5`), `assignPreferSameDir`, `assignSuggestResumeChain`, `staleDays`(>= 1), `doneConfirm`
+
+설정 키 목록과 기본값은 [`./works.md`](./works.md#설정-키-works)에 있습니다.
+
+> 라우트 순서: `/api/works/config`는 `/api/works/:id` catch-all보다 앞에 있어야 합니다.
+
 ## LLM Wiki API
 
 아카이브된 카드를 Obsidian 위키 문서로 분류·생성하는 파이프라인의 API입니다. 실제 처리는 플러그인의 `WikiWorker`가 비동기로 수행합니다.
@@ -538,4 +628,5 @@ UI 테스트용 question 주입/정리에 사용됩니다.
 ## 관련 문서
 
 - [`./kanban-board.md`](./kanban-board.md)
+- [`./works.md`](./works.md)
 - [`./architecture.md`](./architecture.md)

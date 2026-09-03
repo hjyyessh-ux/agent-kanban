@@ -20,6 +20,7 @@
 | Runtime dispatch | runtime별 session id나 실패 복구 계약이 깨짐 | `src/core/types.ts`, `src/core/runtime-config.ts`, `src/plugin/runtimes/*`, `src/plugin/index.ts` | `src/__tests__/runtime-registry.test.ts`, `src/__tests__/dispatch-routing.test.ts`, `src/__tests__/codex-cli-adapter.test.ts`, `src/__tests__/claude-adapter.test.ts` |
 | Quick Action dispatch | 재시도에서 카드/run이 중복 생성되거나 Script 파라미터·secret이 실행 경계를 우회함 | `src/core/quick-action-store.ts`, `src/core/store.ts`, `src/plugin/script-execution-service.ts`, `src/server/routes.ts`, `web/src/components/QuickActions/` | `src/__tests__/quick-action-store.test.ts`, `src/__tests__/quick-action-routes.test.ts`, `src/__tests__/script-execution-service.test.ts`, `e2e/quick-actions.e2e.ts` |
 | 예약/스케줄 dispatch | due 카드가 중복 실행되거나 run↔card 연결이 끊김 | `src/core/store.ts`, `src/plugin/scheduled-dispatch-service.ts`, `src/plugin/scheduler-engine.ts`, `src/server/routes.ts` | `src/__tests__/scheduled-dispatch-service.test.ts`, `src/__tests__/scheduler-engine.test.ts`, `src/__tests__/store.test.ts` |
+| Work 완료 라이프사이클 | Work 완료가 무관한 카드를 archive하거나, Work 단위 wiki 문서가 세션 단위로 쪼개짐 | `src/plugin/works/work-lifecycle.ts`, `src/core/work-store.ts`, `src/plugin/wiki/wiki-worker.ts`, `src/server/routes.ts` | `src/__tests__/work-lifecycle.test.ts`, `src/__tests__/wiki-worker.test.ts`, `src/__tests__/work-store.test.ts` |
 
 ## 불변식 목록
 
@@ -131,6 +132,27 @@
 - per-script `beginRun()` claim은 동시 실행을 거절한다. singleton owner 시작 시 owner PID가 살아 있지 않은 orphan `running` row를 `fail`로 reconcile하고 연결 card도 terminal failed로 닫는다.
 - `executionKind=script` card는 agent session이 없으므로 `StaleCardChecker`의 opencode orphan/stuck 판정에서 제외한다. process liveness와 복구는 ScriptRun owner PID/reconcile 계약이 담당한다.
 
+### Work 완료 라이프사이클
+
+- `PATCH /api/works/:id`의 `status='done'`은 `applyWorkPatch()`(`src/plugin/works/work-lifecycle.ts`)를 통과한다. 엔드포인트는 추가하지 않는다 — Works UI(카드 3/7)는 이 한 경로만 호출한다.
+- 일괄 archive 대상은 **Work의 `sessionLinks`에 연결된 세션의 카드로만** 한정한다. `store.archiveCards()`는 **빈 배열을 넘기면 보드의 모든 `done` 카드를 archive**하므로, seed가 0건이면 절대 호출하지 않고 `archiveSkipped='no-cards'`로 끝낸다. (회귀 테스트 존재)
+- 카드 status 전환은 `store.updateCard(id, { status: 'done' })` 순수 store write로만 한다. 완료 훅(`event-handler.ts`)을 타지 않으므로 **Work 완료가 queue auto-dispatch를 유발하면 안 된다** — 끝낸 작업을 정리하는 동작이 새 agent run을 시작시켜서는 안 된다.
+- 카드 sweep은 Work 스탬프보다 **먼저** 실행한다. sweep이 실패하면 Work은 `archivedAt` 없이 남아 재시도 가능해야 하고, 실제로 일어나지 않은 archive를 광고해서는 안 된다.
+- `works.done_confirm=true`이면 body에 `confirmArchive: true`가 있을 때만 sweep한다. 플래그가 없으면 status/`resolvedAt`/`resolution`만 기록하고 sweep은 보류(`awaiting-confirmation`)한다.
+- `archivedAt`이 이미 있는 Work의 중복 `done` PATCH는 idempotent다(재sweep 금지). 반대로 `done`이지만 `archivedAt`이 없는 Work는 이후 확인 요청으로 sweep을 마칠 수 있어야 한다.
+- terminal 전환은 `resolvedAt`과 `resolution`(`done`→`completed`, `discarded`→`abandoned`)을 자동 스탬프하고, `active`로 되돌리면 둘 다 지운다 — 살아있는 Timeline 바가 과거 종료일을 들고 있으면 안 된다.
+- `discarded`는 카드를 archive하지 않고 보드에 그대로 남기며 wiki 파이프라인에서 제외한다.
+- Work의 `startedAt`은 **첫 세션 링크에서만** 그 세션 카드의 최초 `startedAt`(없으면 `createdAt`, 그것도 없으면 링크 시각)으로 back-date한다. 이후 링크는 Timeline 바의 시작을 옮기지 않는다.
+
+### Work 단위 wiki 그룹핑
+
+- `groupCardsBySession(cards, workIndex?)`에서 `workIndex`가 없거나 세션이 어떤 Work에도 속하지 않으면 **기존 세션 단위 동작과 100% 동일**해야 한다. Work 그룹핑은 순수 추가형이다. (`groupCardsBySession(cards, new Map())`가 `groupCardsBySession(cards)`와 동일함을 고정하는 테스트 존재)
+- 같은 Work에 속한 세션들의 카드는 `work:<workId>` 그룹 1개로 합쳐 문서 1개를 만들고, 문서 제목은 LLM 제안을 무시하고 **Work title**을 쓴다.
+- Work 그룹은 여러 세션에 걸치므로 `sessionId`/`sessionTitle`을 비우고 `sessionIds`(카드 createdAt 순, 결정적)를 채운다. frontmatter에 `work`/`sessions`로 기록한다.
+- `discarded` Work의 세션 카드는 LLM 호출 없이 terminal `skipped`(`skipReason='Work discarded'`)로 큐에서 내린다. `pending`으로 남겨 매 패스마다 재평가하게 두면 안 된다.
+- `WorkStore` 주입이 없거나 읽기가 실패하면 세션 단위로 fallback한다. 그룹핑 실패가 wiki 파이프라인을 멈춰서는 안 된다.
+- 세션 그룹의 프롬프트 텍스트는 그대로 유지한다(Work 헤더 줄은 Work 그룹에만 추가). 세션 그룹 프롬프트를 바꾸면 `WIKI_PROMPT_VERSION`을 올려 과거 분류를 무효화해야 한다.
+
 ### Git/Usage 캡처
 
 - dispatch 시작 시점(`runtime-host.ts`·`plugin/index.ts`의 `dispatchCard`)에 `captureGitStart`가 `card.git.start`/`startBranches`/`repoRoot`를 기록하고, 완료 시점(`claude-adapter.ts` 성공 분기 + `event-handler.ts` `session.idle`)에 `captureGitEndAndUsage`가 `card.git.end`/`branches`와 `card.usage`를 기록한다. 두 함수는 `src/plugin/runtimes/git-capture.ts`의 공통 헬퍼다.
@@ -161,6 +183,8 @@ bun test src/__tests__/dispatch-routing.test.ts
 bun test src/__tests__/codex-cli-adapter.test.ts
 bun test src/__tests__/claude-adapter.test.ts
 bun test src/__tests__/queue-helper.test.ts
+bun test src/__tests__/work-lifecycle.test.ts
+bun test src/__tests__/wiki-worker.test.ts
 bunx tsc --noEmit
 bun test
 ```

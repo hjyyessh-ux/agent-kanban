@@ -8,10 +8,11 @@ agent-kanban은 opencode/Codex/Claude runtime 세션, Telegram follow-up, feedba
 |------|------|
 | [시작하기](./getting-started.md) | 설치, 설정, 첫 번째 카드 만들기 |
 | [Kanban 보드](./kanban-board.md) | 컬럼 구조, 카드 lifecycle, parent-child, Telegram/feedback 흐름 |
+| [Works & Timeline](./works.md) | 세션을 묶는 Work 단위, Inbox 배정, 완료 시 일괄 archive, Timeline 뷰, `works.*` 설정 |
 | [Quick Actions](./quick-actions.md) | Prompt/Script action 등록, 파라미터, 실행 추적, 실패 복구 |
 | [스케줄러](./scheduler.md) | 반복 작업 설정, cron 표현식, 자연어 입력 |
 | [플러그인 도구](./plugin-tools.md) | kanban / scheduler / settings 도구 계약 |
-| [API 레퍼런스](./api-reference.md) | cards, runtimes, sessions, schedulers, settings, scripts, screenshots, models, questions API |
+| [API 레퍼런스](./api-reference.md) | cards, works, runtimes, sessions, schedulers, settings, scripts, screenshots, models, questions API |
 | [아키텍처](./architecture.md) | 시스템 구조, 데이터 흐름, 모듈 설명 |
 
 ## 주요 기능

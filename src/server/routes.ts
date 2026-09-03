@@ -4,6 +4,7 @@ import type { SchedulerEngine } from '../plugin/scheduler-engine';
 import { dispatchCardWithScheduledReservation } from '../plugin/scheduled-dispatch-service';
 import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
+import type { WorkStore } from '../core/work-store';
 import {
   renderPromptQuickAction,
   resolveQuickActionParameters,
@@ -19,7 +20,11 @@ import type { QuestionRequest } from '../plugin/question-monitor';
 import type { WikiWorker } from '../plugin/wiki/wiki-worker';
 import type { RuntimeRunStore } from '../plugin/runtimes/runtime-run-store';
 import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/run-progress';
-import { resolveClaudeTranscriptPath } from '../plugin/wiki/wiki-transcript';
+import { resolveClaudeTranscriptPath, loadClaudeTranscript } from '../plugin/wiki/wiki-transcript';
+import { createWikiLlm } from '../plugin/wiki/wiki-llm';
+import { loadWorksConfig, loadWorksConfigDto, saveWorksConfig } from '../plugin/works/works-config';
+import { generateWorkSummary, type WorkTranscriptSource } from '../plugin/works/works-summary';
+import { applyWorkPatch, resolveSessionStartedAt } from '../plugin/works/work-lifecycle';
 import { getSettingValueOrDefault } from '../core/settings-store';
 import type {
   AgentRuntime,
@@ -34,9 +39,14 @@ import type {
   SkillRuntime,
   RunQuickActionResponse,
   WikiArchiveCardStatusFilter,
+  WorkStatus,
+  UpdateWorkInput,
+  WorkSessionRole,
+  WorkInboxSession,
+  WorksConfigInput,
 } from '../core/types';
 import { QUICK_ACTION_ICON_ERRORS } from '../core/types';
-import { RUNTIME_CATALOG, resolveAgentRuntime, type RuntimeCatalogEntry } from '../core/runtime-config';
+import { RUNTIME_CATALOG, resolveAgentRuntime, DEFAULT_CODEX_REASONING_EFFORT, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
 import { extractAgentThread } from '../core/subagent-transcript';
 import { getMaintenanceStatus, readMaintenanceLog, startApplyUpdateRestart } from './maintenance-runner';
@@ -106,6 +116,13 @@ const PREFLIGHT_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 const AGENT_RUNTIME_VALUES = new Set<AgentRuntime>(['opencode', 'codex', 'claude']);
+const WORK_STATUS_VALUES = new Set<WorkStatus>(['active', 'done', 'discarded']);
+const WORK_RESOLUTION_VALUES = new Set<string>(['completed', 'superseded', 'abandoned']);
+const WORK_SESSION_ROLE_VALUES = new Set<WorkSessionRole>(['dev', 'review', 'debug']);
+/** A parseable ISO 8601 timestamp — the only shape a Work date field accepts. */
+function isValidIsoDate(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+}
 // Directory convention each runtime scans for project-level skills (mirrors defaultSkillRoots()).
 const SKILL_RUNTIME_SUBDIR: Record<SkillRuntime, string[]> = {
   claude: ['.claude', 'skills'],
@@ -277,6 +294,197 @@ export type NativeSessionInfo = {
 };
 export type AggregateSessionsFn = () => Promise<NativeSessionInfo[]>;
 
+/**
+ * Unified session aggregate returned by `GET /api/sessions` and consumed by the
+ * Works Inbox. Core fields are always present; the peer/link enrichments are
+ * populated only on the native (`aggregateSessionsFn`) path.
+ */
+export interface SessionAggregate {
+  sessionId: string;
+  sessionTitle?: string;
+  sessionCreatedAt?: string;
+  cardTitle: string;
+  cardId: string;
+  cardStatus: string;
+  projectDir?: string;
+  agentRuntime: AgentRuntime;
+  agentType?: string;
+  model?: string;
+  updatedAt: string;
+  linkState?: 'none' | 'single' | 'multiple';
+  relatedCardCount?: number;
+  isSubagentOnly?: boolean;
+  hasTopLevelLinkedCard?: boolean;
+  hasSubagentLinkedCard?: boolean;
+  visiblePeerCount?: number;
+  primaryPeerInstanceId?: string;
+  primaryPeerPort?: number;
+  primaryPeerIsLocal?: boolean;
+  primaryPeerCwd?: string;
+}
+
+/**
+ * Aggregates unique sessions from all cards (optionally enriched by the native
+ * peer session listing). Extracted so the Works Inbox route can reuse the exact
+ * same view that backs `GET /api/sessions`.
+ */
+export async function computeSessionAggregates(
+  store: KanbanStore,
+  aggregateSessionsFn?: AggregateSessionsFn,
+): Promise<SessionAggregate[]> {
+  const allCards = await store.getCards({ includeArchived: true });
+
+  if (!aggregateSessionsFn) {
+    const sessionMap = new Map<string, SessionAggregate>();
+    for (const c of allCards) {
+      if (!c.sessionId) continue;
+      const existing = sessionMap.get(c.sessionId);
+      if (!existing || new Date(c.updatedAt) > new Date(existing.updatedAt)) {
+        sessionMap.set(c.sessionId, {
+          sessionId: c.sessionId,
+          sessionTitle: c.sessionTitle,
+          cardTitle: c.title,
+          cardId: c.id,
+          cardStatus: c.status,
+          projectDir: c.projectDir,
+          agentRuntime: resolveAgentRuntime(c),
+          agentType: c.agentType,
+          model: c.model,
+          updatedAt: c.updatedAt,
+        });
+      }
+    }
+    return Array.from(sessionMap.values()).sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+  }
+
+  const nativeSessions = await aggregateSessionsFn();
+  const cardsBySession = new Map<string, typeof allCards>();
+  for (const card of allCards) {
+    if (!card.sessionId) continue;
+    const list = cardsBySession.get(card.sessionId);
+    if (list) {
+      list.push(card);
+    } else {
+      cardsBySession.set(card.sessionId, [card]);
+    }
+  }
+
+  for (const cards of cardsBySession.values()) {
+    cards.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  }
+
+  const nativeBySession = new Map<string, NativeSessionInfo[]>();
+  for (const native of nativeSessions) {
+    const list = nativeBySession.get(native.sessionId);
+    if (list) {
+      list.push(native);
+    } else {
+      nativeBySession.set(native.sessionId, [native]);
+    }
+  }
+
+  const sessions: SessionAggregate[] = Array.from(nativeBySession.entries()).map(([sessionId, nativeEntries]) => {
+    const native = nativeEntries[0];
+    if (!native) {
+      return {
+        sessionId,
+        sessionTitle: undefined,
+        sessionCreatedAt: undefined,
+        cardTitle: '(No linked card)',
+        cardId: '',
+        cardStatus: 'untracked',
+        projectDir: undefined,
+        agentType: undefined,
+        model: undefined,
+        agentRuntime: 'opencode' as const,
+        linkState: 'none' as const,
+        relatedCardCount: 0,
+        isSubagentOnly: false,
+        hasTopLevelLinkedCard: false,
+        hasSubagentLinkedCard: false,
+        visiblePeerCount: 0,
+        primaryPeerInstanceId: undefined,
+        primaryPeerPort: undefined,
+        primaryPeerIsLocal: false,
+        primaryPeerCwd: undefined,
+        updatedAt: new Date(0).toISOString(),
+      };
+    }
+
+    const cards = cardsBySession.get(native.sessionId) ?? [];
+    const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
+    const hasTopLevelLinkedCard = cards.some((card) => !card.parentCardId);
+    const hasSubagentLinkedCard = cards.some((card) => Boolean(card.parentCardId));
+    const isSubagentOnly = cards.length > 0 && !hasTopLevelLinkedCard;
+    const peerKeys = new Set<string>();
+    for (const entry of nativeEntries) {
+      peerKeys.add(`${entry.sourceInstanceId ?? 'unknown'}:${entry.sourcePort ?? 0}`);
+    }
+    const updatedAt = primaryCard?.updatedAt
+      ?? native.updatedAt
+      ?? native.sessionCreatedAt
+      ?? new Date(0).toISOString();
+
+    return {
+      sessionId: native.sessionId,
+      sessionTitle: primaryCard?.sessionTitle ?? native.sessionTitle,
+      sessionCreatedAt: primaryCard?.sessionCreatedAt ?? native.sessionCreatedAt,
+      cardTitle: primaryCard?.title ?? '(No linked card)',
+      cardId: primaryCard?.id ?? '',
+      cardStatus: primaryCard?.status ?? 'untracked',
+      projectDir: primaryCard?.projectDir,
+      agentRuntime: primaryCard ? resolveAgentRuntime(primaryCard) : 'opencode',
+      agentType: primaryCard?.agentType,
+      model: primaryCard?.model,
+      linkState: cards.length === 0 ? 'none' : cards.length === 1 ? 'single' : 'multiple',
+      relatedCardCount: cards.length,
+      isSubagentOnly,
+      hasTopLevelLinkedCard,
+      hasSubagentLinkedCard,
+      visiblePeerCount: peerKeys.size,
+      primaryPeerInstanceId: native.sourceInstanceId,
+      primaryPeerPort: native.sourcePort,
+      primaryPeerIsLocal: native.sourceIsLocal ?? false,
+      primaryPeerCwd: native.sourceCwd,
+      updatedAt,
+    };
+  });
+
+  for (const [sessionId, cards] of cardsBySession.entries()) {
+    if (nativeBySession.has(sessionId)) continue;
+    const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
+    if (!primaryCard) continue;
+    sessions.push({
+      sessionId,
+      sessionTitle: primaryCard.sessionTitle,
+      sessionCreatedAt: primaryCard.sessionCreatedAt,
+      cardTitle: primaryCard.title,
+      cardId: primaryCard.id,
+      cardStatus: primaryCard.status,
+      projectDir: primaryCard.projectDir,
+      agentRuntime: resolveAgentRuntime(primaryCard),
+      agentType: primaryCard.agentType,
+      model: primaryCard.model,
+      linkState: cards.length === 1 ? 'single' : 'multiple',
+      relatedCardCount: cards.length,
+      isSubagentOnly: cards.length > 0 && !cards.some((card) => !card.parentCardId),
+      hasTopLevelLinkedCard: cards.some((card) => !card.parentCardId),
+      hasSubagentLinkedCard: cards.some((card) => Boolean(card.parentCardId)),
+      visiblePeerCount: 0,
+      primaryPeerInstanceId: undefined,
+      primaryPeerPort: undefined,
+      primaryPeerIsLocal: true,
+      primaryPeerCwd: undefined,
+      updatedAt: primaryCard.updatedAt,
+    });
+  }
+
+  sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  return sessions;
+}
+
 interface ParsedQuickActionRunInput {
   clientRequestId: string;
   parameterValues: Record<string, unknown>;
@@ -410,6 +618,7 @@ export function createRouteHandler(
   scopeMcpInventoryFn?: ScopeMcpInventoryFn,
   quickActionStore?: QuickActionStore,
   scriptExecutionService?: ScriptExecutionService,
+  workStore?: WorkStore,
 ) {
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
@@ -533,167 +742,315 @@ export function createRouteHandler(
     // Route: GET /api/sessions — Aggregate unique sessions from cards
     if (method === 'GET' && path === '/api/sessions') {
       try {
-        const allCards = await store.getCards({ includeArchived: true });
-
-        if (!aggregateSessionsFn) {
-          const sessionMap = new Map<string, {
-            sessionId: string;
-            sessionTitle?: string;
-            cardTitle: string;
-            cardId: string;
-            cardStatus: string;
-            agentRuntime: AgentRuntime;
-            agentType?: string;
-            model?: string;
-            updatedAt: string;
-          }>();
-          for (const c of allCards) {
-            if (!c.sessionId) continue;
-            const existing = sessionMap.get(c.sessionId);
-            if (!existing || new Date(c.updatedAt) > new Date(existing.updatedAt)) {
-              sessionMap.set(c.sessionId, {
-                sessionId: c.sessionId,
-                sessionTitle: c.sessionTitle,
-                cardTitle: c.title,
-                cardId: c.id,
-                cardStatus: c.status,
-                agentRuntime: resolveAgentRuntime(c),
-                agentType: c.agentType,
-                model: c.model,
-                updatedAt: c.updatedAt,
-              });
-            }
-          }
-          const sessions = Array.from(sessionMap.values()).sort(
-            (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-          );
-          return json(sessions);
-        }
-
-        const nativeSessions = await aggregateSessionsFn();
-        const cardsBySession = new Map<string, typeof allCards>();
-        for (const card of allCards) {
-          if (!card.sessionId) continue;
-          const list = cardsBySession.get(card.sessionId);
-          if (list) {
-            list.push(card);
-          } else {
-            cardsBySession.set(card.sessionId, [card]);
-          }
-        }
-
-        for (const cards of cardsBySession.values()) {
-          cards.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-        }
-
-        const nativeBySession = new Map<string, NativeSessionInfo[]>();
-        for (const native of nativeSessions) {
-          const list = nativeBySession.get(native.sessionId);
-          if (list) {
-            list.push(native);
-          } else {
-            nativeBySession.set(native.sessionId, [native]);
-          }
-        }
-
-        const sessions = Array.from(nativeBySession.entries()).map(([sessionId, nativeEntries]) => {
-          const native = nativeEntries[0];
-          if (!native) {
-            return {
-              sessionId,
-              sessionTitle: undefined,
-              sessionCreatedAt: undefined,
-              cardTitle: '(No linked card)',
-              cardId: '',
-              cardStatus: 'untracked',
-              agentType: undefined,
-              model: undefined,
-              agentRuntime: 'opencode' as const,
-              linkState: 'none' as const,
-              relatedCardCount: 0,
-              isSubagentOnly: false,
-              hasTopLevelLinkedCard: false,
-              hasSubagentLinkedCard: false,
-              visiblePeerCount: 0,
-              primaryPeerInstanceId: undefined,
-              primaryPeerPort: undefined,
-              primaryPeerIsLocal: false,
-              primaryPeerCwd: undefined,
-              updatedAt: new Date(0).toISOString(),
-            };
-          }
-
-          const cards = cardsBySession.get(native.sessionId) ?? [];
-          const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
-          const hasTopLevelLinkedCard = cards.some((card) => !card.parentCardId);
-          const hasSubagentLinkedCard = cards.some((card) => Boolean(card.parentCardId));
-          const isSubagentOnly = cards.length > 0 && !hasTopLevelLinkedCard;
-          const peerKeys = new Set<string>();
-          for (const entry of nativeEntries) {
-            peerKeys.add(`${entry.sourceInstanceId ?? 'unknown'}:${entry.sourcePort ?? 0}`);
-          }
-          const updatedAt = primaryCard?.updatedAt
-            ?? native.updatedAt
-            ?? native.sessionCreatedAt
-            ?? new Date(0).toISOString();
-
-          return {
-            sessionId: native.sessionId,
-            sessionTitle: primaryCard?.sessionTitle ?? native.sessionTitle,
-            sessionCreatedAt: primaryCard?.sessionCreatedAt ?? native.sessionCreatedAt,
-            cardTitle: primaryCard?.title ?? '(No linked card)',
-            cardId: primaryCard?.id ?? '',
-            cardStatus: primaryCard?.status ?? 'untracked',
-            agentRuntime: primaryCard ? resolveAgentRuntime(primaryCard) : 'opencode',
-            agentType: primaryCard?.agentType,
-            model: primaryCard?.model,
-            linkState: cards.length === 0 ? 'none' : cards.length === 1 ? 'single' : 'multiple',
-            relatedCardCount: cards.length,
-            isSubagentOnly,
-            hasTopLevelLinkedCard,
-            hasSubagentLinkedCard,
-            visiblePeerCount: peerKeys.size,
-            primaryPeerInstanceId: native.sourceInstanceId,
-            primaryPeerPort: native.sourcePort,
-            primaryPeerIsLocal: native.sourceIsLocal ?? false,
-            primaryPeerCwd: native.sourceCwd,
-            updatedAt,
-          };
-        });
-
-        for (const [sessionId, cards] of cardsBySession.entries()) {
-          if (nativeBySession.has(sessionId)) continue;
-          const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
-          if (!primaryCard) continue;
-          sessions.push({
-            sessionId,
-            sessionTitle: primaryCard.sessionTitle,
-            sessionCreatedAt: primaryCard.sessionCreatedAt,
-            cardTitle: primaryCard.title,
-            cardId: primaryCard.id,
-            cardStatus: primaryCard.status,
-            agentRuntime: resolveAgentRuntime(primaryCard),
-            agentType: primaryCard.agentType,
-            model: primaryCard.model,
-            linkState: cards.length === 1 ? 'single' : 'multiple',
-            relatedCardCount: cards.length,
-            isSubagentOnly: cards.length > 0 && !cards.some((card) => !card.parentCardId),
-            hasTopLevelLinkedCard: cards.some((card) => !card.parentCardId),
-            hasSubagentLinkedCard: cards.some((card) => Boolean(card.parentCardId)),
-            visiblePeerCount: 0,
-            primaryPeerInstanceId: undefined,
-            primaryPeerPort: undefined,
-            primaryPeerIsLocal: true,
-            primaryPeerCwd: undefined,
-            updatedAt: primaryCard.updatedAt,
-          });
-        }
-
-        sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        const sessions = await computeSessionAggregates(store, aggregateSessionsFn);
         return json(sessions);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to fetch sessions';
         return errorResponse(message, 500);
+      }
+    }
+
+    // ─── Works Routes ──────────────────────────────────────────────
+    // Work = a human-intent unit grouping 1:N sessions. See docs/mockups and
+    // the Works & Timeline design. Writes are Bearer-gated via requiresLocalAuth.
+
+    // Route: GET /api/works?status=
+    if (method === 'GET' && path === '/api/works') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const statusParam = url.searchParams.get('status');
+      if (statusParam && !WORK_STATUS_VALUES.has(statusParam as WorkStatus)) {
+        return errorResponse('Invalid status filter', 400);
+      }
+      const works = await workStore.getWorks(statusParam as WorkStatus | null ?? undefined);
+      return json(works);
+    }
+
+    // Route: POST /api/works
+    if (method === 'POST' && path === '/api/works') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const body = await req.json();
+        if (typeof body.title !== 'string' || !body.title.trim()) {
+          return errorResponse('title is required', 400);
+        }
+        const work = await workStore.createWork({
+          title: body.title,
+          projectDir: typeof body.projectDir === 'string' ? body.projectDir : undefined,
+          startedAt: typeof body.startedAt === 'string' ? body.startedAt : undefined,
+        });
+        return json(work, 201);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
+      }
+    }
+
+    // Route: GET /api/works/inbox — unassigned, non-ignored sessions
+    if (method === 'GET' && path === '/api/works/inbox') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const sessions = await computeSessionAggregates(store, aggregateSessionsFn);
+        const { works, ignoredSessionIds } = await workStore.load();
+        const linked = new Set<string>();
+        for (const w of works) {
+          for (const link of w.sessionLinks) linked.add(link.sessionId);
+        }
+        const ignored = new Set(ignoredSessionIds);
+        const inbox: WorkInboxSession[] = sessions
+          .filter(s => s.sessionId && !linked.has(s.sessionId) && !ignored.has(s.sessionId))
+          .map(s => ({
+            sessionId: s.sessionId,
+            sessionTitle: s.sessionTitle,
+            cardTitle: s.cardTitle,
+            cardId: s.cardId,
+            cardStatus: s.cardStatus,
+            projectDir: s.projectDir,
+            agentRuntime: s.agentRuntime,
+            agentType: s.agentType,
+            model: s.model,
+            relatedCardCount: s.relatedCardCount ?? 1,
+            updatedAt: s.updatedAt,
+          }));
+        return json(inbox);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to build inbox';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: POST /api/works/ignore-session
+    if (method === 'POST' && path === '/api/works/ignore-session') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const body = await req.json();
+        if (typeof body.sessionId !== 'string' || !body.sessionId.trim()) {
+          return errorResponse('sessionId is required', 400);
+        }
+        const ignoredSessionIds = await workStore.ignoreSession(body.sessionId);
+        return json({ ignoredSessionIds });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        return errorResponse(message, 400);
+      }
+    }
+
+    // Route: GET /api/works/config — works-scoped settings (independent of wiki)
+    // Must precede the /api/works/:id catch-all (id would otherwise be "config").
+    if (method === 'GET' && path === '/api/works/config') {
+      if (!settingsStore) return errorResponse('Settings not available', 503);
+      return json(await loadWorksConfigDto(settingsStore));
+    }
+
+    // Route: POST /api/works/config — save works settings from the settings panel.
+    if (method === 'POST' && path === '/api/works/config') {
+      if (!settingsStore) return errorResponse('Settings not available', 503);
+      try {
+        const body = await req.json().catch(() => ({})) as WorksConfigInput;
+        if (body.summaryLines !== undefined && ![3, 4, 5].includes(body.summaryLines)) {
+          return errorResponse('summaryLines must be 3, 4, or 5', 400);
+        }
+        if (body.staleDays !== undefined && (typeof body.staleDays !== 'number' || !Number.isFinite(body.staleDays) || body.staleDays < 1)) {
+          return errorResponse('staleDays must be a number >= 1', 400);
+        }
+        if (body.assignPreferSameDir !== undefined && typeof body.assignPreferSameDir !== 'boolean') {
+          return errorResponse('assignPreferSameDir must be a boolean', 400);
+        }
+        if (body.assignSuggestResumeChain !== undefined && typeof body.assignSuggestResumeChain !== 'boolean') {
+          return errorResponse('assignSuggestResumeChain must be a boolean', 400);
+        }
+        if (body.doneConfirm !== undefined && typeof body.doneConfirm !== 'boolean') {
+          return errorResponse('doneConfirm must be a boolean', 400);
+        }
+        const saved = await saveWorksConfig(settingsStore, body);
+        return json(saved);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Save config failed';
+        return errorResponse(message, 400);
+      }
+    }
+
+    // Route: POST /api/works/:id/summary — generate a Work Summary from every
+    // connected session's transcript via the works.summary_model LLM.
+    const workSummaryMatch = path.match(/^\/api\/works\/([^/]+)\/summary$/);
+    if (workSummaryMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      if (!settingsStore) return errorResponse('Settings not available', 503);
+      const workId = workSummaryMatch[1];
+      try {
+        const work = await workStore.getWork(workId);
+        if (!work) return errorResponse('Work not found', 404);
+
+        const config = await loadWorksConfig(settingsStore);
+        // Include archived cards: a completed Work's cards may already be archived.
+        const cards = await store.getCards({ includeArchived: true });
+        const sources: WorkTranscriptSource[] = work.sessionLinks.map((link) => {
+          const card = cards.find(c => c.sessionId === link.sessionId);
+          const projectDir = link.projectDir ?? card?.projectDir ?? work.projectDir;
+          const transcript = projectDir
+            ? loadClaudeTranscript({
+                agentRuntime: card?.agentRuntime ?? 'claude',
+                sessionId: link.sessionId,
+                projectDir,
+              })
+            : undefined;
+          return { link, transcript, title: card?.title };
+        });
+
+        const llmRunner = createWikiLlm({
+          settingsStore,
+          model: async () => config.summaryModel,
+          effort: async () => DEFAULT_CODEX_REASONING_EFFORT,
+        });
+        const result = await generateWorkSummary({
+          work,
+          sources,
+          lines: config.summaryLines,
+          model: config.summaryModel,
+          effort: DEFAULT_CODEX_REASONING_EFFORT,
+          llmRunner,
+        });
+        const updated = await workStore.updateWork(workId, { summary: result.summary });
+        return json({
+          work: updated,
+          summary: result.summary,
+          generatedSessions: result.generatedSessions,
+          skippedSessions: result.skippedSessions,
+        });
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Summary generation failed';
+        if (message.includes('not found')) return errorResponse('Work not found', 404);
+        if (message.includes('No session transcripts')) return errorResponse(message, 422);
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: POST /api/works/:id/sessions
+    const workAddSessionMatch = path.match(/^\/api\/works\/([^/]+)\/sessions$/);
+    if (workAddSessionMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workAddSessionMatch[1];
+      try {
+        const body = await req.json();
+        if (typeof body.sessionId !== 'string' || !body.sessionId.trim()) {
+          return errorResponse('sessionId is required', 400);
+        }
+        if (body.role !== undefined && !WORK_SESSION_ROLE_VALUES.has(body.role as WorkSessionRole)) {
+          return errorResponse('Invalid role', 400);
+        }
+        // The Work's `startedAt` (the Timeline bar's left edge) is back-dated to
+        // the session's earliest card on the *first* link. Archived cards count:
+        // a session may already be closed out when it gets triaged.
+        const cards = await store.getCards({ includeArchived: true });
+        const work = await workStore.addSession(workId, {
+          sessionId: body.sessionId,
+          projectDir: typeof body.projectDir === 'string' ? body.projectDir : undefined,
+          role: body.role as WorkSessionRole | undefined,
+          startedAt: resolveSessionStartedAt(cards, body.sessionId),
+        });
+        return json(work);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Invalid request body';
+        if (message.includes('not found')) return errorResponse('Work not found', 404);
+        if (message.includes('already linked')) return errorResponse(message, 409);
+        return errorResponse(message, 400);
+      }
+    }
+
+    // Route: DELETE /api/works/:id/sessions/:sessionId
+    const workRemoveSessionMatch = path.match(/^\/api\/works\/([^/]+)\/sessions\/([^/]+)$/);
+    if (workRemoveSessionMatch && method === 'DELETE') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workRemoveSessionMatch[1];
+      const sessionId = decodeURIComponent(workRemoveSessionMatch[2]);
+      try {
+        const work = await workStore.removeSession(workId, sessionId);
+        return json(work);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : '';
+        if (message.includes('not found')) return errorResponse('Work not found', 404);
+        return errorResponse('Failed to remove session', 500);
+      }
+    }
+
+    // Match /api/works/:id
+    const workMatch = path.match(/^\/api\/works\/([^/]+)$/);
+    if (workMatch) {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workMatch[1];
+
+      if (method === 'GET') {
+        const work = await workStore.getWork(workId);
+        if (!work) return errorResponse('Work not found', 404);
+        return json(work);
+      }
+
+      if (method === 'PATCH') {
+        try {
+          const body = await req.json();
+          const updates: UpdateWorkInput = {};
+          if (body.title !== undefined) updates.title = body.title;
+          if (body.status !== undefined) {
+            if (!WORK_STATUS_VALUES.has(body.status as WorkStatus)) {
+              return errorResponse('Invalid status', 400);
+            }
+            updates.status = body.status;
+          }
+          if (body.resolution !== undefined) {
+            if (body.resolution !== null && !WORK_RESOLUTION_VALUES.has(body.resolution)) {
+              return errorResponse('Invalid resolution', 400);
+            }
+            updates.resolution = body.resolution;
+          }
+          if (body.projectDir !== undefined) updates.projectDir = body.projectDir;
+          // Date edits arrive from the Timeline's bar-edge drag and the detail
+          // dialog's date inputs, so a malformed timestamp must never reach the
+          // store — an unparseable startedAt would drop the bar off the grid.
+          if (body.startedAt !== undefined) {
+            if (!isValidIsoDate(body.startedAt)) return errorResponse('Invalid startedAt', 400);
+            updates.startedAt = body.startedAt;
+          }
+          if (body.resolvedAt !== undefined) {
+            if (body.resolvedAt !== null && !isValidIsoDate(body.resolvedAt)) {
+              return errorResponse('Invalid resolvedAt', 400);
+            }
+            updates.resolvedAt = body.resolvedAt;
+          }
+          if (body.summary !== undefined) updates.summary = body.summary;
+          if (body.archivedAt !== undefined) updates.archivedAt = body.archivedAt;
+
+          // `status: 'done'` carries the bulk done→archive side effect (which
+          // hands the cards to the wiki pipeline). `works.done_confirm` gates it
+          // behind the client's `confirmArchive` flag; the endpoint itself is
+          // unchanged. Defaults to the documented `false` when settings are
+          // unavailable.
+          const doneConfirm = settingsStore
+            ? (await loadWorksConfig(settingsStore)).doneConfirm
+            : false;
+          const result = await applyWorkPatch({
+            store,
+            workStore,
+            workId,
+            updates,
+            doneConfirm,
+            confirmArchive: body.confirmArchive === true,
+          });
+          return json(result.work);
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : 'Invalid request body';
+          if (message.includes('not found')) return errorResponse('Work not found', 404);
+          return errorResponse(message, 400);
+        }
+      }
+
+      if (method === 'DELETE') {
+        try {
+          await workStore.deleteWork(workId);
+          return new Response(null, { status: 204 });
+        } catch (e: unknown) {
+          const message = e instanceof Error ? e.message : '';
+          if (message.includes('not found')) return errorResponse('Work not found', 404);
+          return errorResponse('Delete failed', 500);
+        }
       }
     }
 

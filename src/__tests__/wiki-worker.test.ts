@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { KanbanStore } from '../core/store';
 import { SettingsStore } from '../core/settings-store';
-import { WikiWorker, groupCardsBySession } from '../plugin/wiki/wiki-worker';
+import { WikiWorker, groupCardsBySession, type WorkSessionIndex } from '../plugin/wiki/wiki-worker';
+import { WorkStore } from '../core/work-store';
 import { loadWikiConfig, WIKI_PROMPT_VERSION, WIKI_SETTING_KEYS } from '../plugin/wiki/wiki-config';
 import { parseClassifyResult, parseTriageResult } from '../plugin/wiki/wiki-prompts';
 import type { WikiLlmCallOptions, WikiLlmRunner } from '../plugin/wiki/wiki-llm';
@@ -201,6 +202,124 @@ describe('groupCardsBySession', () => {
     const s1 = groups.find(g => g.key === 's1')!;
     expect(s1.cards.map(c => c.id)).toEqual(['2', '1']); // sorted by createdAt
     expect(groups.some(g => g.key === 'card:3')).toBe(true);
+  });
+
+  test('an empty work index reproduces the per-session grouping exactly', () => {
+    const base = { description: '', status: 'done' as const, createdAt: '2026-01-01', updatedAt: '2026-01-01' };
+    const cards = [
+      { ...base, id: '1', title: 'a', sessionId: 's1', sessionTitle: 'S1' },
+      { ...base, id: '2', title: 'b', sessionId: 's2' },
+      { ...base, id: '3', title: 'c' },
+    ] as KanbanCard[];
+
+    // Regression guard: Work grouping is purely additive for unlinked sessions.
+    expect(groupCardsBySession(cards, new Map())).toEqual(groupCardsBySession(cards));
+  });
+
+  test('sessions of one Work collapse into a single Work group', () => {
+    const base = { description: '', status: 'done' as const, createdAt: '2026-01-01', updatedAt: '2026-01-01' };
+    const cards = [
+      { ...base, id: '1', title: 'a', sessionId: 's1', sessionTitle: 'S1', createdAt: '2026-01-02' },
+      { ...base, id: '2', title: 'b', sessionId: 's2', createdAt: '2026-01-01' },
+      { ...base, id: '3', title: 'c', sessionId: 's3', sessionTitle: 'solo' },
+    ] as KanbanCard[];
+    const workIndex: WorkSessionIndex = new Map([
+      ['s1', { workId: 'w1', title: 'Works 탭 구현' }],
+      ['s2', { workId: 'w1', title: 'Works 탭 구현' }],
+    ]);
+
+    const groups = groupCardsBySession(cards, workIndex);
+    expect(groups.length).toBe(2);
+
+    const workGroup = groups.find(g => g.key === 'work:w1')!;
+    expect(workGroup.workId).toBe('w1');
+    expect(workGroup.workTitle).toBe('Works 탭 구현');
+    expect(workGroup.cards.map(c => c.id)).toEqual(['2', '1']); // createdAt asc
+    expect([...(workGroup.sessionIds ?? [])].sort()).toEqual(['s1', 's2']);
+    // Work groups span sessions, so the single-session fields stay unset.
+    expect(workGroup.sessionId).toBeUndefined();
+    expect(workGroup.sessionTitle).toBeUndefined();
+
+    // The unlinked session keeps its legacy per-session group untouched.
+    const solo = groups.find(g => g.key === 's3')!;
+    expect(solo.sessionTitle).toBe('solo');
+    expect(solo.workId).toBeUndefined();
+  });
+});
+
+describe('WikiWorker × Works', () => {
+  test('a Work produces one document titled after the Work', async () => {
+    await withTempDir(async (dir) => {
+      const { store, settingsStore, vaultDir } = await setupStores(dir);
+      const workStore = new WorkStore(dir);
+      const card1 = await archiveDoneCard(store, { title: 'fix redis', sessionId: 'sess-a' });
+      const card2 = await archiveDoneCard(store, { title: 'follow-up', sessionId: 'sess-b' });
+
+      const work = await workStore.createWork({ title: 'Redis 안정화 작업' });
+      await workStore.addSession(work.id, { sessionId: 'sess-a' });
+      await workStore.addSession(work.id, { sessionId: 'sess-b' });
+
+      const calls: string[] = [];
+      const worker = new WikiWorker(store, settingsStore, {
+        llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }, calls),
+        workStore,
+      });
+      await worker.processQueue();
+
+      // Two sessions, one Work → a single triage + classify pair (one document).
+      expect(calls).toEqual(['triage', 'classify']);
+
+      const docPath = join(vaultDir, 'troubleshooting/redis-timeout.md');
+      expect(existsSync(docPath)).toBe(true);
+      const doc = readFileSync(docPath, 'utf-8');
+      // The Work title wins over the LLM's suggested title.
+      expect(doc).toContain('title: "Redis 안정화 작업"');
+      expect(doc).toContain('# Redis 안정화 작업');
+      expect(doc).toContain(`work: "${work.id}"`);
+      expect(doc).toContain('sessions: ["sess-a", "sess-b"]');
+      expect(doc).toContain(`"${card1.id}"`);
+      expect(doc).toContain(`"${card2.id}"`);
+
+      const archived = await store.getCards({ includeArchived: true });
+      for (const id of [card1.id, card2.id]) {
+        const c = archived.find(x => x.id === id)!;
+        expect(c.wiki?.status).toBe('processed');
+        expect(c.wiki?.decision).toBe('kept');
+        expect(c.wiki?.docPath).toBe('troubleshooting/redis-timeout.md');
+      }
+    });
+  });
+
+  test('cards of a discarded Work leave the queue without an LLM call', async () => {
+    await withTempDir(async (dir) => {
+      const { store, settingsStore } = await setupStores(dir);
+      const workStore = new WorkStore(dir);
+      const discardedCard = await archiveDoneCard(store, { title: 'abandoned', sessionId: 'sess-x' });
+      const keptCard = await archiveDoneCard(store, { title: 'unrelated', sessionId: 'sess-y' });
+
+      const work = await workStore.createWork({ title: '폐기된 작업' });
+      await workStore.addSession(work.id, { sessionId: 'sess-x' });
+      await workStore.updateWork(work.id, { status: 'discarded' });
+
+      const calls: string[] = [];
+      const worker = new WikiWorker(store, settingsStore, {
+        llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }, calls),
+        workStore,
+      });
+      await worker.processQueue();
+
+      // Only the unrelated session was sent to the LLM.
+      expect(calls).toEqual(['triage', 'classify']);
+
+      const archived = await store.getCards({ includeArchived: true });
+      const skipped = archived.find(c => c.id === discardedCard.id)!;
+      expect(skipped.wiki?.status).toBe('processed');
+      expect(skipped.wiki?.decision).toBe('skipped');
+      expect(skipped.wiki?.skipReason).toBe('Work discarded');
+      expect(skipped.wiki?.docPath).toBeUndefined();
+
+      expect(archived.find(c => c.id === keptCard.id)?.wiki?.decision).toBe('kept');
+    });
   });
 });
 

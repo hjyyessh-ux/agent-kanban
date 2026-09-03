@@ -1,0 +1,478 @@
+/* Timeline tab — layout only (mockup screen ⑤). Every colour routes through a
+   kv2 token so the dark theme repaints it; no chart/calendar library, just one
+   CSS grid whose columns are days and whose rows are Works. */
+
+.tl-view {
+  display: flex;
+  flex-direction: column;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* ── Controls ─────────────────────────────────────────────── */
+
+.tl-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-3);
+}
+
+.tl-range-label {
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-lg);
+  color: var(--kv2-text-primary);
+  min-width: 15ch;
+}
+
+.tl-seg {
+  display: inline-flex;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-pill);
+  overflow: hidden;
+}
+
+.tl-seg-option {
+  appearance: none;
+  border: 0;
+  padding: 5px 14px;
+  background: transparent;
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+}
+
+.tl-seg-option[aria-pressed='true'] {
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-tab-active-fg);
+}
+
+.tl-legend {
+  margin-left: auto;
+  display: flex;
+  gap: var(--kv2-sp-3);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.tl-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 3px;
+}
+
+.tl-legend-swatch--active { background: var(--kv2-status-todo-accent); }
+.tl-legend-swatch--done { background: var(--kv2-status-done-accent); }
+.tl-legend-swatch--discarded { background: var(--kv2-neutral-400); }
+
+/* ── Grid frame ───────────────────────────────────────────── */
+
+.timeline {
+  border: 3px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+  overflow: hidden;
+  /* Row height + bar height are the only things the month view changes. */
+  --tl-label-width: 180px;
+  --tl-row-height: 54px;
+  --tl-bar-height: 30px;
+  --tl-col-min: 78px;
+}
+
+.timeline--month {
+  --tl-row-height: 38px;
+  --tl-bar-height: 20px;
+  --tl-col-min: 34px;
+}
+
+/* Month view needs more columns than fit; the label column stays pinned. */
+.tl-scroll {
+  overflow-x: auto;
+}
+
+.tl-grid {
+  display: grid;
+  min-width: 100%;
+}
+
+/* ── Header row ───────────────────────────────────────────── */
+
+.tl-head {
+  padding: 10px 8px;
+  text-align: center;
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-primary);
+  background: var(--kv2-surface-sunken);
+  border-bottom: 3px solid var(--kv2-border-strong);
+  border-left: 1px solid var(--kv2-border-subtle);
+}
+
+.timeline--month .tl-head {
+  padding: 10px 2px;
+}
+
+.tl-head--label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  text-align: left;
+  padding-left: 14px;
+  border-left: 0;
+}
+
+.tl-head--weekend {
+  color: var(--kv2-text-muted);
+}
+
+.tl-head--today {
+  position: relative;
+  background: var(--kv2-frame);
+  color: var(--kv2-text-on-inverse);
+}
+
+/* The today marker's downward arrow, sitting on the header's bottom edge. */
+.tl-head--today::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--kv2-danger-accent);
+  z-index: 5;
+}
+
+.tl-dow {
+  display: block;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 600;
+  color: var(--kv2-text-muted);
+}
+
+.tl-head--today .tl-dow {
+  color: var(--kv2-text-on-inverse-muted);
+}
+
+.tl-date-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-danger-accent);
+  color: var(--kv2-text-inverse);
+}
+
+/* ── Work rows ────────────────────────────────────────────── */
+
+/* Rows are grouping wrappers only — the cells and the bar place themselves on
+   the parent grid with explicit grid-row / grid-column. */
+.tl-row {
+  display: contents;
+}
+
+.tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  background: var(--kv2-surface);
+  border-bottom: 1px solid var(--kv2-border-subtle);
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-primary);
+}
+
+.tl-label-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-label-sub {
+  font-size: var(--kv2-text-2xs);
+  font-weight: 500;
+  color: var(--kv2-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-cell {
+  position: relative;
+  min-height: var(--tl-row-height);
+  border-left: 1px solid var(--kv2-border-subtle);
+  border-bottom: 1px solid var(--kv2-border-subtle);
+}
+
+.tl-cell--weekend {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    var(--kv2-surface-hover) 6px,
+    var(--kv2-surface-hover) 8px
+  );
+}
+
+/* Today's vertical rule. Drawn per cell so it stays continuous down the rows
+   and follows the column when the month view scrolls horizontally. */
+.tl-cell--today::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--kv2-danger-accent);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ── Bars ─────────────────────────────────────────────────── */
+
+/* The slot owns grid placement and the bar's box so the resize handles can sit
+   on the bar's edges as siblings — the bar itself is a <button> (click → Work
+   detail) and cannot nest interactive children. */
+.tl-bar-slot {
+  position: relative;
+  align-self: center;
+  z-index: 2;
+  margin: 0 6px;
+  height: var(--tl-bar-height);
+  min-width: 0;
+  display: flex;
+}
+
+.tl-bar-slot--clipped-left { margin-left: 0; }
+.tl-bar-slot--clipped-right { margin-right: 0; }
+
+.tl-bar-slot--dragging {
+  z-index: 6;
+}
+
+.tl-bar {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-inverse);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+}
+
+.timeline--month .tl-bar {
+  padding: 0 6px;
+  font-size: var(--kv2-text-3xs);
+}
+
+/* Month columns are ~34px, so a bar only has room for its title — the clipping
+   hints and the session chip stay in the week view. */
+.timeline--month .tl-bar-edge,
+.timeline--month .tl-bar-note,
+.timeline--month .tl-bar-count,
+.timeline--month .tl-bar-ongoing {
+  display: none;
+}
+
+.tl-bar:hover {
+  filter: brightness(0.94);
+}
+
+.tl-bar--active { background: var(--kv2-status-todo-accent); }
+.tl-bar--done { background: var(--kv2-status-done-accent); }
+
+.tl-bar--discarded {
+  background: var(--kv2-neutral-400);
+  color: var(--kv2-neutral-900);
+}
+
+/* Unresolved Work: the bar runs to today and its right edge stays open. */
+.tl-bar--ongoing {
+  border-right-width: 3px;
+  border-right-style: dashed;
+}
+
+/* Started before the visible range → the left edge is a cut, not a start. */
+.tl-bar--clipped-left {
+  border-left-style: dashed;
+  border-radius: 0 var(--kv2-radius-md) var(--kv2-radius-md) 0;
+}
+
+/* Runs past the visible range (an earlier week is being viewed). */
+.tl-bar--clipped-right {
+  border-right-style: dashed;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tl-bar--clipped-left.tl-bar--clipped-right {
+  border-radius: 0;
+}
+
+.tl-bar-title {
+  /* The title is the only flexible child, so the chips never squeeze it away. */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-bar-edge,
+.tl-bar-note {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: var(--kv2-text-3xs);
+}
+
+.tl-bar-count {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: var(--kv2-radius-pill);
+  background: color-mix(in srgb, var(--kv2-text-inverse) 28%, transparent);
+  font-size: var(--kv2-text-3xs);
+}
+
+.tl-bar--discarded .tl-bar-count {
+  background: color-mix(in srgb, var(--kv2-neutral-900) 18%, transparent);
+}
+
+.tl-bar-ongoing {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 900;
+}
+
+/* ── Resize handles ───────────────────────────────────────── */
+
+/* Grab targets straddling the bar's edges. They overhang by 4px so the whole
+   grip stays clickable even when the bar is one column wide. */
+.tl-bar-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 3;
+  cursor: ew-resize;
+  /* Without this the browser pans/scrolls instead of emitting pointermove. */
+  touch-action: none;
+}
+
+.timeline--month .tl-bar-handle {
+  width: 8px;
+}
+
+.tl-bar-handle--start { left: -4px; }
+.tl-bar-handle--end { right: -4px; }
+
+/* The visible grip — hidden until the row is hovered or the handle is focused,
+   so the bar reads the same as before at rest. */
+.tl-bar-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 62%;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-text-inverse);
+  border: 1px solid var(--kv2-border-strong);
+  opacity: 0;
+}
+
+.tl-bar-slot:hover .tl-bar-handle::after,
+.tl-bar-slot--dragging .tl-bar-handle::after,
+.tl-bar-handle:focus-visible::after {
+  opacity: 1;
+}
+
+.tl-bar-handle:focus-visible {
+  outline: 2px solid var(--kv2-border-strong);
+  outline-offset: 1px;
+}
+
+/* Keep the whole grid in resize mode while a drag is live: the pointer leaves
+   the handle constantly, and a text selection would fight the drag. */
+.timeline--dragging {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.timeline--dragging .tl-bar {
+  pointer-events: none;
+}
+
+/* `8/31 → 9/3` preview riding above the bar being dragged. */
+.tl-bar-preview {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 2px 8px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-frame);
+  color: var(--kv2-text-on-inverse);
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-3xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Empty state + footnote ───────────────────────────────── */
+
+.tl-empty {
+  grid-column: 1 / -1;
+  padding: var(--kv2-sp-6);
+  text-align: center;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  border-top: 1px solid var(--kv2-border-subtle);
+}
+
+.tl-footnote {
+  margin-top: var(--kv2-sp-3);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  line-height: 1.6;
+  color: var(--kv2-text-muted);
+}

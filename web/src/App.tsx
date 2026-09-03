@@ -10,17 +10,22 @@ import { CardDetailDialog } from './components/Card/CardDetailDialog';
 import { CreateCardDialog } from './components/Card/CreateCardDialog';
 import { SchedulerView } from './components/Scheduler/SchedulerView';
 import { SettingsView } from './components/Settings/SettingsView';
+import { WorksView } from './components/Works/WorksView';
+import { TimelineView } from './components/Works/TimelineView';
+import { BulkAssignModal } from './components/Works/BulkAssignModal';
+import { WorkDetailDialog } from './components/Works/WorkDetailDialog';
 import { ErrorAlert } from './components/shared/ErrorAlert';
 import { AppTabs, PANEL_IDS, TAB_IDS, type MainTab } from './components/shared/AppTabs';
 import { applyCardUpdates } from './utils/cardUpdate';
 import { useSettings } from './hooks/useSettings';
 import { useKanbanBoard } from './hooks/useKanbanBoard';
 import { useScheduler } from './hooks/useScheduler';
+import { useWorks } from './hooks/useWorks';
 import { CapabilitiesView } from './components/Capabilities/CapabilitiesView';
 import { useScripts } from './hooks/useScripts';
 import { useSkills } from './hooks/useSkills';
 import { useSkillRoots } from './hooks/useSkillRoots';
-import type { KanbanCard } from '../../src/core/types';
+import type { KanbanCard, Work, WorkInboxSession } from '../../src/core/types';
 import './components/Scheduler/Scheduler.css';
 import './components/Settings/Settings.css';
 import './App.css';
@@ -88,6 +93,7 @@ export default function App() {
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
   const [showBoardTools, setShowBoardTools] = useState(false);
   const scheduler = useScheduler(activeTab === 'scheduler');
+  const works = useWorks(activeTab === 'works' || activeTab === 'timeline');
   const scripts = useScripts(activeTab === 'capabilities' || activeTab === 'board');
   const quickActions = useQuickActions(activeTab === 'board');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
@@ -99,6 +105,8 @@ export default function App() {
   useTheme();
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
+  const [openWorkId, setOpenWorkId] = useState<string | null>(null);
+  const [bulkAssignSessions, setBulkAssignSessions] = useState<WorkInboxSession[] | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   useEffect(() => {
@@ -248,6 +256,30 @@ export default function App() {
     handleOpenCard(fetchedCard);
   };
 
+  // The Work object is resolved from the live list each render so summary/status
+  // updates from polling flow into the open detail dialog.
+  const openWork = openWorkId
+    ? works.works.find((work) => work.id === openWorkId) ?? null
+    : null;
+
+  // Re-use the board's SessionConversationModal for a Work's linked session by
+  // finding the completed/done card group that owns that sessionId.
+  const handleOpenWorkSession = (sessionId: string) => {
+    const sessionCards = cards.filter((card) => card.sessionId === sessionId);
+    if (sessionCards.length === 0) return;
+    const status = sessionCards.some((card) => card.status === 'done') ? 'done' : 'complete';
+    setSelectedSession({ key: `session:${sessionId}`, status });
+  };
+
+  const handleAssignAll = () => {
+    setBulkAssignSessions(works.inbox);
+  };
+
+  const handleCloseBulkAssign = () => {
+    setBulkAssignSessions(null);
+    void works.refreshInbox();
+  };
+
   const handleQueueOpen = (card: KanbanCard) => {
     if (card.scheduledDispatch?.status === 'scheduled' || card.scheduledDispatch?.status === 'dispatching') {
       showError(createUiAlert('Queue unavailable', '예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.', 'Refresh board'));
@@ -277,7 +309,7 @@ export default function App() {
       >
         <div className="app-header-inner">
           <h1 className="app-title">Agent Kanban</h1>
-          <AppTabs activeTab={activeTab} onActivate={setActiveTab} />
+          <AppTabs activeTab={activeTab} onActivate={setActiveTab} badges={{ works: works.inboxCount }} />
           {activeTab === 'board' && (
             <button
               type="button"
@@ -416,6 +448,36 @@ export default function App() {
               />
             )}
           </BoardWorkspace>
+        ) : activeTab === 'works' ? (
+          <WorksView
+            works={works.works}
+            inbox={works.inbox}
+            loading={works.loading}
+            error={works.error}
+            onCreateWorkFromSession={works.createWorkFromSession}
+            onLinkSessionToWork={works.linkSessionToWork}
+            onIgnoreSession={works.ignoreSession}
+            onCompleteWork={works.completeWork}
+            onRefresh={works.refreshWorks}
+            onClearError={works.clearError}
+            onOpenCard={(cardId) => {
+              void handleOpenCardById(cardId);
+            }}
+            onOpenWork={(work: Work) => setOpenWorkId(work.id)}
+            onAssignAll={handleAssignAll}
+            config={works.config}
+            onSaveConfig={works.saveConfig}
+          />
+        ) : activeTab === 'timeline' ? (
+          <TimelineView
+            works={works.works}
+            loading={works.loading}
+            error={works.error}
+            onOpenWork={(work: Work) => setOpenWorkId(work.id)}
+            onUpdateWorkDates={works.updateWorkDates}
+            onRefresh={works.refreshWorks}
+            onClearError={works.clearError}
+          />
         ) : activeTab === 'wiki' ? (
           <Suspense fallback={<div className="loading-spinner" role="status" aria-label="Loading wiki..." />}>
             <WikiView />
@@ -493,6 +555,30 @@ export default function App() {
           status={selectedSession.status}
           onClose={() => setSelectedSession(null)}
           onCreateFeedback={handleCreateFeedback}
+        />
+      )}
+
+      {bulkAssignSessions && (
+        <BulkAssignModal
+          sessions={bulkAssignSessions}
+          works={works.works}
+          onClose={handleCloseBulkAssign}
+          onCreateWorkFromSession={works.createWorkFromSession}
+          onLinkSessionToWork={works.linkSessionToWork}
+          onIgnoreSession={works.ignoreSession}
+        />
+      )}
+
+      {openWork && (
+        <WorkDetailDialog
+          work={openWork}
+          cards={cards}
+          onClose={() => setOpenWorkId(null)}
+          onComplete={works.completeWork}
+          onDiscard={works.discardWork}
+          onOpenSession={handleOpenWorkSession}
+          onUpdateDates={works.updateWorkDates}
+          onRegenerateSummary={(id) => works.generateSummary(id).then(() => {})}
         />
       )}
 

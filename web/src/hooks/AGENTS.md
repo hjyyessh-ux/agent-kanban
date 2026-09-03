@@ -15,6 +15,10 @@ All web-side data flow lives here: raw `/api` wrappers, reducer-based domain hoo
 | Change board reducer/polling/queue behavior | `useKanbanBoard.ts` | 3s polling, queue reorder, complete-all |
 | Change shared list-CRUD state (entries/polling/errors) | `useCrudResource.ts` | Generic reducer behind the three hooks below |
 | Change scheduler data flow | `useSchedulerApi.ts`, `useScheduler.ts` | Thin wrapper over `useCrudResource` + toggle/run |
+| Change Works data flow | `useWorksApi.ts`, `useWorks.ts` | `useCrudResource` for the Work list (tab-gated on `works` **or** `timeline` — the Timeline tab reads the same list, no endpoint of its own) + a continuously-polled Inbox for the tab badge; assign helpers (create+link) shared with the assign-all modal |
+| Read the Works domain contract first | `docs/works.md` | Work/session model, status side effects, `works.*` settings keys, `/api/works*` reference |
+| Change Work date editing | `useWorks.ts` | `updateWorkDates` is a status-free PATCH of `startedAt`/`resolvedAt`, shared by the Timeline bar-edge drag and the Work detail dialog's date inputs — keep both on this one function. It rejects on the server's ordering/format `400` so the dialog can show it inline |
+| Change Work completion | `useWorks.ts` | `completeWork` sends `{ status: 'done', confirmArchive: true }` — the server bulk-archives the Work's cards. When `works.done_confirm` is on it prompts via `window.confirm` first (in the hook, so the list row and detail dialog share one prompt) and resolves without a PATCH if declined |
 | Change scripts data flow | `useScriptsApi.ts`, `useScripts.ts` | Thin wrapper over `useCrudResource` + run/sync |
 | Change Quick Actions data flow | `useQuickActionsApi.ts`, `useQuickActions.ts` | Shared CRUD wrapper + validated/idempotent execution |
 | Change Quick Actions run form rules | `quickActionFormModel.ts` | Pure default merge, validation, secret-safe form model |
