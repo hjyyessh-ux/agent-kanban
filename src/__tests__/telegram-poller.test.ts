@@ -457,10 +457,12 @@ describe('TelegramPoller', () => {
     }, false);
 
     expect(claudeResult?.type).toBe('reply');
+    expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-fable-5-1');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-fable-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
     expect(codexResult?.type).toBe('reply');
+    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-6-astra');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.5');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.6-sol');
   });
@@ -470,7 +472,7 @@ describe('TelegramPoller', () => {
       chatId: 12345,
       sessions: [],
     }, false);
-    const codexResult = resolveTelegramCommand('/codex_model gpt-6', {
+    const codexResult = resolveTelegramCommand('/codex_model gpt-7', {
       chatId: 12345,
       sessions: [],
     }, false);
@@ -480,6 +482,7 @@ describe('TelegramPoller', () => {
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
     expect(codexResult?.type).toBe('reply');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('지원하지 않는 Codex 모델');
+    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-6-astra');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.5');
   });
 
@@ -511,7 +514,9 @@ describe('TelegramPoller', () => {
   test('model commands resolve shorthand names to catalog ids', () => {
     expect(modelOf('/claude_model opus5')).toBe('claude-opus-5');
     expect(modelOf('/claude_model opus4.8')).toBe('claude-opus-4-8');
+    expect(modelOf('/claude_model fable5.1')).toBe('claude-fable-5-1');
     expect(modelOf('/claude_model fable5')).toBe('claude-fable-5');
+    expect(modelOf('/codex_model gpt6')).toBe('gpt-6-astra');
     expect(modelOf('/codex_model gpt5.5')).toBe('gpt-5.5');
   });
 
@@ -653,11 +658,26 @@ describe('TelegramPoller', () => {
     const claude = resolveTelegramCallback('md:claude:claude-opus-5', { chatId: 12345, sessions: [] });
     expect(claude?.type).toBe('set-defaults');
     expect(claude && 'model' in claude ? claude.model : undefined).toBe('claude-opus-5');
+
+    const fable = resolveTelegramCallback('md:claude:claude-fable-5', { chatId: 12345, sessions: [] });
+    expect(fable?.type).toBe('set-defaults');
+    expect(fable && 'model' in fable ? fable.model : undefined).toBe('claude-fable-5');
+    expect(fable && 'agentRuntime' in fable ? fable.agentRuntime : undefined).toBe('claude');
+
+    const fable51 = resolveTelegramCallback('md:claude:claude-fable-5-1', { chatId: 12345, sessions: [] });
+    expect(fable51?.type).toBe('set-defaults');
+    expect(fable51 && 'model' in fable51 ? fable51.model : undefined).toBe('claude-fable-5-1');
+    expect(fable51 && 'agentRuntime' in fable51 ? fable51.agentRuntime : undefined).toBe('claude');
     expect(claude && 'agentRuntime' in claude ? claude.agentRuntime : undefined).toBe('claude');
 
     const codex = resolveTelegramCallback('md:codex:gpt-5.5', { chatId: 12345, sessions: [] });
     expect(codex?.type).toBe('set-defaults');
     expect(codex && 'model' in codex ? codex.model : undefined).toBe('gpt-5.5');
+
+    const astra = resolveTelegramCallback('md:codex:gpt-6-astra', { chatId: 12345, sessions: [] });
+    expect(astra?.type).toBe('set-defaults');
+    expect(astra && 'model' in astra ? astra.model : undefined).toBe('gpt-6-astra');
+    expect(astra && 'agentRuntime' in astra ? astra.agentRuntime : undefined).toBe('codex');
   });
 
   test('unknown callback data resolves to null', () => {

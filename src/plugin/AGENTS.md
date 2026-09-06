@@ -88,7 +88,7 @@ plugin/
 - Inline keyboards go through `TelegramCommandResult.keyboard`; taps arrive as `update.callback_query` and are resolved by `resolveTelegramCallback()`. Every callback path must call `answerTelegramCallbackQuery()` or the button spins forever.
 - `/directory` callback data pins each button to a digest of its path. The recent-directory list is re-derived from cards at tap time, so a stale index must be rejected rather than silently switching to the wrong project.
 - Commands marked `hiddenFromMenu` stay routable when typed but are filtered out of `setMyCommands`. `buildTelegramHelpText()` must still mention every command that IS registered — `telegram-poller.test.ts` asserts this.
-- Model ids accept shorthand via `resolveModelId()`. An input matching nothing must stay rejected; when several match, only the runtime default may win.
+- Model ids accept shorthand via `resolveModelId()`. Resolution prefers an exact normalized id, then a unique normalized suffix; remaining ambiguous partial matches may only select the runtime default. Inputs matching nothing stay rejected.
 - Idle completion must stay gated by observed session activity; do not reintroduce unconditional `session.idle` completion.
 - Parent/child waiting semantics must stay aligned with stale detection so top-level parents waiting on direct child work are not flagged as orphaned.
 - Telegram selected-session reuse, sticky default agent/model behavior, and idle-completion boundaries must stay aligned with `docs/invariants.md`.

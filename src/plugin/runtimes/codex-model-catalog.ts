@@ -17,7 +17,7 @@ let cachedCommandKey = '';
 
 function tierForCodexModel(id: string): string {
   if (id.includes('mini')) return 'mini';
-  if (id.includes('sol') || id.includes('terra') || id.includes('luna')) return 'frontier';
+  if (id.includes('astra') || id.includes('sol') || id.includes('terra') || id.includes('luna')) return 'frontier';
   if (id.includes('codex')) return 'codex';
   return 'general';
 }

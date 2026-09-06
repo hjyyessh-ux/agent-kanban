@@ -465,9 +465,11 @@ function normalizeModelKey(value: string): string {
 
 /**
  * Map a loosely typed model name onto a catalog id, so `/claude_model opus5`
- * works as well as the full `claude-opus-5`. When several models match (e.g.
- * `gpt5.6` matching sol/terra/luna) the runtime default wins; if it is not
- * among them the input stays ambiguous and the caller shows the list.
+ * works as well as the full `claude-opus-5`. A unique suffix keeps adjacent
+ * versions such as `fable5` and `fable5.1` distinct. When several partial
+ * matches remain (e.g. `gpt5.6` matching sol/terra/luna), the runtime default
+ * wins; if it is not among them the input stays ambiguous and the caller shows
+ * the list.
  */
 export function resolveModelId(
   input: string,
@@ -479,6 +481,9 @@ export function resolveModelId(
 
   const exact = models.find(model => normalizeModelKey(model.id) === target);
   if (exact) return exact.id;
+
+  const suffixMatches = models.filter(model => normalizeModelKey(model.id).endsWith(target));
+  if (suffixMatches.length === 1) return suffixMatches[0].id;
 
   const matches = models.filter(model => normalizeModelKey(model.id).includes(target));
   if (matches.length === 1) return matches[0].id;

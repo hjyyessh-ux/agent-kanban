@@ -12,9 +12,10 @@ const args = process.argv.slice(2);
 if (args[0] !== 'debug' || args[1] !== 'models') process.exit(2);
 process.stdout.write(JSON.stringify({
   models: [
-    { slug: 'gpt-5.7-sol', display_name: 'GPT-5.7-Sol', visibility: 'list', priority: 1 },
-    { slug: 'codex-auto-review', display_name: 'Codex Auto Review', visibility: 'hide', priority: 2 },
-    { slug: 'gpt-5.7-mini', display_name: 'GPT-5.7-Mini', visibility: 'list', priority: 3 }
+    { slug: 'gpt-6-astra', display_name: 'GPT-6-Astra', visibility: 'list', priority: 1 },
+    { slug: 'gpt-5.7-sol', display_name: 'GPT-5.7-Sol', visibility: 'list', priority: 2 },
+    { slug: 'codex-auto-review', display_name: 'Codex Auto Review', visibility: 'hide', priority: 3 },
+    { slug: 'gpt-5.7-mini', display_name: 'GPT-5.7-Mini', visibility: 'list', priority: 4 }
   ]
 }));
 `);
@@ -32,8 +33,8 @@ describe('Codex model catalog', () => {
         forceRefresh: true,
       });
 
-      expect(models.map((model) => model.id)).toEqual(['gpt-5.7-sol', 'gpt-5.7-mini']);
-      expect(models[0]).toEqual({ id: 'gpt-5.7-sol', label: 'GPT-5.7-Sol', tier: 'frontier' });
+      expect(models.map((model) => model.id)).toEqual(['gpt-6-astra', 'gpt-5.7-sol', 'gpt-5.7-mini']);
+      expect(models[0]).toEqual({ id: 'gpt-6-astra', label: 'GPT-6-Astra', tier: 'frontier' });
     });
   });
 
@@ -46,7 +47,7 @@ describe('Codex model catalog', () => {
       });
 
       const codex = catalog.find((entry) => entry.runtime === 'codex');
-      expect(codex?.models?.map((model) => model.id)).toEqual(['gpt-5.7-sol', 'gpt-5.7-mini']);
+      expect(codex?.models?.map((model) => model.id)).toEqual(['gpt-6-astra', 'gpt-5.7-sol', 'gpt-5.7-mini']);
     });
   });
 });

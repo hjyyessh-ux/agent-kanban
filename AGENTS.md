@@ -83,6 +83,7 @@
 - Dispatch updates the card and dispatch tracker before `promptAsync()` to avoid duplicate creation races.
 - Telegram follow-ups reuse the selected session, while `/new_session` clears only the selected session and keeps sticky default agent/model.
 - Telegram follow-up cards inherit the selected session `projectDir`; `/directory` remains sticky until changed or cleared, and new-session/follow-up ACKs show the effective path.
+- Telegram model menus use the shared runtime catalog. Model shorthand prefers a unique normalized suffix before partial/default fallback so adjacent versions such as Fable 5 and Fable 5.1 remain independently selectable.
 - Feedback dispatch reuses the original session strictly via `feedbackForCardId`, not by description text shape.
 - Quick Action icons use the shared ten-emoji palette, reject duplicate/custom non-grapheme values, and give icon-less legacy entries deterministic sorted fallbacks without dropping them. Board/List use a non-layout-consuming labeled `⚡ Quick ›` left-edge tab and left modal side sheet that preserves desktop geometry, dims/inerts the background, and becomes full-screen on mobile; Add/Edit stays in a separate DialogSkeleton editor, and new Prompt drafts share Create Card runtime/model defaults and stop applying asynchronous defaults after the matching field is touched.
 - Tool factories must keep string return values; route handlers must keep CORS.
