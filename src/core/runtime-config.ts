@@ -4,6 +4,7 @@ import { PRIMARY_AGENT_CONFIGS, type PrimaryAgentConfig } from './agent-config';
 export const RUNTIME_MODEL_PREFERENCE_KEY = 'kanban-runtime-model-preference';
 
 export const CLAUDE_MODELS = [
+  { id: 'claude-fable-5-1', label: 'Fable 5.1', tier: 'fable' },
   { id: 'claude-fable-5', label: 'Fable 5', tier: 'fable' },
   { id: 'claude-opus-5', label: 'Opus 5 (1M context)', tier: 'opus' },
   { id: 'claude-opus-4-8', label: 'Opus 4.8', tier: 'opus' },
@@ -20,6 +21,7 @@ export type ClaudeModelId = typeof CLAUDE_MODELS[number]['id'];
 export const DEFAULT_CLAUDE_MODEL: ClaudeModelId = 'claude-sonnet-5';
 
 export const CODEX_MODELS = [
+  { id: 'gpt-6-astra', label: 'GPT-6 Astra', tier: 'frontier' },
   { id: 'gpt-5.6-sol', label: 'GPT-5.6-Sol', tier: 'frontier' },
   { id: 'gpt-5.6-terra', label: 'GPT-5.6-Terra', tier: 'frontier' },
   { id: 'gpt-5.6-luna', label: 'GPT-5.6-Luna', tier: 'frontier' },

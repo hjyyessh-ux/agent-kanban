@@ -59,6 +59,7 @@ describe("deriveSyncedCatalog", () => {
         label: "Codex",
         selection: "model",
         models: [
+          { id: "gpt-6-astra", label: "GPT-6 Astra", tier: "frontier" },
           { id: "gpt-5.6-sol", label: "GPT-5.6-Sol", tier: "frontier" },
         ],
       },
@@ -72,5 +73,28 @@ describe("deriveSyncedCatalog", () => {
 
     expect(added).toBe(0);
     expect(catalog.codex).toEqual([]);
+  });
+
+  test("does not add hardcoded Claude models to the synced catalog", () => {
+    const runtimes: RuntimeCatalogEntry[] = [
+      {
+        runtime: "claude",
+        label: "Claude",
+        selection: "model",
+        models: [
+          { id: "claude-fable-5-1", label: "Fable 5.1", tier: "fable" },
+          { id: "claude-opus-5", label: "Opus 5 (1M context)", tier: "opus" },
+        ],
+      },
+    ];
+
+    const { catalog, added } = deriveSyncedCatalog({
+      models: [],
+      runtimes,
+      previous: emptyPrevious,
+    });
+
+    expect(added).toBe(0);
+    expect(catalog.claude).toEqual([]);
   });
 });

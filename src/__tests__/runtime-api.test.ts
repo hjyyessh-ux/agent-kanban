@@ -36,11 +36,16 @@ describe('runtime API', () => {
       const body = await response.json() as { runtimes: typeof catalog };
       const opencode = body.runtimes.find((entry) => entry.runtime === 'opencode');
       const codex = body.runtimes.find((entry) => entry.runtime === 'codex');
+      const claude = body.runtimes.find((entry) => entry.runtime === 'claude');
       expect(opencode?.available).toBe(false);
       expect(opencode?.disabled).toBe(true);
       expect(opencode?.unavailableReason).toBe('daemon unavailable');
       expect(codex?.available).toBe(true);
       expect(codex?.models?.length).toBeGreaterThan(0);
+      expect(codex?.models?.map((model) => model.id)).toContain('gpt-6-astra');
+      expect(claude?.models?.map((model) => model.id)).toContain('claude-fable-5-1');
+      expect(claude?.models?.map((model) => model.id)).toContain('claude-fable-5');
+      expect(claude?.models?.map((model) => model.id)).toContain('claude-opus-5');
     });
   });
 });

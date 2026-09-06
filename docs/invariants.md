@@ -62,6 +62,7 @@
 - follow-up 카드는 선택된 session의 `projectDir`를 이어받고, 새 session/후속 전달 ACK에는 실제 적용 경로를 표시한다.
 - follow-up 실패 시 selected session을 유지하고 새 session을 몰래 만들지 않는다.
 - `/new_session`은 selected session/card만 지우고 sticky default agent/model/runtime/projectDir은 보존한다. `/directory` 기본값은 다른 경로를 지정하거나 `clear`하기 전까지 새 session에 유지된다.
+- Telegram 모델 목록/버튼은 `src/core/runtime-config.ts`의 공용 catalog를 사용한다. 짧은 모델명은 normalized exact id, unique suffix 순으로 해석하고, 그 뒤에도 여러 모델이 남으면 runtime default만 선택할 수 있어야 한다. 따라서 `fable5`와 `fable5.1`은 각각 독립적으로 선택된다.
 - trailing agent command와 explicit agent command는 필요할 때만 새 dispatch를 강제한다.
 - `session.idle` 이후에도 Telegram selected session은 유지되어 다음 plain message가 같은 session으로 follow-up될 수 있어야 한다.
 

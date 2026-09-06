@@ -277,7 +277,7 @@ Codex/Claude run artifact는 `KANBAN_DATA_DIR/runtime-runs/<runId>/` 아래에 �
 - follow-up 성공 시에도 추적 가능성을 위해 새 `in_progress` 카드가 생성된다.
 - `/new_session`은 selected session/card만 지우고 sticky default agent/model/runtime은 보존한다.
 - `/claude_model_list`와 `/codex_model_list`는 현재 `src/core/runtime-config.ts`에 등록된 사용 가능 model id를 보여준다.
-- `/claude_model <model id>`와 `/codex_model <model id>`는 정확히 등록된 id만 sticky default로 저장하며, 알 수 없는 id는 저장하지 않고 사용 가능한 목록을 안내한다.
+- `/claude_model <model>`과 `/codex_model <model>`은 등록된 id 또는 구분 가능한 짧은 이름을 sticky default로 저장한다. normalized suffix가 정확히 하나면 그 모델을 선택하므로 `fable5`와 `fable5.1`도 구분되며, 여전히 모호하거나 알 수 없는 입력은 저장하지 않고 사용 가능한 목록을 안내한다.
 - feedback 카드는 description wrapper가 아니라 `feedbackForCardId`를 기준으로 원본 session을 찾는다.
 
 ## 서브태스크 계층

@@ -19,10 +19,17 @@ describe("mergeRuntimeCatalog", () => {
     const codex = mergeRuntimeCatalog(remote).find((entry) => entry.runtime === "codex");
     const ids = codex?.models?.map((model) => model.id) ?? [];
 
+    expect(ids).toContain("gpt-6-astra");
     expect(ids).toContain("gpt-5.6-sol");
     expect(ids).toContain("gpt-5.6-terra");
     expect(ids).toContain("gpt-5.6-luna");
     expect(ids.filter((id) => id === "gpt-5.4")).toHaveLength(1);
     expect(ids).toContain("gpt-5.7-preview");
+
+    const claude = mergeRuntimeCatalog(remote).find((entry) => entry.runtime === "claude");
+    const claudeIds = claude?.models?.map((model) => model.id) ?? [];
+    expect(claudeIds).toContain("claude-fable-5-1");
+    expect(claudeIds).toContain("claude-fable-5");
+    expect(claudeIds).toContain("claude-opus-5");
   });
 });
