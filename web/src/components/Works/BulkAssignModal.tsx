@@ -1,16 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Work, WorkInboxSession, WorkSessionRole } from '../../../../src/core/types';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import {
+  EMPTY_BULK_ASSIGN_TALLY,
   ROLE_LABELS,
   ROLE_OPTIONS,
+  describeBulkAssignProgress,
   recommendWorksForSession,
+  resolveBulkAssignShortcut,
   suggestWorkTitle,
-  projectDirLabel,
   shortSessionId,
   formatTimeAgo,
+  type BulkAssignTally,
   type WorkRecommendation,
 } from './worksAssign';
+import { chainedWorkIds, dirAccentClass } from './worksAffinity';
+import {
+  noticeForDiscardedSession,
+  noticeForLinkedSessions,
+  noticeForNewWork,
+  type WorkAssignUndoActions,
+} from './workAssignNotice';
+import { WorkAffinityMarks, DirChip } from './WorkAffinityMarks';
 import './Works.css';
 
 interface BulkAssignModalProps {
@@ -29,6 +40,20 @@ interface BulkAssignModalProps {
     role?: WorkSessionRole,
   ) => Promise<Work>;
   onIgnoreSession: (sessionId: string) => Promise<void>;
+  /** Open the session's card conversation — the same 대화 보기 the Inbox row has. */
+  onOpenCard?: (cardId: string) => void;
+  /** Undo toasts for 연결 / 폐기; omit to assign without them. */
+  assignNotice?: WorkAssignUndoActions;
+  /**
+   * `works.assign_suggest_resume_chain`. When on (the default), Works holding a
+   * session this one continues rank first and are marked 🔗.
+   */
+  suggestSessionChain?: boolean;
+  /**
+   * `works.assign_prefer_same_dir`. When on (the default), Works sharing the
+   * session's directory rank above the rest; off leaves lineage-then-recency.
+   */
+  preferSameDir?: boolean;
 }
 
 /** Up to nine recommendations get a 1–9 shortcut; the rest fall off the keyboard grid. */
@@ -58,15 +83,26 @@ export function BulkAssignModal({
   onCreateWorkFromSession,
   onLinkSessionToWork,
   onIgnoreSession,
+  onOpenCard,
+  assignNotice,
+  suggestSessionChain = true,
+  preferSameDir = true,
 }: BulkAssignModalProps) {
   const [index, setIndex] = useState(0);
 
   const total = sessions.length;
   const session = sessions[index];
 
+  const chained = useMemo(
+    () => (session && suggestSessionChain ? chainedWorkIds(session, works) : undefined),
+    [session, works, suggestSessionChain],
+  );
   const recommendations = useMemo(
-    () => (session ? recommendWorksForSession(session, works).slice(0, MAX_SHORTCUT_WORKS) : []),
-    [session, works],
+    () => (session
+      ? recommendWorksForSession(session, works, undefined, chained, { preferSameDir })
+        .slice(0, MAX_SHORTCUT_WORKS)
+      : []),
+    [session, works, chained, preferSameDir],
   );
   const suggestedTitle = useMemo(
     () => (session ? suggestWorkTitle(session) : ''),
@@ -80,6 +116,10 @@ export function BulkAssignModal({
   const [title, setTitle] = useState(suggestedTitle);
   const [role, setRole] = useState<WorkSessionRole>('dev');
   const [busy, setBusy] = useState(false);
+  // What this walk has actually done so far. The `n / N` counter alone froze at
+  // the snapshot size while sessions were being linked and discarded out of the
+  // Inbox underneath it.
+  const [tally, setTally] = useState<BulkAssignTally>(EMPTY_BULK_ASSIGN_TALLY);
   const primaryRef = useRef<HTMLButtonElement>(null);
 
   // Reset the per-session choice whenever we advance to a new card.
@@ -100,11 +140,15 @@ export function BulkAssignModal({
     }
   };
 
-  const runAction = async (action: () => Promise<void>) => {
+  const runAction = async (
+    action: () => Promise<void>,
+    outcome: keyof BulkAssignTally,
+  ) => {
     if (busy) return;
     setBusy(true);
     try {
       await action();
+      setTally((prev) => ({ ...prev, [outcome]: prev[outcome] + 1 }));
       advance();
     } catch {
       // The error is already surfaced via the Works error alert; keep the user on
@@ -121,52 +165,70 @@ export function BulkAssignModal({
     if (!session || !canConnect) return;
     void runAction(async () => {
       if (selection.mode === 'new') {
-        await onCreateWorkFromSession(session, title.trim() || suggestedTitle, role);
+        const work = await onCreateWorkFromSession(session, title.trim() || suggestedTitle, role);
+        assignNotice?.notify(noticeForNewWork(work, 1, assignNotice));
       } else {
-        await onLinkSessionToWork(selection.workId, session, role);
+        const work = await onLinkSessionToWork(selection.workId, session, role);
+        assignNotice?.notify(noticeForLinkedSessions(work, [session.sessionId], assignNotice));
       }
-    });
+    }, 'linked');
   };
 
   const handleSkip = () => {
     if (busy) return;
+    setTally((prev) => ({ ...prev, skipped: prev.skipped + 1 }));
     advance();
   };
 
+  // Destructive and one keystroke away, so it always leaves an undo behind —
+  // the ignore list was write-only when this shortcut was written.
   const handleDiscard = () => {
     if (!session) return;
-    void runAction(() => onIgnoreSession(session.sessionId));
+    void runAction(async () => {
+      await onIgnoreSession(session.sessionId);
+      assignNotice?.notify(noticeForDiscardedSession(session, assignNotice));
+    }, 'discarded');
   };
 
+  // Which key means what is the pure `resolveBulkAssignShortcut`: this listener
+  // sees *every* key in the dialog (window + capture), so "does the focused
+  // element own this key" is the whole safety property and it belongs in a
+  // tested function rather than inline here.
   const handleKeyDown = (event: KeyboardEvent) => {
-    // Let the title <input> receive letters/digits so titles stay editable; only
-    // Enter (submit) is honored while typing.
-    const target = event.target as HTMLElement;
-    const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+    const target = event.target as HTMLElement | null;
+    const shortcut = resolveBulkAssignShortcut({
+      key: event.key,
+      target: {
+        tagName: target?.tagName ?? '',
+        isContentEditable: target?.isContentEditable,
+      },
+      metaKey: event.metaKey,
+      ctrlKey: event.ctrlKey,
+      altKey: event.altKey,
+      recommendationCount: recommendations.length,
+    });
+    if (!shortcut) return;
 
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      handleConnect();
-      return;
-    }
-    if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
-
-    const key = event.key.toLowerCase();
-    if (key === 'n') {
-      event.preventDefault();
-      setSelection({ mode: 'new' });
-    } else if (key === 's') {
-      event.preventDefault();
-      handleSkip();
-    } else if (key === 'x') {
-      event.preventDefault();
-      handleDiscard();
-    } else if (/^[1-9]$/.test(event.key)) {
-      const pick = recommendations[Number(event.key) - 1];
-      if (pick) {
-        event.preventDefault();
-        setSelection({ mode: 'existing', workId: pick.work.id });
-      }
+    event.preventDefault();
+    switch (shortcut.action) {
+      case 'connect':
+        handleConnect();
+        break;
+      case 'select-new':
+        setSelection({ mode: 'new' });
+        break;
+      case 'skip':
+        handleSkip();
+        break;
+      case 'discard':
+        handleDiscard();
+        break;
+      case 'select-recommendation':
+        setSelection({
+          mode: 'existing',
+          workId: recommendations[shortcut.index].work.id,
+        });
+        break;
     }
   };
 
@@ -197,15 +259,50 @@ export function BulkAssignModal({
           <p className="works-empty">배정할 미배정 세션이 없습니다.</p>
           <div className="kv2-dialog-footer">
             <div className="kv2-actions-split">
-              <button type="button" className="kv2-btn kv2-btn--primary kv2-actions-primary" onClick={onClose}>
-                닫기
-              </button>
+              <div className="kv2-actions-primary">
+                <button type="button" className="kv2-btn kv2-btn--primary" onClick={onClose}>
+                  닫기
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </DialogSkeleton>
     );
   }
+
+  // Rendered directly under whichever option is selected — the inputs for a
+  // choice belong next to that choice, not at the end of a list the user has to
+  // scroll past (and the sticky footer's submit stays in view either way).
+  const detail = (
+    <div className="bulk-assign-detail">
+      {selection.mode === 'new' && (
+        <div className="bulk-assign-new">
+          <label className="kv2-label" htmlFor="bulk-assign-title">새 Work 제목</label>
+          <input
+            id="bulk-assign-title"
+            className="kv2-input"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="Work 제목"
+          />
+        </div>
+      )}
+      <div className="bulk-assign-role">
+        <label className="kv2-label" htmlFor="bulk-assign-role">이 세션 역할</label>
+        <select
+          id="bulk-assign-role"
+          className="kv2-select"
+          value={role}
+          onChange={(event) => setRole(event.target.value as WorkSessionRole)}
+        >
+          {ROLE_OPTIONS.map((option) => (
+            <option key={option} value={option}>{ROLE_LABELS[option]}</option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
 
   return (
     <DialogSkeleton
@@ -215,32 +312,48 @@ export function BulkAssignModal({
       initialFocusRef={primaryRef}
     >
       <div className="bulk-assign">
-        <div className="bulk-assign-progress">
+        {/* Announced, and live: the counts move as sessions are linked, skipped
+            and discarded, instead of restating a frozen snapshot total. */}
+        <div className="bulk-assign-progress" role="status" aria-live="polite">
           <span className="kv2-badge">{index + 1} / {total}</span>
-          <span className="bulk-assign-progress-hint">남은 미배정 세션을 하나씩 배정합니다</span>
+          <span className="bulk-assign-progress-hint">
+            {describeBulkAssignProgress(tally, total - index)}
+          </span>
         </div>
 
         <div className="bulk-assign-session">
           <div className="bulk-assign-session-head">
             <span className="kv2-badge works-runtime-chip">{session.agentRuntime}</span>
-            {session.projectDir && (
-              <b className="bulk-assign-dir">📁 {projectDirLabel(session.projectDir)}</b>
-            )}
+            <DirChip projectDir={session.projectDir} className="bulk-assign-dir" />
             <span className="works-mono">{shortSessionId(session.sessionId)}</span>
             <span className="bulk-assign-session-meta">
               {formatTimeAgo(session.updatedAt)} · 카드 {session.relatedCardCount}
             </span>
+            {/* The prompt excerpt is often not enough to decide where a session
+                belongs; the Inbox row has always offered the conversation and
+                this screen — the one that assigns *without* the row — did not. */}
+            {onOpenCard && session.cardId && (
+              <button
+                type="button"
+                className="kv2-btn kv2-btn--small kv2-btn--ghost bulk-assign-open-card"
+                onClick={() => onOpenCard(session.cardId)}
+              >
+                대화 보기
+              </button>
+            )}
           </div>
           <div className="bulk-assign-prompt">
             {session.sessionTitle || session.cardTitle}
           </div>
         </div>
 
-        <div className="bulk-assign-options" role="listbox" aria-label="배정 대상">
+        {/* A plain group of aria-pressed toggles rather than a listbox: the
+            selected option's inputs render *inside* the list, immediately under
+            it, and a listbox may only contain options. */}
+        <div className="bulk-assign-options" role="group" aria-label="배정 대상">
           <button
             type="button"
-            role="option"
-            aria-selected={selection.mode === 'new'}
+            aria-pressed={selection.mode === 'new'}
             className={`bulk-assign-option${selection.mode === 'new' ? ' is-selected' : ''}`}
             onClick={() => setSelection({ mode: 'new' })}
           >
@@ -249,75 +362,61 @@ export function BulkAssignModal({
             </span>
             <span className="bulk-assign-opt-desc">"{suggestedTitle}" (제목 수정 가능)</span>
           </button>
+          {selection.mode === 'new' && detail}
 
-          {recommendations.map(({ work, sameDirectory }, i) => {
+          {recommendations.map(({ work, sameDirectory, chained: isChained }, i) => {
             const selected = selection.mode === 'existing' && selection.workId === work.id;
             return (
-              <button
-                type="button"
-                key={work.id}
-                role="option"
-                aria-selected={selected}
-                className={`bulk-assign-option${selected ? ' is-selected' : ''}`}
-                onClick={() => setSelection({ mode: 'existing', workId: work.id })}
-              >
-                <span className="bulk-assign-opt-title">
-                  <span className="bulk-assign-kbd">{i + 1}</span> {work.title}
-                </span>
-                <span className="bulk-assign-opt-desc">
-                  {sameDirectory ? '추천 · 같은 projectDir' : '다른 projectDir'}
-                </span>
-              </button>
+              <Fragment key={work.id}>
+                <button
+                  type="button"
+                  aria-pressed={selected}
+                  className={`bulk-assign-option works-dir-accented ${dirAccentClass(work.projectDir)}${selected ? ' is-selected' : ''}`}
+                  onClick={() => setSelection({ mode: 'existing', workId: work.id })}
+                >
+                  <span className="bulk-assign-opt-title">
+                    <span className="bulk-assign-kbd">{i + 1}</span> {work.title}
+                  </span>
+                  <span className="bulk-assign-opt-desc">
+                    <WorkAffinityMarks
+                      projectDir={work.projectDir}
+                      sameDirectory={sameDirectory}
+                      chained={isChained}
+                    />
+                  </span>
+                </button>
+                {selected && detail}
+              </Fragment>
             );
           })}
         </div>
 
-        {selection.mode === 'new' && (
-          <div className="bulk-assign-new">
-            <label className="kv2-label" htmlFor="bulk-assign-title">새 Work 제목</label>
-            <input
-              id="bulk-assign-title"
-              className="kv2-input"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="Work 제목"
-            />
-          </div>
-        )}
-
-        <div className="bulk-assign-role">
-          <label className="kv2-label" htmlFor="bulk-assign-role">이 세션 역할</label>
-          <select
-            id="bulk-assign-role"
-            className="kv2-select"
-            value={role}
-            onChange={(event) => setRole(event.target.value as WorkSessionRole)}
-          >
-            {ROLE_OPTIONS.map((option) => (
-              <option key={option} value={option}>{ROLE_LABELS[option]}</option>
-            ))}
-          </select>
-        </div>
-
+        {/* 폐기 is the only destructive action, so it takes the left danger
+            zone on its own. 건너뛰기 belongs with the forward actions on the
+            right: it advances the queue to the next session rather than leaving
+            it. Previously it sat left with `kv2-action-cancel` and 폐기 was
+            stranded between two `auto` margins, floating mid-footer. */}
         <div className="kv2-dialog-footer">
           <div className="kv2-actions-split">
-            <button
-              type="button"
-              className="kv2-btn kv2-btn--small kv2-btn--ghost kv2-action-cancel"
-              disabled={busy}
-              onClick={handleSkip}
-            >
-              <span className="bulk-assign-kbd">S</span> 건너뛰기
-            </button>
-            <button
-              type="button"
-              className="kv2-btn kv2-btn--small kv2-btn--danger"
-              disabled={busy}
-              onClick={handleDiscard}
-            >
-              <span className="bulk-assign-kbd">X</span> 폐기
-            </button>
+            <div className="kv2-actions-danger">
+              <button
+                type="button"
+                className="kv2-btn kv2-btn--small kv2-btn--subtle-danger"
+                disabled={busy}
+                onClick={handleDiscard}
+              >
+                <span className="bulk-assign-kbd">X</span> 폐기
+              </button>
+            </div>
             <div className="kv2-actions-primary">
+              <button
+                type="button"
+                className="kv2-btn kv2-btn--small kv2-btn--ghost"
+                disabled={busy}
+                onClick={handleSkip}
+              >
+                <span className="bulk-assign-kbd">S</span> 건너뛰기
+              </button>
               <button
                 ref={primaryRef}
                 type="button"

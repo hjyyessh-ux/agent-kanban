@@ -20,6 +20,7 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 | `kv2/card-detail.css` | Detail/create dialog layouts, agent selector, radio group, badge, queue mode, children. |
 | `kv2/panels.css` | Detail sidebar panels: session resume, meta, phases, run metadata/progress, question, feedback, screenshot, queue settings. |
 | `kv2/conversation.css` | Session conversation modal speaker blocks. |
+| `tokenColor.ts` | **Test-only.** sRGB colour maths (luminance, contrast, `color-mix` as a lerp, hue) plus a reader that parses `kanban-v2.tokens.css` into light/dark token maps and evaluates a token's value through `var()` chains and `color-mix`. The one exception to this directory's "no TS" rule: the assertions it enables are about the tokens, so it belongs beside them. It restates **no** palette value — everything is read out of the stylesheet, so a token cannot drift away from its guard. |
 
 ## For AI Agents
 ### Working In This Directory
@@ -31,6 +32,7 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 
 ### Testing Requirements
 - `no-hardcoded-colors.test.ts` greps every `*.css` under `web/src` (except `kanban-v2.tokens.css`) for hex/rgba literals and fails on anything outside the allowlist documented in `docs/dark-mode-token-map.md` — keeps new colors routed through `--kv2-*` tokens instead of leaking past dark-mode.
+- `token-contrast.test.ts` evaluates the Works affinity **text** tokens (`--kv2-dir-{1..8}-text`, `--kv2-affinity-chain-text`) out of the stylesheet and fails below WCAG AA (4.5:1) in either theme — against every panel surface *and* against the 14% accent tint `.works-dir-chip` paints under its own label. It also asserts the layer ① swatches are not restated in the dark block, that each `-text` token keeps its slot hue (mixing all the way to ink would pass a contrast check and destroy the palette), and that hue-adjacent slots differ in luminance. Retune a mix percentage or a swatch and this is what tells you whether it still reads. Layer ① swatches themselves are exempt: a 4px bar is not text.
 - `e2e/v2-visual-audit.e2e.ts` asserts key kv2 metrics (board gap, card radius, dialog width) and captures screenshots (light + dark) — run it plus `board.e2e.ts` after touching shared tokens or `kv2/` files.
 
 ### Common Patterns
@@ -39,7 +41,7 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 
 ## Dependencies
 ### Internal
-- None — pure CSS, no imports from TS/TSX. Consumed globally via `main.tsx`; component-local CSS files assume these tokens are already loaded.
+- None at runtime — pure CSS, no imports from TS/TSX. Consumed globally via `main.tsx`; component-local CSS files assume these tokens are already loaded. (`tokenColor.ts` is imported by tests only — here and by `components/Works/worksAffinity.test.ts` — and never by a component.)
 
 ### External
 - None.

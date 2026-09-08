@@ -26,7 +26,11 @@ export const WORKS_SETTING_DEFAULTS = {
   assignPreferSameDir: 'true',
   assignSuggestResumeChain: 'true',
   staleDays: '5',
-  doneConfirm: 'false',
+  // Completing a Work bulk-archives every card under it and cannot be undone,
+  // so the confirmation is on unless the user turns it off — the default used to
+  // be `false`, which made a single click on the list row's primary button
+  // destroy an unbounded number of cards with no prompt and no undo.
+  doneConfirm: 'true',
 } as const;
 
 /** Allowed Summary line counts — kept in one place for route + config validation. */

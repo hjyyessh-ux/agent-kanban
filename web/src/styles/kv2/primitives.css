@@ -345,6 +345,16 @@
   margin-right: auto;
 }
 
+/* Mirror of .kv2-actions-primary for the footer's left-hand danger zone: keeps
+   multiple destructive actions together at the left edge, away from the primary
+   action. Use instead of .kv2-action-cancel when there is more than one. */
+.kv2-actions-danger {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-right: auto;
+}
+
 .kv2-actions-primary {
   display: flex;
   align-items: center;

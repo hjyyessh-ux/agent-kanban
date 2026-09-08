@@ -15,6 +15,19 @@ import type { SkillStore } from '../core/skill-store';
 import type { SkillRootsStore } from '../core/skill-roots-store';
 import type { PlacementTargetsStore } from '../core/placement-targets-store';
 import { validateSkillPath } from '../core/validate-skill-path';
+import {
+  buildSessionChainMap,
+  buildSubagentSessionTree,
+  subagentAncestorSessions,
+  subagentDescendantSessions,
+} from '../core/session-chain';
+import {
+  buildTimelineSessions,
+  buildWorkSessionsResponse,
+  checkTimelineWindow,
+  timelineArchiveMonths,
+  workCardScanFloor,
+} from '../core/timeline-aggregate';
 import type { QuestionMonitor } from '../plugin/question-monitor';
 import type { QuestionRequest } from '../plugin/question-monitor';
 import type { WikiWorker } from '../plugin/wiki/wiki-worker';
@@ -24,7 +37,30 @@ import { resolveClaudeTranscriptPath, loadClaudeTranscript } from '../plugin/wik
 import { createWikiLlm } from '../plugin/wiki/wiki-llm';
 import { loadWorksConfig, loadWorksConfigDto, saveWorksConfig } from '../plugin/works/works-config';
 import { generateWorkSummary, type WorkTranscriptSource } from '../plugin/works/works-summary';
-import { applyWorkPatch, resolveSessionStartedAt } from '../plugin/works/work-lifecycle';
+import {
+  applyWorkPatch,
+  buildWorkCompletionPreview,
+  createWorkStartedAtResolver,
+  loadWorkStartedAtResolver,
+  reopenWork,
+  resolveWorkStartedAt,
+  selectWorkCards,
+  type ActiveRunProbe,
+} from '../plugin/works/work-lifecycle';
+import { findWorkOwningSession, reconcileWorkSessionLinks } from '../plugin/works/work-links';
+import { isWorkListSort } from '../core/work-list';
+import {
+  WorkAlreadyActiveError,
+  WorkCardsRunningError,
+  WorkDateOrderError,
+  WorkMergeTargetError,
+  WorkNotActiveError,
+  WorkNotFoundError,
+  WorkNotMovableError,
+  WorkSessionAlreadyLinkedError,
+  WorkSessionNotIgnoredError,
+  WorkSessionNotLinkedError,
+} from '../core/work-errors';
 import { getSettingValueOrDefault } from '../core/settings-store';
 import type {
   AgentRuntime,
@@ -39,13 +75,22 @@ import type {
   SkillRuntime,
   RunQuickActionResponse,
   WikiArchiveCardStatusFilter,
+  Work,
+  AddWorkSessionInput,
+  WorkAddSessionResponse,
+  WorkBatchAddSessionsResponse,
+  WorkBatchLinkFailure,
   WorkStatus,
   UpdateWorkInput,
   WorkSessionRole,
+  WorkSummary,
+  WorkIgnoredSession,
   WorkInboxSession,
+  WorkPatchResponse,
   WorksConfigInput,
+  TimelineSnapshot,
 } from '../core/types';
-import { QUICK_ACTION_ICON_ERRORS } from '../core/types';
+import { QUICK_ACTION_ICON_ERRORS, WORK_NOTES_MAX_LENGTH } from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, DEFAULT_CODEX_REASONING_EFFORT, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
 import { extractAgentThread } from '../core/subagent-transcript';
@@ -117,11 +162,49 @@ const PREFLIGHT_HEADERS = {
 };
 const AGENT_RUNTIME_VALUES = new Set<AgentRuntime>(['opencode', 'codex', 'claude']);
 const WORK_STATUS_VALUES = new Set<WorkStatus>(['active', 'done', 'discarded']);
-const WORK_RESOLUTION_VALUES = new Set<string>(['completed', 'superseded', 'abandoned']);
+/**
+ * The resolutions a **client** may write. `superseded` is deliberately absent
+ * even though `WorkResolution` now includes it: only `POST /api/works/:id/merge`
+ * stamps it, and it is meaningless without the `supersededByWorkId` the same
+ * transition writes — so accepting it here would let a client mint a 병합됨
+ * Work that points nowhere. Same reason `supersededByWorkId` itself is rejected
+ * below.
+ */
+const WORK_RESOLUTION_VALUES = new Set<string>(['completed', 'abandoned']);
 const WORK_SESSION_ROLE_VALUES = new Set<WorkSessionRole>(['dev', 'review', 'debug']);
 /** A parseable ISO 8601 timestamp — the only shape a Work date field accepts. */
 function isValidIsoDate(value: unknown): value is string {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value));
+}
+
+/**
+ * Every accepted date is stored **normalized to UTC `Z`**.
+ *
+ * `Date.parse` happily accepts `2026-09-01T09:00:00+09:00`, and stored as-is it
+ * sorts *after* the equivalent `2026-09-01T00:00:00.000Z` under any lexical
+ * comparison — which is what `min()` recalculation and the `startedAt` clamp
+ * used to do. Normalizing on the way in means every instant in `works.json` is
+ * comparable both as a string and as a `Date`.
+ */
+function normalizeIsoDate(value: string): string {
+  return new Date(value).toISOString();
+}
+
+/**
+ * `WorkSummary` shape guard for `PATCH /api/works/:id`.
+ *
+ * The field is normally written by `POST /api/works/:id/summary` from the LLM,
+ * but the patch endpoint accepts it too (that is how the client clears one with
+ * `null`). It used to accept whatever arrived, so a malformed body landed in
+ * `works.json` and the detail dialog rendered from it.
+ */
+function isWorkSummary(value: unknown): value is WorkSummary {
+  if (typeof value !== 'object' || value === null) return false;
+  const summary = value as Record<string, unknown>;
+  return Array.isArray(summary.lines)
+    && summary.lines.every((line) => typeof line === 'string')
+    && typeof summary.generatedAt === 'string'
+    && typeof summary.model === 'string';
 }
 // Directory convention each runtime scans for project-level skills (mirrors defaultSkillRoots()).
 const SKILL_RUNTIME_SUBDIR: Record<SkillRuntime, string[]> = {
@@ -148,6 +231,61 @@ function json(data: unknown, status: number = 200): Response {
 
 function errorResponse(message: string, status: number): Response {
   return json({ error: message }, status);
+}
+
+/**
+ * Works failures → HTTP status, classified on the error **class**.
+ *
+ * Never on the message: substring matching (`message.includes('not found')`) is
+ * what turned a card vanishing mid-sweep — `Card not found: abc` — into
+ * `404 Work not found`, telling the client the Work did not exist while its
+ * other cards had just been archived under it.
+ */
+function worksErrorResponse(e: unknown, fallback: string): Response {
+  if (e instanceof WorkCardsRunningError) {
+    // The blocked card ids travel with the rejection so the confirmation dialog
+    // can name what is still running instead of just refusing.
+    return json({ error: e.message, runningCardIds: e.runningCardIds }, 409);
+  }
+  if (e instanceof WorkNotFoundError) return errorResponse('Work not found', 404);
+  if (e instanceof WorkSessionNotLinkedError) return errorResponse(e.message, 404);
+  if (e instanceof WorkSessionAlreadyLinkedError) return errorResponse(e.message, 409);
+  if (e instanceof WorkNotMovableError) return errorResponse(e.message, 409);
+  if (e instanceof WorkNotActiveError) return errorResponse(e.message, 409);
+  if (e instanceof WorkAlreadyActiveError) return errorResponse(e.message, 409);
+  if (e instanceof WorkSessionNotIgnoredError) return errorResponse(e.message, 404);
+  if (e instanceof WorkDateOrderError) return errorResponse(e.message, 400);
+  if (e instanceof WorkMergeTargetError) return errorResponse(e.message, 400);
+  return errorResponse(e instanceof Error ? e.message : fallback, 400);
+}
+
+/**
+ * Keep the owning Work's link honest after a card's existence changed.
+ *
+ * Deleting a card is the one board action that can leave a `WorkSessionLink`
+ * pointing at nothing, and it never told Works about it: the link stayed, the
+ * detail dialog kept offering a 대화 link into a session with no cards, and
+ * `resolveWorkStartedAt` quietly fell back to `linkedAt` — so the Timeline bar
+ * started at triage time instead of when the work began. Restoring the card has
+ * to clear the stamp for the same reason.
+ *
+ * Narrowed to the one Work that owns the session, so this stays a couple of file
+ * reads on a hot path. Best-effort: a card delete must not fail because Works
+ * bookkeeping did.
+ */
+async function reconcileWorkLinkForCard(
+  store: KanbanStore,
+  workStore: WorkStore | undefined,
+  sessionId: string | undefined,
+): Promise<void> {
+  if (!workStore || !sessionId) return;
+  try {
+    const owner = await findWorkOwningSession(workStore, sessionId);
+    if (!owner) return;
+    await reconcileWorkSessionLinks({ store, workStore, workIds: [owner.id] });
+  } catch {
+    // Bookkeeping only — never turn a successful card write into an error.
+  }
 }
 
 function readSchedulerScheduleInput(body: Record<string, unknown>): SchedulerScheduleInputState {
@@ -313,6 +451,20 @@ export interface SessionAggregate {
   updatedAt: string;
   linkState?: 'none' | 'single' | 'multiple';
   relatedCardCount?: number;
+  /**
+   * Sessions this one continues — `buildSessionChainMap`. Derived **above** both
+   * aggregation branches, so it is present on the native path too; absent only
+   * when the session has no lineage at all.
+   */
+  relatedSessionIds?: string[];
+  /**
+   * Sessions this one ran as a subagent of, nearest parent first —
+   * `subagentAncestorSessions`. Also derived above the branch. The Works Inbox
+   * uses it to drop a subagent row whose parent is already assigned.
+   */
+  parentSessionIds?: string[];
+  /** `subagent` when the session only ever ran under another card/session. */
+  sessionKind?: 'main' | 'subagent';
   isSubagentOnly?: boolean;
   hasTopLevelLinkedCard?: boolean;
   hasSubagentLinkedCard?: boolean;
@@ -324,113 +476,91 @@ export interface SessionAggregate {
 }
 
 /**
- * Aggregates unique sessions from all cards (optionally enriched by the native
- * peer session listing). Extracted so the Works Inbox route can reuse the exact
- * same view that backs `GET /api/sessions`.
+ * Cards of one session, newest first — the shape both aggregation paths want.
  */
-export async function computeSessionAggregates(
-  store: KanbanStore,
-  aggregateSessionsFn?: AggregateSessionsFn,
-): Promise<SessionAggregate[]> {
-  const allCards = await store.getCards({ includeArchived: true });
-
-  if (!aggregateSessionsFn) {
-    const sessionMap = new Map<string, SessionAggregate>();
-    for (const c of allCards) {
-      if (!c.sessionId) continue;
-      const existing = sessionMap.get(c.sessionId);
-      if (!existing || new Date(c.updatedAt) > new Date(existing.updatedAt)) {
-        sessionMap.set(c.sessionId, {
-          sessionId: c.sessionId,
-          sessionTitle: c.sessionTitle,
-          cardTitle: c.title,
-          cardId: c.id,
-          cardStatus: c.status,
-          projectDir: c.projectDir,
-          agentRuntime: resolveAgentRuntime(c),
-          agentType: c.agentType,
-          model: c.model,
-          updatedAt: c.updatedAt,
-        });
-      }
-    }
-    return Array.from(sessionMap.values()).sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    );
-  }
-
-  const nativeSessions = await aggregateSessionsFn();
-  const cardsBySession = new Map<string, typeof allCards>();
-  for (const card of allCards) {
+function groupCardsBySession(cards: KanbanCard[]): Map<string, KanbanCard[]> {
+  const bySession = new Map<string, KanbanCard[]>();
+  for (const card of cards) {
     if (!card.sessionId) continue;
-    const list = cardsBySession.get(card.sessionId);
-    if (list) {
-      list.push(card);
-    } else {
-      cardsBySession.set(card.sessionId, [card]);
-    }
+    const list = bySession.get(card.sessionId);
+    if (list) list.push(card);
+    else bySession.set(card.sessionId, [card]);
   }
-
-  for (const cards of cardsBySession.values()) {
-    cards.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  for (const list of bySession.values()) {
+    list.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
+  return bySession;
+}
 
+/**
+ * The session view derivable from its cards alone. Shared by the card-only
+ * aggregation path and by the native path's "no peer reported this session"
+ * fallback, so a session's counts never depend on which one produced it.
+ */
+function cardDerivedAggregate(
+  sessionId: string,
+  cards: KanbanCard[],
+): SessionAggregate | undefined {
+  // Prefer a top-level card for the label: a session whose newest card is a
+  // subagent still belongs to whatever spawned it.
+  const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
+  if (!primaryCard) return undefined;
+  const hasTopLevelLinkedCard = cards.some(card => !card.parentCardId);
+  const hasSubagentLinkedCard = cards.some(card => Boolean(card.parentCardId));
+  const isSubagentOnly = !hasTopLevelLinkedCard;
+  return {
+    sessionId,
+    sessionTitle: primaryCard.sessionTitle,
+    sessionCreatedAt: primaryCard.sessionCreatedAt,
+    cardTitle: primaryCard.title,
+    cardId: primaryCard.id,
+    cardStatus: primaryCard.status,
+    projectDir: primaryCard.projectDir,
+    agentRuntime: resolveAgentRuntime(primaryCard),
+    agentType: primaryCard.agentType,
+    model: primaryCard.model,
+    linkState: cards.length === 1 ? 'single' : 'multiple',
+    relatedCardCount: cards.length,
+    isSubagentOnly,
+    hasTopLevelLinkedCard,
+    hasSubagentLinkedCard,
+    visiblePeerCount: 0,
+    primaryPeerInstanceId: undefined,
+    primaryPeerPort: undefined,
+    primaryPeerIsLocal: true,
+    primaryPeerCwd: undefined,
+    updatedAt: primaryCard.updatedAt,
+  };
+}
+
+/** Sessions reported by the native peer listing, enriched with their cards. */
+function nativeDerivedAggregates(
+  cardsBySession: Map<string, KanbanCard[]>,
+  nativeSessions: NativeSessionInfo[],
+): SessionAggregate[] {
   const nativeBySession = new Map<string, NativeSessionInfo[]>();
   for (const native of nativeSessions) {
     const list = nativeBySession.get(native.sessionId);
-    if (list) {
-      list.push(native);
-    } else {
-      nativeBySession.set(native.sessionId, [native]);
-    }
+    if (list) list.push(native);
+    else nativeBySession.set(native.sessionId, [native]);
   }
 
-  const sessions: SessionAggregate[] = Array.from(nativeBySession.entries()).map(([sessionId, nativeEntries]) => {
+  const sessions: SessionAggregate[] = [];
+  for (const [sessionId, nativeEntries] of nativeBySession) {
     const native = nativeEntries[0];
-    if (!native) {
-      return {
-        sessionId,
-        sessionTitle: undefined,
-        sessionCreatedAt: undefined,
-        cardTitle: '(No linked card)',
-        cardId: '',
-        cardStatus: 'untracked',
-        projectDir: undefined,
-        agentType: undefined,
-        model: undefined,
-        agentRuntime: 'opencode' as const,
-        linkState: 'none' as const,
-        relatedCardCount: 0,
-        isSubagentOnly: false,
-        hasTopLevelLinkedCard: false,
-        hasSubagentLinkedCard: false,
-        visiblePeerCount: 0,
-        primaryPeerInstanceId: undefined,
-        primaryPeerPort: undefined,
-        primaryPeerIsLocal: false,
-        primaryPeerCwd: undefined,
-        updatedAt: new Date(0).toISOString(),
-      };
-    }
-
-    const cards = cardsBySession.get(native.sessionId) ?? [];
+    const cards = cardsBySession.get(sessionId) ?? [];
     const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
-    const hasTopLevelLinkedCard = cards.some((card) => !card.parentCardId);
-    const hasSubagentLinkedCard = cards.some((card) => Boolean(card.parentCardId));
-    const isSubagentOnly = cards.length > 0 && !hasTopLevelLinkedCard;
+    const hasTopLevelLinkedCard = cards.some(card => !card.parentCardId);
+    const hasSubagentLinkedCard = cards.some(card => Boolean(card.parentCardId));
     const peerKeys = new Set<string>();
     for (const entry of nativeEntries) {
       peerKeys.add(`${entry.sourceInstanceId ?? 'unknown'}:${entry.sourcePort ?? 0}`);
     }
-    const updatedAt = primaryCard?.updatedAt
-      ?? native.updatedAt
-      ?? native.sessionCreatedAt
-      ?? new Date(0).toISOString();
 
-    return {
-      sessionId: native.sessionId,
-      sessionTitle: primaryCard?.sessionTitle ?? native.sessionTitle,
-      sessionCreatedAt: primaryCard?.sessionCreatedAt ?? native.sessionCreatedAt,
+    sessions.push({
+      sessionId,
+      sessionTitle: primaryCard?.sessionTitle ?? native?.sessionTitle,
+      sessionCreatedAt: primaryCard?.sessionCreatedAt ?? native?.sessionCreatedAt,
       cardTitle: primaryCard?.title ?? '(No linked card)',
       cardId: primaryCard?.id ?? '',
       cardStatus: primaryCard?.status ?? 'untracked',
@@ -440,49 +570,263 @@ export async function computeSessionAggregates(
       model: primaryCard?.model,
       linkState: cards.length === 0 ? 'none' : cards.length === 1 ? 'single' : 'multiple',
       relatedCardCount: cards.length,
-      isSubagentOnly,
+      isSubagentOnly: cards.length > 0 && !hasTopLevelLinkedCard,
       hasTopLevelLinkedCard,
       hasSubagentLinkedCard,
-      visiblePeerCount: peerKeys.size,
-      primaryPeerInstanceId: native.sourceInstanceId,
-      primaryPeerPort: native.sourcePort,
-      primaryPeerIsLocal: native.sourceIsLocal ?? false,
-      primaryPeerCwd: native.sourceCwd,
-      updatedAt,
-    };
-  });
-
-  for (const [sessionId, cards] of cardsBySession.entries()) {
-    if (nativeBySession.has(sessionId)) continue;
-    const primaryCard = cards.find(card => !card.parentCardId) ?? cards[0];
-    if (!primaryCard) continue;
-    sessions.push({
-      sessionId,
-      sessionTitle: primaryCard.sessionTitle,
-      sessionCreatedAt: primaryCard.sessionCreatedAt,
-      cardTitle: primaryCard.title,
-      cardId: primaryCard.id,
-      cardStatus: primaryCard.status,
-      projectDir: primaryCard.projectDir,
-      agentRuntime: resolveAgentRuntime(primaryCard),
-      agentType: primaryCard.agentType,
-      model: primaryCard.model,
-      linkState: cards.length === 1 ? 'single' : 'multiple',
-      relatedCardCount: cards.length,
-      isSubagentOnly: cards.length > 0 && !cards.some((card) => !card.parentCardId),
-      hasTopLevelLinkedCard: cards.some((card) => !card.parentCardId),
-      hasSubagentLinkedCard: cards.some((card) => Boolean(card.parentCardId)),
-      visiblePeerCount: 0,
-      primaryPeerInstanceId: undefined,
-      primaryPeerPort: undefined,
-      primaryPeerIsLocal: true,
-      primaryPeerCwd: undefined,
-      updatedAt: primaryCard.updatedAt,
+      visiblePeerCount: native ? peerKeys.size : 0,
+      primaryPeerInstanceId: native?.sourceInstanceId,
+      primaryPeerPort: native?.sourcePort,
+      primaryPeerIsLocal: native?.sourceIsLocal ?? false,
+      primaryPeerCwd: native?.sourceCwd,
+      updatedAt: primaryCard?.updatedAt
+        ?? native?.updatedAt
+        ?? native?.sessionCreatedAt
+        ?? new Date(0).toISOString(),
     });
+  }
+
+  // A session the peer listing does not know about (its runtime has exited) is
+  // still real as long as a card names it.
+  for (const [sessionId, cards] of cardsBySession) {
+    if (nativeBySession.has(sessionId)) continue;
+    const aggregate = cardDerivedAggregate(sessionId, cards);
+    if (aggregate) sessions.push(aggregate);
+  }
+  return sessions;
+}
+
+/**
+ * Aggregates unique sessions from all cards (optionally enriched by the native
+ * peer session listing). Extracted so the Works Inbox route can reuse the exact
+ * same view that backs `GET /api/sessions`.
+ *
+ * There are **two** aggregation paths and production only ever takes one of
+ * them: `plugin/bootstrap.ts` always injects `aggregateSessionsFn`, so the
+ * card-only path exists for unit tests and for a server booted without the
+ * plugin. Every cross-session enrichment is therefore derived **after** the
+ * branch, over the same archive-inclusive card list — an enrichment written
+ * inside one branch is an enrichment that silently does not exist in
+ * production. `relatedSessionIds` was exactly that bug: the chain map was
+ * computed every poll and thrown away, so `🔗 이어진 세션` never fired outside
+ * tests.
+ */
+export async function computeSessionAggregates(
+  store: KanbanStore,
+  aggregateSessionsFn?: AggregateSessionsFn,
+): Promise<SessionAggregate[]> {
+  const allCards = await store.getCards({ includeArchived: true });
+  const cardsBySession = groupCardsBySession(allCards);
+
+  const sessions: SessionAggregate[] = aggregateSessionsFn
+    ? nativeDerivedAggregates(cardsBySession, await aggregateSessionsFn())
+    : Array.from(cardsBySession, ([sessionId, cards]) => cardDerivedAggregate(sessionId, cards))
+      .filter((entry): entry is SessionAggregate => entry !== undefined);
+
+  // Lineage is derived from every card, archived included — an Inbox session's
+  // cards are usually already off the board — and applied to whichever set of
+  // aggregates the branch above produced.
+  const chains = buildSessionChainMap(allCards);
+  const subagentTree = buildSubagentSessionTree(allCards);
+  for (const session of sessions) {
+    const related = chains.get(session.sessionId);
+    if (related) session.relatedSessionIds = related;
+    const ancestors = subagentAncestorSessions(subagentTree, session.sessionId);
+    if (ancestors.length > 0) session.parentSessionIds = ancestors;
+    session.sessionKind = session.isSubagentOnly === true || ancestors.length > 0
+      ? 'subagent'
+      : 'main';
   }
 
   sessions.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   return sessions;
+}
+
+/**
+ * Links a session to a Work, carrying its **subagent descendants** with it.
+ *
+ * A subagent session is not an independent piece of work — it exists only
+ * because a card on the parent session spawned it — so once the parent has a
+ * Work, its children do too. Without this the Inbox asked the same question
+ * once per subagent, and the answer was always "the same Work as its parent".
+ * Descendants already linked somewhere are left alone: the 1:N invariant is the
+ * store's and this must never look like a way around it.
+ *
+ * Each link goes through `resolveWorkStartedAtAfterLinkChange` — the single
+ * entry point every link-set change shares — so the Timeline bar's `min()`
+ * start is recalculated per link rather than once for the batch.
+ */
+async function linkSessionWithSubagents(
+  workStore: WorkStore,
+  store: KanbanStore,
+  workId: string,
+  input: { sessionId: string; projectDir?: string; role?: WorkSessionRole },
+  options: { requireActive?: boolean; cards?: KanbanCard[] } = {},
+): Promise<{ work: Work; cascadedSessionIds: string[] }> {
+  const current = await workStore.getWork(workId);
+  if (!current) throw new WorkNotFoundError(workId);
+  // A resolved Work must not take on a session it never ran: a `done` Work has
+  // already handed its cards to the wiki pipeline, and a `discarded` one exists
+  // only to release its sessions. The client filters recommendations to active
+  // Works, but a panel can sit open across a status change (Works polls every
+  // 10s) and the recommendation can vanish underneath it, so the gate is here.
+  // A **re-link of a session this Work already holds** is exempt: that is how
+  // the `⋯` menu edits a link's role, and it changes no grouping.
+  if (
+    options.requireActive
+    && current.status !== 'active'
+    && !current.sessionLinks.some(link => link.sessionId === input.sessionId)
+  ) {
+    throw new WorkNotActiveError(current.status, current.title);
+  }
+
+  // One archive-inclusive read for the whole call — and reused across a batch
+  // when the caller supplies it. It feeds both the subagent tree and the
+  // `min()` resolver, which used to read it again per link.
+  const cards = options.cards ?? await store.getCards({ includeArchived: true });
+  const resolveStartedAt = createWorkStartedAtResolver(cards);
+  const tree = buildSubagentSessionTree(cards);
+  const { works } = await workStore.load();
+  const linkedElsewhere = new Set<string>();
+  for (const other of works) {
+    if (other.id === workId) continue;
+    for (const link of other.sessionLinks) linkedElsewhere.add(link.sessionId);
+  }
+  const alreadyHere = new Set(current.sessionLinks.map(link => link.sessionId));
+  const cascadedSessionIds = subagentDescendantSessions(tree, input.sessionId)
+    .filter(id => !linkedElsewhere.has(id) && !alreadyHere.has(id));
+
+  let work = current;
+  for (const sessionId of [input.sessionId, ...cascadedSessionIds]) {
+    // The Timeline bar's left edge is min() over every linked session, so a
+    // link to an older session pulls it left. The store runs the resolver inside
+    // its lock against the link set it just wrote — resolving it out here first
+    // is what let two concurrent links overwrite each other's answer.
+    work = await workStore.addSession(
+      workId,
+      {
+        sessionId,
+        // Only the session the user actually picked carries their role and
+        // directory; an inherited subagent takes the defaults.
+        projectDir: sessionId === input.sessionId ? input.projectDir : undefined,
+        role: sessionId === input.sessionId ? input.role : undefined,
+      },
+      resolveStartedAt,
+    );
+  }
+
+  return { work, cascadedSessionIds };
+}
+
+/** What decides whether a session aggregate is Inbox triage material. */
+export interface InboxFilterContext {
+  /** Sessions already linked to some Work. */
+  linked: ReadonlySet<string>;
+  /** Sessions on the ignore list. Pass an empty set to ask "would it come back?". */
+  ignored: ReadonlySet<string>;
+  /** `since` cutoff; `undefined` means no cutoff. */
+  sinceIso?: string;
+}
+
+/**
+ * The Inbox's admission rule, as one predicate.
+ *
+ * Shared by `GET /api/works/inbox` and `GET /api/works/ignored-sessions`: the
+ * restore list has to answer "would un-ignoring this actually bring the row
+ * back?", and the only honest way to answer it is with the same rule the Inbox
+ * itself applies. Re-implementing the four filters there would drift.
+ */
+export function isInboxTriageMaterial(
+  session: SessionAggregate,
+  ctx: InboxFilterContext,
+): boolean {
+  if (!session.sessionId) return false;
+  if (ctx.linked.has(session.sessionId) || ctx.ignored.has(session.sessionId)) return false;
+  if ((session.relatedCardCount ?? 0) < 1 || session.linkState === 'none') return false;
+  if (session.parentSessionIds?.some(id => ctx.linked.has(id))) return false;
+  // A running agent is triage material whatever its timestamp says.
+  if (ctx.sinceIso && session.cardStatus !== 'in_progress' && session.updatedAt < ctx.sinceIso) {
+    return false;
+  }
+  return true;
+}
+
+/** The Inbox row DTO for a session aggregate. */
+export function toInboxSession(session: SessionAggregate): WorkInboxSession {
+  return {
+    sessionId: session.sessionId,
+    sessionTitle: session.sessionTitle,
+    cardTitle: session.cardTitle,
+    cardId: session.cardId,
+    cardStatus: session.cardStatus,
+    projectDir: session.projectDir,
+    agentRuntime: session.agentRuntime,
+    agentType: session.agentType,
+    model: session.model,
+    relatedCardCount: session.relatedCardCount ?? 1,
+    sessionKind: session.sessionKind ?? 'main',
+    updatedAt: session.updatedAt,
+    relatedSessionIds: session.relatedSessionIds,
+  };
+}
+
+/** Defaults for `GET /api/works/inbox` — see `parseInboxQuery`. */
+export const DEFAULT_INBOX_SINCE_DAYS = 30;
+export const DEFAULT_INBOX_LIMIT = 200;
+export const MAX_INBOX_LIMIT = 1000;
+
+export interface InboxQuery {
+  /** Sessions older than this are dropped; `undefined` means no cutoff. */
+  sinceIso?: string;
+  /** Newest-first cap on the returned rows. */
+  limit: number;
+}
+
+/**
+ * `since` / `limit` for the Inbox.
+ *
+ * The Inbox is a triage queue, not an archive: without a window it grows
+ * without bound and the Works tab badge stays lit forever over sessions nobody
+ * will ever assign. Both bounds are therefore **on by default** and both can be
+ * opened up explicitly.
+ *
+ * - `since` — a day count (`since=7`), an ISO 8601 instant
+ *   (`since=2026-08-01T00:00:00.000Z`), or `all` / `0` for no cutoff. Default
+ *   `DEFAULT_INBOX_SINCE_DAYS` days.
+ * - `limit` — a positive integer capped at `MAX_INBOX_LIMIT`, or `all`.
+ *   Default `DEFAULT_INBOX_LIMIT`.
+ *
+ * A day count is tried before ISO parsing on purpose: `Date.parse('30')` is
+ * accepted by some engines as a year, which would silently turn `since=30` into
+ * a cutoff two millennia ago.
+ */
+export function parseInboxQuery(params: URLSearchParams, now: Date): InboxQuery {
+  const sinceParam = params.get('since');
+  let sinceIso: string | undefined;
+  if (sinceParam === null) {
+    sinceIso = new Date(now.getTime() - DEFAULT_INBOX_SINCE_DAYS * 86_400_000).toISOString();
+  } else if (sinceParam === 'all' || sinceParam === '0') {
+    sinceIso = undefined;
+  } else if (/^\d+$/.test(sinceParam)) {
+    sinceIso = new Date(now.getTime() - Number(sinceParam) * 86_400_000).toISOString();
+  } else if (!Number.isNaN(Date.parse(sinceParam))) {
+    sinceIso = new Date(sinceParam).toISOString();
+  } else {
+    throw new Error('since must be a day count, an ISO 8601 timestamp, or "all"');
+  }
+
+  const limitParam = params.get('limit');
+  let limit = DEFAULT_INBOX_LIMIT;
+  if (limitParam === 'all') {
+    limit = Number.POSITIVE_INFINITY;
+  } else if (limitParam !== null) {
+    const parsed = Number(limitParam);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new Error('limit must be a positive integer or "all"');
+    }
+    limit = Math.min(parsed, MAX_INBOX_LIMIT);
+  }
+
+  return { sinceIso, limit };
 }
 
 interface ParsedQuickActionRunInput {
@@ -632,6 +976,26 @@ export function createRouteHandler(
   );
   const activeQuickActionRuns = new Map<string, Promise<QuickActionRunRouteResult>>();
 
+  /**
+   * Which of these cards currently has a live agent process, answered in one
+   * `listRuns()` read rather than a lookup per card. Feeds the Works completion
+   * guard: archiving a card out from under a running runtime makes its
+   * completion hook fail with `Card not found` and leaves the wiki summarizing
+   * an unfinished transcript. Undefined without a run store — the guard then has
+   * nothing to consult and stands down.
+   */
+  const activeRunProbe: ActiveRunProbe | undefined = runtimeRunStore
+    ? async (cardIds: string[]) => {
+      const wanted = new Set(cardIds);
+      const running = new Set<string>();
+      for (const run of await runtimeRunStore.listRuns()) {
+        if (run.status !== 'starting' && run.status !== 'running') continue;
+        if (wanted.has(run.cardId)) running.add(run.cardId);
+      }
+      return [...running];
+    }
+    : undefined;
+
   async function handleRequest(req: Request, ctx?: { clientAddress?: string }): Promise<Response> {
     const url = new URL(req.url);
     const path = url.pathname;
@@ -750,18 +1114,85 @@ export function createRouteHandler(
       }
     }
 
+    // Route: GET /api/timeline?from=&to=&subagents= — executed sessions in a
+    // day window. Composes the per-month archive readers instead of
+    // `loadArchives()`, so the wiki/Telegram full-archive scans are untouched
+    // and a current-month window only parses ~2 files. No Work grouping: the
+    // client already holds `/api/works` and maps session → Work itself.
+    if (method === 'GET' && path === '/api/timeline') {
+      // The window is the only bound on how much archive this parses, and the
+      // route is an unauthenticated GET — so an over-long window is refused
+      // rather than served (checkTimelineWindow, src/core/timeline-aggregate.ts).
+      const requested = checkTimelineWindow(
+        url.searchParams.get('from'),
+        url.searchParams.get('to'),
+      );
+      if (!requested.ok) return errorResponse(requested.error, 400);
+      const { from, to } = requested;
+      const includesSubagents = url.searchParams.get('subagents') === '1';
+      try {
+        const scannedMonths = timelineArchiveMonths(store.listArchiveMonths(), from);
+        const cards: KanbanCard[] = [...await store.getCards({})];
+        for (const month of scannedMonths) {
+          const archive = await store.loadArchiveMonth(month);
+          if (archive) cards.push(...archive.cards);
+        }
+        // Discarded sessions still ran, so they keep their row — but they are no
+        // longer in the Inbox, and a 배정 button that opens a modal with nothing
+        // in it is a permanently dead button. Flagged rather than dropped: the
+        // work happened and the grid should still say so.
+        const ignoredSessionIds = workStore
+          ? new Set((await workStore.load()).ignoredSessionIds)
+          : undefined;
+        const sessions = buildTimelineSessions(cards, {
+          from,
+          to,
+          includeSubagents: includesSubagents,
+          now: new Date(),
+          ignoredSessionIds,
+        });
+        const snapshot: TimelineSnapshot = {
+          from,
+          to,
+          includesSubagents,
+          sessions,
+          scannedMonths,
+        };
+        return json(snapshot);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to build timeline';
+        return errorResponse(message, 500);
+      }
+    }
+
     // ─── Works Routes ──────────────────────────────────────────────
     // Work = a human-intent unit grouping 1:N sessions. See docs/mockups and
     // the Works & Timeline design. Writes are Bearer-gated via requiresLocalAuth.
 
-    // Route: GET /api/works?status=
+    // Route: GET /api/works?status=&projectDir=&q=&sort=
+    //
+    // The filter/sort rule itself is the pure `selectWorks` (`core/work-list.ts`)
+    // and is shared with the web client, which cannot narrow *this* request: it
+    // polls the whole list for the Timeline, the assign recommendations and the
+    // move dialog, so its Active section applies the same function locally.
     if (method === 'GET' && path === '/api/works') {
       if (!workStore) return errorResponse('Works not available', 503);
       const statusParam = url.searchParams.get('status');
       if (statusParam && !WORK_STATUS_VALUES.has(statusParam as WorkStatus)) {
         return errorResponse('Invalid status filter', 400);
       }
-      const works = await workStore.getWorks(statusParam as WorkStatus | null ?? undefined);
+      const sortParam = url.searchParams.get('sort');
+      // Rejected rather than ignored: a client that asked for `stale` and got
+      // `updated` sees exactly the order it was trying to get away from.
+      if (sortParam !== null && !isWorkListSort(sortParam)) {
+        return errorResponse('Invalid sort', 400);
+      }
+      const works = await workStore.getWorks({
+        status: statusParam as WorkStatus | null ?? undefined,
+        projectDir: url.searchParams.get('projectDir') ?? undefined,
+        q: url.searchParams.get('q') ?? undefined,
+        sort: sortParam ?? undefined,
+      });
       return json(works);
     }
 
@@ -773,10 +1204,19 @@ export function createRouteHandler(
         if (typeof body.title !== 'string' || !body.title.trim()) {
           return errorResponse('title is required', 400);
         }
+        if (body.projectDir !== undefined && typeof body.projectDir !== 'string') {
+          return errorResponse('projectDir must be a string', 400);
+        }
+        // Rejected rather than silently dropped: a client that sends a date the
+        // server ignores gets a Work starting *now*, and the Timeline bar is
+        // then wrong with no error to explain it.
+        if (body.startedAt !== undefined && !isValidIsoDate(body.startedAt)) {
+          return errorResponse('Invalid startedAt', 400);
+        }
         const work = await workStore.createWork({
           title: body.title,
           projectDir: typeof body.projectDir === 'string' ? body.projectDir : undefined,
-          startedAt: typeof body.startedAt === 'string' ? body.startedAt : undefined,
+          startedAt: body.startedAt === undefined ? undefined : normalizeIsoDate(body.startedAt),
         });
         return json(work, 201);
       } catch (e: unknown) {
@@ -785,9 +1225,27 @@ export function createRouteHandler(
       }
     }
 
-    // Route: GET /api/works/inbox — unassigned, non-ignored sessions
+    // Route: GET /api/works/inbox?since=&limit= — sessions still awaiting
+    // triage. Four things are *not* triage material and are filtered out here
+    // rather than left for the user to scroll past:
+    //
+    // 1. sessions already linked to a Work, and sessions explicitly discarded;
+    // 2. sessions with no card at all — a peer runtime reports every open
+    //    session it has, and `(No linked card)` rows used to pile up with no
+    //    bound at all, keeping the Works tab badge permanently lit;
+    // 3. subagent sessions whose parent is already assigned — the parent's Work
+    //    owns them (see `POST /api/works/:id/sessions`), so asking again is
+    //    asking a question the user already answered;
+    // 4. anything older than `since` (default 30 days), capped at `limit`.
+    //    A session with a still-running card is kept regardless of the cutoff.
     if (method === 'GET' && path === '/api/works/inbox') {
       if (!workStore) return errorResponse('Works not available', 503);
+      let query: InboxQuery;
+      try {
+        query = parseInboxQuery(url.searchParams, new Date());
+      } catch (e: unknown) {
+        return errorResponse(e instanceof Error ? e.message : 'Invalid inbox query', 400);
+      }
       try {
         const sessions = await computeSessionAggregates(store, aggregateSessionsFn);
         const { works, ignoredSessionIds } = await workStore.load();
@@ -797,24 +1255,68 @@ export function createRouteHandler(
         }
         const ignored = new Set(ignoredSessionIds);
         const inbox: WorkInboxSession[] = sessions
-          .filter(s => s.sessionId && !linked.has(s.sessionId) && !ignored.has(s.sessionId))
-          .map(s => ({
-            sessionId: s.sessionId,
-            sessionTitle: s.sessionTitle,
-            cardTitle: s.cardTitle,
-            cardId: s.cardId,
-            cardStatus: s.cardStatus,
-            projectDir: s.projectDir,
-            agentRuntime: s.agentRuntime,
-            agentType: s.agentType,
-            model: s.model,
-            relatedCardCount: s.relatedCardCount ?? 1,
-            updatedAt: s.updatedAt,
-          }));
+          .filter(s => isInboxTriageMaterial(s, { linked, ignored, sinceIso: query.sinceIso }))
+          .slice(0, query.limit === Number.POSITIVE_INFINITY ? undefined : query.limit)
+          .map(toInboxSession);
         return json(inbox);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to build inbox';
         return errorResponse(message, 500);
+      }
+    }
+
+    // Route: POST /api/works/reconcile-subagents — the one-shot path for data
+    // that predates subagent inheritance. `POST /api/works/:id/sessions` now
+    // carries a session's subagent descendants with it, but Works linked before
+    // that still have orphan subagent sessions sitting in the Inbox. Idempotent:
+    // re-running it links nothing once every descendant has a home. Must be
+    // registered before the /api/works/:id catch-all.
+    if (method === 'POST' && path === '/api/works/reconcile-subagents') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const cards = await store.getCards({ includeArchived: true });
+        const tree = buildSubagentSessionTree(cards);
+        const { works } = await workStore.load();
+        const linkedAnywhere = new Set<string>();
+        for (const w of works) {
+          for (const link of w.sessionLinks) linkedAnywhere.add(link.sessionId);
+        }
+
+        const linked: Array<{ workId: string; sessionIds: string[] }> = [];
+        for (const work of works) {
+          const seeds = work.sessionLinks.map(link => link.sessionId);
+          const adopted: string[] = [];
+          for (const seed of seeds) {
+            for (const descendant of subagentDescendantSessions(tree, seed)) {
+              if (linkedAnywhere.has(descendant)) continue;
+              await linkSessionWithSubagents(workStore, store, work.id, {
+                sessionId: descendant,
+              });
+              linkedAnywhere.add(descendant);
+              adopted.push(descendant);
+            }
+          }
+          if (adopted.length > 0) linked.push({ workId: work.id, sessionIds: adopted });
+        }
+        return json({ linked, linkedCount: linked.reduce((n, e) => n + e.sessionIds.length, 0) });
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to reconcile subagent sessions');
+      }
+    }
+
+    // Route: POST /api/works/reconcile-links — stamp/clear `cardsMissingAt` on
+    // every Work's links. Deleting a card never told Works about it, so a
+    // session whose cards were all deleted stayed linked and quietly dropped the
+    // Work's Timeline start back to `linkedAt`. The delete/restore routes narrow
+    // this pass to one Work; this is the whole-store repair for data that
+    // predates them, and it also runs once at boot. Idempotent. Literal segment
+    // — must precede the /api/works/:id catch-all.
+    if (method === 'POST' && path === '/api/works/reconcile-links') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        return json(await reconcileWorkSessionLinks({ store, workStore }));
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to reconcile work links');
       }
     }
 
@@ -831,6 +1333,63 @@ export function createRouteHandler(
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Invalid request body';
         return errorResponse(message, 400);
+      }
+    }
+
+    // Route: GET /api/works/ignored-sessions — the read side of the ignore list.
+    // `POST /api/works/ignore-session` had no counterpart of any kind, which made
+    // 폐기 the only irreversible action in this domain that was not even
+    // *inspectable*: a session dropped out of the Inbox, the tab badge, and every
+    // list, with `works.json` as the only way to find out what was in there.
+    // Each row carries the Inbox summary (so it is identifiable by its first
+    // prompt) and whether restoring it would really bring the row back.
+    // Literal segment — must precede the /api/works/:id catch-all.
+    if (method === 'GET' && path === '/api/works/ignored-sessions') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const sessions = await computeSessionAggregates(store, aggregateSessionsFn);
+        const { works, ignoredSessionIds } = await workStore.load();
+        const linked = new Set<string>();
+        for (const w of works) {
+          for (const link of w.sessionLinks) linked.add(link.sessionId);
+        }
+        const aggregates = new Map(sessions.map(s => [s.sessionId, s]));
+        // The window is the Inbox's own default: "would this row come back?" is
+        // a question about the Inbox the user is looking at.
+        const { sinceIso } = parseInboxQuery(new URLSearchParams(), new Date());
+        const noneIgnored: ReadonlySet<string> = new Set();
+        const ignored: WorkIgnoredSession[] = ignoredSessionIds.map((sessionId) => {
+          const aggregate = aggregates.get(sessionId);
+          return {
+            sessionId,
+            session: aggregate ? toInboxSession(aggregate) : undefined,
+            returnsToInbox: aggregate
+              ? isInboxTriageMaterial(aggregate, { linked, ignored: noneIgnored, sinceIso })
+              : false,
+          };
+        });
+        // Newest activity first, same as the Inbox; ids with no session left sink.
+        ignored.sort((a, b) => (b.session?.updatedAt ?? '').localeCompare(a.session?.updatedAt ?? ''));
+        return json(ignored);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to list ignored sessions';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: DELETE /api/works/ignore-session/:sessionId — restore an ignored
+    // session. `404` when it was not on the list, so a stale restore list cannot
+    // report success for a row that was already taken off it.
+    const workUnignoreMatch = path.match(/^\/api\/works\/ignore-session\/([^/]+)$/);
+    if (workUnignoreMatch && method === 'DELETE') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const sessionId = decodeURIComponent(workUnignoreMatch[1]);
+      try {
+        const ignoredSessionIds = await workStore.unignoreSession(sessionId);
+        return json({ ignoredSessionIds });
+      } catch (e: unknown) {
+        if (e instanceof WorkSessionNotIgnoredError) return errorResponse(e.message, 404);
+        return worksErrorResponse(e, 'Failed to restore session');
       }
     }
 
@@ -866,6 +1425,42 @@ export function createRouteHandler(
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Save config failed';
         return errorResponse(message, 400);
+      }
+    }
+
+    // Route: PATCH /api/works/sessions/:sessionId — move a session's link to
+    // another Work. Like /api/works/config this literal-segment path must be
+    // registered before the /api/works/:id catch-all, and it is distinct from
+    // /api/works/:id/sessions/:sessionId (which carries a Work id in the second
+    // segment, where this one has the literal "sessions").
+    const workMoveSessionMatch = path.match(/^\/api\/works\/sessions\/([^/]+)$/);
+    if (workMoveSessionMatch && method === 'PATCH') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const sessionId = decodeURIComponent(workMoveSessionMatch[1]);
+      try {
+        const body = await req.json();
+        if (typeof body.toWorkId !== 'string' || !body.toWorkId.trim()) {
+          return errorResponse('toWorkId is required', 400);
+        }
+        if (body.role !== undefined && !WORK_SESSION_ROLE_VALUES.has(body.role as WorkSessionRole)) {
+          return errorResponse('Invalid role', 400);
+        }
+        // One card snapshot feeds both sides; the min() itself runs inside the
+        // store's lock, against each side's post-move link set. The archived/
+        // un-archived gate is the store's too — the move dialog can sit open
+        // across a status change, so the client's filter is never trusted.
+        const cards = await store.getCards({ includeArchived: true });
+        const moved = await workStore.moveSession(
+          {
+            sessionId,
+            toWorkId: body.toWorkId.trim(),
+            role: body.role as WorkSessionRole | undefined,
+          },
+          work => resolveWorkStartedAt(cards, work),
+        );
+        return json(moved);
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to move session');
       }
     }
 
@@ -917,10 +1512,90 @@ export function createRouteHandler(
           skippedSessions: result.skippedSessions,
         });
       } catch (e: unknown) {
+        if (e instanceof WorkNotFoundError) return errorResponse('Work not found', 404);
         const message = e instanceof Error ? e.message : 'Summary generation failed';
-        if (message.includes('not found')) return errorResponse('Work not found', 404);
         if (message.includes('No session transcripts')) return errorResponse(message, 422);
         return errorResponse(message, 500);
+      }
+    }
+
+    // Route: POST /api/works/:id/sessions/batch — link a whole triage selection
+    // in one call.
+    //
+    // The web used to send N sequential `POST .../sessions`, and each of those
+    // read the entire archive (twice, before the resolver change): assigning 20
+    // sessions meant 20+ full-archive scans for a single user action. One call,
+    // one card snapshot, shared by every link *and* by the subagent tree.
+    //
+    // Partial success is a normal outcome and is reported, not thrown: the 1:N
+    // invariant is per-session, so one session that already belongs to another
+    // Work must not roll back the links that did succeed. The three-segment path
+    // must be matched before the two-segment `/sessions` route below.
+    const workBatchAddSessionsMatch = path.match(/^\/api\/works\/([^/]+)\/sessions\/batch$/);
+    if (workBatchAddSessionsMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workBatchAddSessionsMatch[1];
+      try {
+        const body = await req.json();
+        if (!Array.isArray(body.sessions) || body.sessions.length === 0) {
+          return errorResponse('sessions must be a non-empty array', 400);
+        }
+        if (body.role !== undefined && !WORK_SESSION_ROLE_VALUES.has(body.role as WorkSessionRole)) {
+          return errorResponse('Invalid role', 400);
+        }
+        const requested: AddWorkSessionInput[] = [];
+        for (const raw of body.sessions as unknown[]) {
+          const entry = raw as Record<string, unknown>;
+          if (typeof entry?.sessionId !== 'string' || !entry.sessionId.trim()) {
+            return errorResponse('sessions[].sessionId is required', 400);
+          }
+          if (entry.projectDir !== undefined && typeof entry.projectDir !== 'string') {
+            return errorResponse('sessions[].projectDir must be a string', 400);
+          }
+          if (entry.role !== undefined && !WORK_SESSION_ROLE_VALUES.has(entry.role as WorkSessionRole)) {
+            return errorResponse('Invalid role', 400);
+          }
+          requested.push({
+            sessionId: entry.sessionId.trim(),
+            projectDir: entry.projectDir as string | undefined,
+            role: (entry.role as WorkSessionRole | undefined) ?? (body.role as WorkSessionRole | undefined),
+          });
+        }
+
+        const work = await workStore.getWork(workId);
+        if (!work) return errorResponse('Work not found', 404);
+        const cards = await store.getCards({ includeArchived: true });
+
+        let latest = work;
+        const linkedSessionIds: string[] = [];
+        const cascadedSessionIds: string[] = [];
+        const failed: WorkBatchLinkFailure[] = [];
+        for (const entry of requested) {
+          try {
+            const result = await linkSessionWithSubagents(
+              workStore, store, workId, entry, { requireActive: true, cards },
+            );
+            latest = result.work;
+            linkedSessionIds.push(entry.sessionId);
+            for (const id of result.cascadedSessionIds) {
+              if (!cascadedSessionIds.includes(id)) cascadedSessionIds.push(id);
+            }
+          } catch (e: unknown) {
+            failed.push({
+              sessionId: entry.sessionId,
+              message: e instanceof Error ? e.message : 'Failed to link session',
+            });
+          }
+        }
+        const response: WorkBatchAddSessionsResponse = {
+          work: latest,
+          linkedSessionIds,
+          cascadedSessionIds,
+          failed,
+        };
+        return json(response);
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Invalid request body');
       }
     }
 
@@ -937,22 +1612,188 @@ export function createRouteHandler(
         if (body.role !== undefined && !WORK_SESSION_ROLE_VALUES.has(body.role as WorkSessionRole)) {
           return errorResponse('Invalid role', 400);
         }
-        // The Work's `startedAt` (the Timeline bar's left edge) is back-dated to
-        // the session's earliest card on the *first* link. Archived cards count:
-        // a session may already be closed out when it gets triaged.
-        const cards = await store.getCards({ includeArchived: true });
-        const work = await workStore.addSession(workId, {
-          sessionId: body.sessionId,
-          projectDir: typeof body.projectDir === 'string' ? body.projectDir : undefined,
-          role: body.role as WorkSessionRole | undefined,
-          startedAt: resolveSessionStartedAt(cards, body.sessionId),
-        });
-        return json(work);
+        // Trim once here so the projected link id matches the one the store stores.
+        const sessionId = body.sessionId.trim();
+        // Subagent sessions come along: see `linkSessionWithSubagents`. The
+        // response is the Work plus which sessions were inherited, so the client
+        // can say so instead of the Inbox silently losing rows.
+        const { work, cascadedSessionIds } = await linkSessionWithSubagents(
+          workStore,
+          store,
+          workId,
+          {
+            sessionId,
+            projectDir: typeof body.projectDir === 'string' ? body.projectDir : undefined,
+            role: body.role as WorkSessionRole | undefined,
+          },
+          // Only the user-facing link path demands an `active` target;
+          // `reconcile-subagents` repairs historical Works of any status.
+          { requireActive: true },
+        );
+        const response: WorkAddSessionResponse = { ...work, cascadedSessionIds };
+        return json(response);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : 'Invalid request body';
-        if (message.includes('not found')) return errorResponse('Work not found', 404);
-        if (message.includes('already linked')) return errorResponse(message, 409);
-        return errorResponse(message, 400);
+        return worksErrorResponse(e, 'Invalid request body');
+      }
+    }
+
+    // Route: GET /api/works/:id/completion-preview — what completing this Work
+    // would destroy, so the confirmation dialog can state it before the user
+    // commits. Archive-inclusive for the same reason `/sessions` is: an already
+    // swept Work must not describe itself as touching zero cards. Also reports
+    // the cards with a live agent run, which is what makes completion a `409`.
+    const workCompletionPreviewMatch = path.match(/^\/api\/works\/([^/]+)\/completion-preview$/);
+    if (workCompletionPreviewMatch && method === 'GET') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workCompletionPreviewMatch[1];
+      try {
+        const work = await workStore.getWork(workId);
+        if (!work) return errorResponse('Work not found', 404);
+        const scannedMonths = timelineArchiveMonths(
+          store.listArchiveMonths(),
+          workCardScanFloor(work),
+        );
+        const liveCards = await store.getCards({});
+        const cards: KanbanCard[] = [...liveCards];
+        const archivedCardIds = new Set<string>();
+        for (const month of scannedMonths) {
+          const archive = await store.loadArchiveMonth(month);
+          if (!archive) continue;
+          for (const card of archive.cards) {
+            archivedCardIds.add(card.id);
+            cards.push(card);
+          }
+        }
+        // Only board cards can be running: an archived card's run is over. And
+        // only cards the sweep would actually take can block it — a favorited
+        // card stays on the board, so its live run is nobody's problem here.
+        const boardSeedIds = selectWorkCards(liveCards, work)
+          .filter(c => !c.favorite)
+          .map(c => c.id);
+        const runningCardIds = activeRunProbe && boardSeedIds.length > 0
+          ? await activeRunProbe(boardSeedIds)
+          : [];
+        return json(buildWorkCompletionPreview(work, cards, {
+          archivedCardIds,
+          runningCardIds,
+          scannedMonths,
+        }));
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to build completion preview';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: GET /api/works/:id/sessions — the Work detail dialog's data source.
+    // Computed over the live board *plus* the archive months the Work can reach,
+    // because completing a Work sweeps every card under it off the board: a
+    // client-side rollup would describe a finished Work as `카드 0 · done 0`.
+    // Month selection reuses the Timeline's own heuristic, so this stays a
+    // couple of file reads and never becomes `store.loadArchives()`.
+    const workSessionsMatch = path.match(/^\/api\/works\/([^/]+)\/sessions$/);
+    if (workSessionsMatch && method === 'GET') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workSessionsMatch[1];
+      try {
+        const work = await workStore.getWork(workId);
+        if (!work) return errorResponse('Work not found', 404);
+        const scannedMonths = timelineArchiveMonths(
+          store.listArchiveMonths(),
+          workCardScanFloor(work),
+        );
+        const cards: KanbanCard[] = [...await store.getCards({})];
+        // A card carries no archived flag (`archivedAt` lives on the monthly
+        // file), so the two reads are kept distinguishable by id.
+        const archivedCardIds = new Set<string>();
+        for (const month of scannedMonths) {
+          const archive = await store.loadArchiveMonth(month);
+          if (!archive) continue;
+          for (const card of archive.cards) {
+            archivedCardIds.add(card.id);
+            cards.push(card);
+          }
+        }
+        return json(buildWorkSessionsResponse(work, cards, { archivedCardIds, scannedMonths }));
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to load work sessions';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: POST /api/works/:id/reopen — put a terminal Work back to `active`
+    // and lift its bulk-archived cards back onto the board.
+    //
+    // Completion was a one-way door. `PATCH` accepted `status: 'active'` but no
+    // UI sent it, the archived cards never came back, and `archivedAt` stayed
+    // stamped — which also kept the sweep and the session-move gate closed for
+    // good. The only escape was `DELETE`, i.e. throwing the record away.
+    //
+    // Three-segment literal — must precede the `/api/works/:id` catch-all.
+    const workReopenMatch = path.match(/^\/api\/works\/([^/]+)\/reopen$/);
+    if (workReopenMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      try {
+        const result = await reopenWork({ store, workStore, workId: workReopenMatch[1] });
+        return json(result);
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to reopen work');
+      }
+    }
+
+    // Route: POST /api/works/:id/merge — fold this Work's sessions into another
+    // one. `{ intoWorkId }`.
+    //
+    // The only merge-shaped path before this was moving sessions out one at a
+    // time and waiting for the source to empty, which *deletes* the source and
+    // takes its Summary and Timeline history with it. Here the source survives
+    // as `discarded` / `superseded` / `supersededByWorkId`, so the Resolved row
+    // still says where its sessions went.
+    //
+    // Three-segment literal — must precede the `/api/works/:id` catch-all.
+    const workMergeMatch = path.match(/^\/api\/works\/([^/]+)\/merge$/);
+    if (workMergeMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workMergeMatch[1];
+      try {
+        const body = await req.json();
+        if (typeof body.intoWorkId !== 'string' || !body.intoWorkId.trim()) {
+          return errorResponse('intoWorkId is required', 400);
+        }
+        // One card snapshot for the target's `min()`, resolved inside the
+        // store's lock against its post-merge link set — the same contract every
+        // other link-set change uses.
+        const result = await workStore.mergeWork(
+          workId,
+          body.intoWorkId.trim(),
+          await loadWorkStartedAtResolver(store),
+        );
+        return json(result);
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to merge work');
+      }
+    }
+
+    // Route: POST /api/works/:id/prune-sessions — drop every link stamped
+    // `cardsMissingAt` (its session has no cards left anywhere the Work can
+    // reach). The stamp is written by `reconcileWorkSessionLinks`; removing the
+    // link is deliberately a separate, explicit action, because card deletion is
+    // a soft delete that `restoreCard` reverses.
+    //
+    // Three-segment literal — must precede `/api/works/:id/sessions/:sessionId`
+    // only in the sense that it cannot be confused with it (`prune-sessions` is
+    // one segment), but it does have to precede the `/api/works/:id` catch-all.
+    const workPruneSessionsMatch = path.match(/^\/api\/works\/([^/]+)\/prune-sessions$/);
+    if (workPruneSessionsMatch && method === 'POST') {
+      if (!workStore) return errorResponse('Works not available', 503);
+      const workId = workPruneSessionsMatch[1];
+      try {
+        const result = await workStore.pruneMissingSessions(
+          workId,
+          await loadWorkStartedAtResolver(store),
+        );
+        return json(result);
+      } catch (e: unknown) {
+        return worksErrorResponse(e, 'Failed to prune work sessions');
       }
     }
 
@@ -963,12 +1804,21 @@ export function createRouteHandler(
       const workId = workRemoveSessionMatch[1];
       const sessionId = decodeURIComponent(workRemoveSessionMatch[2]);
       try {
-        const work = await workStore.removeSession(workId, sessionId);
+        // Same rule in reverse: dropping the oldest session pushes the bar's
+        // start to the earliest of whatever remains. The store runs the resolver
+        // inside its lock — and skips it entirely when the session was not
+        // linked, so a no-op DELETE cannot overwrite a manually re-dated Work.
+        const work = await workStore.removeSession(
+          workId,
+          sessionId,
+          await loadWorkStartedAtResolver(store),
+        );
         return json(work);
       } catch (e: unknown) {
-        const message = e instanceof Error ? e.message : '';
-        if (message.includes('not found')) return errorResponse('Work not found', 404);
-        return errorResponse('Failed to remove session', 500);
+        // The server's own reason, like every other Works route. Collapsing
+        // everything into `Failed to remove session` hid which of the store's
+        // rejections had happened.
+        return worksErrorResponse(e, 'Failed to remove session');
       }
     }
 
@@ -988,7 +1838,14 @@ export function createRouteHandler(
         try {
           const body = await req.json();
           const updates: UpdateWorkInput = {};
-          if (body.title !== undefined) updates.title = body.title;
+          // Every field is type-checked before it reaches the store. It used to
+          // take `title`/`projectDir`/`summary` verbatim, so `{"title": 7}` came
+          // back as `400 .trim is not a function` — an internal stack detail as
+          // the user-facing error.
+          if (body.title !== undefined) {
+            if (typeof body.title !== 'string') return errorResponse('title must be a string', 400);
+            updates.title = body.title;
+          }
           if (body.status !== undefined) {
             if (!WORK_STATUS_VALUES.has(body.status as WorkStatus)) {
               return errorResponse('Invalid status', 400);
@@ -1001,31 +1858,82 @@ export function createRouteHandler(
             }
             updates.resolution = body.resolution;
           }
-          if (body.projectDir !== undefined) updates.projectDir = body.projectDir;
+          if (body.projectDir !== undefined) {
+            if (body.projectDir !== null && typeof body.projectDir !== 'string') {
+              return errorResponse('projectDir must be a string or null', 400);
+            }
+            updates.projectDir = body.projectDir;
+          }
           // Date edits arrive from the Timeline's bar-edge drag and the detail
           // dialog's date inputs, so a malformed timestamp must never reach the
           // store — an unparseable startedAt would drop the bar off the grid.
+          // Stored normalized to UTC `Z` so mixed offsets cannot make the
+          // `min()` clamp compare two instants as text.
           if (body.startedAt !== undefined) {
             if (!isValidIsoDate(body.startedAt)) return errorResponse('Invalid startedAt', 400);
-            updates.startedAt = body.startedAt;
+            updates.startedAt = normalizeIsoDate(body.startedAt);
           }
           if (body.resolvedAt !== undefined) {
             if (body.resolvedAt !== null && !isValidIsoDate(body.resolvedAt)) {
               return errorResponse('Invalid resolvedAt', 400);
             }
-            updates.resolvedAt = body.resolvedAt;
+            updates.resolvedAt = body.resolvedAt === null
+              ? null
+              : normalizeIsoDate(body.resolvedAt);
           }
-          if (body.summary !== undefined) updates.summary = body.summary;
-          if (body.archivedAt !== undefined) updates.archivedAt = body.archivedAt;
+          if (body.summary !== undefined) {
+            if (body.summary !== null && !isWorkSummary(body.summary)) {
+              return errorResponse('summary must be { lines: string[], generatedAt, model } or null', 400);
+            }
+            updates.summary = body.summary;
+          }
+          // `notes` is the one text field on a Work the *user* owns — `summary`
+          // is overwritten wholesale by the Summary LLM, so anything typed there
+          // was destroyed by the next regeneration. Capped rather than unbounded:
+          // `works.json` is rewritten whole on every store write.
+          if (body.notes !== undefined) {
+            if (body.notes !== null && typeof body.notes !== 'string') {
+              return errorResponse('notes must be a string or null', 400);
+            }
+            if (typeof body.notes === 'string' && body.notes.length > WORK_NOTES_MAX_LENGTH) {
+              return errorResponse(
+                `notes must be at most ${WORK_NOTES_MAX_LENGTH} characters`,
+                400,
+              );
+            }
+            updates.notes = body.notes;
+          }
+          // `archivedAt` and `wikiDocPath` are **server-owned**. `archivedAt` is
+          // stamped by `claimArchiveSweep` and gates both the completion sweep's
+          // idempotence and the session-move rule; an arbitrary client string
+          // parked there froze both permanently, with no UI able to undo it.
+          // `wikiDocPath` is the wiki worker's own bookkeeping.
+          if (body.archivedAt !== undefined) {
+            return errorResponse('archivedAt is set by the server and cannot be patched', 400);
+          }
+          if (body.wikiDocPath !== undefined) {
+            return errorResponse('wikiDocPath is set by the server and cannot be patched', 400);
+          }
+          // Same rule, same reason: the merge transition
+          // (`POST /api/works/:id/merge`) is the only writer, and a client-set
+          // pointer would claim a merge that never happened — the Resolved row
+          // would send the reader to a Work that never took these sessions.
+          if (body.supersededByWorkId !== undefined) {
+            return errorResponse(
+              'supersededByWorkId is set by the server and cannot be patched',
+              400,
+            );
+          }
 
           // `status: 'done'` carries the bulk done→archive side effect (which
           // hands the cards to the wiki pipeline). `works.done_confirm` gates it
           // behind the client's `confirmArchive` flag; the endpoint itself is
-          // unchanged. Defaults to the documented `false` when settings are
-          // unavailable.
+          // unchanged. Defaults to the documented `true` (confirm) when settings
+          // are unavailable — an unreadable setting must not silently open the
+          // destructive path.
           const doneConfirm = settingsStore
             ? (await loadWorksConfig(settingsStore)).doneConfirm
-            : false;
+            : true;
           const result = await applyWorkPatch({
             store,
             workStore,
@@ -1033,12 +1941,33 @@ export function createRouteHandler(
             updates,
             doneConfirm,
             confirmArchive: body.confirmArchive === true,
+            activeRunProbe,
           });
-          return json(result.work);
+          // The sweep report rides along with the Work so a partial sweep is
+          // visible instead of looking like a clean completion. `Work` has no
+          // `sweep` field, so every existing caller is unaffected.
+          const response: WorkPatchResponse = { ...result.work };
+          if (
+            result.archiveSkipped
+            || result.archivedCount > 0
+            || result.failedCards.length > 0
+            || result.keptFavoriteCardIds.length > 0
+          ) {
+            response.sweep = {
+              archivedCount: result.archivedCount,
+              archiveMonth: result.archiveMonth,
+              skipped: result.archiveSkipped,
+              failed: result.failedCards,
+              keptFavoriteCardIds: result.keptFavoriteCardIds.length > 0
+                ? result.keptFavoriteCardIds
+                : undefined,
+            };
+          }
+          // Newly archived cards are stamped wiki-pending — process them promptly.
+          if (result.archivedCount > 0) wikiWorker?.kick();
+          return json(response);
         } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : 'Invalid request body';
-          if (message.includes('not found')) return errorResponse('Work not found', 404);
-          return errorResponse(message, 400);
+          return worksErrorResponse(e, 'Invalid request body');
         }
       }
 
@@ -1047,8 +1976,7 @@ export function createRouteHandler(
           await workStore.deleteWork(workId);
           return new Response(null, { status: 204 });
         } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : '';
-          if (message.includes('not found')) return errorResponse('Work not found', 404);
+          if (e instanceof WorkNotFoundError) return errorResponse('Work not found', 404);
           return errorResponse('Delete failed', 500);
         }
       }
@@ -1059,6 +1987,14 @@ export function createRouteHandler(
       const status = url.searchParams.get('status') as Parameters<typeof store.getCards>[0] extends { status?: infer S } ? S : never;
       const includeArchived = url.searchParams.get('include_archived') === 'true';
       const cards = await store.getCards(status ? { status, includeArchived } : includeArchived ? { includeArchived } : undefined);
+      // `session_id` narrows the (already loaded) result to one conversation.
+      // Paired with `include_archived=true` it is what lets the session
+      // conversation modal open a session whose cards have all been archived —
+      // a completed Work's sessions, and any Timeline rail older than the board.
+      const sessionId = url.searchParams.get('session_id');
+      if (sessionId) {
+        return json(cards.filter((card) => card.sessionId === sessionId));
+      }
       return json(cards);
     }
 
@@ -1641,6 +2577,8 @@ export function createRouteHandler(
       const id = restoreMatch[1];
       try {
         const card = await store.restoreCard(id);
+        // The session has cards again — clear the dangling stamp the delete set.
+        await reconcileWorkLinkForCard(store, workStore, card.sessionId);
         return json(card);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : '';
@@ -1716,7 +2654,11 @@ export function createRouteHandler(
       const id = cardMatch[1];
 
       if (method === 'GET') {
-        const card = await store.getCard(id);
+        // `include_archived=true` lets a deep link resolve a card that has
+        // already been swept into the monthly archive (a Timeline day cell, the
+        // Works Inbox "대화 보기"). Without it those clicks 404'd silently.
+        const includeArchived = url.searchParams.get('include_archived') === 'true';
+        const card = await store.getCard(id, includeArchived ? { includeArchived } : undefined);
         if (!card) return errorResponse('Card not found', 404);
         return json(card);
       }
@@ -1759,6 +2701,10 @@ export function createRouteHandler(
         const card = await store.getCard(id);
         if (!card) return errorResponse('Card not found', 404);
         await store.deleteCard(id);
+        // Deleting the last card of a linked session leaves a dangling
+        // `WorkSessionLink`; the Work is stamped so the detail dialog can say so
+        // and `prune-sessions` can clear it.
+        await reconcileWorkLinkForCard(store, workStore, card.sessionId);
         return new Response(null, { status: 204 });
       }
     }

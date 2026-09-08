@@ -23,6 +23,7 @@ import { TelegramReminderService } from './telegram-reminder';
 import { ScheduledDispatchService } from './scheduled-dispatch-service';
 import { WikiWorker } from './wiki/wiki-worker';
 import { sweepWikiInternalCards } from './wiki/wiki-sweep';
+import { reconcileWorkSessionLinks } from './works/work-links';
 import { appendRuntimeDebugLog } from './debug-log';
 import type { QuestionMonitor } from './question-monitor';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
@@ -266,6 +267,23 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const startSingleton = async (): Promise<void> => {
     if (singletonStarted) return;
     appendRuntimeDebugLog(`${options.debugLabel}.start`, { owner: true });
+    // One-shot repair for links whose session lost every card while nothing was
+    // watching — card deletion predates the `cardsMissingAt` stamp, and a
+    // dangling link silently re-dates a Work's Timeline bar to its triage time.
+    // Idempotent and owner-gated; best-effort, because boot must not hang on it.
+    try {
+      const reconciled = await reconcileWorkSessionLinks({ store, workStore });
+      if (reconciled.marked.length > 0 || reconciled.cleared.length > 0) {
+        appendRuntimeDebugLog(`${options.debugLabel}.works.reconcileLinks`, {
+          marked: reconciled.marked.length,
+          cleared: reconciled.cleared.length,
+        });
+      }
+    } catch (e: unknown) {
+      appendRuntimeDebugLog(`${options.debugLabel}.works.reconcileLinks.failed`, {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     await scriptExecutionService.initialize();
     schedulerEngine.setRuntimeOwner(true);
     await schedulerEngine.start();

@@ -1,26 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WorksConfigDto, WorksConfigInput } from '../../../../src/core/types';
+import { CLAUDE_MODELS, CODEX_MODELS } from '../../../../src/core/runtime-config';
 import './Works.css';
 
 /**
- * Curated Summary models per runtime. Kept in sync with the backend routing
- * (`resolveWikiLlmRoute`: gpt-* → codex CLI, otherwise claude CLI) — the runtime
- * select only filters this list; the persisted value is the model id alone, from
- * which the backend re-derives the route. Mirrors WikiConfigPanel's approach of
- * hardcoding a short list instead of importing the backend catalog.
+ * Summary model choices per runtime, taken from the runtime catalog.
+ *
+ * The list used to be a hand-written literal here, which broke the project's
+ * "never hardcode agent labels/models outside `agent-config.ts` /
+ * `runtime-config.ts`" rule in the way that rule exists to prevent: it drifted.
+ * It offered `claude-opus-4-8` and `gpt-5.5` while the catalog had moved on, and
+ * a model retired from the catalog stayed selectable here.
+ *
+ * The runtime select only *filters*; the persisted value is the model id alone,
+ * from which the backend re-derives the route (`resolveWikiLlmRoute`: `gpt-*` →
+ * codex CLI, otherwise claude CLI).
  */
-const MODELS_BY_RUNTIME: Record<'claude' | 'codex', { value: string; label: string }[]> = {
-  claude: [
-    { value: 'claude-sonnet-5', label: 'Sonnet 5 — 균형 (권장)' },
-    { value: 'claude-opus-4-8', label: 'Opus 4.8 — 최고 품질' },
-    { value: 'claude-opus-5', label: 'Opus 5 — 1M 컨텍스트' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 — 가장 빠름' },
-  ],
-  codex: [
-    { value: 'gpt-5.6-sol', label: 'GPT-5.6-Sol — frontier' },
-    { value: 'gpt-5.5', label: 'GPT-5.5 — 범용' },
-  ],
-};
+const MODELS_BY_RUNTIME = {
+  claude: CLAUDE_MODELS,
+  codex: CODEX_MODELS,
+} satisfies Record<'claude' | 'codex', readonly { id: string; label: string }[]>;
 
 const LINE_OPTIONS = [3, 4, 5] as const;
 const STALE_OPTIONS = [3, 5, 7, 10, 14] as const;
@@ -35,54 +34,116 @@ interface WorksConfigPanelProps {
   onSave: (input: WorksConfigInput) => Promise<void>;
 }
 
+/** The form's editable state — one object so "is this dirty" is one comparison. */
+export interface FormState {
+  model: string;
+  summaryLines: number;
+  preferSameDir: boolean;
+  suggestResume: boolean;
+  doneConfirm: boolean;
+  staleDays: number;
+}
+
+export function formOf(config: WorksConfigDto): FormState {
+  return {
+    model: config.summaryModel,
+    summaryLines: config.summaryLines,
+    preferSameDir: config.assignPreferSameDir,
+    suggestResume: config.assignSuggestResumeChain,
+    doneConfirm: config.doneConfirm,
+    staleDays: config.staleDays,
+  };
+}
+
+export function sameForm(a: FormState, b: FormState): boolean {
+  return a.model === b.model
+    && a.summaryLines === b.summaryLines
+    && a.preferSameDir === b.preferSameDir
+    && a.suggestResume === b.suggestResume
+    && a.doneConfirm === b.doneConfirm
+    && a.staleDays === b.staleDays;
+}
+
 /**
- * Works settings (mockup screen ④). Reached via the ⚙ gear at the top-right of
- * the Works tab. Manages the Summary LLM (independent of the wiki), summary line
- * count, Inbox assignment suggestion toggles, the complete-behavior choice, and
- * the stale-Work threshold. All fields have sane defaults, so there is no setup
- * gate — the form always renders.
+ * What a newly-arrived config should do to the form, as a pure rule.
+ *
+ * `current` is what is on screen, `baseline` is the config it was seeded from,
+ * `next` is what just arrived. The form is *dirty* when it has drifted from its
+ * baseline, and a dirty form keeps its edits: the Works tab polls every 10
+ * seconds and hands over a fresh `WorksConfigDto` object each time, so a plain
+ * `useEffect([config]) → setState(config)` reverted whatever the user was in the
+ * middle of typing, on a timer. A clean form still accepts the new values, so a
+ * change made elsewhere is not ignored either.
+ */
+export function resyncForm(current: FormState, baseline: FormState, next: FormState): FormState {
+  return sameForm(current, baseline) ? next : current;
+}
+
+/**
+ * Works settings, reached via the ⚙ gear at the top-right of the Works tab.
+ * Manages the Summary LLM (independent of the wiki), summary line count, the
+ * Inbox assignment ranking, the complete-behaviour choice, and the stale-Work
+ * threshold. All fields have sane defaults, so there is no setup gate — the form
+ * always renders.
+ *
+ * Copy rule for this panel: **it names things the way the screen does.** The
+ * labels used to be the setting keys and wire fields (`works.summary_model`,
+ * `projectDir`, `resumeSessionId`), which describe the storage rather than the
+ * behaviour and are unreadable to anyone who has not read the source. Every
+ * key is still discoverable — `docs/works.md` has the table — it is just not
+ * what the label says.
  */
 export function WorksConfigPanel({ config, busy, onSave }: WorksConfigPanelProps) {
+  const [form, setForm] = useState<FormState>(() => formOf(config));
   const [runtime, setRuntime] = useState<'claude' | 'codex'>(runtimeOf(config.summaryModel));
-  const [model, setModel] = useState(config.summaryModel);
-  const [summaryLines, setSummaryLines] = useState(config.summaryLines);
-  const [preferSameDir, setPreferSameDir] = useState(config.assignPreferSameDir);
-  const [suggestResume, setSuggestResume] = useState(config.assignSuggestResumeChain);
-  const [doneConfirm, setDoneConfirm] = useState(config.doneConfirm);
-  const [staleDays, setStaleDays] = useState(config.staleDays);
   const [saving, setSaving] = useState(false);
 
-  // Resync when the saved config changes (e.g. after a successful save).
+  /**
+   * Resync from the server *only while the form is clean*.
+   *
+   * `useEffect([config])` used to overwrite the whole form on every arrival of
+   * the config — and the Works tab polls, so a new `config` object landed every
+   * 10 seconds whether or not anything had changed. Half-made edits were
+   * reverted mid-interaction. `baseline` is the config the form was seeded from,
+   * so "dirty" is a real comparison rather than a guess, and a config that
+   * genuinely changed elsewhere still lands here once the user has no pending
+   * edits to lose.
+   */
+  const baseline = useRef<FormState>(formOf(config));
   useEffect(() => {
-    setRuntime(runtimeOf(config.summaryModel));
-    setModel(config.summaryModel);
-    setSummaryLines(config.summaryLines);
-    setPreferSameDir(config.assignPreferSameDir);
-    setSuggestResume(config.assignSuggestResumeChain);
-    setDoneConfirm(config.doneConfirm);
-    setStaleDays(config.staleDays);
+    const next = formOf(config);
+    setForm((current) => {
+      const resolved = resyncForm(current, baseline.current, next);
+      baseline.current = next;
+      if (resolved !== current) setRuntime(runtimeOf(resolved.model));
+      return resolved;
+    });
   }, [config]);
 
   const disabled = busy || saving;
   const models = MODELS_BY_RUNTIME[runtime];
-  // A custom model (from a prior manual save) that isn't in the curated list.
-  const modelInList = models.some((m) => m.value === model);
+  // A custom model (from a prior manual save) that isn't in the catalog.
+  const modelInList = models.some((m) => m.id === form.model);
+  const dirty = !sameForm(form, baseline.current);
+
+  const patch = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((current) => ({ ...current, [key]: value }));
 
   const handleRuntimeChange = (next: 'claude' | 'codex') => {
     setRuntime(next);
-    setModel(MODELS_BY_RUNTIME[next][0].value);
+    patch('model', MODELS_BY_RUNTIME[next][0].id);
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
       await onSave({
-        summaryModel: model,
-        summaryLines,
-        assignPreferSameDir: preferSameDir,
-        assignSuggestResumeChain: suggestResume,
-        doneConfirm,
-        staleDays,
+        summaryModel: form.model,
+        summaryLines: form.summaryLines,
+        assignPreferSameDir: form.preferSameDir,
+        assignSuggestResumeChain: form.suggestResume,
+        doneConfirm: form.doneConfirm,
+        staleDays: form.staleDays,
       });
     } finally {
       setSaving(false);
@@ -94,56 +155,56 @@ export function WorksConfigPanel({ config, busy, onSave }: WorksConfigPanelProps
       <div className="works-config-header">
         <h3 className="works-config-title">⚙ Works 설정</h3>
         <span className="works-config-meta">
-          Summary는 wiki와 독립된 works 전용 모델로 생성됩니다 · route {config.route}
+          요약은 Wiki와 따로 설정합니다 — 여기서 고른 모델만 Works 요약에 쓰입니다.
         </span>
       </div>
 
       <div className="works-config-form">
         <label className="works-config-field">
           <span className="works-config-label">
-            Summary 모델
-            <span className="works-config-sub">works.summary_model — wiki 모델과 독립</span>
+            요약에 쓸 모델
+            <span className="works-config-sub">Wiki 요약 모델과 별개로 동작합니다</span>
           </span>
           <div className="works-config-model">
             <select
-              className="works-config-input"
+              className="kv2-select works-config-select"
               value={runtime}
               onChange={(e) => handleRuntimeChange(e.target.value as 'claude' | 'codex')}
               disabled={disabled}
-              aria-label="Summary 런타임"
+              aria-label="요약 실행 도구"
             >
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
             </select>
             <select
-              className="works-config-input"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+              className="kv2-select works-config-select"
+              value={form.model}
+              onChange={(e) => patch('model', e.target.value)}
               disabled={disabled}
-              aria-label="Summary 모델"
+              aria-label="요약에 쓸 모델"
             >
               {models.map((m) => (
-                <option key={m.value} value={m.value}>{m.label}</option>
+                <option key={m.id} value={m.id}>{m.label}</option>
               ))}
-              {!modelInList && <option value={model}>{model} (사용자 지정)</option>}
+              {!modelInList && <option value={form.model}>{form.model} (직접 지정한 모델)</option>}
             </select>
           </div>
         </label>
 
         <label className="works-config-field">
           <span className="works-config-label">
-            Summary 줄 수
-            <span className="works-config-sub">works.summary_lines · 3~5줄</span>
+            요약 길이
+            <span className="works-config-sub">연결된 세션을 몇 줄로 정리할지</span>
           </span>
-          <div className="works-config-pill" role="radiogroup" aria-label="Summary 줄 수">
+          <div className="works-config-pill" role="radiogroup" aria-label="요약 길이">
             {LINE_OPTIONS.map((n) => (
               <button
                 key={n}
                 type="button"
                 role="radio"
-                aria-checked={summaryLines === n}
-                className={`works-config-pill-btn${summaryLines === n ? ' works-config-pill-btn--on' : ''}`}
-                onClick={() => setSummaryLines(n)}
+                aria-checked={form.summaryLines === n}
+                className={`kv2-btn kv2-btn--small${form.summaryLines === n ? ' kv2-btn--primary' : ''}`}
+                onClick={() => patch('summaryLines', n)}
                 disabled={disabled}
               >
                 {n}줄
@@ -154,56 +215,63 @@ export function WorksConfigPanel({ config, busy, onSave }: WorksConfigPanelProps
 
         <label className="works-config-field">
           <span className="works-config-label">
-            배정 추천
-            <span className="works-config-sub">Inbox에서 기존 Work 추천 기준</span>
+            Inbox 추천 순서
+            <span className="works-config-sub">
+              세션을 배정할 때 어떤 Work를 위에 올릴지
+            </span>
           </span>
           <div className="works-config-checks">
             <label className="works-config-check">
               <input
                 type="checkbox"
-                checked={preferSameDir}
-                onChange={(e) => setPreferSameDir(e.target.checked)}
+                checked={form.preferSameDir}
+                onChange={(e) => patch('preferSameDir', e.target.checked)}
                 disabled={disabled}
               />
-              같은 projectDir의 active Work 우선
+              같은 폴더에서 나온 Work를 먼저 추천
             </label>
             <label className="works-config-check">
+              {/* "resume 체인" named only one of the three things this covers:
+                  the lineage is a resumed session *or* a subagent's parent *or*
+                  a queue chain (`buildSessionChainMap`). */}
               <input
                 type="checkbox"
-                checked={suggestResume}
-                onChange={(e) => setSuggestResume(e.target.checked)}
+                checked={form.suggestResume}
+                onChange={(e) => patch('suggestResume', e.target.checked)}
                 disabled={disabled}
               />
-              resume 체인(resumeSessionId)이면 같은 Work 자동 추천
+              이어서 실행한 세션(이어하기 · 하위 에이전트 · 큐)이면 그 Work를 먼저 추천
             </label>
           </div>
         </label>
 
         <label className="works-config-field">
           <span className="works-config-label">
-            완료 시 동작
-            <span className="works-config-sub">Work done → 산하 카드 처리</span>
+            Work를 완료할 때
+            <span className="works-config-sub">
+              완료하면 그 Work의 카드를 한꺼번에 끝내고 보관함으로 넘깁니다
+            </span>
           </span>
-          <div className="works-config-checks" role="radiogroup" aria-label="완료 시 동작">
+          <div className="works-config-checks" role="radiogroup" aria-label="Work를 완료할 때">
             <label className="works-config-check">
               <input
                 type="radio"
                 name="works-done-confirm"
-                checked={!doneConfirm}
-                onChange={() => setDoneConfirm(false)}
+                checked={!form.doneConfirm}
+                onChange={() => patch('doneConfirm', false)}
                 disabled={disabled}
               />
-              일괄 done→archive + wiki 파이프라인 트리거
+              묻지 않고 바로 보관 (되돌릴 수 없습니다)
             </label>
             <label className="works-config-check">
               <input
                 type="radio"
                 name="works-done-confirm"
-                checked={doneConfirm}
-                onChange={() => setDoneConfirm(true)}
+                checked={form.doneConfirm}
+                onChange={() => patch('doneConfirm', true)}
                 disabled={disabled}
               />
-              archive 전 확인 다이얼로그 표시
+              보관하기 전에 한 번 확인 (기본값)
             </label>
           </div>
         </label>
@@ -211,30 +279,48 @@ export function WorksConfigPanel({ config, busy, onSave }: WorksConfigPanelProps
         <label className="works-config-field">
           <span className="works-config-label">
             오래된 Work 경고
-            <span className="works-config-sub">works.stale_days</span>
+            <span className="works-config-sub">며칠째 끝나지 않으면 ⚠ 표시를 붙일지</span>
           </span>
           <select
-            className="works-config-input"
-            value={staleDays}
-            onChange={(e) => setStaleDays(Number(e.target.value))}
+            className="kv2-select"
+            value={form.staleDays}
+            onChange={(e) => patch('staleDays', Number(e.target.value))}
             disabled={disabled}
           >
             {STALE_OPTIONS.map((d) => (
-              <option key={d} value={d}>{d}일 이상 미완료 시 ⚠ 표시</option>
+              <option key={d} value={d}>{d}일 넘게 진행 중이면 ⚠ 표시</option>
             ))}
           </select>
         </label>
       </div>
 
-      <div className="works-config-actions">
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--primary"
-          onClick={() => { void handleSave(); }}
-          disabled={disabled}
-        >
-          {saving ? '저장 중…' : '저장'}
-        </button>
+      {/* Same footer geometry as every other kv2 form: escape hatch on the left,
+          forward progress on the right. */}
+      <div className="works-config-actions kv2-actions-split">
+        <div className="kv2-actions-danger">
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--small kv2-btn--ghost"
+            disabled={disabled || !dirty}
+            onClick={() => {
+              setForm(baseline.current);
+              setRuntime(runtimeOf(baseline.current.model));
+            }}
+          >
+            되돌리기
+          </button>
+        </div>
+        <div className="kv2-actions-primary">
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--primary"
+            // `onSave` reports through the shared Works error alert and rethrows.
+            onClick={() => { void handleSave().catch(() => {}); }}
+            disabled={disabled}
+          >
+            {saving ? '저장 중…' : '저장'}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -290,12 +290,79 @@ describe('WikiWorker × Works', () => {
     });
   });
 
-  test('cards of a discarded Work leave the queue without an LLM call', async () => {
+  test('a Work archived in two batches keeps one document', async () => {
+    await withTempDir(async (dir) => {
+      const { store, settingsStore, vaultDir } = await setupStores(dir);
+      const workStore = new WorkStore(dir);
+
+      // The Work is still `active` and one of its cards is archived by hand —
+      // the ordinary way a Work's cards reach the queue in more than one batch.
+      const work = await workStore.createWork({ title: 'Redis 안정화 작업' });
+      await workStore.addSession(work.id, { sessionId: 'sess-a' });
+      await workStore.addSession(work.id, { sessionId: 'sess-b' });
+
+      const first = await archiveDoneCard(store, { title: 'fix redis', sessionId: 'sess-a' });
+      const worker = new WikiWorker(store, settingsStore, {
+        llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }),
+        workStore,
+      });
+      await worker.processQueue();
+
+      const docPath = join(vaultDir, 'troubleshooting/redis-timeout.md');
+      expect(existsSync(docPath)).toBe(true);
+      // The path is remembered on the Work, which is the only thing that
+      // survives into the next batch.
+      expect((await workStore.getWork(work.id))?.wikiDocPath)
+        .toBe('troubleshooting/redis-timeout.md');
+
+      // Completion sweeps the rest. Their cards carry no `docPath` from a batch
+      // they were not in, so looking only at them wrote `redis-timeout-2.md`.
+      const second = await archiveDoneCard(store, { title: 'follow-up', sessionId: 'sess-b' });
+      await worker.processQueue();
+
+      expect(existsSync(join(vaultDir, 'troubleshooting/redis-timeout-2.md'))).toBe(false);
+      const doc = readFileSync(docPath, 'utf-8');
+      expect(doc).toContain('title: "Redis 안정화 작업"');
+      // The rewrite describes the batch it just processed, at the same path.
+      expect(doc).toContain(`"${second.id}"`);
+
+      const archived = await store.getCards({ includeArchived: true });
+      for (const id of [first.id, second.id]) {
+        expect(archived.find(c => c.id === id)?.wiki?.docPath)
+          .toBe('troubleshooting/redis-timeout.md');
+      }
+    });
+  });
+
+  test('an active Work groups a card archived before completion', async () => {
     await withTempDir(async (dir) => {
       const { store, settingsStore } = await setupStores(dir);
       const workStore = new WorkStore(dir);
-      const discardedCard = await archiveDoneCard(store, { title: 'abandoned', sessionId: 'sess-x' });
-      const keptCard = await archiveDoneCard(store, { title: 'unrelated', sessionId: 'sess-y' });
+      const work = await workStore.createWork({ title: '진행 중 작업' });
+      await workStore.addSession(work.id, { sessionId: 'sess-a' });
+      expect((await workStore.getWork(work.id))?.status).toBe('active');
+
+      await archiveDoneCard(store, { title: 'early card', sessionId: 'sess-a' });
+      const calls: string[] = [];
+      await new WikiWorker(store, settingsStore, {
+        llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }, calls),
+        workStore,
+      }).processQueue();
+
+      expect(calls).toEqual(['triage', 'classify']);
+      const archived = await store.getCards({ includeArchived: true });
+      // Grouped under the Work even though it has not been completed yet — the
+      // document is titled after the Work, not after the session.
+      expect(archived[0]?.wiki?.docTitle).toBe('진행 중 작업');
+    });
+  });
+
+  test('a discarded Work only loses its grouping — its cards run the normal per-session flow', async () => {
+    await withTempDir(async (dir) => {
+      const { store, settingsStore } = await setupStores(dir);
+      const workStore = new WorkStore(dir);
+      const cardX = await archiveDoneCard(store, { title: 'abandoned', sessionId: 'sess-x' });
+      const cardY = await archiveDoneCard(store, { title: 'unrelated', sessionId: 'sess-y' });
 
       const work = await workStore.createWork({ title: '폐기된 작업' });
       await workStore.addSession(work.id, { sessionId: 'sess-x' });
@@ -308,17 +375,23 @@ describe('WikiWorker × Works', () => {
       });
       await worker.processQueue();
 
-      // Only the unrelated session was sent to the LLM.
-      expect(calls).toEqual(['triage', 'classify']);
+      // Two independent session groups — the discarded Work does not collapse
+      // them and does not suppress its own session either.
+      expect(calls.filter(c => c === 'triage').length).toBe(2);
+      expect(calls.filter(c => c === 'classify').length).toBe(2);
 
       const archived = await store.getCards({ includeArchived: true });
-      const skipped = archived.find(c => c.id === discardedCard.id)!;
-      expect(skipped.wiki?.status).toBe('processed');
-      expect(skipped.wiki?.decision).toBe('skipped');
-      expect(skipped.wiki?.skipReason).toBe('Work discarded');
-      expect(skipped.wiki?.docPath).toBeUndefined();
+      for (const id of [cardX.id, cardY.id]) {
+        const c = archived.find(x => x.id === id)!;
+        expect(c.wiki?.status).toBe('processed');
+        expect(c.wiki?.decision).toBe('kept');
+        expect(c.wiki?.skipReason).toBeUndefined();
+        expect(c.wiki?.docPath).toBeTruthy();
+      }
 
-      expect(archived.find(c => c.id === keptCard.id)?.wiki?.decision).toBe('kept');
+      // Session-unit documents, so the Work title never becomes the doc title.
+      const docTitles = [cardX.id, cardY.id].map(id => archived.find(x => x.id === id)!.wiki?.docTitle);
+      expect(docTitles.every(t => t === 'Redis 타임아웃 해결')).toBe(true);
     });
   });
 });

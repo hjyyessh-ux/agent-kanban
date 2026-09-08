@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-03-25 | Updated: 2026-07-01 -->
+<!-- Generated: 2026-03-25 | Updated: 2026-09-03 -->
 
 # scripts
 
@@ -16,6 +16,7 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 | `restart-main-session.sh` | Gracefully restarts the current agent-kanban runtime-owner process using the singleton lock/peers files under the kanban data dir; supports `--dry-run`, `--force`, `--data-dir`; falls back to a cold-start command (`KANBAN_RESTART_COMMAND`, default `opencode`) when no live owner is found |
 | `restart-opencode-plugin.sh` | Restart helper scoped to the opencode plugin process, same data-dir resolution pattern as `restart-main-session.sh` |
 | `wiki-backfill.ts` | One-off/maintenance script to backfill LLM wiki documents from existing archived cards, using `WikiWorker`/`groupCardsBySession` |
+| `wiki-requeue-discarded.ts` | One-off repair: puts archived cards stamped by the removed "discarded Work" rule (`wiki.skipReason === 'Work discarded'`) back to `wiki.status = 'pending'`, clearing `decision`/`skipReason`/`processedAt`. Matches on that exact skipReason only — triage-authored skips are untouched. Usage: `bun scripts/wiki-requeue-discarded.ts [--dry-run]` |
 | `wiki-reindex.ts` | Pure reformat of the wiki `index.md`: re-derives `processed` date + `topics` per row from each document's frontmatter via `buildIndexLine()`; no LLM calls, idempotent, writes a timestamped `.bak` before changing anything. Usage: `bun scripts/wiki-reindex.ts [vaultDir] [--dry-run]` |
 
 ## For AI Agents
@@ -25,7 +26,7 @@ Standalone operational scripts that run outside the main plugin runtime: the Pla
 - `console.log` is acceptable here — these are CLI/runtime scripts, exempt from the app-wide no-`console.log` rule.
 - `test-server.ts` runs TypeScript source directly (`bun scripts/test-server.ts`), not compiled dist output — keep it in sync with `src/server/index.ts` and store constructors when their signatures change.
 - `createServer()` takes a long positional argument list. When a new store is appended to that signature, `test-server.ts` must pass it too — otherwise the feature's routes silently answer `503 <X> not available` in e2e only, which looks like a UI bug rather than a wiring gap.
-- Wiki scripts (`wiki-backfill.ts`, `wiki-reindex.ts`) import directly from `src/plugin/wiki/` and `src/core/`; keep them aligned with `WikiDocType`, `loadWikiConfig()`, and `buildIndexLine()` if those change shape.
+- Wiki scripts (`wiki-backfill.ts`, `wiki-reindex.ts`, `wiki-requeue-discarded.ts`) import directly from `src/plugin/wiki/` and `src/core/`; keep them aligned with `WikiDocType`, `CardWikiState`, `loadWikiConfig()`, and `buildIndexLine()` if those change shape.
 - Shell scripts (`install.sh`, `restart-*.sh`) resolve `KANBAN_DATA_DIR` with the same fallback-to-`$HOME/.agent-kanban` pattern; preserve that convention if adding new scripts that touch the data dir.
 
 ### Testing Requirements

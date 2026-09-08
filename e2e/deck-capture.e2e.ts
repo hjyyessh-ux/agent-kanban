@@ -31,7 +31,10 @@ async function api(method: string, p: string, body?: unknown): Promise<any> {
   if (!res.ok && res.status !== 404) {
     throw new Error(`${method} ${p} -> ${res.status}: ${await res.text()}`);
   }
-  return res.status === 404 ? null : res.json();
+  // `DELETE /api/cards/:id` answers `204` with no body, so `res.json()` throws
+  // `Unexpected end of JSON input` — which made `clearBoard()` fail (and skip
+  // every capture below it) whenever an earlier spec left a single card behind.
+  return res.status === 404 || res.status === 204 ? null : res.json();
 }
 
 async function create(data: Record<string, unknown>): Promise<Card> {
@@ -328,7 +331,7 @@ test('capture: list view', async ({ page }) => {
   await page.setViewportSize(BOARD_VIEWPORT);
   await page.goto('/');
   await expect(page.locator('.kv2-board')).toBeVisible();
-  const listBtn = page.locator('.app-board-view-toggle-btn', { hasText: 'List' });
+  const listBtn = page.locator('.app-board-view-toggle-btn', { hasText: '리스트' });
   await listBtn.click();
   await settle(page, 700);
   await page.screenshot({ path: path.join(OUT_DIR, '11-list-view.png'), fullPage: false });

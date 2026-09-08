@@ -36,7 +36,19 @@ describe('works-config', () => {
       expect(config.assignPreferSameDir).toBe(true);
       expect(config.assignSuggestResumeChain).toBe(true);
       expect(config.staleDays).toBe(5);
-      expect(config.doneConfirm).toBe(false);
+      // Confirm-before-bulk-archive is on by default: completing a Work is
+      // irreversible, so an un-configured board must not take the destructive
+      // path on a single click.
+      expect(config.doneConfirm).toBe(true);
+    });
+  });
+
+  test('works.done_confirm can still be turned off explicitly', async () => {
+    await withTempDir(async (dir) => {
+      const settingsStore = new SettingsStore(dir);
+      const dto = await saveWorksConfig(settingsStore, { doneConfirm: false });
+      expect(dto.doneConfirm).toBe(false);
+      expect((await loadWorksConfig(new SettingsStore(dir))).doneConfirm).toBe(false);
     });
   });
 

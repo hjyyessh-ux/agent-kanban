@@ -72,6 +72,8 @@ export interface WorkGroupInfo {
   workId: string;
   title: string;
   projectDir?: string;
+  /** `Work.wikiDocPath` — the document this Work already owns, if any. */
+  wikiDocPath?: string;
 }
 
 /** sessionId → the Work that owns it. Sessions outside any Work are absent. */
@@ -97,7 +99,15 @@ export function groupCardsBySession(
     let group = groups.get(key);
     if (!group) {
       group = work
-        ? { key, workId: work.workId, workTitle: work.title, sessionIds: [], cards: [], projectDir: work.projectDir }
+        ? {
+            key,
+            workId: work.workId,
+            workTitle: work.title,
+            workDocPath: work.wikiDocPath,
+            sessionIds: [],
+            cards: [],
+            projectDir: work.projectDir,
+          }
         : { key, sessionId: card.sessionId, cards: [] };
       groups.set(key, group);
     }
@@ -380,28 +390,18 @@ export class WikiWorker {
       const pending = await this.store.getWikiPendingCards();
       if (pending.length === 0) return;
 
-      const { index: workIndex, discardedSessionIds } = await this.loadWorkGrouping();
-      // A discarded Work's cards leave the queue without an LLM call.
-      const excluded = discardedSessionIds.size > 0
-        ? pending.filter(c => c.sessionId !== undefined && discardedSessionIds.has(c.sessionId))
-        : [];
-      if (excluded.length > 0) {
-        await this.skipDiscardedWorkCards(excluded);
-      }
-      const excludedIds = new Set(excluded.map(c => c.id));
-      const queueable = excludedIds.size > 0 ? pending.filter(c => !excludedIds.has(c.id)) : pending;
-      if (queueable.length === 0) return;
+      const workIndex = await this.loadWorkGrouping();
 
       const writer = new WikiVaultWriter(config.vaultDir);
       writer.ensureVaultDir();
 
       const metadata = this.runMetadata(config);
-      const groups = groupCardsBySession(queueable, workIndex);
-      this.totalInRun = queueable.length;
+      const groups = groupCardsBySession(pending, workIndex);
+      this.totalInRun = pending.length;
       this.processedInRun = 0;
       this.log(
         'info',
-        `처리 시작 — ${queueable.length}개 카드, ${groups.length}개 그룹 (concurrency ${this.concurrency}) · ${metadata.route}/${metadata.model} · effort ${metadata.effort}`,
+        `처리 시작 — ${pending.length}개 카드, ${groups.length}개 그룹 (concurrency ${this.concurrency}) · ${metadata.route}/${metadata.model} · effort ${metadata.effort}`,
         metadata,
       );
 
@@ -459,7 +459,15 @@ export class WikiWorker {
       doc.title = group.workTitle.trim();
     }
     // Reprocessing overwrites the previous document instead of orphaning it.
-    const overwritePath = group.cards.find(c => c.wiki?.docPath)?.wiki?.docPath;
+    //
+    // A Work group asks the **Work** first. Its cards can reach this queue in
+    // more than one batch — one card archived while the Work was still active,
+    // the rest by the completion sweep — and the cards in the batch being held
+    // carry no `docPath` from a batch they were not in. Looking only at them
+    // wrote a second file under the same Work title; `Work.wikiDocPath` is what
+    // survives across batches.
+    const overwritePath = group.workDocPath
+      ?? group.cards.find(c => c.wiki?.docPath)?.wiki?.docPath;
     await this.withVaultWriteLock(async () => {
       const docPath = await writer.writeDocument(
         doc,
@@ -493,62 +501,59 @@ export class WikiWorker {
         route: metadata.route,
         effort: metadata.effort,
       }));
+      // Record the path on the Work so the *next* batch of its cards overwrites
+      // this document. Best-effort: failing to remember it can only cost a
+      // duplicate later, and must not fail a document that is already written.
+      if (group.workId && group.workDocPath !== docPath) {
+        try {
+          await this.workStore?.updateWork(group.workId, { wikiDocPath: docPath });
+          group.workDocPath = docPath;
+        } catch (e) {
+          this.log(
+            'warn',
+            `Work의 wiki 문서 경로를 기록하지 못했습니다 — ${e instanceof Error ? e.message : String(e)}`,
+            metadata,
+          );
+        }
+      }
     });
     this.log('info', `keep | ${doc.type} · ${doc.title} (cards: ${group.cards.length})`, metadata);
   }
 
   /**
-   * Build the session → Work index for grouping, plus the sessions of discarded
-   * Works. Grouping is an enhancement layered on the session default: when no
+   * Build the session → Work index for grouping. `discarded` Works are left out
+   * of the index on purpose: discarding only means the grouping is abandoned, so
+   * those sessions fall back to the per-session default and run the ordinary
+   * wiki flow. Grouping is an enhancement layered on that default — when no
    * `WorkStore` is wired (or reading it fails) the pipeline keeps its exact
    * per-session behaviour rather than stalling.
+   *
+   * `active` Works **are** indexed: a card archived by hand before its Work is
+   * completed still belongs to that Work's document. That is what makes a Work's
+   * cards arrive in several batches, and why each entry carries `wikiDocPath` —
+   * without it the later batches wrote duplicate documents under one title.
    */
-  private async loadWorkGrouping(): Promise<{ index: WorkSessionIndex; discardedSessionIds: Set<string> }> {
+  private async loadWorkGrouping(): Promise<WorkSessionIndex> {
     const index: WorkSessionIndex = new Map();
-    const discardedSessionIds = new Set<string>();
-    if (!this.workStore) return { index, discardedSessionIds };
+    if (!this.workStore) return index;
 
     try {
       for (const work of await this.workStore.getWorks()) {
+        if (work.status === 'discarded') continue;
         for (const link of work.sessionLinks) {
-          if (work.status === 'discarded') {
-            discardedSessionIds.add(link.sessionId);
-            continue;
-          }
           index.set(link.sessionId, {
             workId: work.id,
             title: work.title,
             projectDir: work.projectDir ?? link.projectDir,
+            wikiDocPath: work.wikiDocPath,
           });
         }
       }
     } catch (e) {
       this.log('warn', `Work 그룹핑 정보를 읽지 못해 세션 단위로 처리합니다 — ${e instanceof Error ? e.message : String(e)}`);
-      return { index: new Map(), discardedSessionIds: new Set() };
+      return new Map();
     }
-    return { index, discardedSessionIds };
-  }
-
-  /**
-   * Retire the cards of a discarded Work: the user abandoned that work, so there
-   * is nothing worth preserving. Recorded as a terminal `skipped` state (not
-   * left `pending`) so the queue stops re-evaluating them every pass.
-   */
-  private async skipDiscardedWorkCards(cards: KanbanCard[]): Promise<void> {
-    const now = new Date().toISOString();
-    const updates: Record<string, CardWikiState> = {};
-    for (const card of cards) {
-      updates[card.id] = {
-        ...card.wiki,
-        status: 'processed',
-        decision: 'skipped',
-        skipReason: 'Work discarded',
-        processedAt: now,
-        promptVersion: WIKI_PROMPT_VERSION,
-      };
-    }
-    await this.store.updateArchivedCardsWiki(updates);
-    this.log('info', `skip | 폐기된 Work의 카드 ${cards.length}개 — wiki 대상에서 제외`);
+    return index;
   }
 
   private async recordFailure(group: WikiSourceGroup, message: string, metadata: WikiRunMetadata): Promise<void> {

@@ -3,8 +3,11 @@ import type { Work } from '../../../../src/core/types';
 import {
   buildBars,
   buildRange,
+  clampLabelWidth,
   columnAtPointer,
   columnOf,
+  describeTimelineError,
+  describeWorkDateEdit,
   endFromDateInputValue,
   endIsoForColumn,
   fromDateInputValue,
@@ -13,6 +16,9 @@ import {
   resizeBar,
   startOfWeek,
   toDateInputValue,
+  DEFAULT_LABEL_WIDTH,
+  MAX_LABEL_WIDTH,
+  MIN_LABEL_WIDTH,
 } from './timelineModel';
 
 /** 2026-09-02 is a Wednesday — the mockup's "today". */
@@ -344,5 +350,155 @@ describe('date input round-trip', () => {
     const original = localIso(2026, 9, 2, 8);
     const value = toDateInputValue(original);
     expect(new Date(fromDateInputValue(value, original)!).getTime()).toBe(new Date(original).getTime());
+  });
+});
+
+describe('clampLabelWidth', () => {
+  test('keeps an in-range width, rounded to whole pixels', () => {
+    expect(clampLabelWidth(240)).toBe(240);
+    expect(clampLabelWidth(240.6)).toBe(241);
+  });
+
+  test('clamps a drag that runs past either bound', () => {
+    expect(clampLabelWidth(20)).toBe(MIN_LABEL_WIDTH);
+    expect(clampLabelWidth(-500)).toBe(MIN_LABEL_WIDTH);
+    expect(clampLabelWidth(9999)).toBe(MAX_LABEL_WIDTH);
+  });
+
+  test('falls back to the default for a corrupt persisted value', () => {
+    expect(clampLabelWidth(Number.NaN)).toBe(DEFAULT_LABEL_WIDTH);
+    expect(clampLabelWidth(Number.POSITIVE_INFINITY)).toBe(DEFAULT_LABEL_WIDTH);
+  });
+});
+
+/**
+ * A bar clipped by the visible range keeps its *real* columns alongside its
+ * drawn ones. This is the regression the keyboard nudge fell into: it read the
+ * clamped `startIndex`, so `→` on a bar that started twelve days before the
+ * grid moved `startedAt` twelve days forward instead of one day back-to-front.
+ */
+describe('clipped bars keep their real edit columns', () => {
+  // Grid = Mon 2026-08-31 … Sun 2026-09-06; the Work started 2026-08-20.
+  const range = buildRange('week', 0, NOW);
+  const startIso = localIso(2026, 8, 20, 14);
+  const [bar] = buildBars(
+    [work({ id: 'wclip', title: '오래 걸린 Work', status: 'active', startedAt: startIso })],
+    range,
+    NOW,
+  );
+
+  test('exposes the raw start column while drawing at column 0', () => {
+    expect(bar!.startIndex).toBe(0);
+    expect(bar!.clippedLeft).toBe(true);
+    expect(bar!.rawStartIndex).toBe(-11); // 8/20 is 11 days before 8/31
+  });
+
+  test('a one-day nudge off the raw column lands on the day after the real start', () => {
+    // What the fixed nudge does: raw column + 1, keeping the clock time.
+    const nudged = isoForColumn(range, bar!.rawStartIndex + 1, startIso);
+    expect(nudged).toBe(localIso(2026, 8, 21, 14));
+
+    // What the old clamped nudge did — eleven days of history, destroyed.
+    const clamped = isoForColumn(range, bar!.startIndex + 1, startIso);
+    expect(clamped).toBe(localIso(2026, 9, 1, 14));
+    expect(clamped).not.toBe(nudged);
+  });
+
+  test('the inversion guard runs against the raw span, not the drawn one', () => {
+    const span = { startIndex: bar!.rawStartIndex, endIndex: bar!.rawEndIndex };
+    // Moving the start one day right cannot collapse a bar that really is
+    // 11 columns wide, even though its drawn span is only 3.
+    expect(resizeBar(span, 'start', bar!.rawStartIndex + 1).startIndex).toBe(-10);
+  });
+
+  test('an ongoing bar reports today as its raw end', () => {
+    expect(bar!.rawEndIndex).toBe(2); // today, 9/2
+    expect(bar!.endIndex).toBe(2);
+  });
+
+  test('a bar running past the range keeps its real end column', () => {
+    const earlier = buildRange('week', -1, NOW); // Mon 8/24 … Sun 8/30
+    const [past] = buildBars(
+      [work({ id: 'wpast', title: '지난주부터', status: 'active', startedAt: localIso(2026, 8, 25) })],
+      earlier,
+      NOW,
+    );
+    expect(past!.endIndex).toBe(6); // clamped to Sunday
+    expect(past!.rawEndIndex).toBe(9); // 9/2 is column 9 of the 8/24 week
+    expect(past!.clippedRight).toBe(true);
+  });
+});
+
+describe('a terminal Work never borrows updatedAt for its end', () => {
+  const range = buildRange('week', 0, NOW);
+
+  test('a done Work with no resolvedAt draws to today, not to updatedAt', () => {
+    const [bar] = buildBars(
+      [work({
+        id: 'wbroken',
+        title: '종료일 없는 done',
+        status: 'done',
+        startedAt: localIso(2026, 8, 31),
+        // A title edit two days after the fact. The old fallback let this grow
+        // the bar, so a finished Work aged every time it was touched.
+        updatedAt: localIso(2026, 9, 4, 10),
+      })],
+      range,
+      NOW,
+    );
+    expect(bar!.endIndex).toBe(2); // today (9/2), *not* 9/4
+  });
+
+  test('a resolvedAt still wins when it is there', () => {
+    const [bar] = buildBars(
+      [work({
+        id: 'wok',
+        title: '정상 done',
+        status: 'done',
+        startedAt: localIso(2026, 8, 31),
+        resolvedAt: localIso(2026, 9, 1, 18),
+        updatedAt: localIso(2026, 9, 5, 10),
+      })],
+      range,
+      NOW,
+    );
+    expect(bar!.endIndex).toBe(1);
+  });
+});
+
+describe('describeTimelineError', () => {
+  test('turns a bare route miss into a sentence with an action', () => {
+    const message = describeTimelineError('Not found');
+    expect(message).not.toBe('Not found');
+    expect(message).toContain('데몬');
+    expect(message.endsWith('.')).toBe(true);
+  });
+
+  test('names the network as the problem when the fetch never landed', () => {
+    expect(describeTimelineError('Failed to fetch')).toContain('연결할 수 없습니다');
+  });
+
+  test('explains an over-long window in terms the toolbar can fix', () => {
+    expect(describeTimelineError('window must not exceed 400 days')).toContain('기간이 너무 깁니다');
+  });
+
+  test('keeps an unrecognized message readable instead of dropping it', () => {
+    const message = describeTimelineError('EPERM: operation not permitted');
+    expect(message).toContain('문제가 생겼습니다');
+    expect(message).toContain('EPERM');
+  });
+});
+
+describe('describeWorkDateEdit', () => {
+  test('names the field and the new day for an undo toast', () => {
+    expect(describeWorkDateEdit('배포 자동화', 'start', localIso(2026, 8, 21)))
+      .toBe('"배포 자동화" 시작일을 8/21로 옮겼습니다.');
+  });
+
+  test('calls an open Work’s end what it is — a plan', () => {
+    expect(describeWorkDateEdit('배포 자동화', 'end', localIso(2026, 9, 5), { planned: true }))
+      .toContain('종료 예정일');
+    expect(describeWorkDateEdit('배포 자동화', 'end', localIso(2026, 9, 5)))
+      .toContain('종료일');
   });
 });

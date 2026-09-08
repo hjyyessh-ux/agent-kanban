@@ -2,13 +2,17 @@ import type {
   AddWorkSessionInput,
   CreateQuickActionInput,
   CreateWorkInput,
+  MergeWorkResponse,
   QuickActionView,
   RunQuickActionInput,
   RunQuickActionResponse,
   UpdateQuickActionInput,
   Work,
+  WorkIgnoredSession,
   WorkInboxSession,
   WorkPatchInput,
+  WorkReopenResponse,
+  WorkSessionsResponse,
   WorkStatus,
   WorksConfigDto,
   WorksConfigInput,
@@ -370,6 +374,49 @@ export async function apiIgnoreWorkSession(sessionId: string): Promise<string[]>
   });
   const body = await parseJson<{ ignoredSessionIds: string[] }>(res, 'Ignore session failed');
   return body.ignoredSessionIds;
+}
+
+/** The ignore list, each row with the Inbox summary the restore list renders. */
+export async function apiGetIgnoredSessions(): Promise<WorkIgnoredSession[]> {
+  const res = await fetch(`${BASE}/api/works/ignored-sessions`);
+  return parseJson<WorkIgnoredSession[]>(res, 'Get ignored sessions failed');
+}
+
+/** Take a session off the ignore list; it returns to the Inbox. */
+export async function apiRestoreIgnoredSession(sessionId: string): Promise<string[]> {
+  const res = await fetch(
+    `${BASE}/api/works/ignore-session/${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  );
+  const body = await parseJson<{ ignoredSessionIds: string[] }>(res, 'Restore session failed');
+  return body.ignoredSessionIds;
+}
+
+/**
+ * `POST /api/works/:id/reopen` — a terminal Work back to `active`, with its
+ * bulk-archived cards lifted back onto the board.
+ */
+export async function apiReopenWork(id: string): Promise<WorkReopenResponse> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}/reopen`, {
+    method: 'POST',
+  });
+  return parseJson<WorkReopenResponse>(res, 'Reopen work failed');
+}
+
+/** `POST /api/works/:id/merge` — fold one Work's sessions into another. */
+export async function apiMergeWork(id: string, intoWorkId: string): Promise<MergeWorkResponse> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ intoWorkId }),
+  });
+  return parseJson<MergeWorkResponse>(res, 'Merge work failed');
+}
+
+/** `GET /api/works/:id/sessions` — archive-inclusive per-session aggregate. */
+export async function apiGetWorkSessions(id: string): Promise<WorkSessionsResponse> {
+  const res = await fetch(`${BASE}/api/works/${encodeURIComponent(id)}/sessions`);
+  return parseJson<WorkSessionsResponse>(res, 'Get work sessions failed');
 }
 
 export async function apiGetWorksConfig(): Promise<WorksConfigDto> {

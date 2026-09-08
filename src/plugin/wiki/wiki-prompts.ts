@@ -24,6 +24,13 @@ export interface WikiSourceGroup {
   workId?: string;         // set for Work groups
   workTitle?: string;      // Work groups: used verbatim as the document title
   sessionIds?: string[];   // Work groups: every contributing session
+  /**
+   * Work groups: the document this Work was written to last time
+   * (`Work.wikiDocPath`), so a Work whose cards reach the queue in more than one
+   * batch overwrites its own document instead of writing a second file under
+   * the same title.
+   */
+  workDocPath?: string;
 }
 
 export interface TriageResult {

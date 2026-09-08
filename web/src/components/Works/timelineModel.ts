@@ -1,13 +1,17 @@
 import type { Work } from '../../../../src/core/types';
+import { formatShortDate } from './worksAssign';
 
 /**
- * Pure geometry for the Timeline tab (mockup screen ⑤).
+ * Pure date geometry for the Timeline view (the Board tab's `타임라인`).
  *
- * The view is a day grid: one column per day, one row per Work, and a bar that
- * spans `startedAt → resolvedAt` clamped to the visible range. Everything here
- * is date math on *local* day boundaries — the same boundaries the column
- * headers are rendered from — so a bar never lands one column off from the
- * header it sits under.
+ * The view is a day grid: one column per day, and a Work's plan bar spans
+ * `startedAt → resolvedAt` clamped to the visible range. Everything here is date
+ * math on *local* day boundaries — the same boundaries the column headers are
+ * rendered from — so a bar never lands one column off from the header it sits
+ * under.
+ *
+ * Row *grouping* (directory → Work → session) and the per-day card buckets live
+ * in `timelineRows.ts`, which builds on the primitives here.
  */
 
 export type TimelineMode = 'week' | 'month';
@@ -120,6 +124,19 @@ export interface TimelineBar {
   startIndex: number;
   /** Last visible column, inclusive (clamped, always `>= startIndex`). */
   endIndex: number;
+  /**
+   * The bar's *real* start column — negative when the Work began before the
+   * range. `startIndex` is the clamped, drawable one.
+   *
+   * Both exist because they answer different questions. Rendering wants the
+   * clamped column (a bar cannot be drawn at column −12). **Editing wants the
+   * raw one**: a keyboard nudge on the left handle of a bar that started 8/20,
+   * viewed in the 9/1 week, has to move 8/20 → 8/21. Nudging the clamped column
+   * moved it to 9/2 instead and silently destroyed nearly two weeks of history.
+   */
+  rawStartIndex: number;
+  /** The bar's real end column — may exceed the last column. See `rawStartIndex`. */
+  rawEndIndex: number;
   /** The Work started before the range — the bar's left edge is a cut, not a start. */
   clippedLeft: boolean;
   /** The bar continues past the range's right edge. */
@@ -133,7 +150,8 @@ export interface TimelineBar {
 }
 
 /**
- * The true (unclamped) end column of a Work's bar.
+ * The true (unclamped) end column of a Work's bar: its `resolvedAt` column, or
+ * the today column when it has none.
  *
  * An `active` Work usually has no `resolvedAt` (a terminal transition stamps
  * it), and then the bar simply runs to the today column — past the range's
@@ -142,17 +160,25 @@ export interface TimelineBar {
  * or typing a date in the detail dialog: that is a planned end, and the bar
  * ends exactly where it was put rather than tracking today. Clearing the date
  * puts the bar back on today.
+ *
+ * `updatedAt` is deliberately **not** a fallback for a terminal Work. Every
+ * terminal transition stamps `resolvedAt` (docs/invariants.md), so the only
+ * records that arrive without one are damaged — and borrowing `updatedAt` made
+ * a finished Work's bar grow by a day every time someone edited its title.
+ * Drawing to today instead is visible rather than plausible.
  */
-function rawEndColumn(work: Work, range: TimelineRange, todayIndex: number): number | null {
-  if (work.status === 'active') return columnOf(range, work.resolvedAt) ?? todayIndex;
-  return columnOf(range, work.resolvedAt ?? work.updatedAt);
+function rawEndColumn(work: Work, range: TimelineRange, todayIndex: number): number {
+  return columnOf(range, work.resolvedAt) ?? todayIndex;
 }
 
 /**
  * Bars for every Work that overlaps the range, in render order: unresolved
- * Works oldest-first, then resolved Works most-recent-first (mockup footnote).
- * Works with no overlap are dropped — and unassigned sessions never appear at
- * all, since they are not Works yet (that is the Inbox's job).
+ * Works oldest-first, then resolved Works most-recent-first. Works with no
+ * overlap are dropped.
+ *
+ * This is the Work's **plan** bar only. The measured session rails that nest
+ * under it — including unassigned sessions, which do appear on the grid marked
+ * 미배정 — are built in `timelineRows.ts`.
  */
 export function buildBars(works: Work[], range: TimelineRange, now: Date): TimelineBar[] {
   const lastIndex = range.days.length - 1;
@@ -163,7 +189,6 @@ export function buildBars(works: Work[], range: TimelineRange, now: Date): Timel
     const rawStart = columnOf(range, work.startedAt);
     if (rawStart === null) continue;
     const rawEnd = rawEndColumn(work, range, todayIndex);
-    if (rawEnd === null) continue;
     // A Work that ended before the range or starts after it has nothing to draw.
     if (rawEnd < 0 || rawStart > lastIndex) continue;
 
@@ -175,6 +200,8 @@ export function buildBars(works: Work[], range: TimelineRange, now: Date): Timel
       work,
       startIndex,
       endIndex,
+      rawStartIndex: rawStart,
+      rawEndIndex: Math.max(rawEnd, rawStart),
       clippedLeft: rawStart < 0,
       clippedRight: rawEnd > lastIndex,
       ongoing: work.status === 'active',
@@ -324,4 +351,83 @@ export function fromDateInputValue(value: string, sourceIso?: string): string | 
 export function endFromDateInputValue(value: string): string | null {
   const day = parseDateInputValue(value);
   return day ? endOfDay(day) : null;
+}
+
+/**
+ * Sentence for the undo toast a bar-edge edit leaves behind.
+ *
+ * A drag and a `→` keypress both rewrite a stored date with no confirmation
+ * step, so the only safety net is being told what changed and being able to put
+ * it back — the same contract the Works session actions already use
+ * (`WorkSessionNotice`).
+ */
+export function describeWorkDateEdit(
+  title: string,
+  edge: TimelineEdge,
+  iso: string,
+  options?: { planned?: boolean },
+): string {
+  const field = edge === 'start'
+    ? '시작일'
+    : (options?.planned ? '종료 예정일' : '종료일');
+  return `"${title}" ${field}을 ${formatShortDate(iso)}로 옮겼습니다.`;
+}
+
+/* ── Failure copy ─────────────────────────────────────────── */
+
+/**
+ * A sentence a user can act on, from whatever `fetch`/the route produced.
+ *
+ * The banner used to print the raw message, so a missing route read as the
+ * single word `Not found` above a grid that had *also* drawn itself empty — two
+ * signals that together said "nothing ran this week" when the truth was "we
+ * never asked successfully". The grid is dimmed alongside this (see
+ * `.timeline--errored`), and the raw text is kept in parentheses for anything
+ * unrecognized so a bug report still carries it.
+ */
+export function describeTimelineError(raw: string): string {
+  const text = raw.trim();
+  if (/not found|404/i.test(text)) {
+    return '서버에 타임라인 API가 없습니다. 데몬을 최신 버전으로 다시 시작해 주세요.';
+  }
+  if (/failed to fetch|networkerror|load failed|econnrefused/i.test(text)) {
+    return '서버에 연결할 수 없습니다. 데몬이 실행 중인지 확인해 주세요.';
+  }
+  if (/must not exceed/i.test(text)) {
+    return '조회 기간이 너무 깁니다. 주간 또는 월간 범위로 좁혀 주세요.';
+  }
+  if (/iso 8601|precede/i.test(text)) {
+    return '조회 기간이 잘못 전달됐습니다. 오늘로 돌아간 뒤 다시 시도해 주세요.';
+  }
+  return `타임라인을 불러오는 중 문제가 생겼습니다${text ? ` (원문: ${text})` : ''}.`;
+}
+
+/* ── Label column width ───────────────────────────────────── */
+
+/**
+ * Default width of the `Work` label column, matching `--tl-label-width`'s CSS
+ * fallback.
+ *
+ * 240px, not the original 180px: at 180 a Korean Work title ellipsized after
+ * roughly eight characters, so the default view of a real board was a column of
+ * `타임라인 뷰의 범례…`. The column is still resizable in both directions, and a
+ * persisted narrower width is untouched.
+ */
+export const DEFAULT_LABEL_WIDTH = 240;
+
+/**
+ * Resize bounds for the label column. The floor keeps a title readable at all
+ * (below ~120px even a short project name ellipsizes to nothing), the ceiling
+ * keeps at least a few day columns visible on a 1280px viewport.
+ */
+export const MIN_LABEL_WIDTH = 120;
+export const MAX_LABEL_WIDTH = 560;
+
+/** Label-column width step for a keyboard nudge on the resizer. */
+export const LABEL_WIDTH_STEP = 16;
+
+/** Clamps a dragged/nudged/persisted width into the resize bounds. */
+export function clampLabelWidth(width: number): number {
+  if (!Number.isFinite(width)) return DEFAULT_LABEL_WIDTH;
+  return Math.round(Math.min(MAX_LABEL_WIDTH, Math.max(MIN_LABEL_WIDTH, width)));
 }

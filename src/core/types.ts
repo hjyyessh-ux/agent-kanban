@@ -1270,7 +1270,22 @@ export interface CapabilityItem {
 // assigns or ignores them. `ignoredSessionIds` persists the Inbox "ignore" action.
 
 export type WorkStatus = 'active' | 'done' | 'discarded';
-export type WorkResolution = 'completed' | 'superseded' | 'abandoned';
+/**
+ * Why a Work closed.
+ *
+ * - `completed` — the `done` transition (its cards were swept into the archive).
+ * - `abandoned` — the `discarded` transition.
+ * - `superseded` — this Work was **merged into another one**
+ *   (`POST /api/works/:id/merge`): its sessions moved to the target and
+ *   `supersededByWorkId` points at it.
+ *
+ * `superseded` was removed once, for being unreachable: nothing wrote it,
+ * because the only merge-shaped path then available (moving the last session out
+ * of a Work) *deletes* the source rather than resolving it. It is back **with**
+ * the transition that stamps it, which is the condition this type documents —
+ * never add a resolution the server cannot produce.
+ */
+export type WorkResolution = 'completed' | 'abandoned' | 'superseded';
 export type WorkSessionRole = 'dev' | 'review' | 'debug';
 
 export interface WorkSessionLink {
@@ -1278,6 +1293,20 @@ export interface WorkSessionLink {
   projectDir?: string;
   linkedAt: string;      // ISO 8601 — when the session was linked to this Work
   role?: WorkSessionRole;
+  /**
+   * ISO 8601 — when this link was last observed to have **no cards left at all**
+   * (every card of the session deleted off the board, and none in the archive
+   * months the Work can reach). The link is kept rather than dropped: card
+   * deletion is a soft delete and `restoreCard` un-does it, so silently
+   * unlinking would turn one undo-able action into an unrecoverable one.
+   *
+   * A dangling link is not cosmetic — `resolveWorkStartedAt` falls back to
+   * `linkedAt` for a session with no cards, so the Timeline bar quietly starts
+   * at triage time instead of when the work began. `reconcileWorkSessionLinks`
+   * stamps and clears it; `POST /api/works/:id/prune-sessions` is how the user
+   * removes the links that are really gone.
+   */
+  cardsMissingAt?: string;
 }
 
 export interface WorkSummary {
@@ -1293,10 +1322,38 @@ export interface Work {
   resolution?: WorkResolution;
   sessionLinks: WorkSessionLink[];
   projectDir?: string;
-  startedAt: string;     // ISO 8601 — first linked session's earliest card startedAt
+  startedAt: string;     // ISO 8601 — min() over every linked session's earliest card time
   resolvedAt?: string;   // ISO 8601 — done/discard time → end of the Timeline bar
   summary?: WorkSummary;
+  /**
+   * Free-form human notes, up to `WORK_NOTES_MAX_LENGTH` characters.
+   *
+   * Deliberately separate from `summary`: that field is owned by the Summary LLM
+   * (`POST /api/works/:id/summary` overwrites it wholesale), so anything a person
+   * typed there was destroyed by the next regeneration. This is the field the
+   * user owns, and no server path ever writes it.
+   */
+  notes?: string;
   archivedAt?: string;   // ISO 8601 — set when the Work's cards were bulk-archived
+  /**
+   * The Work this one was merged into (`POST /api/works/:id/merge`). Set together
+   * with `status: 'discarded'` + `resolution: 'superseded'` on the *source* of a
+   * merge, so a Resolved row can point at where its sessions actually went
+   * instead of looking abandoned.
+   */
+  supersededByWorkId?: string;
+  /**
+   * Vault-relative path of the wiki document this Work was written to.
+   *
+   * A Work is one document, but its cards can reach the wiki queue in **more
+   * than one batch** (a card archived while the Work was still active, then the
+   * rest by the completion sweep). `WikiWorker` used to look for the previous
+   * document only among the cards in the batch it was holding, so the second
+   * batch found nothing to overwrite and wrote a *second* file under the same
+   * Work title. Recording the path on the Work is what makes the overwrite
+   * survive across batches. Server-owned: never accepted from a client patch.
+   */
+  wikiDocPath?: string;
   createdAt: string;     // ISO 8601
   updatedAt: string;     // ISO 8601
 }
@@ -1306,6 +1363,81 @@ export interface WorkStoreState {
   works: Work[];
   ignoredSessionIds: string[]; // Inbox "ignore" persistence — survives refresh
   lastModified: string;        // ISO 8601
+}
+
+/**
+ * Cap on `Work.notes`. Long enough for a real handover note, short enough that
+ * `works.json` (rewritten whole on every store write) does not grow without a
+ * bound the API never states.
+ */
+export const WORK_NOTES_MAX_LENGTH = 4000;
+
+/**
+ * `GET /api/works?sort=` — how the Work list is ordered.
+ *
+ * - `updated` (default) — most recent activity first. The original behaviour.
+ * - `stale` — **least** recent activity first. `updated` is exactly the wrong
+ *   order for the question the Works tab is usually asked ("what have I left
+ *   sitting?"): a Work nobody has touched for three weeks sank to the bottom of
+ *   the list, which is where it was already invisible.
+ * - `planned` — nearest planned end (`resolvedAt`) first; Works with no planned
+ *   end sort last, by recent activity.
+ */
+export type WorkListSort = 'updated' | 'stale' | 'planned';
+
+/** `GET /api/works` query, and the shape the pure `selectWorks` filter takes. */
+export interface WorkListQuery {
+  status?: WorkStatus;
+  /** Exact `Work.projectDir` match. */
+  projectDir?: string;
+  /** Case-insensitive substring over title, directory, notes and Summary lines. */
+  q?: string;
+  sort?: WorkListSort;
+}
+
+/**
+ * `POST /api/works/:id/reopen` — a terminal Work put back to `active`.
+ *
+ * Completing a Work was a one-way door: `PATCH` accepted `status: 'active'`
+ * (which clears `resolvedAt`/`resolution`) but no UI sent it, the bulk-archived
+ * cards never came back, and `archivedAt` stayed stamped — so the sweep could
+ * never run again either. Deleting the Work was the only escape, and that threw
+ * away the record along with it.
+ *
+ * `restoredCardIds` are the cards lifted back out of the monthly archive onto
+ * the board (see `KanbanStore.unarchiveCards`). They come back **`done`**: the
+ * sweep overwrote whatever status they had and that is not recoverable.
+ */
+export interface WorkReopenResponse {
+  work: Work;
+  restoredCardIds: string[];
+  /** Archive month files read — diagnostics for the same monthly heuristic. */
+  scannedMonths: string[];
+}
+
+/**
+ * `POST /api/works/:id/merge` body. Merging is its own verb because the only
+ * previous route to it was moving sessions out one at a time and waiting for the
+ * source to empty — which *deletes* the source, losing its Summary and its
+ * Timeline history.
+ */
+export interface MergeWorkInput {
+  intoWorkId: string;
+}
+
+/**
+ * Response of a merge. The source is **kept**, not deleted: it becomes
+ * `discarded` / `resolution: 'superseded'` / `supersededByWorkId`, so the
+ * Resolved list can still say where its sessions went.
+ *
+ * `skippedSessionIds` are sessions the target already held — the target's link
+ * (with its role) wins, because it is the record that survives.
+ */
+export interface MergeWorkResponse {
+  from: Work;
+  to: Work;
+  movedSessionIds: string[];
+  skippedSessionIds: string[];
 }
 
 export interface CreateWorkInput {
@@ -1323,7 +1455,14 @@ export interface UpdateWorkInput {
   startedAt?: string;
   resolvedAt?: string | null;
   summary?: WorkSummary | null;
+  /** Human notes. `null` clears them; length-capped at `WORK_NOTES_MAX_LENGTH`. */
+  notes?: string | null;
+  /** Stamped by `WorkStore.mergeWork`. Rejected on `PATCH /api/works/:id`. */
+  supersededByWorkId?: string | null;
+  /** Server-owned (`claimArchiveSweep` stamps it). Rejected on `PATCH /api/works/:id`. */
   archivedAt?: string | null;
+  /** Server-owned (`WikiWorker` stamps it). Rejected on `PATCH /api/works/:id`. */
+  wikiDocPath?: string | null;
 }
 
 /**
@@ -1337,17 +1476,175 @@ export interface WorkPatchInput extends UpdateWorkInput {
   confirmArchive?: boolean;
 }
 
+/** One seed the completion sweep could not flip/archive (e.g. the card was deleted meanwhile). */
+export interface WorkSweepFailure {
+  cardId: string;
+  message: string;
+}
+
+/**
+ * What the completion sweep actually did, reported alongside the patched Work.
+ *
+ * The sweep touches N cards through N independent store writes, so **partial
+ * success is a real outcome**: a card deleted between the read and the write
+ * fails on its own without cancelling the rest. Reporting it is the point — the
+ * previous behaviour let that single rejection escape the route, where the
+ * substring error mapping turned it into `404 Work not found` even though the
+ * Work existed and most of its cards had just been archived.
+ */
+export interface WorkSweepReport {
+  archivedCount: number;
+  archiveMonth?: string;
+  /** Why no sweep ran, when none did. */
+  skipped?: WorkArchiveSkipReason;
+  /** Empty on a clean sweep. */
+  failed: WorkSweepFailure[];
+  /**
+   * Top-level cards left on the board because they are favorited. `favorite`
+   * means "pin this to the board", and `archiveCards` already honours it for
+   * every *descendant* it cascades to — the Work sweep passed its seeds in
+   * explicitly, which is the one path that walked straight past the pin.
+   * Reported so completing a Work never silently removes a starred card.
+   */
+  keptFavoriteCardIds?: string[];
+}
+
+/** Why the bulk done→archive sweep did not run for a `PATCH /api/works/:id` call. */
+export type WorkArchiveSkipReason =
+  | 'not-a-completion'      // status was not transitioning to `done`
+  | 'already-archived'      // this Work's cards were archived by an earlier call
+  | 'awaiting-confirmation' // works.done_confirm is on and the client has not confirmed
+  | 'no-cards'              // nothing active left to sweep (already archived / no sessions)
+  | 'favorites-only';       // every board card under this Work is favorited (pinned) — see WorkSweepReport.keptFavoriteCardIds
+
+/**
+ * `PATCH /api/works/:id` response — the updated `Work` **plus** the sweep's own
+ * report when this patch ran (or deliberately skipped) one.
+ *
+ * Deliberately a superset of `Work` rather than a `{ work, sweep }` envelope:
+ * every existing caller reads Work fields straight off the body, and a Work has
+ * no `sweep` field of its own, so the extra key is additive.
+ */
+export interface WorkPatchResponse extends Work {
+  sweep?: WorkSweepReport;
+}
+
+/**
+ * `GET /api/works/:id/completion-preview` — what completing this Work would do,
+ * so the confirmation dialog can state the damage before the user commits.
+ *
+ * Counts are **archive-inclusive** (same monthly reads as
+ * `GET /api/works/:id/sessions`): a Work whose sweep already ran must not
+ * describe itself as touching zero cards.
+ */
+export interface WorkCompletionPreview {
+  workId: string;
+  /** Cards under every linked session, live board **and** archive. */
+  cardCount: number;
+  /** Card counts per status over the same set, zero-filled so the UI needs no defaults. */
+  byStatus: Record<KanbanStatus, number>;
+  /**
+   * Cards still on the board **and not favorited** — i.e. what a sweep run now
+   * would actually archive. Favorites are excluded because the sweep excludes
+   * them; the dialog must not promise to archive a card it will leave behind.
+   */
+  sweepCardCount: number;
+  /**
+   * Board cards under this Work that are favorited, and therefore stay put.
+   * Named in the confirmation dialog so "카드 N장이 archive됩니다" and the board
+   * the user sees afterwards agree.
+   */
+  favoriteCardIds: string[];
+  /**
+   * Board cards with a live runtime run. Non-empty means completion is refused
+   * with `409`: archiving a card out from under a running agent makes its
+   * completion hook fail with `Card not found` and hands the wiki an unfinished
+   * transcript.
+   */
+  runningCardIds: string[];
+  /**
+   * Titles of `runningCardIds`, same order. Carried so the confirmation dialog
+   * can name what is busy instead of printing nanoids, without the client
+   * needing a board read of its own.
+   */
+  runningCardTitles: string[];
+  sessionCount: number;
+  /** The cards were already bulk-archived — completing again is a no-op. */
+  alreadyArchived: boolean;
+  /** Archive month files read to build this preview — diagnostics for the range heuristic. */
+  scannedMonths: string[];
+}
+
+/**
+ * `POST /api/works/:id/sessions` body. The Work's `startedAt` is **not** part of
+ * it: `min()` is recalculated by a `WorkStartedAtResolver` the caller hands to
+ * `WorkStore.addSession`, which runs it *inside* the store's lock against the
+ * post-link link set. Passing a pre-computed date (as this input used to) is a
+ * TOCTOU: two concurrent links each resolved `min()` against the link set they
+ * read before the lock, so the second write overwrote the first's answer with
+ * one that had never seen the other session.
+ */
 export interface AddWorkSessionInput {
   sessionId: string;
   projectDir?: string;
   role?: WorkSessionRole;
-  /**
-   * Earliest `startedAt` among the session's cards. Applied to the Work's own
-   * `startedAt` only when this is its *first* link, so the Timeline bar starts
-   * when the work actually began rather than when the user got around to
-   * triaging it. Ignored on later links; falls back to the link time.
-   */
-  startedAt?: string;
+}
+
+/** One session of a `POST /api/works/:id/sessions/batch` request. */
+export interface BatchAddWorkSessionsInput {
+  sessions: AddWorkSessionInput[];
+  /** Applied to every session that does not carry its own. */
+  role?: WorkSessionRole;
+}
+
+/** One session a batch link could not attach, with the server's own reason. */
+export interface WorkBatchLinkFailure {
+  sessionId: string;
+  message: string;
+}
+
+/**
+ * `POST /api/works/:id/sessions/batch` response.
+ *
+ * Partial success is a real outcome and is reported rather than thrown: the 1:N
+ * invariant is per-session, so one session that already belongs to another Work
+ * must not undo the links that did succeed. What *is* atomic is each individual
+ * link — the `min()` recalculation happens inside the store's lock — and the
+ * whole batch shares **one** archive-inclusive card read, which is the reason
+ * this verb exists at all (linking 20 sessions one route call at a time scanned
+ * the archive 20+ times).
+ */
+export interface WorkBatchAddSessionsResponse {
+  work: Work;
+  /** Sessions the client asked for that are now linked. */
+  linkedSessionIds: string[];
+  /** Subagent descendants adopted along the way (`linkSessionWithSubagents`). */
+  cascadedSessionIds: string[];
+  failed: WorkBatchLinkFailure[];
+}
+
+/**
+ * `PATCH /api/works/sessions/:sessionId` body (`sessionId` comes from the path).
+ * Re-parents an existing link instead of creating one, which is why moving is a
+ * verb of its own: `POST /api/works/:id/sessions` still rejects a session that
+ * belongs to another Work with `409`, and that invariant stays intact.
+ */
+export interface MoveWorkSessionInput {
+  sessionId: string;
+  toWorkId: string;
+  /** Omitted keeps the role the link already carried. */
+  role?: WorkSessionRole;
+}
+
+/**
+ * Response of a session move. `from` is the source Work *after* the move, or
+ * `null` when the move took its last session and the Work was deleted — emptying
+ * a Work by moving its only session is a merge, and the leftover shell would
+ * otherwise linger on the Timeline as a bar with nothing under it.
+ */
+export interface MoveWorkSessionResponse {
+  from: Work | null;
+  to: Work;
 }
 
 /**
@@ -1356,18 +1653,101 @@ export interface AddWorkSessionInput {
  * 2) reads this list to drive inline assignment. `projectDir` powers the
  * "same-directory Work" recommendation.
  */
+/**
+ * `POST /api/works/:id/sessions` response — the `Work` plus which sessions the
+ * link *inherited*.
+ *
+ * A superset of `Work` rather than a `{ work, cascaded }` envelope, for the same
+ * reason `WorkPatchResponse` is: every existing caller reads it as a `Work` and
+ * keeps working. `cascadedSessionIds` are the subagent sessions linked along
+ * with the requested one (`buildSubagentSessionTree`), so the UI can say why the
+ * Inbox lost rows nobody clicked.
+ */
+export type WorkAddSessionResponse = Work & { cascadedSessionIds: string[] };
+
 export interface WorkInboxSession {
   sessionId: string;
   sessionTitle?: string;
   cardTitle: string;
   cardId: string;
+  /**
+   * Status of the session's representative card (`todo` | `in_progress` |
+   * `complete` | `done`). The Inbox row turns it into a 상태 칩 so a session that
+   * is still running does not look like a finished one — it is the field that
+   * makes "is this even ready to triage" answerable without opening the card.
+   */
   cardStatus: string;
   projectDir?: string;
   agentRuntime: AgentRuntime;
   agentType?: string;
   model?: string;
   relatedCardCount: number;
+  /**
+   * `subagent` when every card on this session carries a `parentCardId`, or when
+   * the session ran under another session's card — see
+   * `buildSubagentSessionTree`. A subagent row whose parent is *already* linked
+   * to a Work is not returned at all; this flag is for the ones whose parent is
+   * still unassigned, so the user can see why two rows look alike.
+   */
+  sessionKind: 'main' | 'subagent';
   updatedAt: string;      // ISO 8601
+  /**
+   * Sessions this one continues (subagent parent / queue chain / resumed
+   * session) — see `buildSessionChainMap`. Triage colors a Work that already
+   * holds one of these as "🔗 이어진 세션" and ranks it first. Computed from all
+   * cards including archived ones, so it is absent only when there is no
+   * lineage at all.
+   */
+  relatedSessionIds?: string[];
+}
+
+/**
+ * What one `reconcileWorkSessionLinks()` pass changed — the response of
+ * `POST /api/works/reconcile-links` and of the boot-time pass.
+ *
+ * Idempotent by construction: a second run over unchanged data reports zero of
+ * both, because the stamp is derived from the cards rather than accumulated.
+ */
+export interface WorkLinkReconcileReport {
+  /** Works inspected. */
+  scanned: number;
+  /** Links newly stamped `cardsMissingAt` (their session lost its last card). */
+  marked: Array<{ workId: string; sessionIds: string[] }>;
+  /** Links whose cards came back (a `restoreCard`, or a stale stamp). */
+  cleared: Array<{ workId: string; sessionIds: string[] }>;
+}
+
+/** `POST /api/works/:id/prune-sessions` response. */
+export interface WorkPruneSessionsResponse {
+  work: Work;
+  /** Links dropped because they were stamped `cardsMissingAt`. */
+  removedSessionIds: string[];
+}
+
+/**
+ * One entry of the Inbox ignore list — `GET /api/works/ignored-sessions`.
+ *
+ * The list was write-only for as long as it existed: `ignoredSessionIds` could
+ * only be appended to, so an accidental `폐기` (one mistyped `x` in the assign
+ * modal) dropped a session out of every screen permanently. This DTO is the read
+ * side of that list, and `DELETE /api/works/ignore-session/:sessionId` the way
+ * back.
+ *
+ * `session` carries the same summary the Inbox row renders, so the restore list
+ * can identify a row by its first prompt rather than an opaque id. It is absent
+ * when the session has no cards left to summarize — the row still exists,
+ * because it is still ignored and restoring it is still how it leaves the list.
+ */
+export interface WorkIgnoredSession {
+  sessionId: string;
+  session?: WorkInboxSession;
+  /**
+   * Whether restoring it would actually put the row back in the Inbox. False
+   * for a session the Inbox filters out anyway (no cards, a subagent whose
+   * parent is assigned, or one past the `since` window) — restoring is still
+   * allowed, it just says so instead of looking broken.
+   */
+  returnsToInbox: boolean;
 }
 
 // ─── Works settings (card 4/7) ──────────────────────────────────────
@@ -1400,10 +1780,160 @@ export interface WorksConfigInput {
   doneConfirm?: boolean;
 }
 
+/**
+ * One linked session of a Work, summarized **over live *and* archived cards**.
+ *
+ * Completing a Work bulk-archives every card under it, so the board list the web
+ * client polls holds none of them a moment later — deriving these counts on the
+ * client would report `카드 0 · done 0` for exactly the Works whose point is to
+ * be looked back at. The server therefore computes them once, reading the
+ * archive months the Work can possibly reach.
+ */
+export interface WorkSessionSummary {
+  sessionId: string;
+  role?: WorkSessionRole;
+  linkedAt: string;          // ISO 8601 — echo of the link
+  projectDir?: string;
+  /** Oldest card's title (the session's first prompt), else `sessionTitle`, else ''. */
+  title: string;
+  cardCount: number;
+  /** Cards whose status is `done` or `complete`. */
+  doneCount: number;
+  /** Cards still `todo` or `in_progress`. */
+  inProgressCount: number;
+  /** Earliest card execution/creation instant, absent when the session has no cards. */
+  firstCardAt?: string;      // ISO 8601
+  /** Latest card activity (`updatedAt` max), absent when the session has no cards. */
+  lastActivityAt?: string;   // ISO 8601
+  /** Every card of this session is off the board — i.e. the session is archived. */
+  archived: boolean;
+  /**
+   * How many of `cardIds` are in the archive rather than on the board.
+   *
+   * `archived` is the all-or-nothing flag the row renders; this is the count the
+   * **reopen** confirmation needs, because reopening restores exactly these
+   * cards and the dialog has to say how many before the user commits. Derived
+   * from the same `archivedCardIds` set, so no second read.
+   */
+  archivedCardCount: number;
+  /**
+   * Echo of `WorkSessionLink.cardsMissingAt` — this link has no cards anywhere
+   * the Work can reach, so it contributes nothing but a `linkedAt` fallback to
+   * the Timeline start. Absent on a healthy link.
+   */
+  cardsMissingAt?: string;
+  /** Card ids oldest-first, so the caller can address them without a second read. */
+  cardIds: string[];
+  /** Distinct vault-relative paths of the wiki docs this session's cards were kept as. */
+  wikiDocPaths: string[];
+  /** Some card is queued for the wiki pipeline but not processed yet. */
+  wikiPending: boolean;
+}
+
+/**
+ * `GET /api/works/:id/sessions` — the Work detail dialog's data source.
+ *
+ * Exists because the dialog has to describe finished work: its cards live in the
+ * monthly archive, which the board API does not serve. Aggregates are echoed at
+ * the top level so the 산출물 row needs no client-side reduction.
+ */
+export interface WorkSessionsResponse {
+  workId: string;
+  sessions: WorkSessionSummary[];
+  cardCount: number;
+  doneCount: number;
+  inProgressCount: number;
+  /** Cards in the archive across the whole Work — what a reopen would restore. */
+  archivedCardCount: number;
+  lastActivityAt?: string;   // ISO 8601 — max over every session, else the Work's updatedAt
+  /** Distinct wiki doc paths across the whole Work, deterministic order. */
+  wikiDocPaths: string[];
+  /**
+   * Some card is queued for the wiki pipeline but not processed yet — the
+   * difference between "this Work produced no document" and "not yet". A Work
+   * completed a moment ago is always in this state, since the archive sweep is
+   * what queues its cards.
+   */
+  wikiPending: boolean;
+  /** Archive month files read for this Work — diagnostics for the range heuristic. */
+  scannedMonths: string[];
+}
+
 /** Response of POST /api/works/:id/summary — the updated Work plus per-session outcome. */
 export interface WorkSummaryResponse {
   work: Work;
   summary: WorkSummary;
   generatedSessions: string[];                              // sessionIds that contributed
   skippedSessions: { sessionId: string; reason: string }[]; // e.g. transcript unavailable
+}
+
+// ─── Timeline (GET /api/timeline) ───────────────────────────────────
+// The Timeline view is a day grid whose smallest row is a **session** and whose
+// smallest column is a **day**. It answers "what actually ran, when" — so a card
+// enters it only once it has executed (`startedAt`/`completedAt`), never from
+// its creation date. A card left in `todo` for months is invisible here.
+
+/** One executed card, projected down to what the day grid draws. */
+export interface TimelineCard {
+  id: string;
+  title: string;
+  status: KanbanStatus;
+  /** First execution instant. Present by construction — an unexecuted card is dropped. */
+  startedAt: string;      // ISO 8601
+  /** Execution end; absent while the card is still running. */
+  completedAt?: string;   // ISO 8601
+  /** `parentCardId` was set — only present when the request asked for subagents. */
+  isSubagent: boolean;
+}
+
+/**
+ * A session's measured extent, plus the cards that produced it. The Timeline's
+ * minimum row: every card belongs to a session, so a lone card row would have
+ * nothing to hang under.
+ *
+ * `endedAt` is absent while any card in the session is still running, which is
+ * what the UI draws as an open-ended rail.
+ */
+export interface TimelineSessionSpan {
+  sessionId: string;
+  sessionTitle?: string;
+  projectDir?: string;
+  agentRuntime: AgentRuntime;
+  startedAt: string;      // ISO 8601 — min() over the session's executed cards
+  endedAt?: string;       // ISO 8601 — max(), absent while one is still running
+  cards: TimelineCard[];
+  /**
+   * The session has cards that ran *entirely before* the window, which the
+   * response therefore omits — `startedAt` is where the visible part begins,
+   * not where the session began.
+   *
+   * Without this the client could not tell "started on this grid" from "was
+   * already running when the grid opened": both arrive with a `startedAt`
+   * inside the window, so the rail drew a closed left edge over a session that
+   * had been running for a week. The UI reads it exactly like a clipped span
+   * (`◂`, dashed left edge).
+   */
+  truncatedBefore?: boolean;
+  /**
+   * The session was discarded from Works triage (`works.json`
+   * `ignoredSessionIds`). It still ran, so it still gets a row — but it must not
+   * offer 배정: the Inbox no longer holds it, so the assign modal would have
+   * nothing to open. Absent when no Work store is wired.
+   */
+  ignored?: boolean;
+}
+
+/**
+ * `GET /api/timeline` response. Deliberately carries **no** Work grouping: the
+ * web client already polls `/api/works`, and mapping session → Work there keeps
+ * an optimistic assignment re-grouping the timeline instantly instead of waiting
+ * for a refetch.
+ */
+export interface TimelineSnapshot {
+  from: string;               // ISO 8601 — echo of the requested window start
+  to: string;                 // ISO 8601 — echo of the requested window end
+  includesSubagents: boolean;
+  sessions: TimelineSessionSpan[];
+  /** Archive month files read for this window — diagnostics for the range heuristic. */
+  scannedMonths: string[];
 }

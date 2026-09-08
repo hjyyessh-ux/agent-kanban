@@ -90,6 +90,35 @@
   --kv2-dataviz-pending: #f1c40f;
   --kv2-dataviz-skipped: #95a5a6;
   --kv2-dataviz-unprocessed: #34495e;
+
+  /* ── Works affinity palette ───────────────────────────────── */
+  /* Categorical series, not theme surface: a stable per-`projectDir` accent
+     (hashed in `worksAffinity.ts`) so the same project reads as the same colour
+     everywhere Works shows a session or a Work.
+     Two axes carry the eight slots, because hue alone was not enough — the
+     previous palette put three slots (#2f6fed, #2f9bd0, #4b5bd6) inside 34° of
+     blue, so a machine with four checkouts saw four blue chips:
+       1. **Hue** — the eight slots sit on an even 45° ring, and the ring is
+          rotated so that `--kv2-affinity-chain` (h 259, the *lineage* signal)
+          falls exactly in the middle of a gap. 22.5° to either neighbour is the
+          most a 45° ring can give it, which is why the two are also kept apart
+          on the second axis.
+       2. **Relative luminance** — hue-adjacent slots alternate light/dark
+          (0.07 … 0.36, every neighbouring pair at least 1.4:1 apart), so the
+          ring survives greyscale, 4px bars, and colour-vision deficiency.
+     Guarded by `web/src/components/Works/worksAffinity.test.ts` (hue spacing)
+     and `web/src/styles/token-contrast.test.ts` (AA). Layer ①: no dark
+     override — the per-slot *text* colours below are what dark mode needs, and
+     they live in layer ② because they mix in `--kv2-text-primary`. */
+  --kv2-dir-1: #a7361b;  /* h  12  lum 0.11  brick      */
+  --kv2-dir-2: #34b76e;  /* h 147  lum 0.36  emerald    */
+  --kv2-dir-3: #a9a019;  /* h  57  lum 0.34  gold       */
+  --kv2-dir-4: #787fed;  /* h 237  lum 0.25  periwinkle */
+  --kv2-dir-5: #357718;  /* h 102  lum 0.14  forest     */
+  --kv2-dir-6: #dd4b9c;  /* h 327  lum 0.23  magenta    */
+  --kv2-dir-7: #107a93;  /* h 192  lum 0.16  teal       */
+  --kv2-dir-8: #712593;  /* h 282  lum 0.07  grape      */
+  --kv2-affinity-chain: #8b5cf0; /* h 259 lum 0.19 violet — lineage, not a directory */
 }
 
 /* =============================================================
@@ -329,6 +358,10 @@
   --kv2-column-header-in-progress-bg: var(--kv2-status-in-progress-bg);
   --kv2-column-header-complete-bg: var(--kv2-status-complete-bg);
   --kv2-column-header-done-bg: var(--kv2-status-done-bg);
+  /* Works Inbox triage band. Light is the amber warn surface; dark cannot reuse
+     it — an amber mix over a wide band reads as muddy brown — so the dark block
+     re-anchors it on graphite with only a trace of the accent. */
+  --kv2-works-inbox-header-bg: var(--kv2-warn-surface);
   --kv2-column-header-fg: var(--kv2-frame);
   --kv2-column-header-stroke-color: var(--kv2-frame);
   --kv2-column-header-shadow-color: var(--kv2-frame);
@@ -341,6 +374,13 @@
   --kv2-status-progress-display: var(--kv2-status-in-progress-accent);
   --kv2-status-complete-display: var(--kv2-status-complete-accent);
   --kv2-status-done-display: var(--kv2-status-done-accent);
+  /* Timeline Work bar — the *plan* layer, deliberately ink rather than a status
+     hue: every hue on that grid is spoken for by the card statuses inside it.
+     Not `--kv2-surface-inverse`, which in dark sits a shade off the base surface
+     and made the bar read as an empty outline instead of a filled bracket. */
+  --kv2-timeline-work-bar: #22272b;
+  --kv2-timeline-work-bar-done: #4a545d;
+  --kv2-timeline-work-bar-fg: #f9fafb;
   --kv2-create-column-fg: var(--kv2-frame);
   --kv2-create-column-stroke-color: var(--kv2-frame);
   --kv2-dialog-shadow-color: var(--kv2-border-strong);
@@ -474,6 +514,32 @@
   --kv2-shadow-sm: 3px 3px 0 var(--kv2-shadow-color);
   --kv2-shadow-md: 4px 4px 0 var(--kv2-shadow-color);
   --kv2-shadow-lg: 4px 4px 0 var(--kv2-shadow-color);
+
+  /* ── Works affinity: readable *text* per palette slot ─────── */
+  /* The layer ① accents above are swatch colours — as a *text* colour they
+     fail AA on one theme or the other by construction (a hue mid-luminance
+     enough to read on cream is too dark on graphite, and vice versa). So the
+     directory name is never painted in the raw accent: it uses the slot's
+     `-text` twin, which pulls the accent toward `--kv2-text-primary` by just
+     enough to clear 4.5:1 on both themes while keeping the hue identifiable.
+     Per-slot mix percentages, not one shared number: gold needs 58% and grape
+     34% to land in the same place, because luminance is hue-dependent.
+
+     One declaration serves both themes. These are layer ② all the same —
+     `var(--kv2-text-primary)` is substituted where the property is *used*, and
+     the dark block below redefines it on this very element, so the same
+     `color-mix` resolves to a dark-legible tint under `data-theme="dark"`
+     without a second declaration. Contrast is asserted for both themes in
+     `web/src/styles/token-contrast.test.ts`. */
+  --kv2-dir-1-text: color-mix(in srgb, var(--kv2-dir-1) 36%, var(--kv2-text-primary));
+  --kv2-dir-2-text: color-mix(in srgb, var(--kv2-dir-2) 56%, var(--kv2-text-primary));
+  --kv2-dir-3-text: color-mix(in srgb, var(--kv2-dir-3) 58%, var(--kv2-text-primary));
+  --kv2-dir-4-text: color-mix(in srgb, var(--kv2-dir-4) 48%, var(--kv2-text-primary));
+  --kv2-dir-5-text: color-mix(in srgb, var(--kv2-dir-5) 40%, var(--kv2-text-primary));
+  --kv2-dir-6-text: color-mix(in srgb, var(--kv2-dir-6) 44%, var(--kv2-text-primary));
+  --kv2-dir-7-text: color-mix(in srgb, var(--kv2-dir-7) 40%, var(--kv2-text-primary));
+  --kv2-dir-8-text: color-mix(in srgb, var(--kv2-dir-8) 34%, var(--kv2-text-primary));
+  --kv2-affinity-chain-text: color-mix(in srgb, var(--kv2-affinity-chain) 42%, var(--kv2-text-primary));
 }
 
 /* =============================================================
@@ -681,6 +747,11 @@
   --kv2-column-header-in-progress-bg: color-mix(in srgb, var(--kv2-status-in-progress-accent) 22%, #25282c);
   --kv2-column-header-complete-bg: color-mix(in srgb, var(--kv2-status-complete-accent) 20%, #25282c);
   --kv2-column-header-done-bg: color-mix(in srgb, var(--kv2-status-done-accent) 20%, #25282c);
+  /* A 12%+ amber mix over graphite reads as a muddy brown band across the full
+     tab width, so dark keeps only a trace of the accent and lets the band's
+     lift off the panel surface plus the amber sub-text carry the "needs triage"
+     signal. */
+  --kv2-works-inbox-header-bg: color-mix(in srgb, var(--kv2-warn-accent) 10%, #2d3034);
   --kv2-column-header-fg: var(--kv2-text-primary);
   --kv2-column-header-stroke-color: #3a3f44;
   --kv2-column-header-shadow-color: #0d0f10;
@@ -693,6 +764,11 @@
   --kv2-status-progress-display: var(--kv2-status-in-progress-accent);
   --kv2-status-complete-display: var(--kv2-status-complete-accent);
   --kv2-status-done-display: var(--kv2-status-done-accent);
+  /* Lifted well clear of `--kv2-surface` (#272a2e) so the bar still reads as a
+     filled bracket rather than an outline. */
+  --kv2-timeline-work-bar: #5c6672;
+  --kv2-timeline-work-bar-done: #444c55;
+  --kv2-timeline-work-bar-fg: #f4f6f8;
   --kv2-create-column-fg: var(--kv2-text-primary);
   --kv2-create-column-stroke-color: var(--kv2-border-strong);
   --kv2-dialog-shadow-color: #0d0f10;
@@ -879,6 +955,10 @@
   --kv2-danger-text-strong: color-mix(in srgb, var(--kv2-danger-accent) 62%, var(--kv2-text-primary));
   --kv2-danger-text-deep: color-mix(in srgb, var(--kv2-danger-accent) 60%, var(--kv2-text-primary));
   --kv2-danger-text-deepest: color-mix(in srgb, var(--kv2-danger-accent) 66%, var(--kv2-text-primary));
+  /* Text colour of .kv2-btn--subtle-danger. Light is a deep rose that reads on
+     a light face; on graphite it has to be re-anchored like the rest of the
+     family or the 폐기 buttons sit at ~2:1 contrast. */
+  --kv2-danger-accent-strong: color-mix(in srgb, var(--kv2-danger-accent) 58%, var(--kv2-text-primary));
 
   /* Purple */
   --kv2-purple-surface: color-mix(in srgb, var(--kv2-purple-accent) 16%, var(--kv2-surface));

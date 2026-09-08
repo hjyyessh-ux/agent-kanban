@@ -404,7 +404,7 @@ test.describe('Quick Actions', () => {
     await expect(completedCard.getByText('SCRIPT', { exact: true })).toBeVisible();
     await expect(completedCard.getByText('OPENCODE', { exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'List', exact: true }).click();
+    await page.getByRole('button', { name: '리스트', exact: true }).click();
     const completedRow = page.locator('.kv2-list-table-row', { hasText: 'Deploy service' });
     await expect(completedRow).toBeVisible();
     await expect(completedRow.getByText('SCRIPT', { exact: true })).toBeVisible();
@@ -528,7 +528,7 @@ test.describe('Quick Actions', () => {
       await expect(page.getByRole('button', { name: 'Open Quick Actions', exact: true })).toBeFocused();
     }
 
-    await page.getByRole('button', { name: 'List', exact: true }).click();
+    await page.getByRole('button', { name: '리스트', exact: true }).click();
     await expect(page.locator('.kv2-board-list')).toBeVisible();
     const listBefore = await page.locator('.kv2-board-list').evaluate((element) => {
       const rect = element.getBoundingClientRect();

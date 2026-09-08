@@ -1,14 +1,18 @@
 import React, { useRef } from 'react';
 
-export type MainTab = 'board' | 'works' | 'timeline' | 'wiki' | 'scheduler' | 'capabilities' | 'settings';
+/**
+ * Timeline is deliberately absent: it is a *view* of the board (리스트 / 보드 /
+ * 타임라인), switched inside the Board tab like ClickUp does, not a section of
+ * its own — it never had content the Board tab did not.
+ */
+export type MainTab = 'board' | 'works' | 'wiki' | 'scheduler' | 'capabilities' | 'settings';
 
 /** Render + keyboard order of the main tab strip. */
-export const MAIN_TABS: MainTab[] = ['board', 'works', 'timeline', 'wiki', 'capabilities', 'scheduler', 'settings'];
+export const MAIN_TABS: MainTab[] = ['board', 'works', 'wiki', 'capabilities', 'scheduler', 'settings'];
 
 export const TAB_IDS = {
   board: 'app-tab-board',
   works: 'app-tab-works',
-  timeline: 'app-tab-timeline',
   wiki: 'app-tab-wiki',
   scheduler: 'app-tab-scheduler',
   capabilities: 'app-tab-capabilities',
@@ -18,7 +22,6 @@ export const TAB_IDS = {
 export const PANEL_IDS = {
   board: 'app-panel-board',
   works: 'app-panel-works',
-  timeline: 'app-panel-timeline',
   wiki: 'app-panel-wiki',
   scheduler: 'app-panel-scheduler',
   capabilities: 'app-panel-capabilities',
@@ -28,7 +31,6 @@ export const PANEL_IDS = {
 const TAB_LABELS: Record<MainTab, string> = {
   board: 'Board',
   works: 'Works',
-  timeline: 'Timeline',
   wiki: 'Wiki',
   capabilities: 'Capabilities',
   scheduler: 'Scheduler',
@@ -47,7 +49,6 @@ export function AppTabs({ activeTab, onActivate, badges }: AppTabsProps) {
   const tabRefs = useRef<Record<MainTab, HTMLButtonElement | null>>({
     board: null,
     works: null,
-    timeline: null,
     wiki: null,
     scheduler: null,
     capabilities: null,
