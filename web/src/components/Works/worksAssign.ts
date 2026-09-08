@@ -366,7 +366,7 @@ export function describeCompletionByStatus(preview: WorkCompletionPreview): stri
 }
 
 /** Why completing this Work is currently refused, or null when it may proceed. */
-export type WorkCompletionBlock = 'running' | 'already-archived' | null;
+export type WorkCompletionBlock = 'running' | 'conflict' | 'already-archived' | null;
 
 export function workCompletionBlock(
   preview: WorkCompletionPreview | null | undefined,
@@ -376,6 +376,7 @@ export function workCompletionBlock(
   // from under the runtime, whose completion hook then fails with `Card not
   // found` and leaves the wiki summarizing an unfinished transcript. The server
   // answers `409`; the dialog says so before the user clicks.
+  if (preview.conflictingCardIds?.length) return 'conflict';
   if (preview.runningCardIds.length > 0) return 'running';
   if (preview.alreadyArchived) return 'already-archived';
   return null;
@@ -388,7 +389,7 @@ export function workCompletionBlock(
  * would happen, with no count and no way to see it first.
  */
 export function describeWorkCompletion(preview: WorkCompletionPreview | null | undefined): string {
-  if (!preview) return '산하 카드를 일괄 done 처리한 뒤 archive합니다. 되돌릴 수 없습니다.';
+  if (!preview) return '산하 카드를 일괄 done 처리한 뒤 archive합니다. 다시 열기로 보드에 복원할 수 있습니다.';
   if (preview.alreadyArchived) {
     return `이 Work의 카드 ${preview.cardCount}장은 이미 archive됐습니다. 더 archive할 카드가 없습니다.`;
   }
@@ -397,7 +398,7 @@ export function describeWorkCompletion(preview: WorkCompletionPreview | null | u
       ? '보드에 남은 카드가 전부 즐겨찾기입니다. archive 없이 Work 상태만 완료로 기록됩니다.'
       : '보드에 남은 카드가 없습니다. Work 상태만 완료로 기록됩니다.';
   }
-  return `카드 ${preview.sweepCardCount}장이 done 처리된 뒤 archive됩니다. 되돌릴 수 없습니다.`;
+  return `카드 ${preview.sweepCardCount}장이 done 처리된 뒤 archive됩니다. 다시 열기로 보드에 복원할 수 있습니다.`;
 }
 
 /**
@@ -421,6 +422,8 @@ export function describeWorkCompletionBlock(
   preview: WorkCompletionPreview | null | undefined,
 ): string {
   switch (workCompletionBlock(preview)) {
+    case 'conflict':
+      return '다른 Work에 연결된 하위 카드가 있습니다. 세션 연결을 정리한 뒤 다시 시도하세요.';
     case 'running':
       return `실행 중 카드 ${preview!.runningCardIds.length}장이 있어 완료할 수 없습니다. `
         + '에이전트가 끝난 뒤 다시 시도하세요.';
@@ -438,7 +441,7 @@ export function describeWorkCompletionBlock(
  */
 export function describeWorkDiscard(work: Work): string {
   return `"${work.title}"을 폐기합니다. 카드 ${work.sessionLinks.length}개 세션은 보드에 그대로 남고, `
-    + 'wiki는 이 Work의 그룹핑만 해제합니다. 되돌릴 수 없습니다.';
+    + 'wiki는 이 Work의 그룹핑만 해제합니다. 폐기한 Work는 다시 열 수 있습니다.';
 }
 
 /** Human summary of a Work's session role composition, e.g. "개발 2 · 리뷰 1". */

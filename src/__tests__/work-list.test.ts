@@ -201,3 +201,13 @@ describe('workProjectDirs', () => {
     expect(workProjectDirs(works)).toEqual(['/a', '/z']);
   });
 });
+
+
+test('recent card activity outranks Work metadata updates, and stale reverses it', () => {
+  const recentlyEdited = work({ id: 'edited', updatedAt: '2026-09-08T00:00:00.000Z' });
+  const recentlyRan = { ...work({ id: 'ran', updatedAt: '2026-09-01T00:00:00.000Z' }),
+    activity: { lastActivityAt: '2026-09-09T00:00:00.000Z', cardCount: 2, doneCount: 1, inProgressCount: 1 },
+  };
+  expect(selectWorks([recentlyEdited, recentlyRan]).map(w => w.id)).toEqual(['ran', 'edited']);
+  expect(selectWorks([recentlyEdited, recentlyRan], { sort: 'stale' }).map(w => w.id)).toEqual(['edited', 'ran']);
+});

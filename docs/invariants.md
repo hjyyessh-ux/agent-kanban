@@ -138,7 +138,7 @@
 ### Work 완료 라이프사이클
 
 - `PATCH /api/works/:id`의 `status='done'`은 `applyWorkPatch()`(`src/plugin/works/work-lifecycle.ts`)를 통과한다. 엔드포인트는 추가하지 않는다 — Works UI(카드 3/7)는 이 한 경로만 호출한다.
-- 일괄 archive 대상은 **Work의 `sessionLinks`에 연결된 세션의 카드로만** 한정한다. `store.archiveCards()`는 **빈 배열을 넘기면 보드의 모든 `done` 카드를 archive**하므로, seed가 0건이면 절대 호출하지 않고 `archiveSkipped='no-cards'`로 끝낸다. (회귀 테스트 존재)
+- 일괄 archive 대상은 **Work의 연결된 세션 카드와 그 실제 하위 카드 cascade**다. 완료 미리보기·실행 검사·store 보관은 `selectArchiveCards`를 공유한다. 다른 Work 소유의 하위 카드는 전체 전이를 `409`로 차단한다. `store.archiveCards()`는 **빈 배열을 넘기면 보드의 모든 `done` 카드를 archive**하므로, seed가 0건이면 절대 호출하지 않고 `archiveSkipped='no-cards'`로 끝낸다. (회귀 테스트 존재)
 - 카드 status 전환은 `store.updateCard(id, { status: 'done' })` 순수 store write로만 한다. 완료 훅(`event-handler.ts`)을 타지 않으므로 **Work 완료가 queue auto-dispatch를 유발하면 안 된다** — 끝낸 작업을 정리하는 동작이 새 agent run을 시작시켜서는 안 된다. **재개(`POST /api/works/:id/reopen`)도 마찬가지다**: 복원된 카드는 `done`으로 돌아오는데, 그 status는 완료 훅이 "방금 끝났으니 뒤에 큐된 카드를 dispatch하라"로 읽는 바로 그 상태다. 카드 20장짜리 Work라면 한 번의 정리가 큐 20건을 동시에 터뜨린다. (회귀 테스트: `src/__tests__/work-lifecycle.test.ts` — `Work completion and reopen never auto-dispatch a queued card`. 라우트에 spy `dispatchFn`을 주입해 완료·재개 양쪽에서 한 번도 호출되지 않고, 스윕된 카드 뒤에 큐된 `todo` 카드가 세션 없이 `todo`로 남는지 확인한다.)
 - Work은 **실제로 일어나지 않은 archive를 광고해서는 안 되고**, sweep이 실패하면 `archivedAt` 없이 남아 재시도 가능해야 한다. 원자적 claim(위 항목) 때문에 스탬프가 카드 sweep보다 앞서므로, 이 불변식은 **한 장도 archive하지 못한 sweep이 자기 스탬프를 되돌리는 것**(`archivedAt: null`)으로 지킨다. 부분 성공(일부 archive됨)은 스탬프를 유지하고 `sweep.failed[]`로 보고한다.
 - **산하 카드에 살아있는 runtime run(`starting`/`running`)이 하나라도 있으면 `done` 전이를 `409`로 거부한다.** 상태 전이도 기록하지 않는다 — 실행 중 카드를 archive하면 그 카드의 완료 훅이 `Card not found`로 실패하고 wiki가 미완성 트랜스크립트로 문서를 만든다. 응답 본문에 `runningCardIds`를 실어 UI가 무엇이 실행 중인지 말할 수 있게 한다. 판정은 주입된 `ActiveRunProbe`(라우트가 `RuntimeRunStore.listRuns()` 한 번으로 구현)이며 `applyWorkPatch`는 store를 직접 알지 않는다.
@@ -153,7 +153,7 @@
 - **`GET /api/timeline`의 창 길이에는 상한(400일)이 있다.** 창은 이 라우트가 파싱하는 아카이브 양을 제한하는 유일한 장치이고 인증 없는 GET이므로, 상한이 없으면 `from=1970&to=2030` 한 번이 디스크의 모든 아카이브 월을 읽는다. 검증은 순수 함수 `checkTimelineWindow`에 모아둔다. (회귀 테스트: `src/__tests__/timeline-aggregate.test.ts`, `src/__tests__/timeline-route.test.ts`)
 - `discarded`는 카드를 archive하지 않고 보드에 그대로 남긴다. 카드의 wiki 파이프라인에는 아무 영향을 주지 않는다(Work 그룹핑에서만 빠진다).
 - **완료된 Work를 다시 읽는 경로는 archive를 포함해야 한다.** 완료는 산하 카드를 전부 archive하므로, Work 상세의 산출물/세션 요약을 라이브 보드 카드에서 계산하면 되돌아볼 대상인 Work가 정확히 `카드 0 · done 0`이 된다. 집계는 서버(`GET /api/works/:id/sessions` → `buildWorkSessionsResponse`)가 하고, 딥링크는 `GET /api/cards/:id?include_archived=true` / `GET /api/cards?session_id=&include_archived=true`를 쓴다. 세 경로 모두 월 단위 읽기(`workCardScanFloor` + `timelineArchiveMonths`, 또는 `store.getCard(id, { includeArchived })`)이며 `store.loadArchives()`(전체 스캔)로 바꾸면 안 된다. 종료된 Work의 기간은 `resolvedAt − startedAt`으로 고정한다(`workAgeDays`) — 완료된 Work가 매일 하루씩 늙으면 안 된다. (회귀 테스트: `src/__tests__/work-sessions-route.test.ts`, `web/src/components/Works/worksAssign.test.ts`, `e2e/works.e2e.ts`)
-- **완료·폐기는 클릭이 곧 실행이어서는 안 된다.** 두 전이 모두 터미널이고 되돌리기가 없으므로 `WorkResolveConfirmDialog`(`DialogSkeleton`)를 반드시 거친다. 완료 확인은 `GET /api/works/:id/completion-preview`로 "카드 N장이 archive된다"와 "실행 중 카드 M장이 있어 완료할 수 없다"를 먼저 말하고, 미리보기가 오기 전에는 확인 버튼이 비활성이다. 훅의 `completeWork`/`discardWork`는 `'done' | 'declined' | 'blocked'`를 돌려주고 호출부는 **`'done'`일 때만** 자신의 다이얼로그를 닫는다 — 예전 `Promise<void>` 계약은 확인 거절과 완료를 구분할 수 없어서 취소가 완료처럼 보였다. 확인 필요 여부는 `requiresDoneConfirm(config)`이며 **설정 미로드는 "확인 필요"** 다(`config?.doneConfirm`을 직접 읽으면 설정보다 빠른 클릭이 프롬프트를 건너뛴다). (회귀 테스트: `src/__tests__/work-lifecycle.test.ts`, `web/src/components/Works/worksAssign.test.ts`, `e2e/works.e2e.ts`)
+- **완료·폐기는 클릭이 곧 실행이어서는 안 된다.** 완료는 카드 보관을 동반하고 폐기도 Work의 상태를 바꾸므로 `WorkResolveConfirmDialog`(`DialogSkeleton`)를 반드시 거친다. 완료 확인은 `GET /api/works/:id/completion-preview`로 "카드 N장이 archive된다"와 "실행 중 카드 M장이 있어 완료할 수 없다"를 먼저 말하고, 미리보기가 오기 전에는 확인 버튼이 비활성이다. 훅의 `completeWork`/`discardWork`는 `'done' | 'declined' | 'blocked'`를 돌려주고 호출부는 **`'done'`일 때만** 자신의 다이얼로그를 닫는다 — 예전 `Promise<void>` 계약은 확인 거절과 완료를 구분할 수 없어서 취소가 완료처럼 보였다. 확인 필요 여부는 `requiresDoneConfirm(config)`이며 **설정 미로드는 "확인 필요"** 다(`config?.doneConfirm`을 직접 읽으면 설정보다 빠른 클릭이 프롬프트를 건너뛴다). (회귀 테스트: `src/__tests__/work-lifecycle.test.ts`, `web/src/components/Works/worksAssign.test.ts`, `e2e/works.e2e.ts`)
 - **subagent 세션은 부모의 Work를 따라간다.** 세션을 Work에 연결하면 `parentCardId` 체인으로 이어진 자손 세션도 같은 Work에 연결된다(transitive, `linkSessionWithSubagents`). 이미 다른 Work에 연결된 세션은 건너뛰므로 "한 세션은 최대 하나의 Work" 불변식은 그대로다. 큐 체인(`queuedAfterCardId`)과 `resumeSessionId`는 승계 대상이 **아니다** — 그쪽은 사용자가 판단할 몫이다.
 - **Inbox는 유계(bounded)다.** 카드가 없는 세션, 부모가 이미 배정된 subagent 세션, `since`(기본 30일)·`limit`(기본 200)을 벗어난 세션은 `GET /api/works/inbox`가 반환하지 않는다. 단 `cardStatus === 'in_progress'`인 세션은 창과 무관하게 남는다.
 - **세션 계보류 필드(`relatedSessionIds` / `parentSessionIds` / `sessionKind`)는 `computeSessionAggregates`의 두 집계 분기 위에서 한 번 계산해 양쪽에 적용한다.** 운영은 항상 네이티브 분기(`aggregateSessionsFn`, `plugin/bootstrap.ts`가 무조건 주입)를 타므로, 한쪽 분기 안에서만 세팅한 값은 조용히 존재하지 않는다. 이 라우트 테스트는 `aggregateSessionsFn`을 주입한 상태로 쓴다.
@@ -237,3 +237,11 @@ bun test
 
 - 회귀점검보고서 (2026-03-15) — 내부 노트, 저장소에 포함되지 않음
 - [칸반 보드 문서](./kanban-board.md)
+
+
+### Works 리뷰 회귀 방지
+
+- 완료 대상은 배정 이후 생긴 하위 카드도 포함한다. 보관 직전 보드 잠금 안에서 live run·다른 Work 소유권·새 자손·즐겨찾기 변경을 재검사한다. 재검사 실패 시 보관하지 않고 부분 실패를 보고하며 archive stamp를 해제한다. 개별 카드의 성공한 done 전환은 기존 부분 실패 계약대로 유지한다. UI도 200 응답의 `sweep.failed`를 확인해서 오류를 표시하고 확인창을 유지한다.
+- Work Wiki 재작성은 이전 배치를 포함한 누적 카드와 모든 세션 출처를 전달한다. 큐 상태 변경은 이번 배치에 한정한다. 새 배치의 skip/실패가 이전 문서나 processed 상태를 지우면 안 된다.
+- Work 상세는 열린 동안 5초 간격으로 최신 카드 활동을 조회한다. `Work.updatedAt`만으로 카드 변화 여부를 판정하지 않는다. 대화 열기는 라이브 카드가 있어도 아카이브를 항상 함께 읽는다.
+- Works 기본 화면은 진행 중 목록이다. 미배정 수가 작업 목록의 위치를 밀어내면 안 된다. 상세의 활동·결과는 저장된 실제 카드 기록을 사용한다.

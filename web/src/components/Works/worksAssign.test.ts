@@ -533,7 +533,7 @@ describe('workCompletionBlock', () => {
 describe('describeWorkCompletion', () => {
   test('states the card count that will be archived', () => {
     expect(describeWorkCompletion(preview({ sweepCardCount: 4 })))
-      .toBe('카드 4장이 done 처리된 뒤 archive됩니다. 되돌릴 수 없습니다.');
+      .toBe('카드 4장이 done 처리된 뒤 archive됩니다. 다시 열기로 보드에 복원할 수 있습니다.');
   });
 
   test('an already-swept Work says there is nothing left to archive', () => {
@@ -547,7 +547,7 @@ describe('describeWorkCompletion', () => {
   });
 
   test('without a preview it still warns rather than promising nothing happens', () => {
-    expect(describeWorkCompletion(null)).toContain('되돌릴 수 없습니다');
+    expect(describeWorkCompletion(null)).toContain('다시 열기');
   });
 });
 
@@ -572,7 +572,7 @@ describe('describeWorkDiscard', () => {
     );
     expect(message).toContain('"중단한 작업"을 폐기합니다.');
     expect(message).toContain('카드 2개 세션은 보드에 그대로 남고');
-    expect(message).toContain('되돌릴 수 없습니다');
+    expect(message).toContain('다시 열 수 있습니다');
   });
 });
 

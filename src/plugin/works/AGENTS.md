@@ -47,3 +47,9 @@ summaries are generated per Work on a button click
   Read `docs/invariants.md` → "Work 완료 라이프사이클" before touching this file.
 - `discarded` is deliberately cheap: resolution stamps only, no card mutation. `WikiWorker` drops the Work from its **grouping index** and nothing more — those sessions fall back to per-session grouping and run the ordinary wiki flow, so a discarded Work never flips a card's wiki state. Do not add an archive step (or a wiki skip) to the discard path — the Timeline needs the cards to stay put, and `scripts/wiki-requeue-discarded.ts` exists to re-queue cards that the older skip behaviour retired.
 - Transcript loading is Claude-only and best-effort; a Work whose sessions have no readable transcript returns `422` ("No session transcripts available"), never a fabricated summary.
+
+## Review fixes (2026-09-08)
+
+- Completion scope includes the actual `parentCardId` cascade, even for child sessions created after assignment. Use `selectWorkSweepCards` / `selectArchiveCards` for preview and guards. Explicit ownership by another Work blocks the transition.
+- `archiveCards` runs the Work guard under the board lock immediately before writes. A late run or changed target set leaves a reported, retryable batch failure (successful earlier card flips remain, archive stamp is cleared).
+- Work Summary falls back to saved card prompts/results when native transcripts are unavailable and reports `cardSourceSessions` separately from skipped sessions.

@@ -134,6 +134,7 @@ export function WorkResolveConfirmDialog({
         onResolved(outcome);
       })
       .catch((e: unknown) => {
+        if (mode === 'complete') void reload();
         setError(e instanceof Error ? e.message : '요청을 처리하지 못했습니다');
       })
       .finally(() => setBusy(false));

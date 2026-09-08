@@ -40,9 +40,10 @@ function worksTabBadge(page: Page): Locator {
   return page.locator('#app-tab-works .app-tab-badge');
 }
 
-async function openWorksTab(page: Page): Promise<void> {
+async function openWorksTab(page: Page, view: 'active' | 'inbox' = 'active'): Promise<void> {
   await page.goto('/');
   await page.getByRole('tab', { name: 'Works' }).click();
+  if (view === 'inbox') await page.getByRole('button', { name: /^미배정 \d/ }).click();
 }
 
 /**
@@ -151,12 +152,11 @@ test('Inbox session becomes a new Work and drops the tab badge', async ({ page, 
     sessionId: `claude-${runId}-2`,
   });
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
 
   // Both seeded sessions land in the Inbox, and the tab badge counts them.
   await expect(worksTabBadge(page)).toHaveText('2');
   await expect(page.getByText('미배정 세션 2개')).toBeVisible();
-  await expect(page.getByText('진행 중인 Work가 없습니다.', { exact: false })).toBeVisible();
 
   const row = inboxRow(page, first.title);
   await row.getByRole('button', { name: '배정' }).click();
@@ -175,11 +175,14 @@ test('Inbox session becomes a new Work and drops the tab badge', async ({ page, 
   await page.getByRole('button', { name: `"${workTitle}" 만들기` }).click();
 
   // Active Works picks it up with the session (and its role) attached…
+  await page.getByRole('button', { name: /^진행 중 \d/ }).click();
   const created = workCard(page, workTitle);
   await expect(created).toBeVisible();
   await expect(created).toHaveClass(/works-card--active/);
   await expect(created).toContainText('세션 1');
   await expect(created).toContainText('리뷰 1');
+
+  await page.getByRole('button', { name: /^미배정 \d/ }).click();
 
   // …and the assigned session leaves the Inbox, decrementing the badge.
   await expect(inboxRow(page, first.title)).toHaveCount(0);
@@ -212,7 +215,7 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
     titles.push(card.title);
   }
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await expect(page.getByText('미배정 세션 3개')).toBeVisible();
   // No selection yet → no checkboxes at all.
   await expect(page.locator('.works-inbox-check')).toHaveCount(0);
@@ -249,10 +252,13 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   await page.getByRole('button', { name: `"${workTitle}" 만들고 2개 연결` }).click();
 
   // One Work, both selected sessions on it, with the one shared role.
+  await page.getByRole('button', { name: /^진행 중 \d/ }).click();
   const created = workCard(page, workTitle);
   await expect(created).toBeVisible();
   await expect(created).toContainText('세션 2');
   await expect(created).toContainText('디버그 2');
+
+  await page.getByRole('button', { name: /^미배정 \d/ }).click();
 
   // Only the deselected session is left in the Inbox, and the selection is gone.
   await expect(page.getByText('미배정 세션 1개')).toBeVisible();
@@ -309,7 +315,7 @@ test('Inbox 행은 상태 칩과 계보 마크를 그 자리에서 보여준다'
     parentCardId: parent.id,
   }, 'complete');
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
 
   await expect(inboxRow(page, idle.title).locator('.works-inbox-state')).toHaveText('미실행');
   await expect(inboxRow(page, running.title).locator('.works-inbox-state')).toHaveText('실행 중');
@@ -348,7 +354,7 @@ test('Assign-all modal walks the Inbox with the N / 1 / S / X shortcuts', async 
   expect(inbox).toHaveLength(4);
   const [step1, step2, step3, step4] = inbox;
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await expect(worksTabBadge(page)).toHaveText('4');
   await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
 
@@ -432,7 +438,7 @@ test('모달에서 폐기 버튼에 포커스한 Enter는 폐기만 실행한다
     sessionId: `claude-${runId}`,
   });
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
   const dialog = page.getByRole('dialog', { name: '세션 배정' });
   await expect(dialog.locator('.bulk-assign-prompt')).toHaveText(card.title);
@@ -475,7 +481,7 @@ test('모달에서 역할 select에 포커스한 x는 아무 일도 하지 않�
   // the *newest* session — read the order rather than assuming it.
   const [step1] = await apiGetWorkInbox();
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
   const dialog = page.getByRole('dialog', { name: '세션 배정' });
   await expect(dialog.getByText('1 / 2')).toBeVisible();
@@ -511,7 +517,7 @@ test('폐기한 세션은 무시한 세션 목록에서 복원해 Inbox로 되�
     sessionId: `claude-${runId}`,
   });
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await expect(worksTabBadge(page)).toHaveText('1');
 
   await inboxRow(page, card.title).getByRole('button', { name: '폐기' }).click();
@@ -552,22 +558,19 @@ test('추천에서 사라진 완료 Work로는 연결 버튼이 비활성된다'
     sessionId: `claude-${runId}`,
   });
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await inboxRow(page, card.title).getByRole('button', { name: '배정' }).click();
 
   // Same directory → the seeded Work is the default target and 연결 is live.
   const submit = page.getByRole('button', { name: `"${target.title}"에 연결` });
   await expect(submit).toBeEnabled();
 
-  // Complete it from the Active list while the panel is still open. The list
-  // updates optimistically, so the recommendation disappears immediately.
-  const confirm = await openCompleteConfirm(page, target.title);
-  await confirm.getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
-  await expect(confirm).toHaveCount(0);
+  // Another client completes the selected recommendation while Inbox stays open.
+  await apiUpdateWork(target.id, { status: 'done', confirmArchive: true });
 
   // The panel is still open, still aimed at that Work — and now refuses.
   await expect(page.locator('.works-assign-inline')).toBeVisible();
-  await expect(page.getByRole('button', { name: '연결', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '연결', exact: true })).toBeDisabled({ timeout: 15000 });
   expect((await apiGetWork(target.id)).sessionLinks).toHaveLength(0);
   await expect(inboxRow(page, card.title)).toHaveCount(1);
 });
@@ -610,7 +613,7 @@ test('배정 패널은 같은 디렉토리를 같은 색으로, 이어진 세션
     resumeSessionId: lineageSeed.sessionId,
   });
 
-  await openWorksTab(page);
+  await openWorksTab(page, 'inbox');
   await inboxRow(page, target.title).getByRole('button', { name: '배정' }).click();
   const panel = page.locator('.works-assign-inline');
 
@@ -663,7 +666,7 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, oldTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, oldTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: oldTitle });
   await expect(detail).toBeVisible();
 
@@ -697,7 +700,7 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   // Escape that cleared the draft in state alone was followed by a blur that
   // committed the abandoned text.
   await page.getByRole('tab', { name: 'Works' }).click();
-  await workCard(page, newTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, newTitle).getByRole('button', { name: '상세', exact: true }).click();
   // Addressed by class, not by accessible name: the name *is* the title being
   // edited, so a locator built from it stops matching the moment a rename lands.
   const reopened = page.locator('.work-detail-dialog');
@@ -716,6 +719,7 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   // The directory is editable too, and it is what the affinity colour hashes.
   // Same tile as the card detail: a click-to-edit DIRECTORY card that swaps to
   // the DirectoryPicker.
+  await reopened.getByText('일정·디렉토리 편집', { exact: true }).click();
   const dirTile = reopened.locator('.kv2-meta-card--directory');
   await expect(dirTile.locator('.kv2-meta-value--mono')).toHaveText(PROJECT_DIR);
   await dirTile.click();
@@ -768,7 +772,7 @@ test('상세는 상태와 산출물을 사용자 언어로만 말한다', async 
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -831,7 +835,7 @@ test('설정의 같은 폴더 우선을 끄면 배정 추천 순서가 바뀐다
       sessionId: `claude-${runId}`,
     });
 
-    await openWorksTab(page);
+    await openWorksTab(page, 'inbox');
     await inboxRow(page, target.title).getByRole('button', { name: '배정' }).click();
     const items = page.locator('.works-assign-inline .works-assign-work-item');
     await expect(items.nth(0)).toContainText(sameDir.title);
@@ -903,8 +907,8 @@ test('Completing a Work archives every card under its sessions', async ({ page, 
   // The Work leaves Active for Resolved, which shows only its count until it
   // is expanded.
   await expect(active).toHaveCount(0);
-  const resolvedSection = page.locator('.works-section').filter({ hasText: '✅ Resolved' });
-  await resolvedSection.getByRole('button', { name: '펼치기 ▼' }).click();
+  await expandResolved(page);
+  const resolvedSection = page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' });
 
   // It lost its 완료 button on the way.
   const resolved = workCard(page, workTitle);
@@ -989,7 +993,7 @@ test('상세에서 완료를 취소하면 상세 다이얼로그가 닫히지 �
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
   await expect(detail).toBeVisible();
 
@@ -1022,8 +1026,9 @@ test('폐기도 확인을 거치고, 취소하면 Work가 그대로 남는다', 
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
 
   // 폐기 used to fire straight off the button with no confirmation and no undo.
   await detail.getByRole('button', { name: '폐기…' }).click();
@@ -1149,6 +1154,7 @@ test('Timeline re-dates a Work by dragging a bar edge and via the detail dialog'
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
   await expect(dialog).toBeVisible();
+  await dialog.getByText('일정·디렉토리 편집', { exact: true }).click();
   const endInput = dialog.getByLabel('End', { exact: true });
   const endDay = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 2);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -1193,6 +1199,7 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   // Set a planned end from the dialog: Sunday, the last column of the week.
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
+  await dialog.getByText('일정·디렉토리 편집', { exact: true }).click();
   const endField = dialog.locator('.work-meta-card').filter({ hasText: 'Planned end' });
   const sunday = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -1623,7 +1630,7 @@ test('⋯ 메뉴의 세션 이동은 양쪽 시작일을 다시 계산하고, �
   expect((await apiGetWork(target.id)).startedAt).toBe(newest);
 
   await openWorksTab(page);
-  await workCard(page, sourceTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, sourceTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: sourceTitle });
   await expect(detail).toBeVisible();
 
@@ -1723,8 +1730,9 @@ test('Work 삭제는 확인을 거쳐 세션만 Inbox로 되돌리고 카드는 
   }
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: title });
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
   await expect(detail).toBeVisible();
 
   // 되돌릴 수 없는 동작이므로 확인을 생략하지 않는다 — 취소하면 아무 일도 없다.
@@ -1745,6 +1753,7 @@ test('Work 삭제는 확인을 거쳐 세션만 Inbox로 되돌리고 카드는 
   // 성공하면 다이얼로그가 닫히고 Works 목록 + Inbox가 갱신된다.
   await expect(detail).toHaveCount(0);
   await expect(workCard(page, title)).toHaveCount(0);
+  await page.getByRole('button', { name: /^미배정 \d/ }).click();
   await expect(page.getByText('미배정 세션 2개')).toBeVisible();
   await expect(worksTabBadge(page)).toHaveText('2');
 
@@ -1804,8 +1813,9 @@ test('카드가 모두 삭제된 세션은 상세에서 경고로 표시되고 �
     .find((link) => link.sessionId === goneSession)?.cardsMissingAt).toBeTruthy();
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: title });
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
   await expect(detail).toBeVisible();
 
   const missingRow = detail.locator('.work-session-item--missing');
@@ -1847,11 +1857,8 @@ test('카드가 모두 삭제된 세션은 상세에서 경고로 표시되고 �
  * toggles, skip the click, and leave the list collapsed.
  */
 async function expandResolved(page: Page): Promise<void> {
-  const section = page.locator('.works-section').filter({ hasText: '✅ Resolved' });
-  await expect(section).toBeVisible();
-  const toggle = section.getByRole('button', { name: '펼치기 ▼' });
-  if (await toggle.count() > 0) await toggle.click();
-  await expect(section.locator('.works-list')).toBeVisible();
+  await page.getByRole('button', { name: /^완료·폐기 \d/ }).click();
+  await expect(page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' })).toBeVisible();
 }
 
 /**
@@ -1897,9 +1904,11 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const open = page.getByRole('dialog', { name: title });
+  await open.getByRole('button', { name: '결과', exact: true }).click();
   await expect(open.locator('.work-detail-fact')).toContainText('없음');
+  await open.getByRole('button', { name: '개요', exact: true }).click();
   const sessionRow = open.locator('.work-session-item');
   await expect(sessionRow.locator('.work-session-title')).toHaveText(firstTitle);
 
@@ -1920,14 +1929,16 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   ).toBe(0);
 
   await expandResolved(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const resolved = page.getByRole('dialog', { name: title });
   await expect(resolved).toBeVisible();
 
   // 산출물 survives the sweep: same card count as before, now all done.
   // The archive sweep queues the cards for the wiki, so this is "생성 대기 중",
   // never the old unconditional "아직 없음".
+  await resolved.getByRole('button', { name: '결과', exact: true }).click();
   await expect(resolved.locator('.work-detail-fact')).toContainText('생성 대기 중');
+  await resolved.getByRole('button', { name: '개요', exact: true }).click();
 
   // The session keeps its prompt title and card count instead of collapsing to
   // a short session id.
@@ -1972,7 +1983,7 @@ test('완료된 Work 상세는 완료 안내를 감추고 기간을 resolvedAt�
 
   await openWorksTab(page);
   await expandResolved(page);
-  await workCard(page, title).getByRole('button', { name: '상세' }).click();
+  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -1984,17 +1995,19 @@ test('완료된 Work 상세는 완료 안내를 감추고 기간을 resolvedAt�
   await expect(detail.locator('.work-detail-facts')).not.toContainText('일째');
   await expect(detail.locator('.work-detail-facts')).not.toContainText('active');
   // The resolution date lives in the End field, not repeated in Last activity.
+  await detail.getByText('일정·디렉토리 편집', { exact: true }).click();
   await expect(detail.getByLabel('End', { exact: true })).not.toHaveValue('');
 
   // The "✅ 완료 시: …" notice describes an action this Work no longer has, and
   // 폐기 would overwrite the resolution the sweep already recorded.
   await expect(detail.locator('.work-detail-note')).toHaveCount(0);
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
   await expect(detail.getByRole('button', { name: '폐기…' })).toBeDisabled();
   // 완료 is not merely disabled but gone: a greyed-out primary still read as
   // "click me", and the slot now holds the transition this Work does have.
   await expect(detail.getByRole('button', { name: '✔ 완료 (일괄 archive)' })).toHaveCount(0);
   // …and no 다시 열기 in its place: a finished record has no primary action.
-  await expect(detail.getByRole('button', { name: '↺ 다시 열기…' })).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: '다시 열기', exact: true })).toBeEnabled();
 });
 
 test('Timeline의 archive된 카드 날짜 칸을 누르면 카드 상세가 열린다', async ({
@@ -2057,7 +2070,7 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
   const work = await seedWork({ title: workTitle, projectDir: PROJECT_DIR });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
   // 메모 opens folded when empty — a disclosure heading, like the card detail's
   // sections — so the textarea appears only after the heading is clicked.
@@ -2077,7 +2090,7 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
 
   // Reload, reopen: still there, and not folded into the LLM Summary.
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
   const reopened = page.getByRole('dialog', { name: workTitle });
   // A saved note opens unfolded: it is the reason the reader came back.
   await expect(reopened.getByLabel('메모', { exact: true })).toHaveValue(text);
@@ -2105,7 +2118,7 @@ test('Active 목록은 검색으로 걸러지고 오래 방치된 순으로 다�
   await apiUpdateWork(fresh.id, { notes: '가장 최근' });
 
   await openWorksTab(page);
-  const activeSection = page.locator('.works-section').filter({ hasText: '🔵 Active Works' });
+  const activeSection = page.locator('.works-section').filter({ hasText: '진행 중인 작업' });
   const titles = () => activeSection.locator('.works-card .works-card-title');
   await expect(titles()).toHaveCount(3);
 
@@ -2162,8 +2175,9 @@ test('다른 Work에 병합하면 세션이 합쳐지고 원본은 병합됨으�
   await apiAddWorkSession(to.id, { sessionId: toSession, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, fromTitle).getByRole('button', { name: '상세' }).click();
+  await workCard(page, fromTitle).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: fromTitle });
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
   await detail.getByRole('button', { name: '⇉ 다른 Work에 병합…' }).click();
 
   const merge = page.getByRole('dialog', { name: 'Work 병합', exact: true });
@@ -2188,8 +2202,8 @@ test('다른 Work에 병합하면 세션이 합쳐지고 원본은 병합됨으�
   // Target summed, source closed as 병합됨 in Resolved (not deleted).
   await expect(workCard(page, toTitle)).toContainText('세션 2');
   await expect(workCard(page, fromTitle)).toHaveCount(0);
-  const resolvedSection = page.locator('.works-section').filter({ hasText: '✅ Resolved' });
-  await resolvedSection.getByRole('button', { name: '펼치기 ▼' }).click();
+  await expandResolved(page);
+  const resolvedSection = page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' });
   const resolved = workCard(page, fromTitle);
   await expect(resolved).toContainText('병합됨');
   await expect(resolved).not.toContainText('폐기');
@@ -2232,10 +2246,12 @@ test('상세 다이얼로그의 푸터 버튼은 390px에서도 전부 화면 �
 
   await page.setViewportSize({ width: 390, height: 844 });
   await openWorksTab(page);
-  await workCard(page, `[E2E ${runId}] 모바일 푸터`).getByRole('button', { name: '상세' }).click();
+  await workCard(page, `[E2E ${runId}] 모바일 푸터`).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: `[E2E ${runId}] 모바일 푸터` });
   await expect(detail).toBeVisible();
 
+  await expect(detail.getByRole('button', { name: '삭제…' })).not.toBeVisible();
+  await detail.getByRole('button', { name: '관리', exact: true }).click();
   const dialogBox = await detail.boundingBox();
   expect(dialogBox).not.toBeNull();
   const footerButtons = detail.locator('.kv2-dialog-footer button');

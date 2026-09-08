@@ -1931,3 +1931,22 @@
   color: var(--kv2-text-secondary);
   text-transform: none;
 }
+
+/* Work navigation stays above lists of arbitrary size. */
+.works-navigation { display: flex; flex-wrap: wrap; gap: var(--kv2-sp-2); margin: var(--kv2-sp-3) 0; }
+.work-detail-navigation, .work-metadata-disclosure { margin: 0 48px var(--kv2-sp-4); }
+.work-activity-list { list-style: none; padding: 0; display: grid; gap: var(--kv2-sp-4); }
+.work-activity-item { display: grid; gap: var(--kv2-sp-2); padding: 0 0 var(--kv2-sp-4) var(--kv2-sp-3); border-left: 2px solid var(--kv2-border); overflow-wrap: anywhere; min-width: 0; }
+.work-activity-item .work-detail-heading { justify-content: space-between; flex-wrap: wrap; }
+.work-activity-item pre { max-width: 100%; overflow-x: auto; }
+.work-session-picker { margin-top: var(--kv2-sp-4); }
+.work-session-picker select { min-width: 0; flex: 1; }
+.work-metadata-disclosure > .work-detail-overview { margin: var(--kv2-sp-3) 0; }
+.work-detail-footer { position: static; }
+@media (max-width: 640px) {
+  .work-detail-navigation, .work-metadata-disclosure { margin-left: 16px; margin-right: 16px; }
+  .work-detail-footer .kv2-dialog-actions-group--detail-priority { flex: 1 1 auto; }
+}
+
+.work-detail-status .work-status, .work-detail-status .work-overrun-chip { white-space: nowrap; }
+@media (max-width: 640px) { .work-detail-id { display: none; } }

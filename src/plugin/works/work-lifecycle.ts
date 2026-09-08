@@ -1,3 +1,4 @@
+import { selectArchiveCards } from '../../core/archive-selection';
 import type { KanbanStore } from '../../core/store';
 import type { WorkStartedAtResolver, WorkStore } from '../../core/work-store';
 import type {
@@ -14,6 +15,7 @@ import { timelineArchiveMonths, workCardScanFloor } from '../../core/timeline-ag
 import {
   WorkAlreadyActiveError,
   WorkCardsRunningError,
+  WorkCardsConflictError,
   WorkNotFoundError,
 } from '../../core/work-errors';
 
@@ -55,6 +57,23 @@ export function selectWorkCards(cards: KanbanCard[], work: Work): KanbanCard[] {
   const sessionIds = new Set(work.sessionLinks.map(l => l.sessionId));
   if (sessionIds.size === 0) return [];
   return cards.filter(c => c.sessionId !== undefined && sessionIds.has(c.sessionId));
+}
+
+/** Includes late subagents even when they were created after session assignment. */
+export function selectWorkSweepCards(cards: KanbanCard[], work: Work): KanbanCard[] {
+  const ids = selectWorkCards(cards, work).filter(c => !c.favorite).map(c => c.id);
+  return ids.length ? selectArchiveCards(cards, ids, false) : [];
+}
+
+async function assertSweepSafe(cards: KanbanCard[], work: Work, workStore: WorkStore, probe?: ActiveRunProbe) {
+  const otherSessions = new Set((await workStore.getWorks())
+    .filter(w => w.id !== work.id).flatMap(w => w.sessionLinks.map(l => l.sessionId)));
+  const conflicts = cards.filter(c => c.sessionId && otherSessions.has(c.sessionId));
+  if (conflicts.length) throw new WorkCardsConflictError(conflicts.map(c => c.id));
+  if (probe && cards.length) {
+    const running = await probe(cards.map(c => c.id));
+    if (running.length) throw new WorkCardsRunningError(running);
+  }
 }
 
 /**
@@ -144,13 +163,13 @@ const ZERO_BY_STATUS: Record<KanbanStatus, number> = {
 export function buildWorkCompletionPreview(
   work: Work,
   cards: KanbanCard[],
-  opts: { archivedCardIds: Set<string>; runningCardIds: string[]; scannedMonths: string[] },
+  opts: { conflictingCardIds?: string[]; archivedCardIds: Set<string>; runningCardIds: string[]; scannedMonths: string[] },
 ): WorkCompletionPreview {
   // A card can show up in both the live board and an archive month when the
   // sweep raced the read; count it once, the way `buildWorkSessionsResponse`
   // does. The live copy comes first in `cards`, so first-wins keeps its status.
   const owned = new Map<string, KanbanCard>();
-  for (const card of selectWorkCards(cards, work)) {
+  for (const card of [...selectWorkCards(cards, work), ...selectWorkSweepCards(cards, work)]) {
     if (!owned.has(card.id)) owned.set(card.id, card);
   }
   const byStatus = { ...ZERO_BY_STATUS };
@@ -168,6 +187,7 @@ export function buildWorkCompletionPreview(
   const titleById = new Map([...owned.values()].map(card => [card.id, card.title]));
   return {
     workId: work.id,
+    conflictingCardIds: opts.conflictingCardIds ?? [],
     cardCount: owned.size,
     byStatus,
     sweepCardCount,
@@ -265,15 +285,12 @@ export async function applyWorkPatch(deps: {
   // its top-level cards as explicit seeds — the one path that walked straight
   // past the pin and archived a starred card out from under the user. Pruned
   // here rather than in the store so `POST /api/archive` keeps its behaviour.
-  const seeds = owned.filter(card => !card.favorite);
+  const seeds = selectWorkSweepCards(active, current);
   const keptFavoriteCardIds = owned.filter(card => card.favorite).map(card => card.id);
 
   // Refuse before touching anything: this is a rejection of the transition, not
   // a partial completion, so the Work must not even record `done`.
-  if (deps.activeRunProbe && seeds.length > 0) {
-    const running = await deps.activeRunProbe(seeds.map(c => c.id));
-    if (running.length > 0) throw new WorkCardsRunningError(running);
-  }
+  await assertSweepSafe(seeds, current, workStore, deps.activeRunProbe);
 
   if (deps.doneConfirm && deps.confirmArchive !== true) return skipped('awaiting-confirmation');
 
@@ -286,6 +303,17 @@ export async function applyWorkPatch(deps: {
     return keptFavoriteCardIds.length > 0
       ? skipped('favorites-only', keptFavoriteCardIds)
       : skipped('no-cards');
+  }
+
+  // Persist late child sessions before queuing the document, so reopening and
+  // reviewing the completed Work can still find every card in the sweep.
+  const linked = new Set(current.sessionLinks.map(link => link.sessionId));
+  const resolver = createWorkStartedAtResolver(active);
+  for (const card of seeds) {
+    if (card.sessionId && !linked.has(card.sessionId)) {
+      await workStore.addSession(workId, { sessionId: card.sessionId, projectDir: card.projectDir }, resolver);
+      linked.add(card.sessionId);
+    }
   }
 
   // Atomic claim: the loser of a concurrent `done` race stops here instead of
@@ -321,7 +349,17 @@ export async function applyWorkPatch(deps: {
   let archiveMonth: string | undefined;
   if (archiveSeedIds.length > 0) {
     try {
-      const result = await store.archiveCards(archiveSeedIds);
+      const result = await store.archiveCards(archiveSeedIds, {
+        beforeArchive: async cards => {
+          // A newly-created descendant was not in the confirmed sweep. Leave
+          // the board intact and report a retryable batch failure.
+          const known = new Set(archiveSeedIds);
+          if (cards.some(card => !known.has(card.id) || card.favorite)) {
+            throw new Error('보관 대상이 변경되었습니다. 완료 범위를 다시 확인해 주세요.');
+          }
+          await assertSweepSafe(cards, current, workStore, deps.activeRunProbe);
+        },
+      });
       archivedCount = result.archivedCount;
       archiveMonth = result.archiveMonth;
     } catch (e: unknown) {

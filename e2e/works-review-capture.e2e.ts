@@ -19,7 +19,7 @@ import {
  * Locators are copied from `works.e2e.ts` on purpose — this file must not
  * invent a second vocabulary for the same screens.
  */
-const OUT_DIR = path.resolve(process.cwd(), '.playwright-mcp', 'works-review');
+const OUT_DIR = path.resolve(process.cwd(), '.playwright-mcp', 'works-fixes');
 mkdirSync(OUT_DIR, { recursive: true });
 
 const PROJECT_DIR = '/tmp/works-review-project';
@@ -50,11 +50,8 @@ function workCard(page: Page, title: string): Locator {
 }
 
 async function expandResolved(page: Page): Promise<void> {
-  const section = page.locator('.works-section').filter({ hasText: '✅ Resolved' });
-  await expect(section).toBeVisible();
-  const toggle = section.getByRole('button', { name: '펼치기 ▼' });
-  if (await toggle.count() > 0) await toggle.click();
-  await expect(section.locator('.works-list')).toBeVisible();
+  await page.getByRole('button', { name: /^완료·폐기 \d/ }).click();
+  await expect(page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' })).toBeVisible();
 }
 
 /** A Work with two sessions of executed work, one still running, plus an unassigned session. */
@@ -73,7 +70,7 @@ async function seedReviewWork(
     description: 'addSession이 락 안에서 startedAt을 재계산한다',
     projectDir: PROJECT_DIR, sessionId: sessionA, sessionTitle: '링크 동시성',
   });
-  await apiUpdateCard(first.id, { status: 'done', startedAt: daysAgo(4), completedAt: daysAgo(3) });
+  await apiUpdateCard(first.id, { status: 'done', startedAt: daysAgo(4), completedAt: daysAgo(3), result: '## 결정\n세션 연결과 시작일 계산을 같은 잠금 안에서 처리합니다.\n\n## 검증\n동시 연결 테스트가 통과했습니다.' });
 
   const second = await seedCard({
     title: '[리뷰] Timeline 손잡이 포커스',
@@ -126,13 +123,17 @@ test('capture: Works tab and Work detail in both themes', async ({ page, seedCar
   await shot(page, '02-works-tab-dark');
   await setTheme(page, 'light');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세' }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
   const detail = page.getByRole('dialog', { name: WORK_TITLE });
   await expect(detail).toBeVisible();
   await shot(page, '03-work-detail-light');
 
   await setTheme(page, 'dark');
   await shot(page, '04-work-detail-dark');
+  await detail.getByRole('button', { name: '활동·타임라인', exact: true }).click();
+  await shot(page, '17-work-activity-dark');
+  await detail.getByRole('button', { name: '결과', exact: true }).click();
+  await shot(page, '18-work-results-dark');
 });
 
 test('capture: completion confirm, resolved layout, and reopen', async ({ page, seedCard, trackWork }) => {
@@ -162,7 +163,7 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   await expandResolved(page);
   await shot(page, '07-works-tab-after-complete');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세' }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
   const resolved = page.getByRole('dialog', { name: WORK_TITLE });
   await expect(resolved).toBeVisible();
   await shot(page, '08-resolved-detail-light');
@@ -170,11 +171,16 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   // A resolved Work's footer carries no forward action: neither 완료 nor the
   // 다시 열기 that briefly replaced it (the reopen route and confirm mode
   // remain, without a button).
-  await expect(resolved.getByRole('button', { name: /다시 열기/ })).toHaveCount(0);
+  await expect(resolved.getByRole('button', { name: '다시 열기', exact: true })).toBeEnabled();
   await expect(resolved.getByRole('button', { name: /완료 \(일괄 archive\)/ })).toHaveCount(0);
   await setTheme(page, 'dark');
   await shot(page, '09-resolved-detail-dark');
   await setTheme(page, 'light');
+  await resolved.getByRole('button', { name: '다시 열기', exact: true }).click();
+  const reopen = page.getByRole('dialog', { name: '다시 열기 확인', exact: true });
+  await reopen.getByRole('button', { name: '↺ 다시 열기', exact: true }).click();
+  await expect(reopen).not.toBeVisible();
+  await expect(resolved.locator('.work-status')).toContainText('진행 중');
 });
 
 test('capture: Timeline in both themes', async ({ page, seedCard, trackWork }) => {
@@ -216,9 +222,11 @@ test('capture: 390px mobile, and nothing overflows sideways', async ({ page, see
   await shot(page, '15-works-tab-mobile-390-dark');
   await setTheme(page, 'light');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세' }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
   await expect(page.getByRole('dialog', { name: WORK_TITLE })).toBeVisible();
   await shot(page, '16-work-detail-mobile-390');
+  await page.getByRole('dialog', { name: WORK_TITLE }).getByRole('button', { name: '결과', exact: true }).click();
+  await shot(page, '19-work-results-mobile');
 
   // The mobile failure mode this pass is looking for: the *page* must not gain a
   // horizontal scrollbar (an inner strip scrolling itself is fine and intended).

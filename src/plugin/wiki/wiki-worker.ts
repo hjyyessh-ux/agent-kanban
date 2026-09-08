@@ -397,6 +397,13 @@ export class WikiWorker {
 
       const metadata = this.runMetadata(config);
       const groups = groupCardsBySession(pending, workIndex);
+      // Queue membership and document sources have different lifetimes. Rebuild
+      // a Work from its full archived history, but only transition this batch.
+      const sources = groups.some(group => group.workId)
+        ? groupCardsBySession((await this.store.getCards({ includeArchived: true }))
+          .filter(card => !card.parentCardId && card.wiki !== undefined), workIndex)
+        : [];
+      const cumulative = new Map(sources.map(group => [group.key, group]));
       this.totalInRun = pending.length;
       this.processedInRun = 0;
       this.log(
@@ -410,7 +417,7 @@ export class WikiWorker {
       await Promise.all(Array.from({ length: workerCount }, async () => {
         for (let group = queue.shift(); group; group = queue.shift()) {
           try {
-            await this.processGroup(group, writer, metadata);
+            await this.processGroup(group, writer, metadata, group.workId ? cumulative.get(group.key) : undefined);
           } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             this.lastError = message;
@@ -427,12 +434,12 @@ export class WikiWorker {
     }
   }
 
-  private async processGroup(group: WikiSourceGroup, writer: WikiVaultWriter, metadata: WikiRunMetadata): Promise<void> {
-    group.transcript = loadGroupTranscript(group);
-    const sourceDepth = group.transcript ? 'transcript' as const : 'card' as const;
+  private async processGroup(group: WikiSourceGroup, writer: WikiVaultWriter, metadata: WikiRunMetadata, sources: WikiSourceGroup = group): Promise<void> {
+    sources.transcript = loadGroupTranscript(sources);
+    const sourceDepth = sources.transcript ? 'transcript' as const : 'card' as const;
     const now = new Date().toISOString();
 
-    const triage = parseTriageResult(await this.llmRunner(buildTriagePrompt(group), metadata));
+    const triage = parseTriageResult(await this.llmRunner(buildTriagePrompt(sources), metadata));
     if (triage.decision === 'skip') {
       await this.withVaultWriteLock(async () => {
         await this.applyWikiState(group, (prev) => ({
@@ -452,7 +459,7 @@ export class WikiWorker {
       return;
     }
 
-    const doc = parseClassifyResult(await this.llmRunner(buildClassifyPrompt(group), metadata));
+    const doc = parseClassifyResult(await this.llmRunner(buildClassifyPrompt(sources), metadata));
     // A Work group is one document named after the Work itself, so the user
     // finds it under the title they gave the work.
     if (group.workTitle?.trim()) {
@@ -472,11 +479,11 @@ export class WikiWorker {
       const docPath = await writer.writeDocument(
         doc,
         {
-          cardIds: group.cards.map(c => c.id),
+          cardIds: sources.cards.map(c => c.id),
           sessionId: group.sessionId,
           sessionTitle: group.sessionTitle,
           workId: group.workId,
-          sessionIds: group.sessionIds,
+          sessionIds: sources.sessionIds,
           projectDir: group.projectDir,
           processedAt: now,
           promptVersion: WIKI_PROMPT_VERSION,

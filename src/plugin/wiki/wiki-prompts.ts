@@ -67,7 +67,8 @@ export function buildGroupContext(group: WikiSourceGroup): string {
     // Work groups only: session groups must keep their exact prior prompt text
     // (changing it would invalidate every prior classification).
     ...(group.workTitle
-      ? [`Work: ${group.workTitle} (세션 ${group.sessionIds?.length ?? 1}개를 종합한 하나의 작업)`]
+      ? [`Work: ${group.workTitle} (세션 ${group.sessionIds?.length ?? 1}개를 종합한 하나의 작업)`,
+          '아래는 이 Work의 누적 기록입니다. 이전 결정·해결 과정과 새 결과를 함께 보존하고, 바뀐 결정은 변경 이력을 구분하세요.']
       : []),
     `세션 제목: ${group.sessionTitle?.trim() || '(제목 없음)'}`,
     `프로젝트: ${group.projectDir ?? '-'}`,

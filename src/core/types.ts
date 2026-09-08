@@ -1358,6 +1358,16 @@ export interface Work {
   updatedAt: string;     // ISO 8601
 }
 
+/** Read-only list rollup. Never written to works.json. */
+export interface WorkListEntry extends Work {
+  activity?: Pick<WorkSessionsResponse, 'cardCount' | 'doneCount' | 'inProgressCount' | 'lastActivityAt'>;
+}
+
+export type WorkCardActivity = Pick<KanbanCard,
+  'id' | 'title' | 'sessionId' | 'status' | 'createdAt' | 'startedAt' | 'completedAt' | 'updatedAt' | 'result'> & {
+    archived: boolean;
+  };
+
 export interface WorkStoreState {
   version: 1;
   works: Work[];
@@ -1538,6 +1548,8 @@ export interface WorkPatchResponse extends Work {
  * describe itself as touching zero cards.
  */
 export interface WorkCompletionPreview {
+  /** A subtree reaches cards explicitly owned by another Work. */
+  conflictingCardIds?: string[];
   workId: string;
   /** Cards under every linked session, live board **and** archive. */
   cardCount: number;
@@ -1838,6 +1850,8 @@ export interface WorkSessionSummary {
  * the top level so the 산출물 row needs no client-side reduction.
  */
 export interface WorkSessionsResponse {
+  /** Actual card history, including archived results, newest activity first. */
+  activities: WorkCardActivity[];
   workId: string;
   sessions: WorkSessionSummary[];
   cardCount: number;
@@ -1861,6 +1875,8 @@ export interface WorkSessionsResponse {
 
 /** Response of POST /api/works/:id/summary — the updated Work plus per-session outcome. */
 export interface WorkSummaryResponse {
+  /** Sessions summarized from saved cards instead of a native transcript. */
+  cardSourceSessions?: string[];
   work: Work;
   summary: WorkSummary;
   generatedSessions: string[];                              // sessionIds that contributed

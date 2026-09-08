@@ -301,9 +301,11 @@ describe('WikiWorker × Works', () => {
       await workStore.addSession(work.id, { sessionId: 'sess-a' });
       await workStore.addSession(work.id, { sessionId: 'sess-b' });
 
-      const first = await archiveDoneCard(store, { title: 'fix redis', sessionId: 'sess-a' });
+      const first = await archiveDoneCard(store, { title: 'fix redis', sessionId: 'sess-a', result: '첫 결정: Redis pool 크기를 16으로 늘렸습니다.' });
+      const prompts: string[] = [];
+      const respond = fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC });
       const worker = new WikiWorker(store, settingsStore, {
-        llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }),
+        llmRunner: async prompt => { prompts.push(prompt); return respond(prompt); },
         workStore,
       });
       await worker.processQueue();
@@ -317,13 +319,23 @@ describe('WikiWorker × Works', () => {
 
       // Completion sweeps the rest. Their cards carry no `docPath` from a batch
       // they were not in, so looking only at them wrote `redis-timeout-2.md`.
-      const second = await archiveDoneCard(store, { title: 'follow-up', sessionId: 'sess-b' });
+      const second = await archiveDoneCard(store, { title: 'follow-up', sessionId: 'sess-b', result: '후속 검증: 타임아웃 재발 없음.' });
       await worker.processQueue();
 
       expect(existsSync(join(vaultDir, 'troubleshooting/redis-timeout-2.md'))).toBe(false);
       const doc = readFileSync(docPath, 'utf-8');
       expect(doc).toContain('title: "Redis 안정화 작업"');
-      // The rewrite describes the batch it just processed, at the same path.
+      // Every rewrite must retain earlier provenance and supply earlier facts
+      // to the model, even though only the new batch is in the queue.
+      expect(doc).toContain(`"${first.id}"`);
+      expect(doc).toContain('sess-a');
+      expect(doc).toContain('sess-b');
+      expect(prompts[2]).toContain('fix redis');
+      expect(prompts[3]).toContain('fix redis');
+      expect(prompts[3]).toContain('follow-up');
+      expect(prompts[3]).toContain('첫 결정: Redis pool 크기를 16으로 늘렸습니다.');
+      expect(prompts[3]).toContain('후속 검증: 타임아웃 재발 없음.');
+      expect(prompts[3]).toContain('이전 결정·해결 과정과 새 결과를 함께 보존');
       expect(doc).toContain(`"${second.id}"`);
 
       const archived = await store.getCards({ includeArchived: true });
@@ -333,6 +345,34 @@ describe('WikiWorker × Works', () => {
       }
     });
   });
+
+  for (const outcome of ['skip', 'error'] as const) {
+    test(`a later Work batch ${outcome} preserves the prior document and processed state`, async () => {
+      await withTempDir(async dir => {
+        const { store, settingsStore, vaultDir } = await setupStores(dir);
+        const workStore = new WorkStore(dir);
+        const work = await workStore.createWork({ title: '누적 기록 보호' });
+        await workStore.addSession(work.id, { sessionId: 'first-source' });
+        await workStore.addSession(work.id, { sessionId: 'second-source' });
+        const first = await archiveDoneCard(store, { title: '이전 결정', sessionId: 'first-source' });
+        await new WikiWorker(store, settingsStore, { workStore,
+          llmRunner: fakeLlm({ triage: KEEP_TRIAGE, classify: CLASSIFY_DOC }),
+        }).processQueue();
+        const before = (await store.getCards({ includeArchived: true })).find(c => c.id === first.id)!.wiki!;
+        const docPath = join(vaultDir, before.docPath!);
+        const original = readFileSync(docPath, 'utf-8');
+        const second = await archiveDoneCard(store, { title: '새 기록', sessionId: 'second-source' });
+        await new WikiWorker(store, settingsStore, { workStore, llmRunner: async () => {
+          if (outcome === 'error') throw new Error('simulated model failure');
+          return JSON.stringify({ decision: 'skip', reason: '새 내용 없음', confidence: 1 });
+        } }).processQueue();
+        const cards = await store.getCards({ includeArchived: true });
+        expect(cards.find(c => c.id === first.id)!.wiki).toEqual(before);
+        expect(readFileSync(docPath, 'utf-8')).toBe(original);
+        expect(cards.find(c => c.id === second.id)!.wiki?.status).toBe(outcome === 'skip' ? 'processed' : 'failed');
+      });
+    });
+  }
 
   test('an active Work groups a card archived before completion', async () => {
     await withTempDir(async (dir) => {

@@ -11,6 +11,7 @@ import {
 } from '../plugin/works/works-config';
 import {
   generateWorkSummary,
+  buildWorkCardContext,
   parseSummaryLines,
   type WorkTranscriptSource,
 } from '../plugin/works/works-summary';
@@ -184,7 +185,28 @@ describe('works-summary', () => {
     expect(result.summary.lines).toHaveLength(3);
     expect(result.summary.model).toBe('claude-sonnet-5');
     expect(result.generatedSessions).toEqual(['ses-有']);
-    expect(result.skippedSessions).toEqual([{ sessionId: 'ses-無', reason: 'transcript unavailable' }]);
+    expect(result.skippedSessions).toEqual([{ sessionId: 'ses-無', reason: 'transcript and saved cards unavailable' }]);
+  });
+
+  test('summarizes saved Codex card results without a Claude transcript', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const work = await workStore.createWork({ title: 'Codex result' });
+      const card = await store.createCard({ title: '검증', description: '카드 기반 요약', agentRuntime: 'codex', sessionId: 'codex-source' });
+      const completed = await store.updateCard(card.id, { result: '누적 기록을 보존하도록 수정했습니다.', status: 'complete' });
+      let prompt = '';
+      const result = await generateWorkSummary({ work, sources: [{
+        link: { sessionId: 'codex-source', linkedAt: work.createdAt },
+        cardContext: buildWorkCardContext([completed]),
+      }], lines: 3, model: 'test-model', effort: 'medium', llmRunner: async text => {
+        prompt = text; return '기록 보존 수정\n검증 완료\n리뷰 대기';
+      } });
+      expect(prompt).toContain(completed.result!);
+      expect(result.generatedSessions).toEqual(['codex-source']);
+      expect(result.cardSourceSessions).toEqual(['codex-source']);
+      expect(result.skippedSessions).toEqual([]);
+    });
   });
 
   test('generateWorkSummary throws when no session has a transcript', async () => {

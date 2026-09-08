@@ -139,3 +139,11 @@ export class WorkAlreadyActiveError extends Error {
     this.name = 'WorkAlreadyActiveError';
   }
 }
+
+/** A completion cascade must not absorb another Work's cards. */
+export class WorkCardsConflictError extends Error {
+  constructor(readonly conflictingCardIds: string[]) {
+    super('다른 Work에 연결된 하위 카드가 있어 완료할 수 없습니다. 세션 연결을 정리한 뒤 다시 시도하세요.');
+    this.name = 'WorkCardsConflictError';
+  }
+}

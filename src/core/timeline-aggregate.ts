@@ -391,6 +391,11 @@ export function buildWorkSessionsResponse(
   }, undefined);
 
   return {
+    activities: [...bySession.values()].flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.id.localeCompare(b.id)).map(card => ({
+      id: card.id, title: card.title, sessionId: card.sessionId, status: card.status,
+      createdAt: card.createdAt, startedAt: card.startedAt, completedAt: card.completedAt,
+      updatedAt: card.updatedAt, result: card.result, archived: archivedCardIds?.has(card.id) ?? false,
+    })),
     workId: work.id,
     sessions,
     cardCount: sessions.reduce((sum, session) => sum + session.cardCount, 0),

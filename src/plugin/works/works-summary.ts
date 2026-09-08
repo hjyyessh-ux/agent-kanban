@@ -1,21 +1,34 @@
-import type { CodexReasoningEffort, Work, WorkSessionLink, WorkSummary } from '../../core/types';
+import type { CodexReasoningEffort, KanbanCard, Work, WorkSessionLink, WorkSummary } from '../../core/types';
 import type { WikiLlmRunner } from '../wiki/wiki-llm';
 
 /**
  * One connected session's transcript for summarization. `transcript` is
  * undefined when the session's transcript could not be loaded (old/cleaned-up
- * session, or a non-claude runtime) — those sessions are skipped and reported.
+ * session, or a non-claude runtime). Saved card context is the fallback; only
+ * sources with neither are skipped and reported.
  */
 export interface WorkTranscriptSource {
   link: WorkSessionLink;
   transcript?: string;
+  /** Runtime-independent fallback when no native transcript is available. */
+  cardContext?: string;
   title?: string;
 }
 
 export interface GenerateWorkSummaryResult {
   summary: WorkSummary;
   generatedSessions: string[];
+  cardSourceSessions: string[];
   skippedSessions: { sessionId: string; reason: string }[];
+}
+
+/** Saved prompts and results are usable for Codex/OpenCode as well as Claude. */
+export function buildWorkCardContext(cards: KanbanCard[]): string | undefined {
+  if (cards.length === 0) return undefined;
+  return [...cards].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(card => [
+    `카드: ${card.title}`, `상태: ${card.status}`, card.description,
+    card.result ? `결과:\n${card.result}` : card.progressSummary ? `진행:\n${card.progressSummary}` : '저장된 실행 결과 없음',
+  ].filter(Boolean).join('\n')).join('\n\n');
 }
 
 /** Strip a leading bullet/number marker so LLM list formatting doesn't leak in. */
@@ -65,8 +78,8 @@ export function buildWorkSummaryPrompt(
 
 /**
  * Generate a Work Summary by feeding every connected session's transcript to the
- * shared wiki LLM runner. Sessions without a transcript are skipped and returned
- * in `skippedSessions`. Throws when no session has a usable transcript, or when
+ * shared wiki LLM runner. Saved card context substitutes for unavailable transcripts. Sources with neither
+ * are returned in `skippedSessions`. Throws when no session has a usable transcript, or when
  * the model returns an empty summary.
  */
 export async function generateWorkSummary(deps: {
@@ -77,10 +90,13 @@ export async function generateWorkSummary(deps: {
   effort: CodexReasoningEffort;
   llmRunner: WikiLlmRunner;
 }): Promise<GenerateWorkSummaryResult> {
-  const usable = deps.sources.filter(s => s.transcript && s.transcript.trim());
-  const skippedSessions = deps.sources
+  const sources = deps.sources.map(source => ({ ...source,
+    transcript: source.transcript?.trim() ? source.transcript : source.cardContext,
+  }));
+  const usable = sources.filter(s => s.transcript && s.transcript.trim());
+  const skippedSessions = sources
     .filter(s => !s.transcript || !s.transcript.trim())
-    .map(s => ({ sessionId: s.link.sessionId, reason: 'transcript unavailable' }));
+    .map(s => ({ sessionId: s.link.sessionId, reason: 'transcript and saved cards unavailable' }));
 
   if (usable.length === 0) {
     throw new Error('No session transcripts available to summarize');
@@ -104,6 +120,7 @@ export async function generateWorkSummary(deps: {
       model: deps.model,
     },
     generatedSessions: usable.map(s => s.link.sessionId),
+    cardSourceSessions: deps.sources.filter(s => !s.transcript?.trim() && s.cardContext?.trim()).map(s => s.link.sessionId),
     skippedSessions,
   };
 }

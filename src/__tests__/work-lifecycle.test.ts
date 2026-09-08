@@ -1407,3 +1407,87 @@ describe('Work completion and reopen never auto-dispatch a queued card', () => {
     });
   });
 });
+
+// Review regressions: children may start in a new session after Work assignment.
+describe('Work completion cascade safety', () => {
+  test('preview and guard include a late running descendant', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const parent = await seedCard(store, { title: 'parent', sessionId: 'parent-session', status: 'complete' });
+      const work = await seedWork(workStore, 'late child', ['parent-session']);
+      const child = await store.createCard({ title: 'late child', description: '', sessionId: 'child-session', parentCardId: parent.id });
+      const runStore = new RuntimeRunStore(dir);
+      const run = await runStore.createRun({ cardId: child.id, runtime: 'codex', cwd: dir });
+      await runStore.updateRun(run.runId, { status: 'running' });
+      const { handleRequest: handler } = handlerWithRuns(store, new SettingsStore(dir), workStore, runStore);
+      const previewResponse = await handler(new Request(`http://localhost/api/works/${work.id}/completion-preview`));
+      const preview = await previewResponse!.json() as WorkCompletionPreview;
+      expect(preview.sweepCardCount).toBe(2);
+      expect(preview.runningCardIds).toEqual([child.id]);
+      expect(preview.runningCardTitles).toEqual(['late child']);
+      const response = await handler(new Request(`http://localhost/api/works/${work.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done', confirmArchive: true }),
+      }));
+      expect(response!.status).toBe(409);
+      expect((await workStore.getWork(work.id))?.status).toBe('active');
+      expect((await store.getCards()).length).toBe(2);
+      expect((await store.getCard(parent.id))?.status).toBe('complete');
+    });
+  });
+
+  test('a descendant owned by another Work blocks the whole completion', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const parent = await seedCard(store, { title: 'parent', sessionId: 's-parent' });
+      const child = await store.createCard({ title: 'other work child', description: '', sessionId: 's-child', parentCardId: parent.id });
+      const work = await seedWork(workStore, 'parent work', ['s-parent']);
+      await seedWork(workStore, 'child work', ['s-child']);
+      const { handleRequest: handler } = handlerWith(store, new SettingsStore(dir), workStore);
+      const preview = await (await handler(new Request(`http://localhost/api/works/${work.id}/completion-preview`)))!.json() as WorkCompletionPreview;
+      expect(preview.conflictingCardIds).toEqual([child.id]);
+      const response = await handler(new Request(`http://localhost/api/works/${work.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'done', confirmArchive: true }),
+      }));
+      expect(response!.status).toBe(409);
+      expect((await workStore.getWork(work.id))?.status).toBe('active');
+      expect((await store.getCards()).length).toBe(2);
+    });
+  });
+
+  test('rechecks live runs under the archive lock and leaves a retryable Work', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const card = await seedCard(store, { title: 'starts late', sessionId: 's' });
+      const work = await seedWork(workStore, 'racing run', ['s']);
+      let reads = 0;
+      const result = await applyWorkPatch({ store, workStore, workId: work.id, updates: { status: 'done' }, doneConfirm: false,
+        activeRunProbe: async ids => ++reads === 1 ? [] : ids,
+      });
+      expect(result.archivedCount).toBe(0);
+      expect(result.failedCards.map(f => f.cardId)).toEqual([card.id]);
+      expect((await store.getCards()).length).toBe(1);
+      expect((await workStore.getWork(work.id))?.archivedAt).toBeUndefined();
+    });
+  });
+
+  test('completed late child sessions remain discoverable in Work history', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const parent = await seedCard(store, { title: 'parent', sessionId: 's-parent' });
+      const work = await seedWork(workStore, 'with late child', ['s-parent']);
+      const child = await store.createCard({ title: 'child', description: '', sessionId: 's-child', parentCardId: parent.id });
+      const result = await applyWorkPatch({ store, workStore, workId: work.id, updates: { status: 'done' }, doneConfirm: false });
+      expect(result.archivedCount).toBe(2);
+      expect(result.work.sessionLinks.map(l => l.sessionId)).toContain('s-child');
+      const { handleRequest: handler } = handlerWith(store, new SettingsStore(dir), workStore);
+      const detail = await (await handler(new Request(`http://localhost/api/works/${work.id}/sessions`)))!.json() as WorkSessionsResponse;
+      expect(detail.cardCount).toBe(2);
+      expect(detail.activities.map(c => c.id)).toContain(child.id);
+    });
+  });
+});

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type {
   Work,
+  WorkListEntry,
   CreateWorkInput,
   MergeWorkResponse,
   MoveWorkSessionResponse,
   WorkPatchInput,
+  WorkPatchResponse,
   WorkIgnoredSession,
   WorkInboxSession,
   WorkSessionRole,
@@ -98,7 +100,7 @@ function describeAssignFailures(failed: BulkAssignFailure[]): string {
 }
 
 export interface UseWorksResult {
-  works: Work[];
+  works: WorkListEntry[];
   loading: boolean;
   error: UiAlert | null;
   /** Unassigned, non-ignored sessions — polled continuously for the tab badge. */
@@ -274,7 +276,7 @@ export interface UseWorksResult {
  * assign-all modal (card 3) share one implementation.
  */
 export function useWorks(active: boolean): UseWorksResult {
-  const resource = useCrudResource<Work, CreateWorkInput, WorkPatchInput, UiAlert>({
+  const resource = useCrudResource<WorkListEntry, CreateWorkInput, WorkPatchInput, UiAlert>({
     enabled: active,
     fetchAll: () => fetchWorks(),
     create: apiCreateWork,
@@ -551,22 +553,28 @@ export function useWorks(active: boolean): UseWorksResult {
     patch: WorkPatchInput,
   ): Promise<WorkResolveOutcome> => {
     try {
-      await updateEntry(workId, patch);
+      const result: WorkPatchResponse = await apiUpdateWork(workId, patch);
+      applyUpdate(result);
+      if (result.sweep?.failed.length) {
+        const failure = new Error(`카드 ${result.sweep.archivedCount}개 보관 · ${result.sweep.failed.length}개 실패. ${result.sweep.failed[0].message}`);
+        throw failure;
+      }
       return 'done';
     } catch (err: unknown) {
+      reportError('update', err, 'Work 상태를 변경하지 못했습니다');
       // 409 = the server re-checked and refused (a card is still running, or
       // the Work moved on under an open dialog). The reason is already on the
       // shared error alert; the caller only needs to keep its dialog open.
       if (err instanceof ApiError && err.status === 409) return 'blocked';
       throw err;
     }
-  }, [updateEntry]);
+  }, [applyUpdate, reportError]);
 
   const completeWork = useCallback(async (
     workId: string,
     options?: { confirmed?: boolean },
   ): Promise<WorkResolveOutcome> => {
-    // The bulk done→archive sweep cannot be undone, so this refuses to send it
+    // The bulk done→archive sweep needs explicit scope confirmation before sending it
     // on the caller's behalf: the confirmation dialog is the only way to get
     // `confirmed`. An unloaded config counts as "confirmation required"
     // (`requiresDoneConfirm`) — reading `config?.doneConfirm` directly used to

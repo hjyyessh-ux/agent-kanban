@@ -1,5 +1,6 @@
 import type {
   Work,
+  WorkListEntry,
   CreateWorkInput,
   AddWorkSessionInput,
   MergeWorkResponse,
@@ -62,10 +63,10 @@ async function expectOk(res: Response): Promise<void> {
   }
 }
 
-export async function fetchWorks(status?: WorkStatus): Promise<Work[]> {
+export async function fetchWorks(status?: WorkStatus): Promise<WorkListEntry[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   const res = await fetch(`${BASE_URL}/works${query}`);
-  return handleResponse<Work[]>(res);
+  return handleResponse<WorkListEntry[]>(res);
 }
 
 /**

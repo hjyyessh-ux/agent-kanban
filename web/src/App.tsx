@@ -169,7 +169,7 @@ export default function App() {
     // card list; board sessions keep re-deriving from the poll so the modal
     // shows the latest turn.
     const source = archivedSessionCards?.key === selectedSession.key
-      ? archivedSessionCards.cards
+      ? [...new Map([...archivedSessionCards.cards, ...cards.filter(card => `session:${card.sessionId}` === selectedSession.key)].map(card => [card.id, card])).values()]
       : cards.filter((card) => card.status === selectedSession.status);
     return groupCompleteCardsBySession(source).find((group) => group.key === selectedSession.key) ?? null;
   }, [cards, selectedSession, archivedSessionCards]);
@@ -344,14 +344,6 @@ export default function App() {
    */
   const handleOpenWorkSession = (sessionId: string) => {
     const key = `session:${sessionId}`;
-    const sessionCards = cards.filter((card) => card.sessionId === sessionId);
-    if (sessionCards.length > 0) {
-      const status = sessionCards.some((card) => card.status === 'done') ? 'done' : 'complete';
-      setArchivedSessionCards(null);
-      setSelectedSession({ key, status });
-      return;
-    }
-
     void fetchSessionCards(sessionId)
       .then((fetched) => {
         if (fetched.length === 0) {
@@ -728,6 +720,7 @@ export default function App() {
 
       {openWork && (
         <WorkDetailDialog
+          key={openWork.id}
           work={openWork}
           cards={cards}
           detail={workSessions.detail}
@@ -760,9 +753,11 @@ export default function App() {
           })}
           onUpdateNotes={works.updateWorkNotes}
           onOpenSession={handleOpenWorkSession}
+          assignableSessions={works.inbox}
+          onAddSession={session => works.linkSessionToWork(openWork.id, session).then(() => {})}
           onUpdateDates={works.updateWorkDates}
           onUpdateMeta={works.updateWorkMeta}
-          onRegenerateSummary={(id) => works.generateSummary(id).then(() => {})}
+          onRegenerateSummary={works.generateSummary}
           onDelete={works.deleteWork}
           onPruneSessions={works.pruneWorkSessions}
           sessionActions={{

@@ -13,18 +13,9 @@ export interface UseWorkSessionsResult {
 }
 
 /**
- * The Work detail dialog's session data (`GET /api/works/:id/sessions`).
- *
- * Not part of `useWorks`: that hook polls the Work *list*, while this is a
- * one-Work read that also parses archive month files, so it runs only while a
- * detail dialog is open. There is no polling for the same reason — pass the
- * Work's `updatedAt` as `revision` and it refetches on every event that can
- * change what it returns (a link, an unlink, a role change, the completion
- * sweep) without blanking what is already on screen.
- *
- * A response for a Work the user has already closed (or switched away from) is
- * discarded via `requestRef`, the same guard `useTimeline` uses for a window the
- * user has paged past.
+ * Archive-inclusive detail, refreshed on Work mutations and every five seconds
+ * while open and visible. Card activity changes independently of Work.updatedAt.
+ * Request IDs discard responses for closed or switched dialogs.
  */
 export function useWorkSessions(
   workId: string | null,
@@ -76,6 +67,18 @@ export function useWorkSessions(
     loadedRef.current = { workId, revision };
     void load(workId, isFirst);
   }, [workId, revision, load]);
+
+  useEffect(() => {
+    if (!workId) return;
+    let stopped = false;
+    let timer: number;
+    const poll = async () => {
+      if (document.visibilityState === 'visible') await load(workId, false);
+      if (!stopped) timer = window.setTimeout(() => { void poll(); }, 5000);
+    };
+    timer = window.setTimeout(() => { void poll(); }, 5000);
+    return () => { stopped = true; window.clearTimeout(timer); requestRef.current++; };
+  }, [workId, load]);
 
   const refresh = useCallback(async () => {
     if (!workId) return;

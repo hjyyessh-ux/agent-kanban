@@ -1,4 +1,4 @@
-import type { Work, WorkListQuery, WorkListSort } from './types';
+import type { Work, WorkListEntry, WorkListQuery, WorkListSort } from './types';
 
 /**
  * Search / filter / sort for the Work list — the one implementation, shared by
@@ -62,11 +62,11 @@ export function workPlanOverrunDays(
 }
 
 /** Sort comparators. Every one ends on `id` so the order is total and stable. */
-const COMPARATORS: Record<WorkListSort, (a: Work, b: Work) => number> = {
+const COMPARATORS: Record<WorkListSort, (a: WorkListEntry, b: WorkListEntry) => number> = {
   // Most recently updated first — the board/session convention.
-  updated: (a, b) => instant(b.updatedAt, 0) - instant(a.updatedAt, 0) || a.id.localeCompare(b.id),
+  updated: (a, b) => instant(b.activity?.lastActivityAt ?? b.updatedAt, 0) - instant(a.activity?.lastActivityAt ?? a.updatedAt, 0) || a.id.localeCompare(b.id),
   // The mirror image: longest untouched first.
-  stale: (a, b) => instant(a.updatedAt, 0) - instant(b.updatedAt, 0) || a.id.localeCompare(b.id),
+  stale: (a, b) => instant(a.activity?.lastActivityAt ?? a.updatedAt, 0) - instant(b.activity?.lastActivityAt ?? b.updatedAt, 0) || a.id.localeCompare(b.id),
   // Nearest planned end first. A Work with no planned end has nothing to be
   // near, so it sinks below every dated one instead of claiming the epoch or
   // the far future — and those sink among themselves by recent activity.
@@ -87,7 +87,7 @@ const COMPARATORS: Record<WorkListSort, (a: Work, b: Work) => number> = {
  * An omitted `sort` is `updated`, which is what `WorkStore.getWorks()` did
  * before this existed — so every existing caller keeps its ordering.
  */
-export function selectWorks(works: readonly Work[], query?: WorkListQuery): Work[] {
+export function selectWorks<T extends Work>(works: readonly T[], query?: WorkListQuery): T[] {
   const needle = query?.q?.trim().toLowerCase();
   const projectDir = query?.projectDir?.trim();
   const filtered = works.filter((work) => {

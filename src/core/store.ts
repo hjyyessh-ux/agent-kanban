@@ -1,3 +1,4 @@
+import { selectArchiveCards } from './archive-selection';
 import { Buffer } from 'node:buffer';
 import { existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
 import { join, extname } from 'node:path';
@@ -1148,59 +1149,17 @@ export class KanbanStore {
     return cards;
   }
 
-  async archiveCards(cardIds?: string[]): Promise<{ archivedCount: number; archiveMonth: string }> {
+  async archiveCards(cardIds?: string[], options?: { beforeArchive?: (cards: KanbanCard[]) => Promise<void> }): Promise<{ archivedCount: number; archiveMonth: string }> {
     let archivedCount = 0;
     let primaryMonth = '';
 
     await this.withDualLock(async () => {
       const board = await this.load();
 
-      // Determine which cards to archive
-      let toArchive: KanbanCard[];
-      if (cardIds && cardIds.length > 0) {
-        const requestedIds = new Set(cardIds);
-
-        // Index active children by parent so we can walk the full subtree.
-        const childrenByParent = new Map<string, KanbanCard[]>();
-        for (const card of board.cards) {
-          if (isActiveCard(card) && card.parentCardId) {
-            const siblings = childrenByParent.get(card.parentCardId);
-            if (siblings) siblings.push(card);
-            else childrenByParent.set(card.parentCardId, [card]);
-          }
-        }
-
-        // Seed with the requested done cards, then cascade to every descendant
-        // regardless of the child's status (an in_progress subagent left behind
-        // gets re-driven back to in_progress by its still-live parent runtime,
-        // so it must be archived together with the parent). Favorited cards are
-        // pruned from the sweep: the card — and its subtree — stays on the board.
-        const toArchiveIds = new Set<string>();
-        const stack: string[] = [];
-        for (const card of board.cards) {
-          if (isActiveCard(card) && requestedIds.has(card.id) && card.status === 'done') {
-            toArchiveIds.add(card.id);
-            stack.push(card.id);
-          }
-        }
-        while (stack.length > 0) {
-          const parentId = stack.pop()!;
-          for (const child of childrenByParent.get(parentId) ?? []) {
-            if (child.favorite) continue;
-            if (toArchiveIds.has(child.id)) continue;
-            toArchiveIds.add(child.id);
-            stack.push(child.id);
-          }
-        }
-
-        toArchive = board.cards.filter((card) => toArchiveIds.has(card.id));
-      } else {
-        toArchive = board.cards.filter(c => isActiveCard(c) && c.status === 'done');
-      }
-
-      if (toArchive.length === 0) {
-        return;
-      }
+      const toArchive = selectArchiveCards(board.cards, cardIds);
+      if (toArchive.length === 0) return;
+      // Run under the board lock against the actual cascade, before any write.
+      await options?.beforeArchive?.(toArchive);
 
       // Stamp wiki processing queue state at archive time. Child cards are
       // archived for traceability but excluded from the wiki pipeline.

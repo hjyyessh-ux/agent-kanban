@@ -36,7 +36,7 @@ import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/ru
 import { resolveClaudeTranscriptPath, loadClaudeTranscript } from '../plugin/wiki/wiki-transcript';
 import { createWikiLlm } from '../plugin/wiki/wiki-llm';
 import { loadWorksConfig, loadWorksConfigDto, saveWorksConfig } from '../plugin/works/works-config';
-import { generateWorkSummary, type WorkTranscriptSource } from '../plugin/works/works-summary';
+import { buildWorkCardContext, generateWorkSummary, type WorkTranscriptSource } from '../plugin/works/works-summary';
 import {
   applyWorkPatch,
   buildWorkCompletionPreview,
@@ -45,13 +45,15 @@ import {
   reopenWork,
   resolveWorkStartedAt,
   selectWorkCards,
+  selectWorkSweepCards,
   type ActiveRunProbe,
 } from '../plugin/works/work-lifecycle';
 import { findWorkOwningSession, reconcileWorkSessionLinks } from '../plugin/works/work-links';
-import { isWorkListSort } from '../core/work-list';
+import { selectWorks, isWorkListSort } from '../core/work-list';
 import {
   WorkAlreadyActiveError,
   WorkCardsRunningError,
+  WorkCardsConflictError,
   WorkDateOrderError,
   WorkMergeTargetError,
   WorkNotActiveError,
@@ -242,6 +244,7 @@ function errorResponse(message: string, status: number): Response {
  * other cards had just been archived under it.
  */
 function worksErrorResponse(e: unknown, fallback: string): Response {
+  if (e instanceof WorkCardsConflictError) return json({ error: e.message, conflictingCardIds: e.conflictingCardIds }, 409);
   if (e instanceof WorkCardsRunningError) {
     // The blocked card ids travel with the rejection so the confirmation dialog
     // can name what is still running instead of just refusing.
@@ -1187,13 +1190,25 @@ export function createRouteHandler(
       if (sortParam !== null && !isWorkListSort(sortParam)) {
         return errorResponse('Invalid sort', 400);
       }
-      const works = await workStore.getWorks({
+      const works = await workStore.getWorks();
+      const cards = await store.getCards();
+      const floor = works.map(workCardScanFloor).sort()[0];
+      if (floor) {
+        for (const month of timelineArchiveMonths(store.listArchiveMonths(), floor)) {
+          const archive = await store.loadArchiveMonth(month);
+          if (archive) cards.push(...archive.cards);
+        }
+      }
+      const entries = works.map(work => {
+        const { cardCount, doneCount, inProgressCount, lastActivityAt } = buildWorkSessionsResponse(work, cards);
+        return { ...work, activity: { cardCount, doneCount, inProgressCount, lastActivityAt } };
+      });
+      return json(selectWorks(entries, {
         status: statusParam as WorkStatus | null ?? undefined,
         projectDir: url.searchParams.get('projectDir') ?? undefined,
         q: url.searchParams.get('q') ?? undefined,
         sort: sortParam ?? undefined,
-      });
-      return json(works);
+      }));
     }
 
     // Route: POST /api/works
@@ -1488,7 +1503,7 @@ export function createRouteHandler(
                 projectDir,
               })
             : undefined;
-          return { link, transcript, title: card?.title };
+          return { link, transcript, cardContext: buildWorkCardContext(cards.filter(c => c.sessionId === link.sessionId)), title: card?.title };
         });
 
         const llmRunner = createWikiLlm({
@@ -1509,6 +1524,7 @@ export function createRouteHandler(
           work: updated,
           summary: result.summary,
           generatedSessions: result.generatedSessions,
+          cardSourceSessions: result.cardSourceSessions,
           skippedSessions: result.skippedSessions,
         });
       } catch (e: unknown) {
@@ -1667,13 +1683,16 @@ export function createRouteHandler(
         // Only board cards can be running: an archived card's run is over. And
         // only cards the sweep would actually take can block it — a favorited
         // card stays on the board, so its live run is nobody's problem here.
-        const boardSeedIds = selectWorkCards(liveCards, work)
+        const boardSeedIds = selectWorkSweepCards(liveCards, work)
           .filter(c => !c.favorite)
           .map(c => c.id);
         const runningCardIds = activeRunProbe && boardSeedIds.length > 0
           ? await activeRunProbe(boardSeedIds)
           : [];
+        const otherSessions = new Set((await workStore.getWorks()).filter(w => w.id !== work.id)
+          .flatMap(w => w.sessionLinks.map(l => l.sessionId)));
         return json(buildWorkCompletionPreview(work, cards, {
+          conflictingCardIds: selectWorkSweepCards(liveCards, work).filter(c => c.sessionId && otherSessions.has(c.sessionId)).map(c => c.id),
           archivedCardIds,
           runningCardIds,
           scannedMonths,
