@@ -19,7 +19,12 @@ for (const width of [1440, 390]) {
     await expect(page.locator('.works-inbox-row-group').first().getByRole('button', { name: '배정', exact: true })).toBeInViewport();
     const inboxBox = await page.locator('.works-inbox-rows').boundingBox();
     expect(inboxBox!.height).toBeLessThanOrEqual(width === 390 ? 280 : 480);
-    if (width === 1440) await expect(title).toBeInViewport();
+    const layoutBox = await page.locator('.works-active-layout').boundingBox();
+    const triageBox = await page.getByRole('region', { name: '미배정 세션', exact: true }).boundingBox();
+    const worksBox = await page.locator('.works-grouped-section').boundingBox();
+    expect(triageBox!.width).toBeCloseTo(layoutBox!.width, 0);
+    expect(worksBox!.width).toBeCloseTo(layoutBox!.width, 0);
+    expect(worksBox!.y).toBeGreaterThanOrEqual(triageBox!.y + triageBox!.height);
     await expect(page.locator('.works-card')).toContainText('카드 1');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`works-${width}.png`), fullPage: true });

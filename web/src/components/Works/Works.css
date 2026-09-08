@@ -1934,11 +1934,10 @@
 
 /* Assignment and existing Works share one workspace. */
 .works-navigation { display: flex; flex-wrap: wrap; gap: var(--kv2-sp-2); margin: var(--kv2-sp-3) 0; }
-.works-active-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--kv2-sp-5); align-items: start; }
+.works-active-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--kv2-sp-5); }
 .works-active-layout > .works-section { min-width: 0; }
 .works-active-layout .works-section-heading { margin-top: 0; flex-wrap: wrap; }
 .works-triage-section .works-inbox-header { flex-wrap: wrap; }
-.works-triage-section .works-inbox-header-sub { flex-basis: 100%; }
 .works-triage-section .works-inbox-rows { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .work-detail-progress { margin: 0 48px var(--kv2-sp-4); }
 .work-session-picker { margin-top: var(--kv2-sp-4); }
@@ -1948,7 +1947,6 @@
 .work-detail-footer { position: static; }
 .work-detail-status .work-status, .work-detail-status .work-overrun-chip { white-space: nowrap; }
 @media (max-width: 1100px) {
-  .works-active-layout { grid-template-columns: minmax(0, 1fr); }
   .works-triage-section .works-inbox-rows { max-height: 280px; }
   .works-triage-section .works-inbox-rows--assigning { max-height: 520px; }
 }
