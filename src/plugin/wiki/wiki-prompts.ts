@@ -9,14 +9,28 @@ export const WIKI_DOC_TYPES: WikiDocType[] = [
   'reference',
 ];
 
-/** One wiki processing unit: all archived cards that share a session. */
+/**
+ * One wiki processing unit. By default that is every archived card sharing a
+ * session; when the session belongs to a `Work`, all of that Work's sessions
+ * collapse into a single group so a Work yields exactly one document.
+ */
 export interface WikiSourceGroup {
-  key: string;             // sessionId, or `card:<id>` for sessionless cards
-  sessionId?: string;
+  key: string;             // sessionId, `work:<workId>`, or `card:<id>` for sessionless cards
+  sessionId?: string;      // unset for Work groups — they span several sessions
   sessionTitle?: string;
   projectDir?: string;
   cards: KanbanCard[];     // sorted by createdAt ascending
   transcript?: string;     // optional enrichment from the runtime transcript
+  workId?: string;         // set for Work groups
+  workTitle?: string;      // Work groups: used verbatim as the document title
+  sessionIds?: string[];   // Work groups: every contributing session
+  /**
+   * Work groups: the document this Work was written to last time
+   * (`Work.wikiDocPath`), so a Work whose cards reach the queue in more than one
+   * batch overwrites its own document instead of writing a second file under
+   * the same title.
+   */
+  workDocPath?: string;
 }
 
 export interface TriageResult {
@@ -50,6 +64,12 @@ function truncate(text: string, max: number): string {
 /** Render a session group as the source material both prompts share. */
 export function buildGroupContext(group: WikiSourceGroup): string {
   const lines: string[] = [
+    // Work groups only: session groups must keep their exact prior prompt text
+    // (changing it would invalidate every prior classification).
+    ...(group.workTitle
+      ? [`Work: ${group.workTitle} (세션 ${group.sessionIds?.length ?? 1}개를 종합한 하나의 작업)`,
+          '아래는 이 Work의 누적 기록입니다. 이전 결정·해결 과정과 새 결과를 함께 보존하고, 바뀐 결정은 변경 이력을 구분하세요.']
+      : []),
     `세션 제목: ${group.sessionTitle?.trim() || '(제목 없음)'}`,
     `프로젝트: ${group.projectDir ?? '-'}`,
     `카드 수: ${group.cards.length}`,

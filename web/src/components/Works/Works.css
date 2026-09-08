@@ -1,0 +1,1956 @@
+/* Works tab — layout only. Colors/typography/controls come from kv2 tokens and
+   primitives (kv2-btn, kv2-badge, kv2-input, …). Do not redefine primitives. */
+
+.works-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.works-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.works-section-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+  margin-top: var(--kv2-sp-5);
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-base);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv2-text-primary);
+}
+
+.works-section:first-child .works-section-heading {
+  margin-top: 0;
+}
+
+.works-section-hint {
+  font-family: var(--kv2-font-sans);
+  font-weight: 500;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.works-section-rule {
+  flex: 1;
+  border-top: 2px dashed var(--kv2-border);
+}
+
+.works-empty {
+  margin: 0;
+  padding: var(--kv2-sp-4);
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-sm);
+}
+
+.works-mono {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.works-warn {
+  color: var(--kv2-warn-text);
+  font-weight: 700;
+}
+
+.works-runtime-chip {
+  text-transform: capitalize;
+}
+
+/* ── Inbox ──────────────────────────────────────────────────── */
+.works-inbox {
+  border: 3px solid var(--kv2-ink-pure);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+}
+
+.works-inbox-header {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-3) var(--kv2-sp-4);
+  background: var(--kv2-works-inbox-header-bg);
+  border-bottom: 3px solid var(--kv2-ink-pure);
+  font-weight: 800;
+  color: var(--kv2-text-primary);
+}
+
+.works-inbox-header-sub {
+  font-weight: 500;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-warn-text);
+}
+
+/* Pushes the ignore-list link + selection toggle + 모두 배정하기 to the right. */
+.works-inbox-ignored-toggle {
+  margin-left: auto;
+}
+
+/* Same edge whether or not the ignore-list link is rendered. */
+.works-inbox-select-toggle {
+  margin-left: auto;
+}
+
+.works-inbox-ignored-toggle + .works-inbox-select-toggle {
+  margin-left: 0;
+}
+
+/* ── 무시한 세션 (ignore list) ───────────────────────────────────
+   The recovery path for 폐기. Sits between the Inbox header and the rows so it
+   reads as an annex of the Inbox rather than a section of its own. */
+.works-ignored {
+  padding: var(--kv2-sp-3) var(--kv2-sp-4);
+  background: var(--kv2-warn-surface-pale);
+  border-bottom: 3px solid var(--kv2-ink-pure);
+}
+
+.works-ignored-lead {
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-muted);
+  margin-bottom: var(--kv2-sp-2);
+}
+
+.works-ignored-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+.works-ignored-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+}
+
+.works-ignored-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.works-ignored-title {
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Batch assign panel ─────────────────────────────────────────
+   Chips enumerate the selection, which the panel body (one representative
+   session) cannot. */
+.works-bulk-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-3) var(--kv2-sp-4) 0;
+}
+
+.works-bulk-selected-label {
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  color: var(--kv2-text-muted);
+}
+
+.works-bulk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  max-width: 240px;
+  padding: 2px var(--kv2-sp-2);
+  border: 2px solid var(--kv2-ink-pure);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.works-bulk-chip-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.works-bulk-chip-remove {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: var(--kv2-text-sm);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--kv2-text-muted);
+}
+
+.works-bulk-chip-remove:hover {
+  color: var(--kv2-danger-text);
+}
+
+/* A batch links one session per request, so the failed rows are named on the
+   rows themselves — the shared banner only carries the first reason. */
+.works-inbox-failure {
+  margin-top: var(--kv2-sp-1);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-danger-text);
+}
+
+/* ── Inbox multi-select ─────────────────────────────────────────
+   The action bar sits *below* the rows on purpose: mounting it above them would
+   push the whole list down under the pointer the instant a drag starts. */
+.works-inbox-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-4);
+  background: var(--kv2-info-surface);
+  border-top: 3px solid var(--kv2-ink-pure);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  color: var(--kv2-text-primary);
+}
+
+.works-inbox-selection-count {
+  margin-right: auto;
+}
+
+/* Coordinate origin for the drag's row measurements. */
+.works-inbox-rows {
+  position: relative;
+}
+
+.works-inbox-rows.is-dragging {
+  user-select: none;
+}
+
+.works-inbox-check {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--kv2-text-link);
+  cursor: pointer;
+}
+
+.works-inbox-row--selectable {
+  cursor: pointer;
+}
+
+.works-inbox-row.is-selected {
+  background: var(--kv2-info-surface);
+}
+
+.works-inbox-row-group {
+  border-bottom: 2px solid var(--kv2-border-muted, var(--kv2-border));
+}
+
+.works-inbox-row-group:last-child {
+  border-bottom: 0;
+}
+
+.works-inbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-3) var(--kv2-sp-4);
+}
+
+.works-inbox-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--kv2-status-progress-accent, var(--kv2-status-todo-accent));
+  border: 2px solid var(--kv2-ink-pure);
+  flex: none;
+}
+
+.works-inbox-dot--idle {
+  background: var(--kv2-text-muted);
+}
+
+.works-inbox-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.works-inbox-title {
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.works-inbox-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-3);
+  margin-top: var(--kv2-sp-1);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+  align-items: center;
+}
+
+/*
+ * Inbox 상태 칩. Only rendered for a session that is *not* settled
+ * (`describeSessionState`), so the common finished row stays quiet. Colours come
+ * from the board's own status tokens — a 실행 중 chip has to read as the same
+ * "in progress" the board uses — and `subagent` borrows the affinity hue, which
+ * no card status claims.
+ */
+.works-inbox-state {
+  border: 2px solid var(--kv2-ink-pure);
+  font-weight: 800;
+}
+
+.works-inbox-state--running {
+  background: var(--kv2-status-progress-badge-bg);
+  color: var(--kv2-status-progress-badge-fg);
+}
+
+.works-inbox-state--idle {
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-muted);
+}
+
+.works-inbox-state--subagent {
+  background: transparent;
+  border-color: var(--kv2-affinity-chain);
+  color: var(--kv2-affinity-chain-text);
+}
+
+/* The row's lineage mark is a denser variant of the assign panel's badge. */
+.works-inbox-chain {
+  font-size: var(--kv2-text-xs);
+}
+
+.works-inbox-actions {
+  display: flex;
+  gap: var(--kv2-sp-2);
+  flex: none;
+}
+
+/* ── Inline assign panel ────────────────────────────────────── */
+.works-assign-inline {
+  margin: 0 var(--kv2-sp-4) var(--kv2-sp-4) var(--kv2-sp-8);
+  padding: var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface-warm-soft);
+}
+
+.works-assign-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--kv2-sp-3);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+}
+
+.works-assign-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--kv2-sp-3);
+}
+
+.works-assign-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  padding: var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.works-assign-option:hover:not(:disabled) {
+  border-color: var(--kv2-info-border);
+  background: var(--kv2-info-surface);
+}
+
+.works-assign-option:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.works-assign-option.is-selected {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-info-surface);
+  box-shadow: var(--kv2-shadow-sm);
+}
+
+.works-assign-opt-title {
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.works-assign-opt-desc {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.works-assign-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+  margin-top: var(--kv2-sp-3);
+}
+
+.works-assign-role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  margin-top: var(--kv2-sp-3);
+  max-width: 220px;
+}
+
+.works-assign-work-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+  margin-top: var(--kv2-sp-3);
+}
+
+.works-assign-work-item {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  text-align: left;
+}
+
+.works-assign-work-item:hover {
+  border-color: var(--kv2-info-border);
+  background: var(--kv2-info-surface);
+}
+
+.works-assign-work-item.is-selected {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-info-surface);
+  font-weight: 700;
+}
+
+/* Doubles as the directory swatch — same colour = same projectDir as the
+   session's own chip above the list. */
+.works-assign-work-bar {
+  width: 6px;
+  height: 18px;
+  border-radius: var(--kv2-radius-sm);
+  background: var(--works-dir-accent, var(--kv2-status-todo-accent));
+  flex: none;
+}
+
+.works-assign-work-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.works-assign-work-ago {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-left: auto;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+}
+
+/* Layout only — the left/right split comes from `kv2-actions-split`, which this
+   class is combined with. Nothing here may set `justify-content` or per-button
+   margins or it would fight the primitive's `auto` margins. */
+.works-assign-footer {
+  margin-top: var(--kv2-sp-3);
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+}
+
+/* ── Work cards ─────────────────────────────────────────────── */
+.works-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.works-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-4);
+  padding: var(--kv2-sp-4) var(--kv2-sp-4) var(--kv2-sp-4) var(--kv2-sp-6);
+  border: 3px solid var(--kv2-ink-pure);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+}
+
+.works-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  background: var(--works-accent, var(--kv2-status-todo-accent));
+}
+
+.works-card--active { --works-accent: var(--kv2-status-todo-accent); }
+.works-card--done { --works-accent: var(--kv2-status-done-accent); }
+.works-card--discarded { --works-accent: var(--kv2-text-muted); }
+
+.works-card--resolved {
+  opacity: 0.82;
+}
+
+.works-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.works-card-title {
+  font-family: var(--kv2-font-heading);
+  font-weight: 800;
+  font-size: var(--kv2-text-md);
+  color: var(--kv2-text-primary);
+}
+
+.works-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-3);
+  margin-top: var(--kv2-sp-1);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.works-card-summary {
+  margin-top: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border-left: 3px solid var(--kv2-success-border);
+  border-radius: 0 var(--kv2-radius-sm) var(--kv2-radius-sm) 0;
+  background: var(--kv2-success-surface);
+  color: var(--kv2-success-text);
+  font-size: var(--kv2-text-xs);
+}
+
+.works-card-side {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex: none;
+}
+
+/* ── Role chips (shared by modal + detail) ──────────────────── */
+.works-role {
+  text-transform: none;
+  border-color: var(--kv2-border-strong);
+}
+
+.works-role--dev {
+  background: var(--kv2-info-surface);
+  color: var(--kv2-info-text);
+  border-color: var(--kv2-info-border);
+}
+
+.works-role--review {
+  background: var(--kv2-warn-surface);
+  color: var(--kv2-warn-text);
+  border-color: var(--kv2-warn-border);
+}
+
+.works-role--debug {
+  background: var(--kv2-success-surface);
+  color: var(--kv2-success-text);
+  border-color: var(--kv2-success-border);
+}
+
+/* ── Bulk assign modal (screen ②) ───────────────────────────── */
+.bulk-assign {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.bulk-assign-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.bulk-assign-progress-hint {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.bulk-assign-session {
+  padding: var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface-warm-soft);
+}
+
+.bulk-assign-session-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex-wrap: wrap;
+}
+
+.bulk-assign-dir {
+  color: var(--kv2-text-primary);
+}
+
+.bulk-assign-session-meta {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.bulk-assign-prompt {
+  margin-top: var(--kv2-sp-2);
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-secondary);
+  line-height: 1.5;
+}
+
+.bulk-assign-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+.bulk-assign-option {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.bulk-assign-option:hover {
+  border-color: var(--kv2-info-border);
+  background: var(--kv2-info-surface);
+}
+
+.bulk-assign-option.is-selected {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-info-surface);
+  box-shadow: var(--kv2-shadow-sm);
+}
+
+.bulk-assign-opt-title {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.bulk-assign-opt-desc {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex-wrap: wrap;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.bulk-assign-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1.5px solid var(--kv2-ink-pure);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.bulk-assign-new {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+.bulk-assign-role {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  max-width: 220px;
+}
+
+/* ── Work detail dialog (screen ③) ──────────────────────────── */
+/*
+ * Same shell as the card detail (`kv2-dialog--detail` + `kv2-detail-shell`):
+ * a status row, a large title, a row of meta tiles, then headed sections and
+ * the actions rail. Everything below is what a Work needs on top of those
+ * shared classes; the shared ones live in kv2/card-detail.css and panels.css.
+ *
+ * The old version was a stack of bordered `.work-detail-row` boxes with
+ * `기본 정보` (title + directory sharing one line) and `기간` (two inputs
+ * pushed to the left of a wide row). Neither matched the card detail beside
+ * it, and 디렉토리 is a project identity, not a sub-field of the title.
+ */
+.work-detail {
+  padding-bottom: 0;
+}
+
+/* The status row doubles as the hero's top edge; the badge keeps the card
+   detail's 36px chip geometry (`kv2-status-badge`) and adds Work colours. */
+.work-status {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.work-status--active {
+  background: var(--kv2-info-surface-strong);
+  color: var(--kv2-info-text-strong);
+  border-color: var(--kv2-info-border);
+}
+
+.work-status--done {
+  background: var(--kv2-success-surface-strong);
+  color: var(--kv2-success-text);
+  border-color: var(--kv2-success-border);
+}
+
+.work-status--discarded {
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-muted);
+  border-color: var(--kv2-border);
+}
+
+/* The dialog's left accent stripe follows the Work's status (the card detail
+   does the same per card status via `--kv2-dialog-accent`). */
+.work-detail-dialog--active { --kv2-dialog-accent: var(--kv2-timeline-work-bar); }
+.work-detail-dialog--done { --kv2-dialog-accent: var(--kv2-status-done-display); }
+.work-detail-dialog--discarded { --kv2-dialog-accent: var(--kv2-neutral-400); }
+
+/* Title — the one large line. Editable in place: the text is a button that
+   swaps for an input on click (Enter saves, Esc abandons). */
+.work-detail-title-row {
+  padding-bottom: 8px;
+}
+
+/* `kv2-unstyled-button` resets everything (`all: unset`), so the title's type
+   has to be restated here rather than inherited from `.kv2-title-text`. */
+.work-title-text {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-2xl);
+  line-height: 1.2;
+  color: var(--kv2-strong-title-color);
+  word-break: break-word;
+  cursor: pointer;
+}
+
+.work-title-text:disabled {
+  cursor: default;
+}
+
+.work-title-input {
+  width: 100%;
+  padding: 4px 8px;
+}
+
+/* ── Meta tiles ─────────────────────────────────────────────── */
+.work-detail-overview {
+  padding: 0 48px;
+  gap: 12px;
+}
+
+/* Four tiles: DIRECTORY · START · END (PLANNED END) · LAST ACTIVITY. The
+   directory takes the whole first line — a path needs the width and, like the
+   card detail's DIRECTORY tile it reuses (click-to-edit → DirectoryPicker), it
+   is the one value that wraps. */
+.work-meta-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.work-meta-card {
+  height: auto;
+  min-height: 76px;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+/* Directory tile: the project's colour on its left edge, the same stripe the
+   Timeline and Works list draw for that directory. */
+.work-meta-card.kv2-meta-card--directory {
+  grid-column: 1 / -1;
+  border-left: 6px solid var(--works-dir-accent, var(--kv2-border-muted));
+}
+
+.work-meta-input,
+.work-detail-overview .work-date-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: var(--kv2-text-sm);
+}
+
+/* A tile with an input plus a small clear button beside it. */
+.work-meta-card-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.work-meta-card-line > .kv2-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Read-only tiles: the value is text, not a control. */
+.work-detail-facts {
+  white-space: normal;
+  color: var(--kv2-text-primary);
+}
+
+/* 산출물 — three narrow number tiles, then the wiki documents taking the
+   rest of the row: a two-digit count does not need a quarter of the dialog,
+   and a vault path does. */
+.work-meta-panel--artifacts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A read-only value in the same field chrome as the date inputs beside it. */
+.work-meta-readonly {
+  display: flex;
+  align-items: center;
+  cursor: default;
+  color: var(--kv2-text-primary);
+}
+
+.work-meta-card--wiki {
+  height: auto;
+  min-height: 76px;
+}
+
+.work-meta-stat {
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xl);
+  font-weight: 800;
+  color: var(--kv2-strong-title-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.work-meta-card--wiki .kv2-meta-value {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: var(--kv2-text-sm);
+}
+
+/* wiki 문서 — one document per line, each a link into the document. */
+.work-detail-wiki {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.work-detail-wiki li {
+  min-width: 0;
+}
+
+.work-detail-wiki-doc {
+  display: block;
+  max-width: 100%;
+  padding: 2px 6px;
+  border-radius: var(--kv2-radius-sm);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-sm);
+  line-height: 1.5;
+  color: var(--kv2-info-text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--kv2-info-text) 45%, transparent);
+  text-underline-offset: 2px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-detail-wiki-doc:hover,
+.work-detail-wiki-doc:focus-visible {
+  background: var(--kv2-info-surface-pale);
+  text-decoration-color: currentColor;
+}
+
+/* ── Wiki 문서 dialog (WorkWikiDocDialog) ──────────────────────── */
+.work-wiki-doc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.work-wiki-doc-path-card {
+  height: auto;
+  border-left: 6px solid var(--kv2-info-accent);
+}
+
+.work-wiki-doc-path {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.work-wiki-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-top: var(--kv2-sp-1);
+}
+
+.work-wiki-doc-body {
+  padding: 16px 20px;
+  border: 1px solid var(--kv2-border-muted);
+  border-radius: 8px;
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-md);
+  line-height: 1.7;
+  color: var(--kv2-text-primary);
+}
+
+/* CardMarkdown sets its own sizes; the whole document steps up one size with
+   the body, code blocks included. */
+.work-wiki-doc-body :is(p, li, td, th) {
+  font-size: var(--kv2-text-md);
+}
+
+.work-wiki-doc-body :is(pre, code) {
+  font-size: var(--kv2-text-sm);
+}
+
+.work-wiki-doc-muted {
+  margin: 0;
+  color: var(--kv2-text-muted);
+}
+
+/* ── Sections (Summary · 메모 · 연결된 세션) ────────────────────
+   The card detail's `kv2-detail-primary-block`: no border, a heading line, the
+   content underneath. Padded to the same 48px gutter as the tiles. */
+.work-detail-section {
+  padding: 10px 48px;
+  gap: 10px;
+}
+
+.work-detail-heading {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.work-detail-heading-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A heading that is also a disclosure (메모 ▼) — same face as the card
+   detail's Queue After / Session Resume panel headers. */
+.work-detail-disclosure {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+/* The accent-bordered text box the card detail uses for the prompt. */
+.work-detail-box {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--kv2-timeline-work-bar);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-info-surface-pale);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-sm);
+  line-height: 1.6;
+}
+
+.work-detail-box--empty {
+  border-left-color: var(--kv2-border-strong);
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-muted);
+}
+
+.work-summary-lines {
+  padding-left: 32px;
+}
+
+.work-summary-lines li + li {
+  margin-top: 4px;
+}
+
+.work-summary-model {
+  font-family: var(--kv2-font-mono);
+  text-transform: none;
+}
+
+.work-summary-error {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-danger);
+}
+
+/* A closed 메모 shows its first line beside the heading. */
+.work-notes-peek {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 연결된 세션 ─────────────────────────────────────────────── */
+.work-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.work-session-item {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 1px solid var(--kv2-border-muted);
+  border-left: 5px solid var(--kv2-border-strong);
+  border-radius: 8px;
+  background: var(--kv2-surface);
+}
+
+/* The role tints the *row*: left edge + background, the chip inside just
+   names it. Same surface family as the role chips so a dev / review / debug
+   list reads as bands. */
+.work-session-item--role-dev {
+  border-left-color: var(--kv2-info-accent);
+  background: var(--kv2-info-surface-pale);
+}
+
+.work-session-item--role-review {
+  border-left-color: var(--kv2-warn-accent);
+  background: var(--kv2-warn-surface-pale);
+}
+
+.work-session-item--role-debug {
+  border-left-color: var(--kv2-success-accent-vivid);
+  background: var(--kv2-success-surface-pale);
+}
+
+.work-session-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.work-session-title {
+  font-weight: 700;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-session-meta {
+  margin-top: 2px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+/* A link whose session has no cards left anywhere (`cardsMissingAt`). Warn, not
+   danger: nothing is broken, but the link is silently dragging the Work's
+   Timeline start back to its 연결 time and the row has to say so. Wins over the
+   role tint — a broken link matters more than which role it had. */
+.work-session-item--missing {
+  border-color: var(--kv2-warn-border);
+  border-left-color: var(--kv2-warn-accent);
+  background: var(--kv2-warn-surface);
+}
+
+.work-session-missing {
+  margin-top: 4px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-warn-text);
+  white-space: normal;
+}
+
+.work-detail-inline-error {
+  padding: 0 48px;
+}
+
+/* ── Footer ────────────────────────────────────────────────── */
+/*
+ * The card detail's actions rail (`kv2-dialog-actions--detail`): danger group
+ * at the left, the primary pushed right, secondary actions in between. Kept
+ * sticky so 완료 stays reachable on a long session list, and the bottom padding
+ * the scrollport used to carry lives here so the bar pins flush (see the
+ * `.kv2-dialog-content` note below).
+ */
+.work-detail-dialog > .kv2-dialog-content {
+  padding-bottom: 0;
+}
+
+.work-detail-footer {
+  position: sticky;
+  bottom: 0;
+  flex-direction: row;
+  padding: 16px 48px 24px;
+  margin-top: 8px;
+  background: var(--kv2-surface);
+  border-top: 1px solid var(--kv2-border-muted);
+  justify-content: stretch;
+}
+
+.work-detail-footer .kv2-dialog-actions-rail {
+  width: 100%;
+  padding-top: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.work-detail-footer-secondary:empty {
+  display: none;
+}
+
+.work-detail-note {
+  margin: 0 48px;
+  padding: var(--kv2-sp-3);
+  border-left: 3px solid var(--kv2-success-border);
+  border-radius: 0 var(--kv2-radius-sm) var(--kv2-radius-sm) 0;
+  background: var(--kv2-success-surface);
+  color: var(--kv2-success-text);
+  font-size: var(--kv2-text-xs);
+  line-height: 1.55;
+}
+
+.work-date-error {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-danger);
+}
+
+@media (max-width: 720px) {
+  .works-assign-options {
+    grid-template-columns: 1fr;
+  }
+
+  .work-meta-panel,
+  .work-meta-panel--artifacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .work-detail-overview,
+  .work-detail-section,
+  .work-detail-note,
+  .work-detail-inline-error {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail-note {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+  .work-detail-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail .kv2-status-row,
+  .work-detail .kv2-title-row {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail .kv2-detail-divider {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+
+  .works-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .works-card-side {
+    justify-content: flex-end;
+  }
+}
+
+/*
+ * Phone width (390px is an iPhone's CSS viewport).
+ *
+ * Two things break before this point, both because a row that is a `flex` line
+ * on a desktop has nowhere left to go:
+ *
+ *  - The Inbox header put a count, a hint and three buttons on one un-wrapped
+ *    line, which folded into three ragged lines with the buttons orphaned.
+ *  - `.works-inbox-row` keeps its actions in a `flex: none` column at the right
+ *    edge, so the body shrank until the wrapped meta ran *past* the buttons and
+ *    read as belonging to them.
+ *
+ * Both become explicit stacks: label line, then a full-width action line.
+ */
+@media (max-width: 480px) {
+  .works-section-heading {
+    flex-wrap: wrap;
+    gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  }
+
+  .works-inbox-header {
+    flex-wrap: wrap;
+    row-gap: var(--kv2-sp-2);
+  }
+
+  /* The hint is a nicety, not a control; it takes the whole second line rather
+     than squeezing the buttons off the first. */
+  .works-inbox-header-sub {
+    flex: 1 0 100%;
+    order: 1;
+  }
+
+  /* `margin-left: auto` on a wrapped line pushes the first button alone to the
+     far right and leaves a hole; the buttons share one full-width line. */
+  .works-inbox-ignored-toggle,
+  .works-inbox-select-toggle {
+    margin-left: 0;
+  }
+
+  .works-inbox-row {
+    flex-wrap: wrap;
+    row-gap: var(--kv2-sp-2);
+  }
+
+  .works-inbox-body {
+    flex: 1 1 100%;
+  }
+
+  .works-inbox-actions {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+
+  /* Wrapping the meta into a tight column beats wrapping it mid-phrase. */
+  .works-inbox-meta {
+    gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  }
+
+  .works-dir-chip,
+  .works-dir-mark {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .work-meta-panel,
+  .work-meta-panel--artifacts {
+    grid-template-columns: 1fr;
+  }
+
+  /* The footer rail grew to as many as five buttons (폐기 · 삭제 · 병합/다시
+     열기 · 끊긴 세션 정리 · 완료). At 390px that pushed the primary `✔ 완료
+     (일괄 archive)` past the dialog's right edge — not merely clipped but
+     **unreachable**, because a `position: sticky` footer inside a vertically
+     scrolling dialog has no sideways scroll to recover it. Each group takes its
+     own full-width line, primary last, so the most important target is also
+     the widest. (Regression test: `e2e/works.e2e.ts`, 푸터 버튼은 390px에서도
+     전부 화면 안에.) */
+  .work-detail-footer .kv2-dialog-danger-row,
+  .work-detail-footer .work-detail-footer-secondary,
+  .work-detail-footer .kv2-dialog-actions-group--detail-priority {
+    flex: 1 0 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .work-detail-footer .kv2-dialog-actions-rail > * > .kv2-btn {
+    flex: 1 1 auto;
+  }
+}
+
+/* ─── Works settings (⚙ panel, mockup screen ④) ──────────────────── */
+
+.works-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--kv2-sp-3);
+}
+
+.works-view-title {
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv2-text-primary);
+}
+
+.works-config-gear--on {
+  background: var(--kv2-surface-warm-soft);
+}
+
+/* Same frame as .works-inbox / .works-card — the panel is a peer of those
+   blocks in the tab, not a lighter-weight form. */
+.works-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-4);
+  padding: var(--kv2-sp-4);
+  border: 3px solid var(--kv2-ink-pure);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+}
+
+.works-config-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+.works-config-title {
+  margin: 0;
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-base);
+  color: var(--kv2-text-primary);
+}
+
+.works-config-meta {
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.works-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-4);
+}
+
+.works-config-field {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.5fr) 1fr;
+  gap: var(--kv2-sp-4);
+  align-items: start;
+}
+
+.works-config-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.works-config-sub {
+  font-weight: 500;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.works-config-model {
+  display: flex;
+  gap: var(--kv2-sp-2);
+  flex-wrap: wrap;
+}
+
+/* Layout only: the two model selects share the row. Appearance comes from the
+   `kv2-select` primitive (this used to be a local re-implementation of it). */
+.works-config-model .works-config-select {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.works-config-pill {
+  display: inline-flex;
+  gap: var(--kv2-sp-1);
+}
+
+.works-config-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+.works-config-check {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-control-text-color);
+  cursor: pointer;
+}
+
+/* Native controls, sized and tinted like the Inbox row's own checkbox so the
+   two lists of checkboxes in this tab do not read as different widgets. */
+.works-config-check input {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--kv2-text-link);
+  cursor: pointer;
+}
+
+/* Layout comes from `kv2-actions-split` (되돌리기 left, 저장 right) — the same
+   footer geometry every other kv2 form uses. This rule only adds the rule line
+   that separates the actions from the fields, and deliberately declares no
+   `display`/`justify-content` so it cannot fight the primitive. */
+.works-config-actions {
+  padding-top: var(--kv2-sp-3);
+  border-top: 2px solid var(--kv2-border-muted, var(--kv2-border));
+}
+
+@media (max-width: 720px) {
+  .works-config-field {
+    grid-template-columns: 1fr;
+    gap: var(--kv2-sp-2);
+  }
+}
+
+/* ── Session move (⋯ 메뉴 → 다른 Work로 이동) ─────────────────── */
+.work-move-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+/* The reused assign panel already owns its own padding/border inside the
+   Inbox row, so inside the dialog it only needs to fill the width. */
+.work-move-dialog .works-assign-inline {
+  margin: 0;
+}
+
+.works-assign-current {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-2);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.works-assign-current-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--kv2-status-progress-accent, var(--kv2-status-todo-accent));
+  border: 2px solid var(--kv2-ink-pure);
+  flex: none;
+}
+
+/* Impact preview above the confirm button: the Timeline re-dating and the
+   deletion of an emptied source Work are otherwise silent. */
+.works-move-preview {
+  margin: var(--kv2-sp-3) 0 0;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 2px solid var(--kv2-info-border);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-info-surface);
+  color: var(--kv2-info-text-strong);
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1.5;
+}
+
+.work-move-error {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-danger-text);
+}
+
+/* ── Linked-session ⋯ menu ─────────────────────────────────────
+   Sizing lives on `kv2-meta-dropdown--inline`, not here: overriding the
+   primitive locally left its `width: 100%` in place, which made the menu the
+   full row width and collapsed the session title to 0px. */
+.work-session-menu-trigger {
+  min-width: 32px;
+  letter-spacing: 1px;
+}
+
+.work-session-menu-popover {
+  display: flex;
+  flex-direction: column;
+}
+
+.work-session-menu-sep {
+  height: 2px;
+  margin: 4px 0;
+  background: var(--kv2-border-soft);
+}
+
+.work-session-menu-sub {
+  padding-left: var(--kv2-sp-5);
+}
+
+/* ── Session action notice (move / unlink, with undo) ────────── */
+/*
+ * Bottom-*left*, and click-through.
+ *
+ * It used to be centred at `left: 50%`, which put it directly over the sticky
+ * `.kv2-dialog-footer` of any open dialog — and now that assignment itself
+ * offers an undo, the surface most likely to be behind it is the assign-all
+ * modal's own 폐기 / 건너뛰기 / 연결하고 다음 row. At `z-index: 1500` the bar
+ * both hid and *swallowed* those clicks.
+ *
+ * So: out of the centre column, and `pointer-events: none` on the bar with
+ * `auto` restored on its own controls. The notice can never intercept a click
+ * meant for what is underneath it, only for its own buttons.
+ */
+.work-session-notice {
+  position: fixed;
+  left: var(--kv2-sp-5);
+  bottom: var(--kv2-sp-5);
+  z-index: 1500;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+  max-width: min(560px, 60vw);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  box-shadow: 4px 6px 0 var(--kv2-dialog-shadow-color);
+  font-size: var(--kv2-text-xs);
+}
+
+/* Local class, not `.work-session-notice .kv2-btn` — a primitive is never
+   redefined from a screen stylesheet (docs/design-system.md). */
+.work-session-notice-action {
+  pointer-events: auto;
+}
+
+.work-session-notice--success {
+  background: var(--kv2-success-surface);
+  color: var(--kv2-success-text-strong);
+}
+
+.work-session-notice--warn {
+  background: var(--kv2-warn-surface);
+  color: var(--kv2-warn-text-strong);
+}
+
+.work-session-notice-text {
+  font-weight: 700;
+}
+
+.work-session-notice-error {
+  font-weight: 700;
+  color: var(--kv2-danger-text);
+}
+
+/* ── Affinity colours (directory + session lineage) ─────────────
+   `.works-dir-c{n}` publishes one palette slot as two variables: the swatch
+   (`--works-dir-accent`, for bars and tints) and its AA-safe text twin
+   (`--works-dir-text`, for anything with letters in it). The slot is hashed
+   from the full projectDir in `worksAffinity.ts`, so the same project is the
+   same colour in the Inbox, the assign panel, and the modal. Anything that
+   wants a colour reads one of the two variables — never a literal, and never
+   `--kv2-dir-{n}` directly.
+
+   Text uses the twin because the swatch is not a text colour: painting a
+   directory name in the raw accent left `--kv2-dir-2` at 3.7:1 on light and
+   `--kv2-affinity-chain` at 3.1:1 on dark. See `styles/token-contrast.test.ts`. */
+.works-dir-c1 { --works-dir-accent: var(--kv2-dir-1); --works-dir-text: var(--kv2-dir-1-text); }
+.works-dir-c2 { --works-dir-accent: var(--kv2-dir-2); --works-dir-text: var(--kv2-dir-2-text); }
+.works-dir-c3 { --works-dir-accent: var(--kv2-dir-3); --works-dir-text: var(--kv2-dir-3-text); }
+.works-dir-c4 { --works-dir-accent: var(--kv2-dir-4); --works-dir-text: var(--kv2-dir-4-text); }
+.works-dir-c5 { --works-dir-accent: var(--kv2-dir-5); --works-dir-text: var(--kv2-dir-5-text); }
+.works-dir-c6 { --works-dir-accent: var(--kv2-dir-6); --works-dir-text: var(--kv2-dir-6-text); }
+.works-dir-c7 { --works-dir-accent: var(--kv2-dir-7); --works-dir-text: var(--kv2-dir-7-text); }
+.works-dir-c8 { --works-dir-accent: var(--kv2-dir-8); --works-dir-text: var(--kv2-dir-8-text); }
+
+/* Timeline label swatch. Kept a dot only there, where the row already carries
+   a full-height colour band and a tinted block would fight it. */
+.works-dir-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--kv2-ink-pure);
+  background: var(--works-dir-accent, var(--kv2-neutral-400));
+}
+
+/*
+ * Directory chip / mark — the colour carries the *name*, not a separate dot.
+ *
+ * An 8–10px dot beside grey text is the smallest possible sample of a hue, and
+ * it was doing the whole job of "which project is this": at that size two
+ * neighbouring slots are the same dot. Tinting the label instead spends a whole
+ * word's worth of area on the colour and puts the hue and the text it labels in
+ * the same place, so the chip is legible before the path is read.
+ */
+.works-dir-chip,
+.works-dir-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+  padding: 1px var(--kv2-sp-2);
+  border: 2px solid color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 55%, transparent);
+  border-radius: var(--kv2-radius-sm);
+  /* 14% — matched by CHIP_TINT_PERCENT in styles/token-contrast.test.ts, which
+     asserts the text twin still clears AA against this tint. */
+  background: color-mix(in srgb, var(--works-dir-accent, transparent) 14%, var(--kv2-surface));
+  color: var(--works-dir-text, var(--kv2-text-secondary));
+  font-weight: 700;
+}
+
+/* Left edge of a recommendation row = its directory colour, so a list of
+   Works reads as colour-grouped before any text is parsed. */
+.works-dir-accented {
+  border-left: 6px solid var(--works-dir-accent, var(--kv2-border));
+}
+
+.works-dir-same {
+  font-weight: 800;
+  color: var(--works-dir-text, var(--kv2-text-secondary));
+}
+
+/* The other signal: lineage, deliberately a hue no directory slot uses. */
+.works-chain-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  padding: 0 var(--kv2-sp-1);
+  border: 2px solid var(--kv2-affinity-chain);
+  border-radius: var(--kv2-radius-sm);
+  color: var(--kv2-affinity-chain-text);
+  font-weight: 800;
+}
+
+.bulk-assign-option.is-chained,
+.works-assign-work-item.is-chained {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--kv2-affinity-chain) 45%, transparent);
+}
+
+/* Selected option's own inputs, rendered inline right under it. */
+.bulk-assign-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+  margin: calc(var(--kv2-sp-1) * -1) 0 var(--kv2-sp-1) var(--kv2-sp-4);
+  padding: var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface-warm-soft);
+}
+
+/* ── 완료 / 폐기 / 다시 열기 확인 다이얼로그 (WorkResolveConfirmDialog) ──
+   The same vocabulary as the detail dialog behind it: a `kv2-meta-card` tile
+   naming the Work, the consequence as an accent-bordered callout (the tone
+   says what kind of transition this is), the numbers as tiles, and the kv2
+   split footer. It used to be loose text with no header and no padding —
+   because the detail dialog's `.kv2-dialog--detail .kv2-dialog-content`
+   rule leaked into this nested dialog (now a child combinator). */
+.work-resolve-dialog {
+  --work-resolve-tone: var(--kv2-warn-accent);
+  --work-resolve-tone-surface: var(--kv2-warn-surface-pale);
+  --kv2-dialog-accent: var(--work-resolve-tone);
+}
+
+.work-resolve-dialog--discard {
+  --work-resolve-tone: var(--kv2-danger-accent);
+  --work-resolve-tone-surface: var(--kv2-danger-surface-pale);
+}
+
+.work-resolve-dialog--reopen {
+  --work-resolve-tone: var(--kv2-info-accent);
+  --work-resolve-tone-surface: var(--kv2-info-surface-pale);
+}
+
+.work-resolve-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.work-resolve-target-card {
+  height: auto;
+  border-left: 6px solid var(--work-resolve-tone);
+}
+
+/* Which Work this is about. In the body, not the dialog title — see MODE_COPY. */
+.work-resolve-target {
+  margin: 0;
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-lg);
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--kv2-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* The consequence. A callout, not a paragraph: this is the sentence the
+   dialog exists to make the user read before the button. */
+.work-resolve-headline {
+  margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--work-resolve-tone);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--work-resolve-tone-surface);
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  line-height: 1.55;
+  color: var(--kv2-text-primary);
+}
+
+.work-resolve-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kv2-sp-2);
+}
+
+.work-resolve-fact-card {
+  height: auto;
+  padding: 10px 14px;
+}
+
+.work-resolve-fact-card--wide {
+  grid-column: 1 / -1;
+}
+
+.work-resolve-stat {
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xl);
+  font-weight: 800;
+}
+
+.work-resolve-footer {
+  margin-top: var(--kv2-sp-4);
+}
+
+.work-resolve-fact {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+/* Why the action is refused. Warn rather than danger: nothing has gone wrong,
+   the Work simply is not completable while an agent is still writing to it. */
+.work-resolve-block {
+  margin: 0;
+  padding: var(--kv2-sp-3);
+  border-left: 3px solid var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-warn-surface-pale);
+  color: var(--kv2-warn-text);
+  font-size: var(--kv2-text-ui-sm);
+}
+
+.work-resolve-block p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.work-resolve-running {
+  margin: var(--kv2-sp-2) 0 0;
+  padding-left: var(--kv2-sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+/* ── 메모 (Work notes) ────────────────────────────────────────────
+   Deliberately *not* styled like the Summary box. The two panels answer
+   the same question ("what is this Work about?") and the reason they have to
+   look different is ownership: Summary is regenerated by an LLM and overwritten
+   wholesale, notes are only ever written by a human. So notes keep the plain
+   `.work-detail-row` chrome the reversible edit rows use, with no hero
+   background and no shadow lift. */
+.work-notes-body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--kv2-sp-2);
+}
+
+.work-notes-input {
+  width: 100%;
+  min-height: 5rem;
+  resize: vertical;
+  font-family: inherit;
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1.6;
+}
+
+.work-notes-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.work-notes-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notes commit on an explicit button, so the unsaved state has to be visible —
+   otherwise closing the dialog silently drops what was typed (the close path
+   also confirms, but the badge is what prevents reaching that prompt). */
+.work-notes-dirty {
+  margin-left: auto;
+  padding: 0 var(--kv2-sp-2);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-warn-surface-pale);
+  color: var(--kv2-warn-text);
+  font-weight: 700;
+}
+
+/* Without `.work-notes-dirty` present, the save button still needs pushing to
+   the right edge. */
+.work-notes-foot > .kv2-btn:last-child {
+  margin-left: auto;
+}
+
+.work-notes-dirty ~ .kv2-btn {
+  margin-left: 0;
+}
+
+/* ── 예정일 초과 (plan overrun) ───────────────────────────────────
+   An `active` Work whose planned end has passed. Warn, not danger: nothing is
+   broken, the plan is just older than the work. The same tokens carry the chip
+   in the Works list, the Work detail 기간 row and the Timeline bar so a late
+   Work looks late everywhere. */
+.work-overrun-chip {
+  border-color: var(--kv2-warn-border);
+  background: var(--kv2-warn-surface);
+  color: var(--kv2-warn-text-deep);
+  font-weight: 800;
+  text-transform: none;
+}
+
+.work-merge-empty {
+  margin: 0;
+  padding: var(--kv2-sp-3);
+  border: 2px dashed var(--kv2-border);
+  border-radius: var(--kv2-radius-md);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  text-align: center;
+}
+
+/* ── Active 리스트 검색·필터·정렬 ─────────────────────────────────
+   Sits between the section heading and the list, so the controls read as
+   belonging to the Active list and not to the whole tab (Inbox above and
+   Resolved below are unaffected by them). */
+.works-active-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2) var(--kv2-sp-3);
+  margin-bottom: var(--kv2-sp-3);
+}
+
+.works-active-search {
+  flex: 1 1 16rem;
+  min-width: 12rem;
+}
+
+.works-active-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+/* A late Work's accent stripe switches to warn, which is what makes it findable
+   by scrolling rather than only by reading each 예정 date. Overrides the
+   status accent set by `.works-card--active` — an overrun row is only ever
+   active, so nothing else competes for the stripe. */
+.works-card--overrun {
+  --works-accent: var(--kv2-warn-accent);
+  border-color: var(--kv2-warn-text-deep);
+}
+
+/* A merge source. Muted rather than warn: nothing needs attention, the row is
+   just explaining where its sessions went. */
+.works-superseded-chip {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-secondary);
+  text-transform: none;
+}
+
+/* Assignment and existing Works share one workspace. */
+.works-navigation { display: flex; flex-wrap: wrap; gap: var(--kv2-sp-2); margin: var(--kv2-sp-3) 0; }
+.works-active-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--kv2-sp-5); }
+.works-active-layout > .works-section { min-width: 0; }
+.works-active-layout .works-section-heading { margin-top: 0; flex-wrap: wrap; }
+.works-triage-section .works-inbox-header { flex-wrap: wrap; }
+.works-triage-section .works-inbox-rows { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.work-detail-progress { margin: 0 48px var(--kv2-sp-4); }
+.work-session-picker { margin-top: var(--kv2-sp-4); }
+.work-session-picker select { min-width: 0; flex: 1; }
+.work-wiki-archive { display: grid; gap: var(--kv2-sp-3); }
+.work-wiki-archive-path { overflow-wrap: anywhere; }
+.work-detail-footer { position: static; }
+.work-detail-status .work-status, .work-detail-status .work-overrun-chip { white-space: nowrap; }
+@media (max-width: 1100px) {
+  .works-triage-section .works-inbox-rows { max-height: 280px; }
+  .works-triage-section .works-inbox-rows--assigning { max-height: 520px; }
+}
+@media (max-width: 640px) {
+  .work-detail-progress { margin-left: 16px; margin-right: 16px; }
+  .work-detail-id { display: none; }
+}

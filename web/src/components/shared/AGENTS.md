@@ -9,7 +9,7 @@ Small, domain-agnostic UI primitives reused across multiple component directorie
 ## Key Files
 | File | Description |
 |------|-------------|
-| `AppTabs.tsx` | Main section tab strip (`role="tablist"`, roving tabindex, Arrow/Home/End keys). Exports `MainTab`, `MAIN_TABS`, `TAB_IDS`, `PANEL_IDS` used by `App.tsx` for the tabpanel wiring. |
+| `AppTabs.tsx` | Main section tab strip (`role="tablist"`, roving tabindex, Arrow/Home/End keys). Exports `MainTab`, `MAIN_TABS`, `TAB_IDS`, `PANEL_IDS` used by `App.tsx` for the tabpanel wiring. Optional `badges` prop renders a count pill next to a tab label (e.g. Works Inbox count via `.app-tab-badge`). Adding a tab means adding its key to **all five** exports (`MainTab`, `MAIN_TABS`, `TAB_IDS`, `PANEL_IDS`, `TAB_LABELS`) plus the `tabRefs` record — the `Record<MainTab, …>` types make a miss a type error. Order: `board, works, timeline, wiki, capabilities, scheduler, settings`. |
 | `ErrorAlert.tsx` | Reusable error banner (`role="alert"`, `aria-live="assertive"`) with a title, message, optional action button, and optional dismiss button. Supports `banner` (full-width) and `inline` variants via `.kv2-alert*` classes. Used by `Card/CreateCardDialog.tsx`, `Scheduler/SchedulerView.tsx`, `Scheduler/SchedulerJobModal.tsx`, `Settings/SettingsView.tsx`, `Settings/SettingsEntryModal.tsx`. |
 
 ## For AI Agents

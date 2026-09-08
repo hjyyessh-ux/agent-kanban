@@ -21,12 +21,26 @@ const HIDDEN_POPOVER_STYLE: React.CSSProperties = {
   pointerEvents: "none",
 };
 
+interface AnchoredPopoverOptions {
+  /**
+   * Selector for an ancestor the popover should stay inside, on top of the
+   * viewport clamp — pass `.kv2-dialog` for a trigger in a dialog row, where a
+   * downward popover would otherwise hang past the dialog's own bottom edge and
+   * float over the page behind it. Opt-in: without it the popover only respects
+   * the viewport (the behaviour the card sidebar's meta fields rely on).
+   */
+  boundarySelector?: string;
+}
+
 /**
  * Anchors a body-portal popover to a trigger button using fixed positioning.
  * This escapes the dialog's `overflow` clipping that breaks `position: absolute`
  * popovers rendered inside the scrollable detail dialog.
  */
-export function useAnchoredPopover(minPopoverWidth = 200) {
+export function useAnchoredPopover(
+  minPopoverWidth = 200,
+  { boundarySelector }: AnchoredPopoverOptions = {},
+) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<AnchorCoords | null>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -40,13 +54,24 @@ export function useAnchoredPopover(minPopoverWidth = 200) {
     const popover = popoverRef.current;
     const popoverHeight = popover?.offsetHeight ?? 0;
     const popoverWidth = popover?.offsetWidth ?? rect.width;
-    const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
+    // The popover may not leave the viewport, and — when a boundary is given —
+    // not the anchoring box either. Whichever bottom is closer wins.
+    const boundary = boundarySelector
+      ? trigger.closest(boundarySelector)?.getBoundingClientRect()
+      : undefined;
+    const bottomLimit = Math.min(
+      window.innerHeight,
+      boundary?.bottom ?? Number.POSITIVE_INFINITY,
+    );
+    const topLimit = Math.max(gap, boundary?.top ?? gap);
 
-    const spaceBelow = viewportHeight - rect.bottom;
-    const openUp = popoverHeight > 0 && spaceBelow < popoverHeight + gap && rect.top > spaceBelow;
+    const spaceBelow = bottomLimit - rect.bottom;
+    const spaceAbove = rect.top - topLimit;
+    const openUp =
+      popoverHeight > 0 && spaceBelow < popoverHeight + gap && spaceAbove > spaceBelow;
     const top = openUp
-      ? Math.max(gap, rect.top - gap - popoverHeight)
+      ? Math.max(topLimit, rect.top - gap - popoverHeight)
       : rect.bottom + gap;
 
     let left = rect.left;
@@ -54,7 +79,7 @@ export function useAnchoredPopover(minPopoverWidth = 200) {
     if (left > maxLeft) left = Math.max(gap, maxLeft);
 
     setCoords({ top, left, minWidth: rect.width });
-  }, []);
+  }, [boundarySelector]);
 
   useLayoutEffect(() => {
     if (!open) {

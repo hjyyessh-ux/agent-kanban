@@ -5,6 +5,7 @@ import { SchedulerStore } from '../core/scheduler-store';
 import { SettingsStore } from '../core/settings-store';
 import { ScriptStore } from '../core/script-store';
 import { QuickActionStore } from '../core/quick-action-store';
+import { WorkStore } from '../core/work-store';
 import { SkillStore } from '../core/skill-store';
 import { SkillRootsStore } from '../core/skill-roots-store';
 import { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -22,6 +23,7 @@ import { TelegramReminderService } from './telegram-reminder';
 import { ScheduledDispatchService } from './scheduled-dispatch-service';
 import { WikiWorker } from './wiki/wiki-worker';
 import { sweepWikiInternalCards } from './wiki/wiki-sweep';
+import { reconcileWorkSessionLinks } from './works/work-links';
 import { appendRuntimeDebugLog } from './debug-log';
 import type { QuestionMonitor } from './question-monitor';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
@@ -40,6 +42,7 @@ export interface KanbanAppStores {
   settingsStore: SettingsStore;
   scriptStore: ScriptStore;
   quickActionStore: QuickActionStore;
+  workStore: WorkStore;
   skillStore: SkillStore;
   skillRootsStore: SkillRootsStore;
   placementTargetsStore: PlacementTargetsStore;
@@ -116,6 +119,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   await sweepWikiInternalCards(store);
   const scriptStore = new ScriptStore(dataDir);
   const quickActionStore = new QuickActionStore(dataDir, scriptStore);
+  const workStore = new WorkStore(dataDir);
   const skillStore = new SkillStore(dataDir);
   const skillRootsStore = new SkillRootsStore(dataDir);
   const placementTargetsStore = new PlacementTargetsStore(dataDir);
@@ -129,6 +133,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     settingsStore,
     scriptStore,
     quickActionStore,
+    workStore,
     skillStore,
     skillRootsStore,
     placementTargetsStore,
@@ -191,7 +196,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
 
   // Wiki worker — consumes wiki-pending archived cards into the Obsidian
   // vault. Only runs on the singleton runtime owner (start/stop below).
-  const wikiWorker = new WikiWorker(store, settingsStore);
+  // The WorkStore lets the wiki group a Work's sessions into one document and
+  // skip the cards of discarded Works.
+  const wikiWorker = new WikiWorker(store, settingsStore, { workStore });
 
   // Discover skills from disk and register them so user-authored skills
   // surface as runtime commands without a code change. Best-effort: a scan
@@ -228,6 +235,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     dispatch.runStore,
     quickActionStore,
     scriptExecutionService,
+    workStore,
   );
   const port = await monitor.start();
   if (port) {
@@ -259,6 +267,23 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const startSingleton = async (): Promise<void> => {
     if (singletonStarted) return;
     appendRuntimeDebugLog(`${options.debugLabel}.start`, { owner: true });
+    // One-shot repair for links whose session lost every card while nothing was
+    // watching — card deletion predates the `cardsMissingAt` stamp, and a
+    // dangling link silently re-dates a Work's Timeline bar to its triage time.
+    // Idempotent and owner-gated; best-effort, because boot must not hang on it.
+    try {
+      const reconciled = await reconcileWorkSessionLinks({ store, workStore });
+      if (reconciled.marked.length > 0 || reconciled.cleared.length > 0) {
+        appendRuntimeDebugLog(`${options.debugLabel}.works.reconcileLinks`, {
+          marked: reconciled.marked.length,
+          cleared: reconciled.cleared.length,
+        });
+      }
+    } catch (e: unknown) {
+      appendRuntimeDebugLog(`${options.debugLabel}.works.reconcileLinks.failed`, {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
     await scriptExecutionService.initialize();
     schedulerEngine.setRuntimeOwner(true);
     await schedulerEngine.start();

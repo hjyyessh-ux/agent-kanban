@@ -68,9 +68,29 @@ export async function fetchRuntimes(): Promise<RuntimeCatalogEntry[]> {
   return body.runtimes;
 }
 
-export async function fetchCard(id: string): Promise<KanbanCard> {
-  const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(id)}`);
+/**
+ * One card by id. `includeArchived` also looks in the monthly archive, which is
+ * required for every deep link into finished work (a Timeline day cell, the
+ * Works Inbox "대화 보기") — a completed Work's cards are off the board by
+ * design, so the plain read answers `404` for exactly those.
+ */
+export async function fetchCard(
+  id: string,
+  options?: { includeArchived?: boolean },
+): Promise<KanbanCard> {
+  const query = options?.includeArchived ? '?include_archived=true' : '';
+  const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(id)}${query}`);
   return handleResponse<KanbanCard>(res);
+}
+
+/**
+ * Every card of one session, archive included — what the session conversation
+ * modal needs to open a session that has already been swept off the board.
+ */
+export async function fetchSessionCards(sessionId: string): Promise<KanbanCard[]> {
+  const query = new URLSearchParams({ session_id: sessionId, include_archived: 'true' });
+  const res = await fetch(`${BASE_URL}/cards?${query.toString()}`);
+  return handleResponse<KanbanCard[]>(res);
 }
 
 export async function createCard(input: CreateCardInput): Promise<KanbanCard> {

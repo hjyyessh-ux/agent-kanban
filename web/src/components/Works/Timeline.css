@@ -1,0 +1,1123 @@
+/* Timeline view (Board tab) — layout only. Every colour routes through a kv2
+   token so the dark theme repaints it; no chart/calendar library, just one CSS
+   grid whose columns are days and whose rows are directory groups, Work
+   brackets and sessions. */
+
+.tl-view {
+  display: flex;
+  flex-direction: column;
+  /* Wider than the other Works surfaces: a day grid earns every pixel, and the
+     rows now carry per-day card blocks rather than one bar. */
+  max-width: 1600px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* ── Controls ─────────────────────────────────────────────── */
+
+.tl-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-3);
+}
+
+.tl-range-label {
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-lg);
+  color: var(--kv2-text-primary);
+  min-width: 15ch;
+}
+
+.tl-seg {
+  display: inline-flex;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-pill);
+  overflow: hidden;
+}
+
+.tl-seg-option {
+  appearance: none;
+  border: 0;
+  padding: 5px 14px;
+  background: transparent;
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+}
+
+.tl-seg-option[aria-pressed='true'] {
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-tab-active-fg);
+}
+
+.tl-legend {
+  margin-left: auto;
+  display: flex;
+  gap: var(--kv2-sp-3);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.tl-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 3px;
+}
+
+/* Three layers, three colour axes — see the Timeline section of
+   docs/design-system.md. Work = ink (a plan), session = the affinity violet
+   (a measurement), cards = the board's own status hues. */
+.tl-legend-swatch--work { background: var(--kv2-timeline-work-bar); }
+.tl-legend-swatch--session { background: var(--kv2-affinity-chain); }
+.tl-legend-swatch--todo { background: var(--kv2-status-todo-display); }
+.tl-legend-swatch--in_progress { background: var(--kv2-status-progress-display); }
+.tl-legend-swatch--complete { background: var(--kv2-status-complete-display); }
+.tl-legend-swatch--done { background: var(--kv2-status-done-display); }
+
+.tl-subagent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+}
+
+/* ── Grid frame ───────────────────────────────────────────── */
+
+.timeline {
+  border: 3px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+  overflow: hidden;
+  /* Row height + bar height are the only things the month view changes. */
+  /* Default only — TimelineView overrides --tl-label-width inline from the
+     persisted, drag-resizable label column width (clampLabelWidth). */
+  --tl-label-width: 240px;
+  /* The track the grid template actually reads. It exists because
+     --tl-label-width arrives as an *inline* style, which no stylesheet rule can
+     override — so a narrow viewport caps the user's width through this
+     indirection instead (see the media queries at the end of this file). */
+  --tl-label-cap: 9999px;
+  --tl-label-track: min(var(--tl-label-width), var(--tl-label-cap));
+  --tl-row-height: 60px;
+  --tl-bar-height: 34px;
+  --tl-col-min: 78px;
+}
+
+.timeline--month {
+  --tl-row-height: 38px;
+  --tl-bar-height: 20px;
+  --tl-col-min: 34px;
+}
+
+/* Month view needs more columns than fit; the label column stays pinned. */
+.tl-scroll {
+  overflow-x: auto;
+}
+
+.tl-grid {
+  display: grid;
+  min-width: 100%;
+}
+
+/* ── Header row ───────────────────────────────────────────── */
+
+.tl-head {
+  padding: 10px 8px;
+  text-align: center;
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-primary);
+  background: var(--kv2-surface-sunken);
+  border-bottom: 3px solid var(--kv2-border-strong);
+  border-left: 1px solid var(--kv2-border-subtle);
+}
+
+.timeline--month .tl-head {
+  padding: 10px 2px;
+}
+
+.tl-head--label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  text-align: left;
+  padding-left: 14px;
+  /* Room for the resize grip sitting on the column's right edge. */
+  padding-right: 14px;
+  border-left: 0;
+}
+
+/* ── Label column resize grip ─────────────────────────────── */
+
+/* Drag (or ←/→) to re-width the Work column when titles get clipped;
+   double-click / Home restores the default. Header-only, table-header style —
+   the width itself is an inline `--tl-label-width` on `.timeline`. */
+.tl-label-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: -3px;
+  width: 11px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tl-label-resizer::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 4px;
+  width: 3px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-border-strong);
+  opacity: 0;
+  transition: opacity var(--kv2-transition-fast) ease;
+}
+
+.tl-label-resizer:hover::before,
+.tl-label-resizer:focus-visible::before,
+.timeline--label-resizing .tl-label-resizer::before {
+  opacity: 1;
+}
+
+.tl-label-resizer:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: -2px;
+}
+
+.timeline--label-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.tl-head--weekend {
+  color: var(--kv2-text-muted);
+}
+
+.tl-head--today {
+  position: relative;
+  background: var(--kv2-frame);
+  color: var(--kv2-text-on-inverse);
+}
+
+/* The today marker's downward arrow, sitting on the header's bottom edge. */
+.tl-head--today::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--kv2-danger-accent);
+  z-index: 5;
+}
+
+.tl-dow {
+  display: block;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 600;
+  color: var(--kv2-text-muted);
+}
+
+.tl-head--today .tl-dow {
+  color: var(--kv2-text-on-inverse-muted);
+}
+
+.tl-date-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-danger-accent);
+  color: var(--kv2-text-inverse);
+}
+
+/* ── Work rows ────────────────────────────────────────────── */
+
+/* Rows are grouping wrappers only — the cells and the bar place themselves on
+   the parent grid with explicit grid-row / grid-column. */
+.tl-row {
+  display: contents;
+}
+
+.tl-label {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  background: var(--kv2-surface);
+  border-bottom: 1px solid var(--kv2-border-subtle);
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.tl-label-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-label-sub {
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 500;
+  color: var(--kv2-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-cell {
+  position: relative;
+  min-height: var(--tl-row-height);
+  border-left: 1px solid var(--kv2-border-subtle);
+  border-bottom: 1px solid var(--kv2-border-subtle);
+}
+
+.tl-cell--weekend {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 6px,
+    var(--kv2-surface-hover) 6px,
+    var(--kv2-surface-hover) 8px
+  );
+}
+
+/* Today's vertical rule. Drawn per cell so it stays continuous down the rows
+   and follows the column when the month view scrolls horizontally. */
+.tl-cell--today::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--kv2-danger-accent);
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* ── Bars ─────────────────────────────────────────────────── */
+
+/* The slot owns grid placement and the bar's box so the resize handles can sit
+   on the bar's edges as siblings — the bar itself is a <button> (click → Work
+   detail) and cannot nest interactive children. */
+.tl-bar-slot {
+  position: relative;
+  align-self: center;
+  z-index: 2;
+  margin: 0 6px;
+  height: var(--tl-bar-height);
+  min-width: 0;
+  display: flex;
+}
+
+.tl-bar-slot--clipped-left { margin-left: 0; }
+.tl-bar-slot--clipped-right { margin-right: 0; }
+
+.tl-bar-slot--dragging {
+  z-index: 6;
+}
+
+.tl-bar {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-timeline-work-bar-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+}
+
+.timeline--month .tl-bar {
+  padding: 0 6px;
+  font-size: var(--kv2-text-3xs);
+}
+
+/* Month columns are ~34px, so the 폐기 note and the session chip stay in the
+   week view. The edge hints do *not*: `◂8/20` and `▸9/5` are how a bar says its
+   real dates are off-screen, and hiding them made the month view claim every
+   bar started and ended exactly where it was drawn. TimelineView renders them
+   in an abbreviated form there (`compact`). */
+.timeline--month .tl-bar-note,
+.timeline--month .tl-bar-count {
+  display: none;
+}
+
+.timeline--month .tl-bar-edge,
+.timeline--month .tl-bar-ongoing {
+  font-size: var(--kv2-text-3xs);
+}
+
+.tl-bar:hover {
+  filter: brightness(0.94);
+}
+
+/* An open Work's bar is the one coloured bracket on the grid (steel blue, see
+   `--kv2-timeline-work-bar`); a closed one drops to ink. The session rails and
+   card cells inside keep their own status hues. */
+.tl-bar--active { background: var(--kv2-timeline-work-bar); }
+/* Finished: a muted green so it no longer reads as a draft/inactive grey bar,
+   and the `✔ 완료` mark at the right end says it in words. */
+.tl-bar--done { background: var(--kv2-timeline-work-bar-done); }
+
+.tl-bar-done-mark {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 900;
+}
+
+.tl-bar--discarded {
+  background: var(--kv2-neutral-400);
+  color: var(--kv2-neutral-900);
+}
+
+/* Unresolved Work: the bar runs to today and its right edge stays open. */
+.tl-bar--ongoing {
+  border-right-width: 3px;
+  border-right-style: dashed;
+}
+
+/* Past its planned end. The bar's geometry cannot say this — it stops at the
+   planned date whether that date is next week or three weeks ago — so the fill
+   carries it, with the same warn tokens the Works list chip uses. Placed after
+   `.tl-bar--active` so it wins the background for an active bar, which is the
+   only status this can apply to. */
+.tl-bar--overrun {
+  background: var(--kv2-warn-accent);
+  border-color: var(--kv2-warn-text-deep);
+}
+
+.tl-bar-ongoing--overrun {
+  color: var(--kv2-warn-text-strong);
+}
+
+/* Started before the visible range → the left edge is a cut, not a start. */
+.tl-bar--clipped-left {
+  border-left-style: dashed;
+  border-radius: 0 var(--kv2-radius-md) var(--kv2-radius-md) 0;
+}
+
+/* Runs past the visible range (an earlier week is being viewed). */
+.tl-bar--clipped-right {
+  border-right-style: dashed;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.tl-bar--clipped-left.tl-bar--clipped-right {
+  border-radius: 0;
+}
+
+.tl-bar-title {
+  /* The title is the only flexible child, so the chips never squeeze it away. */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tl-bar-edge,
+.tl-bar-note {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: var(--kv2-text-3xs);
+}
+
+.tl-bar-count {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 6px;
+  border-radius: var(--kv2-radius-pill);
+  background: color-mix(in srgb, var(--kv2-text-inverse) 28%, transparent);
+  font-size: var(--kv2-text-3xs);
+}
+
+.tl-bar--discarded .tl-bar-count {
+  background: color-mix(in srgb, var(--kv2-neutral-900) 18%, transparent);
+}
+
+.tl-bar-ongoing {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 900;
+}
+
+/* ── Resize handles ───────────────────────────────────────── */
+
+/* Grab targets straddling the bar's edges. They overhang by 4px so the whole
+   grip stays clickable even when the bar is one column wide. */
+.tl-bar-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  z-index: 3;
+  cursor: ew-resize;
+  /* Without this the browser pans/scrolls instead of emitting pointermove. */
+  touch-action: none;
+}
+
+.timeline--month .tl-bar-handle {
+  width: 8px;
+}
+
+.tl-bar-handle--start { left: -4px; }
+.tl-bar-handle--end { right: -4px; }
+
+/* The visible grip — hidden until the row is hovered or the handle is focused,
+   so the bar reads the same as before at rest. */
+.tl-bar-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4px;
+  height: 62%;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-text-inverse);
+  border: 1px solid var(--kv2-border-strong);
+  opacity: 0;
+}
+
+.tl-bar-slot:hover .tl-bar-handle::after,
+.tl-bar-slot--dragging .tl-bar-handle::after,
+.tl-bar-handle:focus-visible::after {
+  opacity: 1;
+}
+
+.tl-bar-handle:focus-visible {
+  outline: 2px solid var(--kv2-border-strong);
+  outline-offset: 1px;
+}
+
+/* Keep the whole grid in resize mode while a drag is live: the pointer leaves
+   the handle constantly, and a text selection would fight the drag. */
+.timeline--dragging {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+.timeline--dragging .tl-bar {
+  pointer-events: none;
+}
+
+/* `8/31 → 9/3` preview riding above the bar being dragged. */
+.tl-bar-preview {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 2px 8px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-frame);
+  color: var(--kv2-text-on-inverse);
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-3xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ── Group rows: directory → Work → session ───────────────── */
+
+/* Row heights are per row *kind*: a directory header and a session rail need
+   far less vertical room than a Work bar, and the grid has to fit ~60 rows in
+   a busy week without scrolling. */
+.tl-cell--dir { min-height: 30px; }
+
+/* The directory header is a *band*, not a row: sunken across every column and
+   closed off by a 2px rule above and below, so the eye finds the group
+   boundary the way it does on a ClickUp/Gantt group header — previously only
+   the label cell was tinted and the day cells ran straight through. */
+.tl-cell--dir {
+  background: var(--kv2-surface-sunken);
+  border-top: 2px solid var(--kv2-border-strong);
+  border-bottom: 2px solid var(--kv2-border-strong);
+}
+.tl-cell--work { min-height: var(--tl-row-height); }
+.tl-cell--session { min-height: 44px; }
+
+.timeline--month .tl-cell--dir { min-height: 26px; }
+.timeline--month .tl-cell--session { min-height: 26px; }
+
+/* The directory accent (`--works-dir-accent`, hashed per projectDir in
+   worksAffinity.ts) is the group's identity — the same colour the Works tab
+   uses for that project. */
+.tl-label--dir {
+  background: var(--kv2-surface-sunken);
+  border-top: 2px solid var(--kv2-border-strong);
+  border-bottom: 2px solid var(--kv2-border-strong);
+  border-left: 6px solid var(--works-dir-accent, transparent);
+  padding-left: calc(var(--kv2-sp-3) - 6px);
+  font-size: var(--kv2-text-base);
+  letter-spacing: 0.01em;
+}
+
+/* Tree indent. One step per level, measured so the *text* moves, not just the
+   caret: the old 14px step was eaten by the 20px caret box, and a Work's title
+   started at the same x as its directory's — nothing but the sub-label said
+   which row was the parent. A session row has no caret, so it takes the Work's
+   step plus the caret's width, and draws a ├ guide back to the Work. */
+.tl-label--work {
+  --tl-indent: 24px;
+  border-left: 6px solid var(--works-dir-accent, transparent);
+  padding-left: calc(var(--kv2-sp-3) - 6px + var(--tl-indent));
+}
+
+/* Work title starts at indent + caret (20px) + gap (5px); the session's guide
+   stem stands 6px inside that title's left edge, and its own title starts
+   14px after the stem — so each level's *text* is ~20px right of its parent's. */
+.tl-label--session {
+  --tl-indent: 24px;
+  --tl-guide-x: calc(var(--kv2-sp-3) - 6px + var(--tl-indent) + 25px + 6px);
+  border-left: 6px solid var(--works-dir-accent, transparent);
+  padding-left: calc(var(--tl-guide-x) + 14px);
+  font-weight: 600;
+}
+
+/* A 미배정 session is the directory's child, not a Work's: it sits at the
+   Work rows' level (text aligned with a Work title) with no guide back to a
+   bracket. Indented like an assigned session it read as part of the Work
+   above it — the exact misreading the row's 배정 button exists to fix. */
+.tl-label--session-loose {
+  padding-left: calc(var(--kv2-sp-3) - 6px + var(--tl-indent) + 25px);
+}
+
+.tl-label--session-loose::before,
+.tl-label--session-loose::after {
+  display: none;
+}
+
+.tl-label--session::before,
+.tl-label--session::after {
+  content: '';
+  position: absolute;
+  background: var(--kv2-border-strong);
+  pointer-events: none;
+}
+
+/* The vertical stem runs the row's full height so consecutive session rows
+   read as one branch; the horizontal tick points at this row's title. */
+.tl-label--session::before {
+  left: var(--tl-guide-x);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.tl-label--session::after {
+  left: var(--tl-guide-x);
+  top: 50%;
+  width: 9px;
+  height: 1px;
+}
+
+.tl-label-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tl-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tl-group-toggle--caret {
+  flex: 0 0 auto;
+}
+
+/* The disclosure control. It was a 10px muted glyph with no box — invisible
+   enough that Works read as permanently expanded, and now that Works start
+   collapsed it is the one thing standing between the user and the sessions. A
+   real button face: bordered, 20px, with a hover fill. */
+.tl-group-caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-xs);
+  line-height: 1;
+  color: var(--kv2-text-primary);
+}
+
+.tl-group-toggle:hover .tl-group-caret,
+.tl-group-toggle:focus-visible .tl-group-caret {
+  background: var(--kv2-surface-sunken);
+  border-color: var(--kv2-text-primary);
+}
+
+/* A collapsed Work's caret carries its hidden session count in the sub-label
+   (`세션 N · 펼치기`); the caret itself only points right. */
+.tl-group-caret--collapsed {
+  color: var(--kv2-text-secondary);
+}
+
+.tl-label-link {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-label-link:hover {
+  text-decoration: underline;
+}
+
+.tl-label-sub--unassigned {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tl-unassigned {
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-warn-surface);
+  font-weight: 800;
+  color: var(--kv2-warn-text-deep);
+}
+
+/*
+ * 폐기 replaces 미배정 + 배정 on a discarded session's row: unassigned and
+ * *staying* unassigned. Muted rather than warm — it is a settled outcome, not
+ * something waiting on the user.
+ */
+.tl-ignored {
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-danger-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-danger-surface);
+  font-weight: 800;
+  color: var(--kv2-danger-text);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* The one control on a loose row. A 18px ghost was invisible next to the chip;
+   it is a primary now (`kv2-btn--primary` in the markup) at a size that still
+   fits the 34px session row. */
+.tl-assign-btn {
+  height: 22px;
+  padding: 0 9px;
+  border-width: 1px;
+  border-radius: var(--kv2-radius-sm);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  box-shadow: none;
+}
+
+/* ── Session rails + card day blocks ──────────────────────── */
+
+/* The session's *measured* extent. Violet on purpose: it is the one hue no
+   card status uses, so a rail never reads as a status. */
+.tl-rail {
+  position: relative;
+  align-self: center;
+  z-index: 2;
+  margin: 0 6px;
+  height: 12px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--kv2-affinity-chain) 26%, transparent);
+  border-left: 4px solid var(--kv2-affinity-chain);
+}
+
+.tl-rail--unassigned {
+  /* Not in a Work yet — the rail is drawn as an outline so an unassigned
+     session reads as provisional next to its assigned siblings. */
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 4px,
+    color-mix(in srgb, var(--kv2-affinity-chain) 30%, transparent) 4px,
+    color-mix(in srgb, var(--kv2-affinity-chain) 30%, transparent) 7px
+  );
+}
+
+.tl-rail--ongoing {
+  border-right: 3px dashed var(--kv2-affinity-chain);
+}
+
+.tl-rail--clipped-left {
+  margin-left: 0;
+  border-left-style: dashed;
+  border-radius: 0 999px 999px 0;
+}
+
+.tl-rail--clipped-right {
+  margin-right: 0;
+  border-radius: 999px 0 0 999px;
+}
+
+.tl-rail--clipped-left.tl-rail--clipped-right {
+  border-radius: 0;
+}
+
+.tl-rail-hit {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+/* The rail's own text is gone: the card-day blocks now fill their columns, so
+   a label at the rail's start sat under the first block. The count lives in
+   the row label's sub-line (`… · 카드 N`) and in the rail's tooltip. */
+.tl-rail-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* One card-day. Sits above the rail (z-index) because it is the thing the
+   user actually clicks, and carries the card's status colour. */
+.tl-day-slot {
+  position: relative;
+  z-index: 3;
+  align-self: center;
+  display: flex;
+  justify-content: center;
+  padding: 0 2px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+/* A card-day fills its column. It used to be capped at 34px and centred, so a
+   week column showed a small block floating mid-rail with hatching on both
+   sides — which read as "part of the day", when the grid's resolution is one
+   day and the block means "ran on this day". */
+/* The status hue is the block's *frame* — a 5px left stripe and a 1px border —
+   over a tinted fill, and the text is the theme's own ink. Painting the full
+   status colour behind dark ink was unreadable on the pink/red statuses in the
+   dark theme; the tint keeps the colour legible as a status while the title
+   stays legible as text. */
+.tl-day {
+  --tl-day-hue: var(--kv2-status-done-display);
+  pointer-events: auto;
+  width: 100%;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 8px;
+  min-width: 0;
+  border: 1px solid var(--tl-day-hue);
+  border-left-width: 5px;
+  border-radius: var(--kv2-radius-sm);
+  background: color-mix(in srgb, var(--tl-day-hue) 24%, var(--kv2-surface));
+  color: var(--kv2-text-primary);
+  box-shadow: 1px 1px 0 var(--kv2-shadow-color);
+  cursor: pointer;
+}
+
+.tl-day:disabled {
+  cursor: default;
+}
+
+.tl-day:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 2px 2px 0 var(--kv2-shadow-color);
+}
+
+.tl-day--todo { --tl-day-hue: var(--kv2-status-todo-display); }
+.tl-day--in_progress { --tl-day-hue: var(--kv2-status-progress-display); }
+.tl-day--complete { --tl-day-hue: var(--kv2-status-complete-display); }
+.tl-day--done { --tl-day-hue: var(--kv2-status-done-display); }
+
+.tl-day-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--tl-day-hue);
+  text-align: center;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 900;
+  color: var(--kv2-ink-pure);
+}
+
+/* The card's title, on the block. Ink on the status hue like the count, and
+   ellipsised — a week column is ~180px, a month column ~34px (where it hides). */
+.tl-day-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.timeline--month .tl-day {
+  height: 14px;
+  border-width: 1px;
+}
+
+/* Month columns carry no text, so the block goes back to the solid hue —
+   a 24% tint on a 14px block is not a readable colour. */
+.timeline--month .tl-day {
+  padding: 0 2px;
+  justify-content: center;
+  border-left-width: 1px;
+  background: var(--tl-day-hue);
+}
+
+.timeline--month .tl-day-text,
+.timeline--month .tl-day-count {
+  display: none;
+}
+
+/* ── Empty state + footnote ───────────────────────────────── */
+
+.tl-empty {
+  grid-column: 1 / -1;
+  padding: var(--kv2-sp-6);
+  text-align: center;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  border-top: 1px solid var(--kv2-border-subtle);
+}
+
+/* ── How-to-read block (`?`) ──────────────────────────────── */
+
+/* Was a permanent five-line footnote under every grid. It is onboarding copy,
+   so it now shows once (localStorage `kanban-timeline-help-seen`) and lives
+   behind the toolbar's `?` after that. */
+.tl-help {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kv2-sp-3);
+  margin-bottom: var(--kv2-sp-3);
+  padding: var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-subtle);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface-sunken);
+}
+
+.tl-help p {
+  flex: 1 1 auto;
+  margin: 0;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  line-height: 1.6;
+  color: var(--kv2-text-secondary);
+}
+
+.tl-help-toggle {
+  min-width: 28px;
+}
+
+/* ── Directory filter ─────────────────────────────────────── */
+
+.tl-dir-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-3);
+}
+
+.tl-dir-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 3px 10px;
+  border: 2px solid var(--kv2-border-subtle);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-surface);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+}
+
+.tl-dir-chip:hover {
+  border-color: var(--kv2-border-strong);
+}
+
+.tl-dir-chip.is-active {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-tab-active-fg);
+}
+
+.tl-dir-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tl-dir-chip-count {
+  font-size: var(--kv2-text-3xs);
+  font-weight: 800;
+  color: var(--kv2-text-muted);
+}
+
+.tl-dir-chip.is-active .tl-dir-chip-count {
+  color: inherit;
+}
+
+/* ── Failed read ──────────────────────────────────────────── */
+
+/* A failed window used to leave a fully drawn grid with zero sessions in it,
+   which reads as "nothing ran". Dimmed and inert, it reads as "this is not the
+   answer" — the banner above says why. */
+.timeline--errored {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+  pointer-events: none;
+}
+
+/* ── Narrow viewports ─────────────────────────────────────── */
+
+/* Shown only under 480px: the day grid cannot shrink below --tl-col-min, so on
+   a phone the answer is horizontal scrolling and the hint says so. */
+.tl-mobile-hint {
+  display: none;
+  margin: 0 0 var(--kv2-sp-2);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-3xs);
+  color: var(--kv2-text-muted);
+}
+
+@media (max-width: 900px) {
+  /* The legend's `margin-left: auto` pushed it off the toolbar's wrapped last
+     row; on a narrow screen it becomes its own full-width line instead. */
+  .tl-legend {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: var(--kv2-sp-2);
+  }
+
+  .tl-range-label {
+    min-width: 0;
+  }
+
+  /* Capped, not overridden: --tl-label-width is an inline style. */
+  .timeline {
+    --tl-label-cap: 180px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tl-mobile-hint {
+    display: block;
+  }
+
+  .timeline {
+    --tl-label-cap: 132px;
+    --tl-col-min: 56px;
+  }
+
+  .timeline--month {
+    --tl-col-min: 30px;
+  }
+
+  .tl-controls {
+    gap: 5px;
+  }
+
+  .tl-help {
+    flex-direction: column;
+  }
+
+  .tl-dir-chip {
+    max-width: 148px;
+  }
+
+  .tl-head {
+    padding: 8px 4px;
+  }
+
+  .tl-label {
+    padding: var(--kv2-sp-2);
+  }
+}

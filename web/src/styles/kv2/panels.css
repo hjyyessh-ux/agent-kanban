@@ -393,6 +393,17 @@
   display: flex;
 }
 
+/* Compact variant for a bare icon trigger inside a dense row (the Work detail's
+   linked-session ⋯ menu). The default sizing is meant for a sidebar meta field
+   that owns its whole row: as a flex item its `width: 100%` becomes the base
+   size, so in a row it claims the full width and shrinks every sibling with
+   `min-width: 0` to 0px. Use this wherever the dropdown sits *next to* content
+   rather than filling a field. */
+.kv2-meta-dropdown--inline {
+  width: auto;
+  flex: none;
+}
+
 .kv2-meta-dropdown-trigger {
   display: flex;
   align-items: center;

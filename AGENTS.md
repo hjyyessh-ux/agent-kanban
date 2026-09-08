@@ -18,7 +18,7 @@
 │   ├── plugin/      # Plugin runtime: tools, hooks, dispatch, Telegram, monitors
 │   ├── server/      # Bun.serve() server + REST routes + static SPA serving
 │   └── __tests__/   # Bun unit/integration tests
-├── web/src/         # React SPA: board, scheduler, scripts, settings, question UI
+├── web/src/         # React SPA: board, works/timeline, scheduler, scripts, settings, question UI
 ├── e2e/             # Playwright specs + fixtures + API seed helpers
 ├── scripts/         # Operational CLI/test/bootstrap scripts kept in-repo only
 ├── docs/            # Human docs; may drift behind source
@@ -31,10 +31,10 @@
 | Directory | Description |
 |-----------|-------------|
 | [`src/`](./src/AGENTS.md) | Bun backend: shared types/stores (`core/`), opencode plugin runtime (`plugin/`), Bun.serve() HTTP server (`server/`), unit/integration tests (`__tests__/`) |
-| [`web/`](./web/src/AGENTS.md) | React/Vite SPA — board, capabilities, scheduler, scripts, settings, wiki UI |
+| [`web/`](./web/src/AGENTS.md) | React/Vite SPA — board, works/timeline, capabilities, scheduler, scripts, settings, wiki UI |
 | [`e2e/`](./e2e/AGENTS.md) | Playwright browser specs, fixtures, and API seed helpers |
 | [`scripts/`](./scripts/AGENTS.md) | Operational CLI scripts: test server, install/restart, wiki maintenance |
-| [`docs/`](./docs/AGENTS.md) | Human-facing docs (Korean): getting started, kanban board, scheduler, plugin tools, API reference, architecture, invariants |
+| [`docs/`](./docs/AGENTS.md) | Human-facing docs (Korean): getting started, kanban board, works/timeline, scheduler, plugin tools, API reference, architecture, invariants |
 
 ## WHERE TO LOOK
 
@@ -55,8 +55,9 @@
 | Change unit/integration expectations | `src/__tests__/AGENTS.md` | Invariant-heavy coverage map |
 | Change browser flows | `e2e/AGENTS.md` | Playwright fixtures + test server flow |
 | Change operational scripts | `scripts/AGENTS.md` | Test server, install/restart, wiki backfill/reindex |
+| Change Works/Timeline behavior | `src/core/work-store.ts`, `src/plugin/works/`, `web/src/components/Works/`, `docs/works.md` | Work = N sessions : 1 Work; never auto-created (Inbox triage only). Completing a Work bulk-archives its cards into the wiki queue — read `docs/works.md` first |
 | Change LLM wiki pipeline (triage/classify/vault) | `src/plugin/wiki/` | Archive stamps `wiki.pending`; worker writes Obsidian vault docs; `/api/wiki/*` + Settings panel |
-| Change human-facing docs | `docs/AGENTS.md` | Getting started, kanban board, scheduler, plugin tools, API reference, architecture, invariants |
+| Change human-facing docs | `docs/AGENTS.md` | Getting started, kanban board, works/timeline, scheduler, plugin tools, API reference, architecture, invariants |
 
 ## GLOBAL CONVENTIONS
 

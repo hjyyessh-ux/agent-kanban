@@ -14,10 +14,11 @@ Human-facing documentation for agent-kanban, written in Korean. Covers installat
 | `README.md` | Docs index/table of contents, feature summary, quick start, data storage layout under `~/.agent-kanban/` |
 | `getting-started.md` | Prerequisites (Bun, opencode), install steps, first card walkthrough |
 | `kanban-board.md` | Board columns, card lifecycle, parent-child cards, Telegram/feedback flows |
+| `works.md` | Works & Timeline: Work/session model, the five screens, `/api/works*` reference, `works.*` settings keys, storage layout |
 | `quick-actions.md` | Prompt/Script Quick Action registration, parameter/env rules, card tracking, security, and failure recovery |
 | `scheduler.md` | `SchedulerEntry` shape, cron vs natural-language schedules, shell vs skill job types, croner engine lifecycle |
 | `plugin-tools.md` | Contract reference for the kanban + scheduler plugin tools registered via `createKanbanTools()`/`createSchedulerTools()` |
-| `api-reference.md` | REST endpoint reference for cards, schedulers, settings, scripts, screenshots, models, questions |
+| `api-reference.md` | REST endpoint reference for cards, works, schedulers, settings, scripts, screenshots, models, questions |
 | `architecture.md` | Three-layer system diagram (plugin -> server -> web), tech stack, data flow |
 | `design-system.md` | **MUST READ before UI work**: kv2 tokens/primitives, DialogSkeleton modal contract, new-screen checklist, forbidden UI patterns |
 | `invariants.md` | Canonical checklist of workflow regression invariants (parent-child cards, completion transitions, Telegram follow-up, feedback reuse, runtime dispatch) tied to specific source files and tests |

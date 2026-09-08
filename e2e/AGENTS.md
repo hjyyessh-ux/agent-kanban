@@ -37,6 +37,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `theme.e2e.ts` | Light/dark/system theme toggle, `data-theme` + localStorage persistence |
 | `v2-visual-audit.e2e.ts` | V2 design-system compliance checks (light + dark screenshot variants) |
 | `wiki-archive-cards.e2e.ts` | LLM wiki processing triggered by card archival, excluding child cards |
+| `works.e2e.ts` | Works tab (Inbox → new Work, tab badge), assign-all modal N/1/S/X shortcuts, Work completion → card archive, Timeline bar geometry + detail dialog, re-dating a Work by bar-edge drag and by the detail dialog's date inputs, an open Work's planned end surviving completion |
 | `tsconfig.json` | TypeScript config scoped to the e2e test tree |
 
 ## Subdirectories
@@ -55,7 +56,9 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 - Seed data through `e2e/helpers/api.ts` (`apiCreateCard`, `apiUpdateCard`, `apiDeleteCard`, `apiGetCards`, `apiCreateScript`, `apiDeleteScript`, `apiCreateQuickAction`, `apiRunQuickAction`, and related helpers) rather than clicking through creation forms, unless the UI path itself is what's under test.
 - Base URL for API helpers defaults to `http://127.0.0.1:24681`, overridable via `E2E_BASE_URL`.
 - Rely on Playwright auto-waiting and locator assertions; avoid `page.waitForTimeout()` as a synchronization mechanism.
-- Track every card, script, and Quick Action you create for cleanup (`trackCard`, `trackScript`, `trackQuickAction`, or the matching seed fixture). `trackQuickAction` depends on `trackScript` so teardown removes references before deleting ScriptEntries; preserve that ordering.
+- Track every card, script, Quick Action, and Work you create for cleanup (`trackCard`, `trackScript`, `trackQuickAction`, `trackWork`, or the matching seed fixture). `trackQuickAction` depends on `trackScript` so teardown removes references before deleting ScriptEntries; preserve that ordering.
+- Timeline column geometry (`style.gridColumnStart/End`) lives on `.tl-bar-slot`, the wrapper — **not** on `.tl-bar`, which is just the clickable label inside it. Reading `grid-column` off `.tl-bar` silently returns empty strings.
+- The Works domain is **global server state**, not per-card: the Inbox, the Active/Resolved lists, and the Works tab badge all reflect every session in the store. Any spec that asserts on them must start from `apiResetWorksState()` (deletes every Work, then ignores every leftover Inbox session), or sessions from earlier spec files will leak into the assertions.
 
 ### Testing Requirements
 

@@ -78,7 +78,10 @@
   gap: 12px;
 }
 
-.kv2-dialog--detail .kv2-dialog-header {
+/* Child combinator on purpose: a detail dialog nests confirm dialogs (Work
+   완료/폐기 확인, 세션 이동), and a descendant selector hid *their* headers
+   and stripped their padding too. */
+.kv2-dialog--detail > .kv2-dialog-header {
   display: none;
 }
 
@@ -118,7 +121,7 @@
   padding: 20px;
 }
 
-.kv2-dialog--detail .kv2-dialog-content {
+.kv2-dialog--detail > .kv2-dialog-content {
   padding: 0;
 }
 
@@ -238,6 +241,16 @@
   filter: brightness(0.95);
 }
 
+/* A disabled button has to look disabled. Without this every variant kept its
+   full colour and shadow, so a resolved Work's greyed-out 완료 was a bright
+   green button that did nothing when clicked. */
+.kv2-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: none;
+}
+
 .kv2-btn--primary {
   background: var(--kv2-btn-primary-bg);
   color: var(--kv2-btn-primary-fg);
@@ -342,6 +355,16 @@
 }
 
 .kv2-actions-split > .kv2-action-cancel {
+  margin-right: auto;
+}
+
+/* Mirror of .kv2-actions-primary for the footer's left-hand danger zone: keeps
+   multiple destructive actions together at the left edge, away from the primary
+   action. Use instead of .kv2-action-cancel when there is more than one. */
+.kv2-actions-danger {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
   margin-right: auto;
 }
 

@@ -229,6 +229,14 @@ are already dark.
 | `#1e1e1e` | log console fill → `--kv2-console-bg` |
 | `#262c31` `#2c3338` `#1f2428` `#d1d5db` `#4b5563` `#3f2f00` | add `--kv2-surface-inverse-*` / on-inverse step per Rule A |
 
+Timeline의 Work 계획 바는 인버스 계열이면서도 **자기 토큰**을 씁니다.
+
+| 토큰 | 라이트 | 다크 | 왜 별도인가 |
+|------|--------|------|-------------|
+| `--kv2-timeline-work-bar` | `#22272b` | `#5c6672` | `--kv2-surface-inverse`를 그대로 쓰면 다크에서 값이 `--kv2-surface`(#272a2e)와 한 톤 차이라 바가 **채워진 막대**가 아니라 빈 외곽선으로 읽힙니다 |
+| `--kv2-timeline-work-bar-done` | `#4a545d` | `#444c55` | 완료된 Work 바 |
+| `--kv2-timeline-work-bar-fg` | `#f9fafb` | `#f4f6f8` | 바 위의 글자 |
+
 ---
 
 ## Shadows
@@ -629,3 +637,59 @@ card 5's assumptions, and closed the loop with regression guards:
 - The migration remains guarded by the token test and e2e screenshots; the
   dark audit now additionally requires status-header and create-control text
   contrast of at least 4.5:1.
+
+---
+
+## Post-migration additions (Works tab dark audit)
+
+Two gaps found by measuring the Works tab in dark mode, both fixed the same way
+the migration prescribes — a layer-② token, light value unchanged:
+
+| token | light | dark | why |
+|-------|-------|------|-----|
+| `--kv2-danger-accent-strong` | `#e11d48` (unchanged) | `color-mix(in srgb, var(--kv2-danger-accent) 58%, var(--kv2-text-primary))` | The danger family's `surface*`/`border*`/`text*` steps were all re-anchored in the dark block, but this one — the *only* consumer being `.kv2-btn--subtle-danger`'s text colour — was missed, so every 폐기 button sat at **3.07:1** on graphite. Re-anchored at the family's text ratio it measures **4.47:1**. |
+| `--kv2-works-inbox-header-bg` | `var(--kv2-warn-surface)` (value-exact) | `color-mix(in srgb, var(--kv2-warn-accent) 10%, #2d3034)` | `.works-inbox-header` read `--kv2-warn-surface` directly. That amber-into-surface mix is fine on a chip but, stretched across the tab-wide triage band, renders as a muddy brown. Dark keeps a trace of the accent and lets the band's lift off `--kv2-surface` plus the amber sub-text carry the signal — the same "big surfaces get a quieter role token" rule as the board's column headers. |
+
+---
+
+## Post-migration additions (Works affinity palette, AA)
+
+Layer ① is exempt from the dark override by Rule D, and that is still right for
+the Works affinity **swatches** (`--kv2-dir-1..8`, `--kv2-affinity-chain`): a
+4px bar is not text, and repainting the swatch per theme would break "같은 색 =
+같은 디렉토리" across a theme switch.
+
+What Rule D does *not* cover is the same hue used as a **text** colour, which is
+what `.works-dir-chip`, `.works-dir-mark`, `.works-dir-same`, the `🔗 이어진
+세션` mark and `.works-inbox-state--subagent` were doing. Measured:
+
+| painted in | light | dark |
+|------------|-------|------|
+| `--kv2-dir-2` (old `#12967f`) on `--kv2-surface` | **3.69:1** | — |
+| `--kv2-affinity-chain` (`#8b5cf0`) on `--kv2-surface-raised` | — | **3.05:1** |
+
+Neither theme could be fixed by moving the swatch, because the two pull in
+opposite directions: a hue light enough for graphite is too light for cream.
+
+**The fix is a per-slot text twin, and it is layer ②.** For every layer ① slot
+there is now a `-text` sibling in the semantic band:
+
+| token | value | notes |
+|-------|-------|-------|
+| `--kv2-dir-{1..8}-text` | `color-mix(in srgb, var(--kv2-dir-{n}) N%, var(--kv2-text-primary))` | `N` is per slot (34 – 58%): the mix needed to reach 4.5:1 is hue-dependent, so one shared percentage would over-mix half the ring |
+| `--kv2-affinity-chain-text` | `color-mix(in srgb, var(--kv2-affinity-chain) 42%, var(--kv2-text-primary))` | same rule for the lineage signal |
+
+These follow **Rule C's** `color-mix` form, and unusually they need **one
+declaration for both themes**: `var(--kv2-text-primary)` is substituted where
+the property is *used*, and the dark block redefines it on the same element, so
+the single `color-mix` resolves to a light-legible tint on cream and a
+dark-legible one on graphite. Do not restate them in the dark block.
+
+Consumers never touch either token directly — `.works-dir-c{n}` publishes both
+as `--works-dir-accent` (swatch) and `--works-dir-text` (letters), and component
+CSS reads only those.
+
+Guards: `web/src/styles/token-contrast.test.ts` evaluates the tokens straight
+out of `kanban-v2.tokens.css` (following `var()` and `color-mix`) and fails
+below 4.5:1 in either theme, against every panel surface *and* against the 14%
+chip tint the chip paints under its own label.

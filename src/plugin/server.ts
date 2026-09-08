@@ -16,6 +16,7 @@ import type { SchedulerEngine } from './scheduler-engine';
 import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
 import type { QuickActionStore } from '../core/quick-action-store';
+import type { WorkStore } from '../core/work-store';
 import type { ScriptExecutionService } from './script-execution-service';
 import type { SkillStore } from '../core/skill-store';
 import type { SkillRootsStore } from '../core/skill-roots-store';
@@ -73,6 +74,7 @@ export class ServerMonitor {
   private readonly runtimeRunStore?: RuntimeRunStore;
   private readonly quickActionStore?: QuickActionStore;
   private readonly scriptExecutionService?: ScriptExecutionService;
+  private readonly workStore?: WorkStore;
 
   constructor(
     store: KanbanStore,
@@ -95,6 +97,7 @@ export class ServerMonitor {
     runtimeRunStore?: RuntimeRunStore,
     quickActionStore?: QuickActionStore,
     scriptExecutionService?: ScriptExecutionService,
+    workStore?: WorkStore,
   ) {
     this.store = store;
     this.input = input;
@@ -117,6 +120,7 @@ export class ServerMonitor {
     this.runtimeRunStore = runtimeRunStore;
     this.quickActionStore = quickActionStore;
     this.scriptExecutionService = scriptExecutionService;
+    this.workStore = workStore;
 
     // Create the network setting change callback that restarts with new hostname
     this.onNetworkSettingChange = (newHostname: string) => this.restart(newHostname);
@@ -152,6 +156,7 @@ export class ServerMonitor {
       undefined,
       this.quickActionStore,
       this.scriptExecutionService,
+      this.workStore,
     );
   }
 

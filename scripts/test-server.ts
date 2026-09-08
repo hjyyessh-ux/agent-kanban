@@ -6,6 +6,7 @@ import { SchedulerStore } from '../src/core/scheduler-store';
 import { SchedulerEngine } from '../src/plugin/scheduler-engine';
 import { ScriptStore } from '../src/core/script-store';
 import { QuickActionStore } from '../src/core/quick-action-store';
+import { WorkStore } from '../src/core/work-store';
 import { SkillStore } from '../src/core/skill-store';
 import { SkillRootsStore } from '../src/core/skill-roots-store';
 import { PlacementTargetsStore } from '../src/core/placement-targets-store';
@@ -93,7 +94,10 @@ const schedulerEngine = new SchedulerEngine(schedulerStore, {
 const scriptStore = new ScriptStore(dataDir);
 const quickActionStore = new QuickActionStore(dataDir, scriptStore);
 const runtimeRunStore = new RuntimeRunStore(dataDir);
-const wikiWorker = new WikiWorker(store, settingsStore);
+const workStore = new WorkStore(dataDir);
+// Mirrors bootstrap.ts: the wiki worker needs the WorkStore to group a Work's
+// sessions into one document and to skip discarded Works.
+const wikiWorker = new WikiWorker(store, settingsStore, { workStore });
 
 // Capabilities MCP and Skill discovery are wired against isolated HOME/data fixtures.
 // The Playwright webServer sets HOME=.e2e-home before this module is loaded, so
@@ -433,6 +437,7 @@ const innerServer = createServer(
   undefined, // scopeMcpInventoryFn
   quickActionStore,
   scriptExecutionService,
+  workStore,
 );
 
 async function restartBackgroundServices(): Promise<void> {

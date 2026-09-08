@@ -1,3 +1,4 @@
+import { selectArchiveCards } from './archive-selection';
 import { Buffer } from 'node:buffer';
 import { existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
 import { join, extname } from 'node:path';
@@ -999,12 +1000,38 @@ export class KanbanStore {
     return deleted;
   }
 
-  async getCard(id: string, options?: { includeDeleted?: boolean }): Promise<KanbanCard | null> {
+  /**
+   * One card by id. Live board only by default.
+   *
+   * `includeArchived` adds a fallback pass over the monthly archive files, which
+   * is what makes a *finished* card addressable at all: a Work's completion
+   * sweeps its cards off the board, and without this every deep link into that
+   * work (a Timeline day cell, the Works Inbox "대화 보기") answered `404`. The
+   * fallback stops at the first month that holds the id and reads months newest
+   * first (`listArchiveMonths()` is already sorted that way), so the common
+   * case — a card archived recently — parses one file. `loadArchives()` is
+   * deliberately not used: that full scan belongs to the wiki/Telegram paths.
+   */
+  async getCard(
+    id: string,
+    options?: { includeDeleted?: boolean; includeArchived?: boolean },
+  ): Promise<KanbanCard | null> {
     const board = await this.load();
     const card = board.cards.find(c => c.id === id) ?? null;
-    if (!card) return null;
-    if (card.deletedAt && !options?.includeDeleted) return null;
-    return card;
+    if (card) {
+      if (card.deletedAt && !options?.includeDeleted) return null;
+      return card;
+    }
+    if (!options?.includeArchived) return null;
+
+    for (const month of this.listArchiveMonths()) {
+      const archive = await this.loadArchiveMonth(month);
+      const archived = archive?.cards.find(c => c.id === id);
+      if (!archived) continue;
+      if (archived.deletedAt && !options.includeDeleted) return null;
+      return archived;
+    }
+    return null;
   }
 
   async getDeletedCards(): Promise<KanbanCard[]> {
@@ -1122,59 +1149,17 @@ export class KanbanStore {
     return cards;
   }
 
-  async archiveCards(cardIds?: string[]): Promise<{ archivedCount: number; archiveMonth: string }> {
+  async archiveCards(cardIds?: string[], options?: { beforeArchive?: (cards: KanbanCard[]) => Promise<void> }): Promise<{ archivedCount: number; archiveMonth: string }> {
     let archivedCount = 0;
     let primaryMonth = '';
 
     await this.withDualLock(async () => {
       const board = await this.load();
 
-      // Determine which cards to archive
-      let toArchive: KanbanCard[];
-      if (cardIds && cardIds.length > 0) {
-        const requestedIds = new Set(cardIds);
-
-        // Index active children by parent so we can walk the full subtree.
-        const childrenByParent = new Map<string, KanbanCard[]>();
-        for (const card of board.cards) {
-          if (isActiveCard(card) && card.parentCardId) {
-            const siblings = childrenByParent.get(card.parentCardId);
-            if (siblings) siblings.push(card);
-            else childrenByParent.set(card.parentCardId, [card]);
-          }
-        }
-
-        // Seed with the requested done cards, then cascade to every descendant
-        // regardless of the child's status (an in_progress subagent left behind
-        // gets re-driven back to in_progress by its still-live parent runtime,
-        // so it must be archived together with the parent). Favorited cards are
-        // pruned from the sweep: the card — and its subtree — stays on the board.
-        const toArchiveIds = new Set<string>();
-        const stack: string[] = [];
-        for (const card of board.cards) {
-          if (isActiveCard(card) && requestedIds.has(card.id) && card.status === 'done') {
-            toArchiveIds.add(card.id);
-            stack.push(card.id);
-          }
-        }
-        while (stack.length > 0) {
-          const parentId = stack.pop()!;
-          for (const child of childrenByParent.get(parentId) ?? []) {
-            if (child.favorite) continue;
-            if (toArchiveIds.has(child.id)) continue;
-            toArchiveIds.add(child.id);
-            stack.push(child.id);
-          }
-        }
-
-        toArchive = board.cards.filter((card) => toArchiveIds.has(card.id));
-      } else {
-        toArchive = board.cards.filter(c => isActiveCard(c) && c.status === 'done');
-      }
-
-      if (toArchive.length === 0) {
-        return;
-      }
+      const toArchive = selectArchiveCards(board.cards, cardIds);
+      if (toArchive.length === 0) return;
+      // Run under the board lock against the actual cascade, before any write.
+      await options?.beforeArchive?.(toArchive);
 
       // Stamp wiki processing queue state at archive time. Child cards are
       // archived for traceability but excluded from the wiki pipeline.
@@ -1248,6 +1233,133 @@ export class KanbanStore {
     });
 
     return { archivedCount, archiveMonth: primaryMonth };
+  }
+
+  /**
+   * Lift archived cards back onto the live board — the counterpart to
+   * `archiveCards`, and the reason reopening a completed Work is possible at
+   * all (`POST /api/works/:id/reopen`).
+   *
+   * Cards are removed from their monthly archive file and pushed into
+   * `active.json` with a fresh `updatedAt`, so the board treats them as just
+   * changed and a later re-archive files them under the current month. Their
+   * **status is not touched**: the completion sweep flipped them to `done` and
+   * what they were before that is recorded nowhere, so restoring them `done` is
+   * the only honest answer — they land in the board's done column and are swept
+   * again by the next `POST /api/archive`, like any other done card.
+   *
+   * The subtree cascade mirrors `archiveCards`: a seed's archived descendants
+   * come back with it, because the sweep took them along and leaving a child in
+   * the archive under a parent on the board is a split the board cannot render.
+   *
+   * **Wiki state policy.** `archiveCards` stamps `wiki.status = 'pending'`, and
+   * `WikiWorker` looks for pending cards **in the archive only** — so a card on
+   * the board is not in that queue whatever its stamp says.
+   *
+   * - `pending` (queued, never processed) → the stamp is **cleared**. Keeping it
+   *   would be a claim nothing can honour, and it would also block re-queueing:
+   *   `archiveCards` only stamps a card that has no `wiki` state at all.
+   * - anything already decided (`kept` / `skipped` / `failed`) → **kept as is**.
+   *   The document (or the decision) exists; re-archiving must not re-queue it,
+   *   and a later completion overwrites the same file through
+   *   `Work.wikiDocPath`.
+   *
+   * `months` bounds which archive files are parsed — callers pass the same
+   * monthly heuristic the rest of the Works reads use (`workCardScanFloor` +
+   * `timelineArchiveMonths`). Omitting it scans every month, which suits only a
+   * caller that has no window at all.
+   */
+  async unarchiveCards(
+    cardIds: string[],
+    options?: { months?: string[] },
+  ): Promise<{ restoredCardIds: string[]; scannedMonths: string[] }> {
+    const requested = new Set(cardIds);
+    if (requested.size === 0) {
+      return { restoredCardIds: [], scannedMonths: [] };
+    }
+
+    const restoredCardIds: string[] = [];
+    let scannedMonths: string[] = [];
+
+    await this.withDualLock(async () => {
+      const available = new Set(this.listArchiveMonths());
+      scannedMonths = (options?.months ?? [...available]).filter(month => available.has(month));
+      if (scannedMonths.length === 0) return;
+
+      // One parse per month, held so the cascade can walk a parent that lives
+      // in a different file from its children.
+      const archives = new Map<string, KanbanArchive>();
+      const byId = new Map<string, { month: string; card: KanbanCard }>();
+      const childrenByParent = new Map<string, string[]>();
+      for (const month of scannedMonths) {
+        const archive = await this.loadArchiveMonth(month);
+        if (!archive) continue;
+        archives.set(month, archive);
+        for (const card of archive.cards) {
+          byId.set(card.id, { month, card });
+          if (!card.parentCardId) continue;
+          const siblings = childrenByParent.get(card.parentCardId);
+          if (siblings) siblings.push(card.id);
+          else childrenByParent.set(card.parentCardId, [card.id]);
+        }
+      }
+
+      const restore = new Set<string>();
+      const stack: string[] = [];
+      for (const id of requested) {
+        if (!byId.has(id) || restore.has(id)) continue;
+        restore.add(id);
+        stack.push(id);
+      }
+      while (stack.length > 0) {
+        const parentId = stack.pop()!;
+        for (const childId of childrenByParent.get(parentId) ?? []) {
+          if (restore.has(childId)) continue;
+          restore.add(childId);
+          stack.push(childId);
+        }
+      }
+      if (restore.size === 0) return;
+
+      const board = await this.load();
+      const onBoard = new Set(board.cards.map(card => card.id));
+      const now = new Date().toISOString();
+      const touchedMonths = new Set<string>();
+
+      for (const id of restore) {
+        const entry = byId.get(id)!;
+        touchedMonths.add(entry.month);
+        // Already on the board (a raced read, or a partly rolled-back sweep):
+        // drop the archive copy rather than creating a duplicate row.
+        if (onBoard.has(id)) continue;
+        const card: KanbanCard = { ...entry.card, updatedAt: now };
+        if (card.wiki?.status === 'pending') delete card.wiki;
+        board.cards.push(card);
+        onBoard.add(id);
+        restoredCardIds.push(id);
+      }
+
+      for (const month of touchedMonths) {
+        const archive = archives.get(month);
+        if (!archive) continue;
+        const remaining = archive.cards.filter(card => !restore.has(card.id));
+        if (remaining.length === archive.cards.length) continue;
+        const next: KanbanArchive = {
+          ...archive,
+          cards: remaining,
+          archivedAt: new Date().toISOString(),
+        };
+        const archivePath = join(this.archiveDir, `${month}.json`);
+        const tmpArchivePath = join(this.archiveDir, `.${month}.json.tmp`);
+        await Bun.write(tmpArchivePath, JSON.stringify(next, null, 2));
+        renameSync(tmpArchivePath, archivePath);
+      }
+
+      board.lastModified = now;
+      await this.save(board);
+    });
+
+    return { restoredCardIds, scannedMonths };
   }
 
   async loadArchives(): Promise<KanbanCard[]> {
