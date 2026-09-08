@@ -469,16 +469,17 @@ export default function App() {
               className={`app-board-view-controls${showBoardTools ? ' is-mobile-open' : ''}`}
               id="app-board-tools"
             >
-              {/* Card filters and session grouping shape the card columns, which
-                  the Timeline view does not render — so they hide there. */}
-              {!timelineActive && (
-                <BoardFilterBar
-                  cards={cards}
-                  filters={boardFilters}
-                  onFiltersChange={setBoardFilters}
-                  onFiltersReset={() => setBoardFilters(DEFAULT_BOARD_FILTERS)}
-                />
-              )}
+              {/* One toolbar for all three board views. The filter bar narrows
+                  the Timeline's session rows too (`sessionFilter`), and the
+                  session-grouping toggle keeps its state visible here even
+                  though only the list/board layouts render grouped columns —
+                  a control that vanished on one view read as a broken toolbar. */}
+              <BoardFilterBar
+                cards={cards}
+                filters={boardFilters}
+                onFiltersChange={setBoardFilters}
+                onFiltersReset={() => setBoardFilters(DEFAULT_BOARD_FILTERS)}
+              />
               <fieldset className="app-board-view-toggle">
                 <legend className="app-board-view-toggle-legend">Board view mode</legend>
                 {BOARD_VIEW_MODES.map(([viewMode, label]) => (
@@ -493,17 +494,17 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              {!timelineActive && (
-                <button
-                  type="button"
-                  className={`app-board-session-toggle${groupCompleteSessions ? ' is-active' : ''}`}
-                  aria-pressed={groupCompleteSessions}
-                  title="Group complete cards by session"
-                  onClick={() => setGroupCompleteSessions((previous) => !previous)}
-                >
-                  Session 모아보기
-                </button>
-              )}
+              <button
+                type="button"
+                className={`app-board-session-toggle${groupCompleteSessions ? ' is-active' : ''}`}
+                aria-pressed={groupCompleteSessions}
+                title={timelineActive
+                  ? '리스트·보드 뷰에서 complete 카드를 세션별로 묶습니다 (타임라인은 항상 세션 단위)'
+                  : 'Group complete cards by session'}
+                onClick={() => setGroupCompleteSessions((previous) => !previous)}
+              >
+                Session 모아보기
+              </button>
             </div>
           )}
           {activeTab === 'board' && !timelineActive && (
@@ -542,6 +543,7 @@ export default function App() {
             }}
             onOpenSession={handleOpenWorkSession}
             onAssignSession={handleAssignSession}
+            sessionFilter={boardFilters}
             // A bar-edge edit rewrites a stored date with no confirmation, so it
             // gets the same undo bar the Works session actions use. Owned here
             // because the notice has to outlive whatever opened it.
@@ -707,18 +709,6 @@ export default function App() {
         />
       )}
 
-      {selectedSession && selectedSessionGroup && (
-        <SessionConversationModal
-          group={selectedSessionGroup}
-          status={selectedSession.status}
-          onClose={() => {
-            setSelectedSession(null);
-            setArchivedSessionCards(null);
-          }}
-          onCreateFeedback={handleCreateFeedback}
-        />
-      )}
-
       {bulkAssignSessions && (
         <BulkAssignModal
           sessions={bulkAssignSessions}
@@ -790,6 +780,23 @@ export default function App() {
         <WorkSessionNotice
           notice={workSessionNotice}
           onDismiss={() => setWorkSessionNotice(null)}
+        />
+      )}
+
+      {/* Rendered *after* WorkDetailDialog on purpose. Every DialogSkeleton
+          overlay shares one z-index, so DOM order decides the stack — and 대화
+          on a Work's session row opens this modal *from* that dialog, so it
+          has to land on top. (Card detail still follows, since a card is opened
+          from inside the conversation.) */}
+      {selectedSession && selectedSessionGroup && (
+        <SessionConversationModal
+          group={selectedSessionGroup}
+          status={selectedSession.status}
+          onClose={() => {
+            setSelectedSession(null);
+            setArchivedSessionCards(null);
+          }}
+          onCreateFeedback={handleCreateFeedback}
         />
       )}
 

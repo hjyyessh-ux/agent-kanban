@@ -11,6 +11,9 @@ import {
   buildTimelineRows,
   dayCells,
   filterTimelineRows,
+  filterTimelineSessions,
+  filterTimelineWorks,
+  isTimelineFilterActive,
   gridSpan,
   rangeWindow,
   timelineDirOptions,
@@ -452,5 +455,53 @@ describe('directory filter', () => {
     const kept = filterTimelineRows(rowsFor(), DIR_NONE_KEY);
     const sessions = kept.filter((row): row is TimelineSessionRow => row.kind === 'session');
     expect(sessions.map((row) => row.session.sessionId)).toEqual(['s-none']);
+  });
+});
+
+describe('filterTimelineSessions / filterTimelineWorks (Board FILTER bar on the grid)', () => {
+  const sessions = [
+    span({ sessionId: 's-pay', sessionTitle: '결제 모듈 리팩터링', projectDir: '/w/agent-kanban' }),
+    span({ sessionId: 's-cf', projectDir: '/w/mcp-server/', cards: [tlCard({ id: 'c', title: 'cloudflare cache purge' })] }),
+    span({ sessionId: 's-none', cards: [tlCard({ id: 'n', title: '오늘 뭐 먹지' })] }),
+  ];
+  const works = [
+    work({ id: 'w-pay', title: '결제 모듈', projectDir: '/w/agent-kanban', sessionIds: ['s-pay'] }),
+    work({ id: 'w-cf', title: 'mcp-server cache 개선', projectDir: '/w/mcp-server', sessionIds: ['s-cf'] }),
+    work({ id: 'w-empty', title: 'cache 계획만', projectDir: '/w/zetta' }),
+  ];
+
+  test('an empty filter is a no-op and keeps the same arrays', () => {
+    expect(filterTimelineSessions(sessions, { search: ' ', directory: '' })).toBe(sessions);
+    expect(filterTimelineWorks(works, sessions, undefined)).toBe(works);
+    expect(isTimelineFilterActive({ search: '  ' })).toBe(false);
+  });
+
+  test('search matches the session title, any card title, or the id', () => {
+    expect(filterTimelineSessions(sessions, { search: '결제' }).map((s) => s.sessionId)).toEqual(['s-pay']);
+    expect(filterTimelineSessions(sessions, { search: 'PURGE' }).map((s) => s.sessionId)).toEqual(['s-cf']);
+    expect(filterTimelineSessions(sessions, { search: 's-none' }).map((s) => s.sessionId)).toEqual(['s-none']);
+  });
+
+  test('directory compares normalized paths (trailing slash, case)', () => {
+    expect(filterTimelineSessions(sessions, { directory: '/w/mcp-server' }).map((s) => s.sessionId)).toEqual(['s-cf']);
+    expect(filterTimelineSessions(sessions, { directory: '/W/Agent-Kanban/' }).map((s) => s.sessionId)).toEqual(['s-pay']);
+  });
+
+  test('a Work survives through a kept session, or through its own title/directory under search', () => {
+    const kept = filterTimelineSessions(sessions, { search: 'cache' });
+    expect(kept.map((s) => s.sessionId)).toEqual(['s-cf']);
+    // w-cf via its session; w-empty via its own title; w-pay drops.
+    expect(filterTimelineWorks(works, kept, { search: 'cache' }).map((w) => w.id)).toEqual(['w-cf', 'w-empty']);
+  });
+
+  test('a session-id filter names sessions, so a Work without one is out even if its title matches', () => {
+    const kept = filterTimelineSessions(sessions, { sessionId: 's-cf' });
+    expect(filterTimelineWorks(works, kept, { sessionId: 's-cf' }).map((w) => w.id)).toEqual(['w-cf']);
+  });
+
+  test('directory alone keeps Works of that directory even with no session on the grid', () => {
+    const kept = filterTimelineSessions(sessions, { directory: '/w/zetta' });
+    expect(kept).toEqual([]);
+    expect(filterTimelineWorks(works, kept, { directory: '/w/zetta' }).map((w) => w.id)).toEqual(['w-empty']);
   });
 });

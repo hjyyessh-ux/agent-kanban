@@ -167,16 +167,14 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   await expect(resolved).toBeVisible();
   await shot(page, '08-resolved-detail-light');
 
-  // Reopen — the escape hatch that used to not exist.
-  await resolved.getByRole('button', { name: /다시 열기/ }).click();
-  const reopenConfirm = page.getByRole('dialog', { name: '다시 열기 확인', exact: true });
-  await expect(reopenConfirm).toBeVisible();
-  await shot(page, '09-reopen-confirm-light');
-
-  await reopenConfirm.getByRole('button', { name: /다시 열기/ }).last().click();
-  await expect(reopenConfirm).not.toBeVisible();
-  await expect(resolved).toBeVisible();
-  await shot(page, '10-after-reopen-detail');
+  // A resolved Work's footer carries no forward action: neither 완료 nor the
+  // 다시 열기 that briefly replaced it (the reopen route and confirm mode
+  // remain, without a button).
+  await expect(resolved.getByRole('button', { name: /다시 열기/ })).toHaveCount(0);
+  await expect(resolved.getByRole('button', { name: /완료 \(일괄 archive\)/ })).toHaveCount(0);
+  await setTheme(page, 'dark');
+  await shot(page, '09-resolved-detail-dark');
+  await setTheme(page, 'light');
 });
 
 test('capture: Timeline in both themes', async ({ page, seedCard, trackWork }) => {

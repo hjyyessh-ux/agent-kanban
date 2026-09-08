@@ -718,167 +718,343 @@
 }
 
 /* ── Work detail dialog (screen ③) ──────────────────────────── */
+/*
+ * Same shell as the card detail (`kv2-dialog--detail` + `kv2-detail-shell`):
+ * a status row, a large title, a row of meta tiles, then headed sections and
+ * the actions rail. Everything below is what a Work needs on top of those
+ * shared classes; the shared ones live in kv2/card-detail.css and panels.css.
+ *
+ * The old version was a stack of bordered `.work-detail-row` boxes with
+ * `기본 정보` (title + directory sharing one line) and `기간` (two inputs
+ * pushed to the left of a wide row). Neither matched the card detail beside
+ * it, and 디렉토리 is a project identity, not a sub-field of the title.
+ */
 .work-detail {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kv2-sp-4);
+  padding-bottom: 0;
 }
 
-.work-detail-status {
-  display: flex;
-  align-items: center;
-  gap: var(--kv2-sp-2);
-}
-
+/* The status row doubles as the hero's top edge; the badge keeps the card
+   detail's 36px chip geometry (`kv2-status-badge`) and adds Work colours. */
 .work-status {
   text-transform: none;
+  letter-spacing: 0;
 }
 
 .work-status--active {
-  background: var(--kv2-info-surface);
-  color: var(--kv2-info-text);
+  background: var(--kv2-info-surface-strong);
+  color: var(--kv2-info-text-strong);
   border-color: var(--kv2-info-border);
 }
 
 .work-status--done {
-  background: var(--kv2-success-surface);
+  background: var(--kv2-success-surface-strong);
   color: var(--kv2-success-text);
   border-color: var(--kv2-success-border);
 }
 
 .work-status--discarded {
-  background: var(--kv2-surface-warm-soft);
+  background: var(--kv2-surface-sunken);
   color: var(--kv2-text-muted);
   border-color: var(--kv2-border);
 }
 
-.work-summary-hero {
-  padding: var(--kv2-sp-4);
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: var(--kv2-radius-md);
-  background: var(--kv2-surface-warm-soft);
-  box-shadow: var(--kv2-shadow-md);
+/* The dialog's left accent stripe follows the Work's status (the card detail
+   does the same per card status via `--kv2-dialog-accent`). */
+.work-detail-dialog--active { --kv2-dialog-accent: var(--kv2-timeline-work-bar); }
+.work-detail-dialog--done { --kv2-dialog-accent: var(--kv2-status-done-display); }
+.work-detail-dialog--discarded { --kv2-dialog-accent: var(--kv2-neutral-400); }
+
+/* Title — the one large line. Editable in place: the text is a button that
+   swaps for an input on click (Enter saves, Esc abandons). */
+.work-detail-title-row {
+  padding-bottom: 8px;
 }
 
-.work-summary-head {
+/* `kv2-unstyled-button` resets everything (`all: unset`), so the title's type
+   has to be restated here rather than inherited from `.kv2-title-text`. */
+.work-title-text {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--kv2-font-sans);
+  font-weight: 700;
+  font-size: var(--kv2-text-2xl);
+  line-height: 1.2;
+  color: var(--kv2-strong-title-color);
+  word-break: break-word;
+  cursor: pointer;
+}
+
+.work-title-text:disabled {
+  cursor: default;
+}
+
+.work-title-input {
+  width: 100%;
+  padding: 4px 8px;
+}
+
+/* ── Meta tiles ─────────────────────────────────────────────── */
+.work-detail-overview {
+  padding: 0 48px;
+  gap: 12px;
+}
+
+/* Four tiles: DIRECTORY · START · END (PLANNED END) · LAST ACTIVITY. The
+   directory takes the whole first line — a path needs the width and, like the
+   card detail's DIRECTORY tile it reuses (click-to-edit → DirectoryPicker), it
+   is the one value that wraps. */
+.work-meta-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.work-meta-card {
+  height: auto;
+  min-height: 76px;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+/* Directory tile: the project's colour on its left edge, the same stripe the
+   Timeline and Works list draw for that directory. */
+.work-meta-card.kv2-meta-card--directory {
+  grid-column: 1 / -1;
+  border-left: 6px solid var(--works-dir-accent, var(--kv2-border-muted));
+}
+
+.work-meta-input,
+.work-detail-overview .work-date-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: var(--kv2-text-sm);
+}
+
+/* A tile with an input plus a small clear button beside it. */
+.work-meta-card-line {
   display: flex;
   align-items: center;
-  gap: var(--kv2-sp-2);
+  gap: 6px;
+  min-width: 0;
+}
+
+.work-meta-card-line > .kv2-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Read-only tiles: the value is text, not a control. */
+.work-detail-facts {
+  white-space: normal;
+  color: var(--kv2-text-primary);
+}
+
+/* 산출물 — three narrow number tiles, then the wiki documents taking the
+   rest of the row: a two-digit count does not need a quarter of the dialog,
+   and a vault path does. */
+.work-meta-panel--artifacts {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A read-only value in the same field chrome as the date inputs beside it. */
+.work-meta-readonly {
+  display: flex;
+  align-items: center;
+  cursor: default;
+  color: var(--kv2-text-primary);
+}
+
+.work-meta-card--wiki {
+  height: auto;
+  min-height: 76px;
+}
+
+.work-meta-stat {
   font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xl);
   font-weight: 800;
+  color: var(--kv2-strong-title-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.work-meta-card--wiki .kv2-meta-value {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
   font-size: var(--kv2-text-sm);
-  color: var(--kv2-text-primary);
 }
 
-.work-summary-model {
-  margin-left: auto;
-  text-transform: none;
-}
-
-.work-summary-lines {
-  margin: var(--kv2-sp-3) 0 0;
-  padding-left: var(--kv2-sp-5);
-  font-size: var(--kv2-text-sm);
-  line-height: 1.65;
-  color: var(--kv2-text-primary);
-}
-
-.work-summary-meta {
-  display: flex;
-  align-items: center;
-  gap: var(--kv2-sp-2);
-  margin-top: var(--kv2-sp-3);
-  font-size: var(--kv2-text-ui-sm);
-  color: var(--kv2-text-muted);
-}
-
-.work-summary-regen {
-  margin-left: auto;
-}
-
-.work-summary-empty {
+/* wiki 문서 — one document per line, each a link into the document. */
+.work-detail-wiki {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--kv2-sp-3);
-}
-
-.work-summary-empty-text {
+  gap: 4px;
   margin: 0;
-  font-size: var(--kv2-text-sm);
-  color: var(--kv2-text-muted);
+  padding: 0;
+  list-style: none;
+  min-width: 0;
 }
 
-.work-summary-error {
-  margin: var(--kv2-sp-2) 0 0;
-  font-size: var(--kv2-text-sm);
-  color: var(--kv2-warn-text);
-}
-
-/* The dialog is one vertical stack: Summary → 기간 → 산출물 → 세션. Session
-   metadata used to be duplicated in a right-hand column; each concern now owns
-   one full-width row instead. */
-.work-detail-row {
-  padding: var(--kv2-sp-3);
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: var(--kv2-radius-md);
-  background: var(--kv2-surface);
-  box-shadow: var(--kv2-shadow-sm);
-}
-
-/* Facts sit on one line and wrap; the trailing group is pushed to the right so
-   the editable controls stay grouped on the left. */
-.work-detail-row-body {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: var(--kv2-sp-2) var(--kv2-sp-3);
-}
-
-.work-detail-facts {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--kv2-sp-1) var(--kv2-sp-3);
-  font-size: var(--kv2-text-ui-sm);
-  color: var(--kv2-text-muted);
-}
-
-.work-detail-fact {
-  font-size: var(--kv2-text-ui-sm);
-  color: var(--kv2-text-muted);
-}
-
-/* wiki 문서 paths sit inline with the artifact badges and wrap as a group. */
-.work-detail-wiki {
-  display: inline-flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--kv2-sp-1) var(--kv2-sp-2);
+.work-detail-wiki li {
   min-width: 0;
 }
 
 .work-detail-wiki-doc {
+  display: block;
   max-width: 100%;
+  padding: 2px 6px;
+  border-radius: var(--kv2-radius-sm);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-sm);
+  line-height: 1.5;
+  color: var(--kv2-info-text);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--kv2-info-text) 45%, transparent);
+  text-underline-offset: 2px;
   overflow-wrap: anywhere;
-  color: var(--kv2-text);
+  text-align: left;
+  cursor: pointer;
 }
 
-.work-detail-sessions {
+.work-detail-wiki-doc:hover,
+.work-detail-wiki-doc:focus-visible {
+  background: var(--kv2-info-surface-pale);
+  text-decoration-color: currentColor;
+}
+
+/* ── Wiki 문서 dialog (WorkWikiDocDialog) ──────────────────────── */
+.work-wiki-doc {
   display: flex;
   flex-direction: column;
-  gap: var(--kv2-sp-2);
+  gap: var(--kv2-sp-3);
 }
 
-.work-detail-panel-title {
-  font-family: var(--kv2-font-heading);
-  font-weight: 900;
+.work-wiki-doc-path-card {
+  height: auto;
+  border-left: 6px solid var(--kv2-info-accent);
+}
+
+.work-wiki-doc-path {
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.work-wiki-doc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-top: var(--kv2-sp-1);
+}
+
+.work-wiki-doc-body {
+  padding: 16px 20px;
+  border: 1px solid var(--kv2-border-muted);
+  border-radius: 8px;
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-md);
+  line-height: 1.7;
+  color: var(--kv2-text-primary);
+}
+
+/* CardMarkdown sets its own sizes; the whole document steps up one size with
+   the body, code blocks included. */
+.work-wiki-doc-body :is(p, li, td, th) {
+  font-size: var(--kv2-text-md);
+}
+
+.work-wiki-doc-body :is(pre, code) {
+  font-size: var(--kv2-text-sm);
+}
+
+.work-wiki-doc-muted {
+  margin: 0;
+  color: var(--kv2-text-muted);
+}
+
+/* ── Sections (Summary · 메모 · 연결된 세션) ────────────────────
+   The card detail's `kv2-detail-primary-block`: no border, a heading line, the
+   content underneath. Padded to the same 48px gutter as the tiles. */
+.work-detail-section {
+  padding: 10px 48px;
+  gap: 10px;
+}
+
+.work-detail-heading {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.work-detail-heading-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* A heading that is also a disclosure (메모 ▼) — same face as the card
+   detail's Queue After / Session Resume panel headers. */
+.work-detail-disclosure {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+/* The accent-bordered text box the card detail uses for the prompt. */
+.work-detail-box {
+  margin: 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--kv2-timeline-work-bar);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-info-surface-pale);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-sm);
+  line-height: 1.6;
+}
+
+.work-detail-box--empty {
+  border-left-color: var(--kv2-border-strong);
+  background: var(--kv2-surface-sunken);
+  color: var(--kv2-text-muted);
+}
+
+.work-summary-lines {
+  padding-left: 32px;
+}
+
+.work-summary-lines li + li {
+  margin-top: 4px;
+}
+
+.work-summary-model {
+  font-family: var(--kv2-font-mono);
+  text-transform: none;
+}
+
+.work-summary-error {
+  margin: 0;
   font-size: var(--kv2-text-ui-sm);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv2-strong-label-color);
-  margin-bottom: var(--kv2-sp-1);
+  color: var(--kv2-text-danger);
+}
+
+/* A closed 메모 shows its first line beside the heading. */
+.work-notes-peek {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 연결된 세션 ─────────────────────────────────────────────── */
+.work-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .work-session-item {
@@ -886,10 +1062,28 @@
   align-items: center;
   gap: var(--kv2-sp-2);
   padding: var(--kv2-sp-2) var(--kv2-sp-3);
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: var(--kv2-radius-md);
+  border: 1px solid var(--kv2-border-muted);
+  border-left: 5px solid var(--kv2-border-strong);
+  border-radius: 8px;
   background: var(--kv2-surface);
-  box-shadow: var(--kv2-shadow-sm);
+}
+
+/* The role tints the *row*: left edge + background, the chip inside just
+   names it. Same surface family as the role chips so a dev / review / debug
+   list reads as bands. */
+.work-session-item--role-dev {
+  border-left-color: var(--kv2-info-accent);
+  background: var(--kv2-info-surface-pale);
+}
+
+.work-session-item--role-review {
+  border-left-color: var(--kv2-warn-accent);
+  background: var(--kv2-warn-surface-pale);
+}
+
+.work-session-item--role-debug {
+  border-left-color: var(--kv2-success-accent-vivid);
+  background: var(--kv2-success-surface-pale);
 }
 
 .work-session-body {
@@ -914,10 +1108,12 @@
 
 /* A link whose session has no cards left anywhere (`cardsMissingAt`). Warn, not
    danger: nothing is broken, but the link is silently dragging the Work's
-   Timeline start back to its 연결 time and the row has to say so. */
+   Timeline start back to its 연결 time and the row has to say so. Wins over the
+   role tint — a broken link matters more than which role it had. */
 .work-session-item--missing {
   border-color: var(--kv2-warn-border);
-  background: var(--kv2-warn-surface-pale);
+  border-left-color: var(--kv2-warn-accent);
+  background: var(--kv2-warn-surface);
 }
 
 .work-session-missing {
@@ -927,93 +1123,46 @@
   white-space: normal;
 }
 
-/* 제목 · 디렉토리 inline editing. Two fields on one wrapping line, the title
-   given the room because it is the Work's name everywhere else on the screen. */
-.work-detail-meta-body {
-  align-items: flex-end;
+.work-detail-inline-error {
+  padding: 0 48px;
 }
 
-.work-meta-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1 1 14rem;
-  min-width: 0;
-}
-
-.work-meta-field--title {
-  flex: 2 1 20rem;
-}
-
-.work-meta-input {
-  width: 100%;
-  padding: 6px 8px;
-  font-size: var(--kv2-text-xs);
-}
-
+/* ── Footer ────────────────────────────────────────────────── */
 /*
- * The sticky footer has to reach the *visible* bottom of the scrollport.
- *
- * `.kv2-dialog-content` scrolls and carries 20px of padding all round, and a
- * `position: sticky; bottom: 0` element pins to its containing block's content
- * edge — 20px above the visible bottom. Content scrolls through that strip, so
- * the last session row appeared *below* the action bar, half-drawn.
- *
- * Moving the bottom padding from the scrollport onto the footer fixes it at the
- * source: the scrollport's content edge becomes its visible edge, the bar pins
- * flush, and the footer's own padding gives back the same breathing room. (A
- * negative margin does not work — it moves the bar up rather than extending it
- * down, since the constraint applies to the margin box.)
+ * The card detail's actions rail (`kv2-dialog-actions--detail`): danger group
+ * at the left, the primary pushed right, secondary actions in between. Kept
+ * sticky so 완료 stays reachable on a long session list, and the bottom padding
+ * the scrollport used to carry lives here so the bar pins flush (see the
+ * `.kv2-dialog-content` note below).
  */
-.work-detail-dialog .kv2-dialog-content {
+.work-detail-dialog > .kv2-dialog-content {
   padding-bottom: 0;
 }
 
-.work-detail .kv2-dialog-footer {
-  padding-bottom: var(--kv2-sp-5);
+.work-detail-footer {
+  position: sticky;
+  bottom: 0;
+  flex-direction: row;
+  padding: 16px 48px 24px;
+  margin-top: 8px;
+  background: var(--kv2-surface);
+  border-top: 1px solid var(--kv2-border-muted);
+  justify-content: stretch;
 }
 
-/* Start/end date editing — the dialog-side twin of the Timeline's edge drag. */
-.work-date-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  /* Wide enough for a full `yyyy. mm. dd.` plus the native picker button. */
-  width: 12.5rem;
+.work-detail-footer .kv2-dialog-actions-rail {
+  width: 100%;
+  padding-top: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
-.work-date-label {
-  font-size: var(--kv2-text-ui-sm);
-  font-weight: 700;
-  color: var(--kv2-text-muted);
-}
-
-.work-date-input {
-  padding: 6px 8px;
-  font-size: var(--kv2-text-xs);
-}
-
-.work-date-arrow {
-  padding-bottom: 6px;
-  font-size: var(--kv2-text-ui-sm);
-  color: var(--kv2-text-muted);
-}
-
-.work-date-error,
-.work-date-hint {
-  margin: var(--kv2-sp-2) 0 0;
-  font-size: var(--kv2-text-ui-sm);
-}
-
-.work-date-error {
-  color: var(--kv2-text-danger);
-}
-
-.work-date-hint {
-  color: var(--kv2-text-muted);
+.work-detail-footer-secondary:empty {
+  display: none;
 }
 
 .work-detail-note {
+  margin: 0 48px;
   padding: var(--kv2-sp-3);
   border-left: 3px solid var(--kv2-success-border);
   border-radius: 0 var(--kv2-radius-sm) var(--kv2-radius-sm) 0;
@@ -1023,14 +1172,51 @@
   line-height: 1.55;
 }
 
+.work-date-error {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-danger);
+}
+
 @media (max-width: 720px) {
   .works-assign-options {
     grid-template-columns: 1fr;
   }
 
-  .work-detail-grid {
-    grid-template-columns: 1fr;
+  .work-meta-panel,
+  .work-meta-panel--artifacts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .work-detail-overview,
+  .work-detail-section,
+  .work-detail-note,
+  .work-detail-inline-error {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail-note {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+  .work-detail-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail .kv2-status-row,
+  .work-detail .kv2-title-row {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .work-detail .kv2-detail-divider {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
 
   .works-card {
     flex-direction: column;
@@ -1108,46 +1294,28 @@
     white-space: nowrap;
   }
 
-  .work-detail-meta-body .work-meta-field,
-  .work-detail-meta-body .work-meta-field--title {
-    flex: 1 1 100%;
+  .work-meta-panel,
+  .work-meta-panel--artifacts {
+    grid-template-columns: 1fr;
   }
 
-  .work-date-field {
-    width: 100%;
-  }
-
-  .work-date-arrow {
-    display: none;
-  }
-
-  /* The footer is one non-wrapping flex row, and this feature grew it to as
-     many as five buttons (폐기 · 삭제 · 병합/다시 열기 · 끊긴 세션 정리 · 완료).
-     At 390px that pushed the primary `✔ 완료 (일괄 archive)` past the dialog's
-     right edge — not merely clipped but **unreachable**, because a
-     `position: sticky` footer inside a vertically scrolling dialog has no
-     sideways scroll to recover it. Each group takes its own full-width line
-     instead, primary last, so the most important target is also the widest.
-     (Regression test: `e2e/works.e2e.ts`, 푸터 버튼은 390px에서도 전부 화면 안에.) */
-  .work-detail .kv2-dialog-footer .kv2-actions-split {
-    flex-wrap: wrap;
-    row-gap: var(--kv2-sp-2);
-  }
-
-  .work-detail .kv2-dialog-footer .kv2-actions-danger,
-  .work-detail .kv2-dialog-footer .kv2-actions-primary {
+  /* The footer rail grew to as many as five buttons (폐기 · 삭제 · 병합/다시
+     열기 · 끊긴 세션 정리 · 완료). At 390px that pushed the primary `✔ 완료
+     (일괄 archive)` past the dialog's right edge — not merely clipped but
+     **unreachable**, because a `position: sticky` footer inside a vertically
+     scrolling dialog has no sideways scroll to recover it. Each group takes its
+     own full-width line, primary last, so the most important target is also
+     the widest. (Regression test: `e2e/works.e2e.ts`, 푸터 버튼은 390px에서도
+     전부 화면 안에.) */
+  .work-detail-footer .kv2-dialog-danger-row,
+  .work-detail-footer .work-detail-footer-secondary,
+  .work-detail-footer .kv2-dialog-actions-group--detail-priority {
     flex: 1 0 100%;
-    /* The `auto` margins that separate the zones on one line leave a hole once
-       each zone owns its own line. */
     margin-left: 0;
     margin-right: 0;
   }
 
-  /* The middle actions are bare buttons rather than a wrapper, so they are
-     stretched individually; the grouped ones share their own line. */
-  .work-detail .kv2-dialog-footer .kv2-actions-split > .kv2-btn,
-  .work-detail .kv2-dialog-footer .kv2-actions-danger > .kv2-btn,
-  .work-detail .kv2-dialog-footer .kv2-actions-primary > .kv2-btn {
+  .work-detail-footer .kv2-dialog-actions-rail > * > .kv2-btn {
     flex: 1 1 auto;
   }
 }
@@ -1528,34 +1696,88 @@
   background: var(--kv2-surface-warm-soft);
 }
 
-/* ── 완료 / 폐기 확인 다이얼로그 (WorkResolveConfirmDialog) ───────────────
-   Layout only: the scope line, the fact row, and the blocking notice. Colours
-   and controls come from the kv2 tokens/primitives. */
+/* ── 완료 / 폐기 / 다시 열기 확인 다이얼로그 (WorkResolveConfirmDialog) ──
+   The same vocabulary as the detail dialog behind it: a `kv2-meta-card` tile
+   naming the Work, the consequence as an accent-bordered callout (the tone
+   says what kind of transition this is), the numbers as tiles, and the kv2
+   split footer. It used to be loose text with no header and no padding —
+   because the detail dialog's `.kv2-dialog--detail .kv2-dialog-content`
+   rule leaked into this nested dialog (now a child combinator). */
+.work-resolve-dialog {
+  --work-resolve-tone: var(--kv2-warn-accent);
+  --work-resolve-tone-surface: var(--kv2-warn-surface-pale);
+  --kv2-dialog-accent: var(--work-resolve-tone);
+}
+
+.work-resolve-dialog--discard {
+  --work-resolve-tone: var(--kv2-danger-accent);
+  --work-resolve-tone-surface: var(--kv2-danger-surface-pale);
+}
+
+.work-resolve-dialog--reopen {
+  --work-resolve-tone: var(--kv2-info-accent);
+  --work-resolve-tone-surface: var(--kv2-info-surface-pale);
+}
+
 .work-resolve-confirm {
   display: flex;
   flex-direction: column;
   gap: var(--kv2-sp-3);
 }
 
+.work-resolve-target-card {
+  height: auto;
+  border-left: 6px solid var(--work-resolve-tone);
+}
+
 /* Which Work this is about. In the body, not the dialog title — see MODE_COPY. */
 .work-resolve-target {
   margin: 0;
-  font-size: var(--kv2-text-ui-sm);
-  color: var(--kv2-text-muted);
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-lg);
+  font-weight: 800;
+  line-height: 1.3;
+  color: var(--kv2-text-primary);
+  overflow-wrap: anywhere;
 }
 
+/* The consequence. A callout, not a paragraph: this is the sentence the
+   dialog exists to make the user read before the button. */
 .work-resolve-headline {
   margin: 0;
+  padding: 12px 14px;
+  border-left: 4px solid var(--work-resolve-tone);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--work-resolve-tone-surface);
   font-size: var(--kv2-text-sm);
   font-weight: 700;
-  color: var(--kv2-strong-title-color);
+  line-height: 1.55;
+  color: var(--kv2-text-primary);
 }
 
 .work-resolve-facts {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kv2-sp-2);
+}
+
+.work-resolve-fact-card {
+  height: auto;
+  padding: 10px 14px;
+}
+
+.work-resolve-fact-card--wide {
+  grid-column: 1 / -1;
+}
+
+.work-resolve-stat {
+  font-family: var(--kv2-font-heading);
+  font-size: var(--kv2-text-xl);
+  font-weight: 800;
+}
+
+.work-resolve-footer {
+  margin-top: var(--kv2-sp-4);
 }
 
 .work-resolve-fact {
@@ -1590,17 +1812,17 @@
 }
 
 /* ── 메모 (Work notes) ────────────────────────────────────────────
-   Deliberately *not* styled like `.work-summary-hero`. The two panels answer
+   Deliberately *not* styled like the Summary box. The two panels answer
    the same question ("what is this Work about?") and the reason they have to
    look different is ownership: Summary is regenerated by an LLM and overwritten
    wholesale, notes are only ever written by a human. So notes keep the plain
    `.work-detail-row` chrome the reversible edit rows use, with no hero
    background and no shadow lift. */
 .work-notes-body {
-  /* Overrides the row's inline flex: a textarea plus its own footer is a
-     stack, not a row of fields. */
+  display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: var(--kv2-sp-2);
 }
 
 .work-notes-input {

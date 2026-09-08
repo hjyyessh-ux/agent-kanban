@@ -350,8 +350,11 @@ export function requiresDoneConfirm(config: WorksConfigDto | null | undefined): 
 const PREVIEW_STATUS_LABELS: Array<[KanbanStatus, string]> = [
   ['todo', '대기'],
   ['in_progress', '진행중'],
-  ['complete', '완료'],
-  ['done', 'done'],
+  // Same words as the Timeline legend (`TIMELINE_STATUS_LABELS`): `complete`
+  // is the agent waiting on the user, `done` is the finished column — the old
+  // `done 6` printed the wire enum in the one dialog that should read plainly.
+  ['complete', '검토 대기'],
+  ['done', '완료'],
 ];
 
 /** `대기 2 · 진행중 1` — the non-zero statuses of a completion preview, board order. */

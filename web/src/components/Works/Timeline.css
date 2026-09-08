@@ -112,8 +112,8 @@
      indirection instead (see the media queries at the end of this file). */
   --tl-label-cap: 9999px;
   --tl-label-track: min(var(--tl-label-width), var(--tl-label-cap));
-  --tl-row-height: 54px;
-  --tl-bar-height: 30px;
+  --tl-row-height: 60px;
+  --tl-bar-height: 34px;
   --tl-col-min: 78px;
 }
 
@@ -272,7 +272,7 @@
   border-bottom: 1px solid var(--kv2-border-subtle);
   font-family: var(--kv2-font-sans);
   font-weight: 700;
-  font-size: var(--kv2-text-ui-sm);
+  font-size: var(--kv2-text-sm);
   color: var(--kv2-text-primary);
 }
 
@@ -283,7 +283,7 @@
 }
 
 .tl-label-sub {
-  font-size: var(--kv2-text-2xs);
+  font-size: var(--kv2-text-ui-sm);
   font-weight: 500;
   color: var(--kv2-text-muted);
   overflow: hidden;
@@ -359,7 +359,7 @@
   box-shadow: 2px 2px 0 var(--kv2-shadow-color);
   font-family: var(--kv2-font-sans);
   font-weight: 800;
-  font-size: var(--kv2-text-xs);
+  font-size: var(--kv2-text-sm);
   color: var(--kv2-timeline-work-bar-fg);
   white-space: nowrap;
   overflow: hidden;
@@ -391,10 +391,20 @@
   filter: brightness(0.94);
 }
 
-/* Ink, not a status hue: the bar is the Work's *plan*, and every hue on this
-   grid is spoken for by the card statuses inside it. */
+/* An open Work's bar is the one coloured bracket on the grid (steel blue, see
+   `--kv2-timeline-work-bar`); a closed one drops to ink. The session rails and
+   card cells inside keep their own status hues. */
 .tl-bar--active { background: var(--kv2-timeline-work-bar); }
+/* Finished: a muted green so it no longer reads as a draft/inactive grey bar,
+   and the `✔ 완료` mark at the right end says it in words. */
 .tl-bar--done { background: var(--kv2-timeline-work-bar-done); }
+
+.tl-bar-done-mark {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: var(--kv2-text-3xs);
+  font-weight: 900;
+}
 
 .tl-bar--discarded {
   background: var(--kv2-neutral-400);
@@ -560,8 +570,18 @@
    far less vertical room than a Work bar, and the grid has to fit ~60 rows in
    a busy week without scrolling. */
 .tl-cell--dir { min-height: 30px; }
+
+/* The directory header is a *band*, not a row: sunken across every column and
+   closed off by a 2px rule above and below, so the eye finds the group
+   boundary the way it does on a ClickUp/Gantt group header — previously only
+   the label cell was tinted and the day cells ran straight through. */
+.tl-cell--dir {
+  background: var(--kv2-surface-sunken);
+  border-top: 2px solid var(--kv2-border-strong);
+  border-bottom: 2px solid var(--kv2-border-strong);
+}
 .tl-cell--work { min-height: var(--tl-row-height); }
-.tl-cell--session { min-height: 34px; }
+.tl-cell--session { min-height: 44px; }
 
 .timeline--month .tl-cell--dir { min-height: 26px; }
 .timeline--month .tl-cell--session { min-height: 26px; }
@@ -571,20 +591,71 @@
    uses for that project. */
 .tl-label--dir {
   background: var(--kv2-surface-sunken);
+  border-top: 2px solid var(--kv2-border-strong);
   border-bottom: 2px solid var(--kv2-border-strong);
   border-left: 6px solid var(--works-dir-accent, transparent);
   padding-left: calc(var(--kv2-sp-3) - 6px);
+  font-size: var(--kv2-text-base);
+  letter-spacing: 0.01em;
 }
 
+/* Tree indent. One step per level, measured so the *text* moves, not just the
+   caret: the old 14px step was eaten by the 20px caret box, and a Work's title
+   started at the same x as its directory's — nothing but the sub-label said
+   which row was the parent. A session row has no caret, so it takes the Work's
+   step plus the caret's width, and draws a ├ guide back to the Work. */
 .tl-label--work {
+  --tl-indent: 24px;
   border-left: 6px solid var(--works-dir-accent, transparent);
-  padding-left: calc(var(--kv2-sp-3) - 6px + 14px);
+  padding-left: calc(var(--kv2-sp-3) - 6px + var(--tl-indent));
 }
 
+/* Work title starts at indent + caret (20px) + gap (5px); the session's guide
+   stem stands 6px inside that title's left edge, and its own title starts
+   14px after the stem — so each level's *text* is ~20px right of its parent's. */
 .tl-label--session {
+  --tl-indent: 24px;
+  --tl-guide-x: calc(var(--kv2-sp-3) - 6px + var(--tl-indent) + 25px + 6px);
   border-left: 6px solid var(--works-dir-accent, transparent);
-  padding-left: calc(var(--kv2-sp-3) - 6px + 28px);
+  padding-left: calc(var(--tl-guide-x) + 14px);
   font-weight: 600;
+}
+
+/* A 미배정 session is the directory's child, not a Work's: it sits at the
+   Work rows' level (text aligned with a Work title) with no guide back to a
+   bracket. Indented like an assigned session it read as part of the Work
+   above it — the exact misreading the row's 배정 button exists to fix. */
+.tl-label--session-loose {
+  padding-left: calc(var(--kv2-sp-3) - 6px + var(--tl-indent) + 25px);
+}
+
+.tl-label--session-loose::before,
+.tl-label--session-loose::after {
+  display: none;
+}
+
+.tl-label--session::before,
+.tl-label--session::after {
+  content: '';
+  position: absolute;
+  background: var(--kv2-border-strong);
+  pointer-events: none;
+}
+
+/* The vertical stem runs the row's full height so consecutive session rows
+   read as one branch; the horizontal tick points at this row's title. */
+.tl-label--session::before {
+  left: var(--tl-guide-x);
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.tl-label--session::after {
+  left: var(--tl-guide-x);
+  top: 50%;
+  width: 9px;
+  height: 1px;
 }
 
 .tl-label-line {
@@ -612,11 +683,35 @@
   flex: 0 0 auto;
 }
 
+/* The disclosure control. It was a 10px muted glyph with no box — invisible
+   enough that Works read as permanently expanded, and now that Works start
+   collapsed it is the one thing standing between the user and the sessions. A
+   real button face: bordered, 20px, with a hover fill. */
 .tl-group-caret {
   flex: 0 0 auto;
-  width: 10px;
-  font-size: var(--kv2-text-3xs);
-  color: var(--kv2-text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-xs);
+  line-height: 1;
+  color: var(--kv2-text-primary);
+}
+
+.tl-group-toggle:hover .tl-group-caret,
+.tl-group-toggle:focus-visible .tl-group-caret {
+  background: var(--kv2-surface-sunken);
+  border-color: var(--kv2-text-primary);
+}
+
+/* A collapsed Work's caret carries its hidden session count in the sub-label
+   (`세션 N · 펼치기`); the caret itself only points right. */
+.tl-group-caret--collapsed {
+  color: var(--kv2-text-secondary);
 }
 
 .tl-label-link {
@@ -644,12 +739,12 @@
 }
 
 .tl-unassigned {
-  padding: 0 5px;
-  border: 1px solid var(--kv2-border-strong);
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-warn-border);
   border-radius: var(--kv2-radius-sm);
-  background: var(--kv2-surface-warm-cream);
+  background: var(--kv2-warn-surface);
   font-weight: 800;
-  color: var(--kv2-text-secondary);
+  color: var(--kv2-warn-text-deep);
 }
 
 /*
@@ -658,18 +753,27 @@
  * something waiting on the user.
  */
 .tl-ignored {
-  padding: 0 5px;
-  border: 1px solid var(--kv2-border-strong);
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-danger-border);
   border-radius: var(--kv2-radius-sm);
-  background: var(--kv2-surface-sunken);
+  background: var(--kv2-danger-surface);
   font-weight: 800;
-  color: var(--kv2-text-muted);
+  color: var(--kv2-danger-text);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 
+/* The one control on a loose row. A 18px ghost was invisible next to the chip;
+   it is a primary now (`kv2-btn--primary` in the markup) at a size that still
+   fits the 34px session row. */
 .tl-assign-btn {
-  padding: 0 6px;
-  min-height: 18px;
-  font-size: var(--kv2-text-3xs);
+  height: 22px;
+  padding: 0 9px;
+  border-width: 1px;
+  border-radius: var(--kv2-radius-sm);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  box-shadow: none;
 }
 
 /* ── Session rails + card day blocks ──────────────────────── */
@@ -734,17 +838,16 @@
   text-align: left;
 }
 
+/* The rail's own text is gone: the card-day blocks now fill their columns, so
+   a label at the rail's start sat under the first block. The count lives in
+   the row label's sub-line (`… · 카드 N`) and in the rail's tooltip. */
 .tl-rail-label {
-  font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-3xs);
-  font-weight: 800;
-  color: var(--kv2-text-secondary);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-/* Month columns are ~34px — the rail keeps its colour, drops its text. */
-.timeline--month .tl-rail-label {
-  display: none;
 }
 
 /* One card-day. Sits above the rail (z-index) because it is the thing the
@@ -755,21 +858,36 @@
   align-self: center;
   display: flex;
   justify-content: center;
-  padding: 0 3px;
+  padding: 0 2px;
   min-width: 0;
   pointer-events: none;
 }
 
+/* A card-day fills its column. It used to be capped at 34px and centred, so a
+   week column showed a small block floating mid-rail with hatching on both
+   sides — which read as "part of the day", when the grid's resolution is one
+   day and the block means "ran on this day". */
+/* The status hue is the block's *frame* — a 5px left stripe and a 1px border —
+   over a tinted fill, and the text is the theme's own ink. Painting the full
+   status colour behind dark ink was unreadable on the pink/red statuses in the
+   dark theme; the tint keeps the colour legible as a status while the title
+   stays legible as text. */
 .tl-day {
+  --tl-day-hue: var(--kv2-status-done-display);
   pointer-events: auto;
   width: 100%;
-  max-width: 34px;
-  height: 18px;
+  height: 28px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  border: 2px solid var(--kv2-border-strong);
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 8px;
+  min-width: 0;
+  border: 1px solid var(--tl-day-hue);
+  border-left-width: 5px;
   border-radius: var(--kv2-radius-sm);
+  background: color-mix(in srgb, var(--tl-day-hue) 24%, var(--kv2-surface));
+  color: var(--kv2-text-primary);
   box-shadow: 1px 1px 0 var(--kv2-shadow-color);
   cursor: pointer;
 }
@@ -783,24 +901,53 @@
   box-shadow: 2px 2px 0 var(--kv2-shadow-color);
 }
 
-.tl-day--todo { background: var(--kv2-status-todo-display); }
-.tl-day--in_progress { background: var(--kv2-status-progress-display); }
-.tl-day--complete { background: var(--kv2-status-complete-display); }
-.tl-day--done { background: var(--kv2-status-done-display); }
+.tl-day--todo { --tl-day-hue: var(--kv2-status-todo-display); }
+.tl-day--in_progress { --tl-day-hue: var(--kv2-status-progress-display); }
+.tl-day--complete { --tl-day-hue: var(--kv2-status-complete-display); }
+.tl-day--done { --tl-day-hue: var(--kv2-status-done-display); }
 
 .tl-day-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--tl-day-hue);
+  text-align: center;
   font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-3xs);
+  font-size: var(--kv2-text-2xs);
   font-weight: 900;
   color: var(--kv2-ink-pure);
 }
 
+/* The card's title, on the block. Ink on the status hue like the count, and
+   ellipsised — a week column is ~180px, a month column ~34px (where it hides). */
+.tl-day-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
 .timeline--month .tl-day {
   height: 14px;
-  max-width: 22px;
   border-width: 1px;
 }
 
+/* Month columns carry no text, so the block goes back to the solid hue —
+   a 24% tint on a 14px block is not a readable colour. */
+.timeline--month .tl-day {
+  padding: 0 2px;
+  justify-content: center;
+  border-left-width: 1px;
+  background: var(--tl-day-hue);
+}
+
+.timeline--month .tl-day-text,
 .timeline--month .tl-day-count {
   display: none;
 }

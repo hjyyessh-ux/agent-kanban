@@ -374,12 +374,14 @@
   --kv2-status-progress-display: var(--kv2-status-in-progress-accent);
   --kv2-status-complete-display: var(--kv2-status-complete-accent);
   --kv2-status-done-display: var(--kv2-status-done-accent);
-  /* Timeline Work bar — the *plan* layer, deliberately ink rather than a status
-     hue: every hue on that grid is spoken for by the card statuses inside it.
-     Not `--kv2-surface-inverse`, which in dark sits a shade off the base surface
-     and made the bar read as an empty outline instead of a filled bracket. */
-  --kv2-timeline-work-bar: #22272b;
-  --kv2-timeline-work-bar-done: #4a545d;
+  /* Timeline Work bar — the *plan* layer. An open Work is coloured, a closed
+     one is ink: the bar used to be graphite in both states, which made every
+     running Work read as a draft or something switched off. The active hue is
+     a steel blue at h 214 — halfway between directory slots 5 (h 192) and 6
+     (h 237), so it never lands on a project's identity colour, and unlike the
+     card statuses inside it (yellow / green) it cannot be mistaken for one. */
+  --kv2-timeline-work-bar: #2f6cb6;
+  --kv2-timeline-work-bar-done: #3b8a5c; /* muted green — a finished bar reads as finished, not as draft grey */
   --kv2-timeline-work-bar-fg: #f9fafb;
   --kv2-create-column-fg: var(--kv2-frame);
   --kv2-create-column-stroke-color: var(--kv2-frame);
@@ -765,9 +767,10 @@
   --kv2-status-complete-display: var(--kv2-status-complete-accent);
   --kv2-status-done-display: var(--kv2-status-done-accent);
   /* Lifted well clear of `--kv2-surface` (#272a2e) so the bar still reads as a
-     filled bracket rather than an outline. */
-  --kv2-timeline-work-bar: #5c6672;
-  --kv2-timeline-work-bar-done: #444c55;
+     filled bracket rather than an outline. Active keeps the light theme's steel
+     blue, brightened for the dark ground; done stays ink. */
+  --kv2-timeline-work-bar: #3d7fd0;
+  --kv2-timeline-work-bar-done: #3f9a6a;
   --kv2-timeline-work-bar-fg: #f4f6f8;
   --kv2-create-column-fg: var(--kv2-text-primary);
   --kv2-create-column-stroke-color: var(--kv2-border-strong);

@@ -108,6 +108,15 @@ function endOfDayAfter(from: Date, offsetDays: number): string {
 }
 
 /**
+ * A session's Timeline row. The visible label is the session's title (or its
+ * oldest card's title), so the row is addressed by the id it carries as data —
+ * the id itself is no longer printed.
+ */
+function sessionRow(page: Page, sessionId: string): Locator {
+  return page.locator(`.tl-row[data-session-id="${sessionId}"]`);
+}
+
+/**
  * A Work's bar slot — the grid-placed wrapper. Column geometry and the resize
  * handles live here; `.tl-bar` inside it is only the clickable label.
  */
@@ -658,7 +667,10 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   const detail = page.getByRole('dialog', { name: oldTitle });
   await expect(detail).toBeVisible();
 
-  const titleInput = detail.locator('.work-meta-field--title input');
+  // The title is the dialog heading, edited in place: click it, and the
+  // heading swaps to an input.
+  await detail.locator('.work-title-text').click();
+  const titleInput = detail.locator('.work-title-input');
   await expect(titleInput).toHaveValue(oldTitle);
   await titleInput.fill(newTitle);
   await titleInput.press('Enter');
@@ -690,21 +702,34 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   // edited, so a locator built from it stops matching the moment a rename lands.
   const reopened = page.locator('.work-detail-dialog');
   await expect(reopened).toBeVisible();
-  const reopenedTitle = reopened.locator('.work-meta-field--title input');
+  await reopened.locator('.work-title-text').click();
+  const reopenedTitle = reopened.locator('.work-title-input');
   await reopenedTitle.fill('버려질 편집');
   await reopenedTitle.press('Escape');
   await expect(reopened).toBeVisible();
-  await expect(reopenedTitle).toHaveValue(newTitle);
+  await expect(reopened.locator('.work-title-text')).toHaveText(newTitle);
   // …and nothing was saved. Checked against the server, because the input
   // snapping back is also what a successful save looks like for one frame.
   await expect.poll(async () => (await apiGetWork(work.id)).title, { timeout: 3_000 })
     .toBe(newTitle);
 
   // The directory is editable too, and it is what the affinity colour hashes.
-  const dirInput = reopened.locator('.work-meta-field').nth(1).locator('input');
+  // Same tile as the card detail: a click-to-edit DIRECTORY card that swaps to
+  // the DirectoryPicker.
+  const dirTile = reopened.locator('.kv2-meta-card--directory');
+  await expect(dirTile.locator('.kv2-meta-value--mono')).toHaveText(PROJECT_DIR);
+  await dirTile.click();
+  // Escape abandons the directory draft without closing the dialog, like the title.
+  await reopened.locator('.kv2-directory-input').press('Escape');
+  await expect(reopened).toBeVisible();
+  await expect(reopened.locator('.kv2-directory-input')).toHaveCount(0);
+  await dirTile.click();
+  const dirInput = reopened.locator('.kv2-directory-input');
   await expect(dirInput).toHaveValue(PROJECT_DIR);
   await dirInput.fill(`${PROJECT_DIR}-moved`);
   await dirInput.press('Enter');
+  await expect(reopened.locator('.kv2-meta-card--directory .kv2-meta-value--mono'))
+    .toHaveText(`${PROJECT_DIR}-moved`);
   await expect.poll(async () => (await apiGetWork(work.id)).projectDir, { timeout: 10_000 })
     .toBe(`${PROJECT_DIR}-moved`);
 });
@@ -749,11 +774,10 @@ test('상세는 상태와 산출물을 사용자 언어로만 말한다', async 
 
   // One badge, in Korean.
   await expect(detail.locator('.work-status')).toHaveText(/^진행 중 · \d+일째$/);
-  await expect(detail.locator('.work-detail-status .kv2-badge')).toHaveCount(1);
+  await expect(detail.locator('.work-detail-status .kv2-status-badge')).toHaveCount(1);
 
-  const artifacts = detail.locator('.work-detail-row').filter({ hasText: '산출물' });
-  await expect(artifacts.getByText('끝난 카드 1', { exact: true })).toBeVisible();
-  await expect(artifacts.getByText('남은 카드 1', { exact: true })).toBeVisible();
+  // The 산출물 row is the wiki documents only — no card counts to leak an enum.
+  await expect(detail.locator('.work-meta-card--stat')).toHaveCount(0);
 
   // Nothing anywhere in the dialog says a status the way the wire does.
   const body = (await detail.locator('.work-detail').innerText()).replace(/\s+/g, ' ');
@@ -870,7 +894,9 @@ test('Completing a Work archives every card under its sessions', async ({ page, 
   // only thing that may send the sweep.
   const confirm = await openCompleteConfirm(page, workTitle);
   await expect(confirm).toContainText('카드 2장이 done 처리된 뒤 archive됩니다');
-  await expect(confirm).toContainText('세션 1');
+  // The numbers are tiles (label above value), not one `세션 1` chip.
+  await expect(confirm.locator('.work-resolve-fact-card').filter({ hasText: '세션' }).locator('.work-resolve-stat'))
+    .toHaveText('1');
   await confirm.getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   await expect(confirm).toHaveCount(0);
 
@@ -1123,7 +1149,7 @@ test('Timeline re-dates a Work by dragging a bar edge and via the detail dialog'
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
   await expect(dialog).toBeVisible();
-  const endInput = dialog.locator('.work-date-field', { hasText: '종료' }).locator('input');
+  const endInput = dialog.getByLabel('End', { exact: true });
   const endDay = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 2);
   const pad = (n: number) => String(n).padStart(2, '0');
   await endInput.fill(`${endDay.getFullYear()}-${pad(endDay.getMonth() + 1)}-${pad(endDay.getDate())}`);
@@ -1167,7 +1193,7 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   // Set a planned end from the dialog: Sunday, the last column of the week.
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
-  const endField = dialog.locator('.work-date-field', { hasText: '종료 예정' });
+  const endField = dialog.locator('.work-meta-card').filter({ hasText: 'Planned end' });
   const sunday = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
   const pad = (n: number) => String(n).padStart(2, '0');
   await endField.locator('input')
@@ -1258,18 +1284,23 @@ test('Timeline nests executed sessions under their Work and marks unassigned one
   // cards are legitimately session rows on this same grid.
   await expect(page.locator('.tl-label--dir').filter({ hasText: 'works-e2e-project' }))
     .toHaveCount(1);
-  await expect(page.locator('.tl-label--work').filter({ hasText: workTitle })).toHaveCount(1);
+  const workLabel = page.locator('.tl-label--work').filter({ hasText: workTitle });
+  await expect(workLabel).toHaveCount(1);
+  // Works open collapsed: the bracket alone stands for its sessions until the
+  // caret is clicked, and the row under test is one of those sessions.
+  await expect(sessionRow(page, assignedSession)).toHaveCount(0);
+  await expect(workLabel).toContainText('펼치기');
+  await workLabel.locator('.tl-group-toggle--caret').click();
 
-  const assignedRow = page.locator('.tl-row').filter({ hasText: assignedSession });
+  const assignedRow = sessionRow(page, assignedSession);
   await expect(assignedRow.locator('.tl-label--session')).toHaveCount(1);
   await expect(assignedRow.locator('.tl-unassigned')).toHaveCount(0);
 
-  const looseRow = page.locator('.tl-row').filter({ hasText: looseSession });
+  const looseRow = sessionRow(page, looseSession);
   await expect(looseRow.locator('.tl-unassigned')).toHaveText('미배정');
 
   // The unexecuted card contributes neither a row nor a day cell.
-  await expect(page.locator('.tl-row').filter({ hasText: `claude-${runId}-planned` }))
-    .toHaveCount(0);
+  await expect(sessionRow(page, `claude-${runId}-planned`)).toHaveCount(0);
   await expect(page.locator(`.tl-day[title*="${planned.title}"]`)).toHaveCount(0);
 
   // A card that ran on Tuesday occupies exactly Tuesday's column (grid col 3).
@@ -1278,10 +1309,10 @@ test('Timeline nests executed sessions under their Work and marks unassigned one
   await expect(dayCell.locator('.tl-day--complete')).toHaveCount(1);
   expect((await gridColumnBounds(dayCell)).start).toBe('3');
 
-  // Assigning the loose session moves its row under the Work. Addressed by
-  // class, not getByRole: `.tl-row` is `display: contents` (its children place
-  // themselves on the parent grid), and role queries scoped under a box-less
-  // ancestor do not resolve.
+  // Assigning the loose session moves its row under the (now expanded) Work.
+  // Addressed by class, not getByRole: `.tl-row` is `display: contents` (its
+  // children place themselves on the parent grid), and role queries scoped
+  // under a box-less ancestor do not resolve.
   await looseRow.locator('.tl-assign-btn').click();
   const modal = page.getByRole('dialog', { name: '세션 배정' });
   await expect(modal).toBeVisible();
@@ -1291,10 +1322,13 @@ test('Timeline nests executed sessions under their Work and marks unassigned one
   await expect.poll(async () => (await apiGetWork(work.id)).sessionLinks.length, { timeout: 10_000 })
     .toBe(2);
   await expect.poll(
-    async () => page.locator('.tl-row').filter({ hasText: looseSession })
+    async () => sessionRow(page, looseSession)
       .locator('.tl-unassigned').count(),
     { timeout: 15_000 },
   ).toBe(0);
+  await expect(sessionRow(page, looseSession)).toHaveCount(1);
+  await expect(page.locator('.tl-label--work').filter({ hasText: workTitle }))
+    .toContainText('세션 2');
 });
 
 /**
@@ -1326,13 +1360,13 @@ test('폐기한 세션은 Timeline에 남지만 배정 버튼을 갖지 않는�
   await page.goto('/');
   await openTimeline(page);
 
-  const discardedRow = page.locator('.tl-row').filter({ hasText: discarded });
+  const discardedRow = sessionRow(page, discarded);
   await expect(discardedRow.locator('.tl-ignored')).toHaveText('폐기');
   await expect(discardedRow.locator('.tl-assign-btn')).toHaveCount(0);
   await expect(discardedRow.locator('.tl-unassigned')).toHaveCount(0);
 
   // The session next to it is untouched: still 미배정, still assignable.
-  const keptRow = page.locator('.tl-row').filter({ hasText: kept });
+  const keptRow = sessionRow(page, kept);
   await expect(keptRow.locator('.tl-unassigned')).toHaveText('미배정');
   await expect(keptRow.locator('.tl-assign-btn')).toHaveCount(1);
 });
@@ -1484,19 +1518,19 @@ test('Timeline의 디렉토리 필터가 다른 프로젝트 행을 걸러낸다
 
   const filter = page.locator('.tl-dir-filter');
   await expect(filter).toBeVisible();
-  await expect(page.locator('.tl-row').filter({ hasText: mine })).toHaveCount(1);
-  await expect(page.locator('.tl-row').filter({ hasText: theirs })).toHaveCount(1);
+  await expect(sessionRow(page, mine)).toHaveCount(1);
+  await expect(sessionRow(page, theirs)).toHaveCount(1);
 
   // Selecting one directory drops the other one's rows, group header included.
   await filter.getByRole('button', { name: /works-e2e-project-other/ }).click();
-  await expect(page.locator('.tl-row').filter({ hasText: theirs })).toHaveCount(1);
-  await expect(page.locator('.tl-row').filter({ hasText: mine })).toHaveCount(0);
+  await expect(sessionRow(page, theirs)).toHaveCount(1);
+  await expect(sessionRow(page, mine)).toHaveCount(0);
   await expect(page.locator('.tl-label--dir')).toHaveCount(1);
 
   // 전체 puts everything back.
   await filter.getByRole('button', { name: '전체' }).click();
-  await expect(page.locator('.tl-row').filter({ hasText: mine })).toHaveCount(1);
-  await expect(page.locator('.tl-row').filter({ hasText: theirs })).toHaveCount(1);
+  await expect(sessionRow(page, mine)).toHaveCount(1);
+  await expect(sessionRow(page, theirs)).toHaveCount(1);
 });
 
 /**
@@ -1865,8 +1899,7 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   await openWorksTab(page);
   await workCard(page, title).getByRole('button', { name: '상세' }).click();
   const open = page.getByRole('dialog', { name: title });
-  await expect(open.locator('.work-detail-row-body').getByText('카드 2', { exact: true }))
-    .toBeVisible();
+  await expect(open.locator('.work-detail-fact')).toContainText('없음');
   const sessionRow = open.locator('.work-session-item');
   await expect(sessionRow.locator('.work-session-title')).toHaveText(firstTitle);
 
@@ -1892,15 +1925,9 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   await expect(resolved).toBeVisible();
 
   // 산출물 survives the sweep: same card count as before, now all done.
-  const artifacts = resolved.locator('.work-detail-row-body');
-  await expect(artifacts.getByText('카드 2', { exact: true })).toBeVisible();
-  // Named by what each number sums, in Korean: `done 2` / `in_progress 0` were
-  // the wire enums, and `in_progress` was counting todo cards too.
-  await expect(artifacts.getByText('끝난 카드 2', { exact: true })).toBeVisible();
-  await expect(artifacts.getByText('남은 카드 0', { exact: true })).toBeVisible();
   // The archive sweep queues the cards for the wiki, so this is "생성 대기 중",
   // never the old unconditional "아직 없음".
-  await expect(resolved.locator('.work-detail-fact')).toContainText('wiki 문서: 생성 대기 중');
+  await expect(resolved.locator('.work-detail-fact')).toContainText('생성 대기 중');
 
   // The session keeps its prompt title and card count instead of collapsing to
   // a short session id.
@@ -1956,13 +1983,18 @@ test('완료된 Work 상세는 완료 안내를 감추고 기간을 resolvedAt�
   // adds the resolution date and the last activity.
   await expect(detail.locator('.work-detail-facts')).not.toContainText('일째');
   await expect(detail.locator('.work-detail-facts')).not.toContainText('active');
-  await expect(detail.locator('.work-detail-facts')).toContainText('완료');
+  // The resolution date lives in the End field, not repeated in Last activity.
+  await expect(detail.getByLabel('End', { exact: true })).not.toHaveValue('');
 
   // The "✅ 완료 시: …" notice describes an action this Work no longer has, and
   // 폐기 would overwrite the resolution the sweep already recorded.
   await expect(detail.locator('.work-detail-note')).toHaveCount(0);
   await expect(detail.getByRole('button', { name: '폐기…' })).toBeDisabled();
-  await expect(detail.getByRole('button', { name: '✔ 완료 (일괄 archive)' })).toBeDisabled();
+  // 완료 is not merely disabled but gone: a greyed-out primary still read as
+  // "click me", and the slot now holds the transition this Work does have.
+  await expect(detail.getByRole('button', { name: '✔ 완료 (일괄 archive)' })).toHaveCount(0);
+  // …and no 다시 열기 in its place: a finished record has no primary action.
+  await expect(detail.getByRole('button', { name: '↺ 다시 열기…' })).toHaveCount(0);
 });
 
 test('Timeline의 archive된 카드 날짜 칸을 누르면 카드 상세가 열린다', async ({
@@ -1994,7 +2026,7 @@ test('Timeline의 archive된 카드 날짜 칸을 누르면 카드 상세가 열
   await openTimeline(page);
 
   // The grid still draws it — `/api/timeline` reads the archive by month.
-  const row = page.locator('.tl-row').filter({ hasText: sessionId });
+  const row = sessionRow(page, sessionId);
   const dayCell = row.locator('.tl-day-slot');
   await expect(dayCell).toHaveCount(1);
 
@@ -2013,78 +2045,6 @@ test('Timeline의 archive된 카드 날짜 칸을 누르면 카드 상세가 열
 });
 
 /**
- * ① 재개 — 완료 → 다시 열기.
- *
- * Completion was a one-way door. `PATCH` accepted `status: 'active'` but no UI
- * sent it, the bulk-archived cards never came back, and `archivedAt` stayed
- * stamped — which also kept the sweep and the session-move gate closed for
- * good. The only escape was `DELETE`, i.e. throwing the record away.
- */
-test('완료한 Work를 다시 열면 카드가 보드로 돌아오고 상세가 진행 중 레이아웃이 된다', async ({
-  page, seedCardWithStatus, seedWork,
-}) => {
-  const runId = `works-reopen-${Date.now()}`;
-  const sessionId = `claude-${runId}`;
-  const card = await seedCardWithStatus(
-    { title: `[E2E ${runId}] 되돌아올 카드`, description: '재개 fixture', projectDir: PROJECT_DIR },
-    'complete',
-    { sessionId, resolution: 'completed' },
-  );
-
-  const workTitle = `다시 열 Work ${runId}`;
-  const work = await seedWork({ title: workTitle, projectDir: PROJECT_DIR });
-  await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
-
-  await openWorksTab(page);
-  const confirm = await openCompleteConfirm(page, workTitle);
-  await confirm.getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
-  await expect(confirm).toHaveCount(0);
-
-  // The card is off the board and the Work carries an `archivedAt` stamp.
-  await expect(async () => {
-    expect((await apiGetCards()).map((c) => c.id)).not.toContain(card.id);
-    expect((await apiGetWork(work.id)).archivedAt).toBeTruthy();
-  }).toPass({ timeout: 5_000 });
-
-  const resolvedSection = page.locator('.works-section').filter({ hasText: '✅ Resolved' });
-  await resolvedSection.getByRole('button', { name: '펼치기 ▼' }).click();
-  await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
-  const detail = page.getByRole('dialog', { name: workTitle });
-  await expect(detail).toBeVisible();
-
-  // 다시 열기 confirms first, and states how many cards come back — the count
-  // comes from the archive-inclusive session aggregate the dialog already holds.
-  await detail.getByRole('button', { name: '↺ 다시 열기…' }).click();
-  const reopen = page.getByRole('dialog', { name: '다시 열기 확인', exact: true });
-  await expect(reopen).toBeVisible();
-  await expect(reopen).toContainText('archive된 카드 1장');
-  await reopen.getByRole('button', { name: '↺ 다시 열기' }).click();
-  await expect(reopen).toHaveCount(0);
-
-  // The detail dialog deliberately stays open and re-renders as active — the
-  // point of reopening is to keep working on the Work.
-  await expect(detail).toBeVisible();
-  await expect(detail.locator('.work-status')).toHaveText(/^진행 중/);
-  await expect(detail.getByRole('button', { name: '↺ 다시 열기…' })).toHaveCount(0);
-  await expect(detail.getByRole('button', { name: '폐기…' })).toBeEnabled();
-
-  await detail.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(workCard(page, workTitle)).toHaveClass(/works-card--active/);
-
-  // The card is back on the board — as `done`, because the sweep flipped every
-  // card and recorded their previous statuses nowhere.
-  await expect(async () => {
-    const board = await apiGetCards();
-    expect(board.find((c) => c.id === card.id)?.status).toBe('done');
-  }).toPass({ timeout: 5_000 });
-
-  const persisted = await apiGetWork(work.id);
-  expect(persisted.status).toBe('active');
-  expect(persisted.archivedAt).toBeUndefined();
-  expect(persisted.resolvedAt).toBeUndefined();
-});
-
-/**
  * ② 메모.
  *
  * A Work had no human-writable free-text field at all. `summary` looks like one
@@ -2099,7 +2059,10 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
   await openWorksTab(page);
   await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
-  const notes = detail.getByLabel('메모');
+  // 메모 opens folded when empty — a disclosure heading, like the card detail's
+  // sections — so the textarea appears only after the heading is clicked.
+  await detail.locator('.work-detail-disclosure').click();
+  const notes = detail.getByLabel('메모', { exact: true });
   await expect(notes).toBeVisible();
   await expect(notes).toHaveValue('');
 
@@ -2116,8 +2079,9 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
   await openWorksTab(page);
   await workCard(page, workTitle).getByRole('button', { name: '상세' }).click();
   const reopened = page.getByRole('dialog', { name: workTitle });
-  await expect(reopened.getByLabel('메모')).toHaveValue(text);
-  await expect(reopened.locator('.work-summary-hero')).not.toContainText('락 순서');
+  // A saved note opens unfolded: it is the reason the reader came back.
+  await expect(reopened.getByLabel('메모', { exact: true })).toHaveValue(text);
+  await expect(reopened.locator('.work-summary')).not.toContainText('락 순서');
 });
 
 /**
@@ -2218,7 +2182,7 @@ test('다른 Work에 병합하면 세션이 합쳐지고 원본은 병합됨으�
   // The dialog follows the sessions to the target.
   const target = page.getByRole('dialog', { name: toTitle });
   await expect(target).toBeVisible();
-  await expect(target).toContainText('연결된 세션 2');
+  await expect(target.locator('.work-session-item')).toHaveCount(2);
   await target.getByRole('button', { name: 'Close dialog' }).click();
 
   // Target summed, source closed as 병합됨 in Resolved (not deleted).

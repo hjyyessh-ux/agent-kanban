@@ -496,6 +496,77 @@ export function timelineDirOptions(rows: TimelineRow[]): TimelineDirOption[] {
  * describe the whole grid, not the filtered slice, or selecting one directory
  * would erase every other option from the filter.
  */
+/**
+ * The Board tab's FILTER bar, applied to Timeline sessions. Only the fields
+ * that describe a *session* apply — search (session title or any card title),
+ * directory, session name, session id. The date-range fields describe card
+ * creation/update times, which the grid's own week/month axis already answers,
+ * so they are ignored here rather than filtering rows by an invisible rule.
+ */
+export interface TimelineSessionFilter {
+  search?: string;
+  directory?: string;
+  sessionName?: string;
+  sessionId?: string;
+}
+
+function lower(value: string | undefined): string {
+  return (value ?? '').toLowerCase().trim();
+}
+
+function normalizeDir(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\/+$/, '').toLowerCase();
+}
+
+export function isTimelineFilterActive(filter: TimelineSessionFilter | undefined): boolean {
+  if (!filter) return false;
+  return Boolean(lower(filter.search) || normalizeDir(filter.directory) || lower(filter.sessionName) || lower(filter.sessionId));
+}
+
+export function filterTimelineSessions(
+  sessions: TimelineSessionSpan[],
+  filter: TimelineSessionFilter | undefined,
+): TimelineSessionSpan[] {
+  if (!isTimelineFilterActive(filter)) return sessions;
+  const search = lower(filter!.search);
+  const directory = normalizeDir(filter!.directory);
+  const sessionName = lower(filter!.sessionName);
+  const sessionId = lower(filter!.sessionId);
+  return sessions.filter((session) => {
+    const names = [session.sessionTitle, ...session.cards.map((card) => card.title)].map(lower);
+    if (search && !names.some((name) => name.includes(search)) && !lower(session.sessionId).includes(search)) return false;
+    if (directory && normalizeDir(session.projectDir) !== directory) return false;
+    if (sessionName && !names.some((name) => name.includes(sessionName))) return false;
+    if (sessionId && !lower(session.sessionId).includes(sessionId)) return false;
+    return true;
+  });
+}
+
+/**
+ * Works to keep while a session filter is active: those with a matching
+ * session on the grid, or whose own title/directory matches — a bracket with
+ * no surviving session and no match of its own is noise under a search.
+ */
+export function filterTimelineWorks(
+  works: Work[],
+  keptSessions: TimelineSessionSpan[],
+  filter: TimelineSessionFilter | undefined,
+): Work[] {
+  if (!isTimelineFilterActive(filter)) return works;
+  const keptIds = new Set(keptSessions.map((session) => session.sessionId));
+  const search = lower(filter!.search);
+  const directory = normalizeDir(filter!.directory);
+  return works.filter((work) => {
+    if (work.sessionLinks.some((link) => keptIds.has(link.sessionId))) return true;
+    // A session-name / session-id filter names sessions; a Work without one of
+    // those sessions is out regardless of its own fields.
+    if (lower(filter!.sessionName) || lower(filter!.sessionId)) return false;
+    if (search && lower(work.title).includes(search)) return !directory || normalizeDir(work.projectDir) === directory;
+    if (!search && directory) return normalizeDir(work.projectDir) === directory;
+    return false;
+  });
+}
+
 export function filterTimelineRows(
   rows: TimelineRow[],
   groupKey: string | null,

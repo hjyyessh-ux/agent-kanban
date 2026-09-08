@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Work } from '../../../../src/core/types';
+import type { TimelineSessionSpan, Work } from '../../../../src/core/types';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
 import { useTimeline } from '../../hooks/useTimeline';
@@ -31,6 +31,9 @@ import {
 import {
   buildTimelineRows,
   filterTimelineRows,
+  filterTimelineSessions,
+  filterTimelineWorks,
+  type TimelineSessionFilter,
   rangeWindow,
   timelineDirOptions,
   timelineLegend,
@@ -74,6 +77,11 @@ export interface TimelineViewProps {
   /** Start assignment for a 미배정 session row. */
   onAssignSession?: (sessionId: string) => void;
   /**
+   * The Board tab's FILTER bar. The same bar is shown above every board view,
+   * so what it says must hold here too — see `filterTimelineSessions`.
+   */
+  sessionFilter?: TimelineSessionFilter;
+  /**
    * Show a transient notice with an undo. A bar-edge edit rewrites a stored date
    * with no confirmation, so this is the only way back — it is owned by `App`
    * (same bar the Works session actions use) rather than rendered here.
@@ -91,6 +99,21 @@ const MODE_LABELS: Record<TimelineMode, string> = {
 const MODES: TimelineMode[] = ['week', 'month'];
 
 /** Persisted label-column width, so a widened label column survives a reload. */
+/**
+ * What a session row is called. `sessionTitle` when the runtime set one; else
+ * the *oldest* card's title (its first prompt — the same rule the Works Inbox
+ * and the Work detail use); else the raw id. Claude-runtime cards never carry a
+ * `sessionTitle`, so without the middle step every one of their rows read as a
+ * UUID while the Inbox row for the same session read as a sentence.
+ */
+function sessionLabel(session: TimelineSessionSpan): string {
+  const explicit = session.sessionTitle?.trim();
+  if (explicit) return explicit;
+  const oldest = [...session.cards].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
+  const fromCard = oldest?.title?.trim();
+  return fromCard || session.sessionId;
+}
+
 const LABEL_WIDTH_STORAGE_KEY = 'kanban-timeline-label-width';
 /** Persisted subagent toggle — hidden by default (they triple the row count). */
 const SUBAGENT_STORAGE_KEY = 'kanban-timeline-subagents';
@@ -374,6 +397,9 @@ const TimelineRowBar = memo(function TimelineRowBar({
         {work.sessionLinks.length > 0 && (
           <span className="tl-bar-count">세션 {work.sessionLinks.length}</span>
         )}
+        {work.status === 'done' && (
+          <span className="tl-bar-done-mark">{compact ? '✔' : '✔ 완료'}</span>
+        )}
         {bar.ongoing && (
           <span className={`tl-bar-ongoing${overrun ? ' tl-bar-ongoing--overrun' : ''}`}>
             {overrun
@@ -445,7 +471,7 @@ const SessionRailRow = memo(function SessionRailRow({
             type="button"
             className="tl-rail-hit"
             onClick={() => openSession(session.sessionId)}
-            title={`${session.sessionTitle ?? session.sessionId} · 카드 ${cardCount}`}
+            title={`${sessionLabel(session)} · 카드 ${cardCount}`}
           >
             <span className="tl-rail-label">카드 {cardCount}</span>
           </button>
@@ -476,6 +502,9 @@ const SessionRailRow = memo(function SessionRailRow({
               {cell.cards.length > 1 && (
                 <span className="tl-day-count">{cell.cards.length}</span>
               )}
+              {/* What ran — the block used to be a bare colour (plus a count),
+                  which said *that* something ran on this day but not what. */}
+              <span className="tl-day-text">{cell.cards[0]?.title ?? ''}</span>
             </button>
           </div>
         );
@@ -511,7 +540,10 @@ const DirRowView = memo(function DirRowView({
           onClick={() => handlers.toggleDir(row.groupKey)}
           title={row.projectDir ?? '디렉토리 없음'}
         >
-          <span className="tl-group-caret" aria-hidden="true">
+          <span
+            className={`tl-group-caret${row.collapsed ? ' tl-group-caret--collapsed' : ''}`}
+            aria-hidden="true"
+          >
             {row.collapsed ? '▸' : '▾'}
           </span>
           <span className="works-dir-dot" aria-hidden="true" />
@@ -568,7 +600,10 @@ const WorkRowView = memo(function WorkRowView({
             aria-label={`${row.work.title} 세션 ${row.collapsed ? '펼치기' : '접기'}`}
             onClick={() => handlers.toggleWork(row.work.id)}
           >
-            <span className="tl-group-caret" aria-hidden="true">
+            <span
+              className={`tl-group-caret${row.collapsed ? ' tl-group-caret--collapsed' : ''}`}
+              aria-hidden="true"
+            >
               {row.collapsed ? '▸' : '▾'}
             </span>
           </button>
@@ -581,7 +616,10 @@ const WorkRowView = memo(function WorkRowView({
             {row.work.title}
           </button>
         </span>
-        <span className="tl-label-sub">세션 {row.sessionCount}</span>
+        <span className="tl-label-sub">
+          세션 {row.sessionCount}
+          {row.collapsed && row.sessionCount > 0 ? ' · 펼치기' : ''}
+        </span>
       </div>
       <RowCells range={range} gridRow={gridRow} todayIndex={todayIndex} kind="work" />
       {bar && span && (
@@ -614,13 +652,13 @@ const SessionRowView = memo(function SessionRowView({
   todayIndex: number;
   handlers: TimelineHandlers;
 }) {
-  const title = row.session.sessionTitle ?? row.session.sessionId;
+  const title = sessionLabel(row.session);
   const { openSession, assignSession } = handlers;
 
   return (
-    <div className="tl-row">
+    <div className="tl-row" data-session-id={row.session.sessionId}>
       <div
-        className={`tl-label tl-label--session ${dirAccentClass(row.session.projectDir)}`}
+        className={`tl-label tl-label--session${row.workId ? '' : ' tl-label--session-loose'} ${dirAccentClass(row.session.projectDir)}`}
         style={{ gridRow, gridColumn: 1 }}
       >
         <span className="tl-label-line">
@@ -640,6 +678,8 @@ const SessionRowView = memo(function SessionRowView({
         {row.workId ? (
           <span className="tl-label-sub">
             {row.session.projectDir ? projectDirLabel(row.session.projectDir) : '디렉토리 없음'}
+            {' · 카드 '}
+            {row.session.cards.length}
           </span>
         ) : (
           <span className="tl-label-sub tl-label-sub--unassigned">
@@ -659,7 +699,7 @@ const SessionRowView = memo(function SessionRowView({
                 {assignSession && (
                   <button
                     type="button"
-                    className="kv2-btn kv2-btn--small tl-assign-btn"
+                    className="kv2-btn kv2-btn--primary kv2-btn--small tl-assign-btn"
                     onClick={() => assignSession(row.session.sessionId)}
                   >
                     배정
@@ -725,12 +765,21 @@ export function TimelineView({
   onOpenSession,
   onAssignSession,
   onNotify,
+  sessionFilter,
 }: TimelineViewProps) {
   const [mode, setMode] = useState<TimelineMode>('week');
   const [offset, setOffset] = useState(0);
   const [showSubagents, setShowSubagents] = useState(readShowSubagents);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(() => new Set());
-  const [collapsedWorks, setCollapsedWorks] = useState<ReadonlySet<string>>(() => new Set());
+  // Works start *collapsed*: the Timeline is read at the Work level first, and
+  // a Work's sessions are detail you open on purpose. Tracking the expanded set
+  // (rather than the collapsed one) is what makes that hold for Works that
+  // appear later — a Work the user never touched is collapsed by definition.
+  const [expandedWorks, setExpandedWorks] = useState<ReadonlySet<string>>(() => new Set());
+  const collapsedWorks = useMemo<ReadonlySet<string>>(
+    () => new Set(works.filter((work) => !expandedWorks.has(work.id)).map((work) => work.id)),
+    [works, expandedWorks],
+  );
   const [dirFilter, setDirFilter] = useState<TimelineDirOption | null>(null);
   const [helpOpen, setHelpOpen] = useState(readHelpUnseen);
 
@@ -748,14 +797,22 @@ export function TimelineView({
     includeSubagents: showSubagents,
   });
 
+  const filteredSessions = useMemo(
+    () => filterTimelineSessions(timeline.sessions, sessionFilter),
+    [timeline.sessions, sessionFilter],
+  );
+  const filteredWorks = useMemo(
+    () => filterTimelineWorks(works, filteredSessions, sessionFilter),
+    [works, filteredSessions, sessionFilter],
+  );
   const allRows = useMemo(() => buildTimelineRows({
-    sessions: timeline.sessions,
-    works,
+    sessions: filteredSessions,
+    works: filteredWorks,
     range,
     now: new Date(todayMs),
     collapsedDirs,
     collapsedWorks,
-  }), [timeline.sessions, works, range, todayMs, collapsedDirs, collapsedWorks]);
+  }), [filteredSessions, filteredWorks, range, todayMs, collapsedDirs, collapsedWorks]);
 
   // Options describe the whole grid; the filter narrows what is drawn. Derived
   // in that order so selecting one directory cannot erase the other options.
@@ -942,7 +999,7 @@ export function TimelineView({
   }, []);
 
   const toggleWork = useCallback((workId: string) => {
-    setCollapsedWorks((prev) => {
+    setExpandedWorks((prev) => {
       const next = new Set(prev);
       if (!next.delete(workId)) next.add(workId);
       return next;

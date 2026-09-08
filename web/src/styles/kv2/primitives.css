@@ -78,7 +78,10 @@
   gap: 12px;
 }
 
-.kv2-dialog--detail .kv2-dialog-header {
+/* Child combinator on purpose: a detail dialog nests confirm dialogs (Work
+   완료/폐기 확인, 세션 이동), and a descendant selector hid *their* headers
+   and stripped their padding too. */
+.kv2-dialog--detail > .kv2-dialog-header {
   display: none;
 }
 
@@ -118,7 +121,7 @@
   padding: 20px;
 }
 
-.kv2-dialog--detail .kv2-dialog-content {
+.kv2-dialog--detail > .kv2-dialog-content {
   padding: 0;
 }
 
@@ -236,6 +239,16 @@
 
 .kv2-btn:hover {
   filter: brightness(0.95);
+}
+
+/* A disabled button has to look disabled. Without this every variant kept its
+   full colour and shadow, so a resolved Work's greyed-out 완료 was a bright
+   green button that did nothing when clicked. */
+.kv2-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  filter: none;
 }
 
 .kv2-btn--primary {

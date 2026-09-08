@@ -77,13 +77,13 @@ Timeline(Board 탭의 `타임라인` 뷰)은 한 화면에 **디렉토리 · Wor
 | 층 | 토큰 | 왜 이 색인가 |
 |----|------|--------------|
 | 디렉토리 그룹 | `--works-dir-accent`(`.works-dir-c{n}`) 왼쪽 색 띠 | Works 탭과 **같은 색 = 같은 프로젝트**. 새 색을 만들지 말고 기존 팔레트를 재사용 |
-| Work 계획 바 | `--kv2-timeline-work-bar` / `--kv2-timeline-work-bar-done` / `--kv2-timeline-work-bar-fg` | 바는 *계획*이지 상태가 아님. 색 예산은 카드 상태에 씁니다. `--kv2-surface-inverse`를 쓰지 않는 이유는 다크에서 그 값이 기본 면색과 한 톤 차이라 바가 **빈 외곽선**처럼 읽혔기 때문 — 그래서 라이트/다크에 각각 명시값을 둔 계층 ② 토큰입니다 |
+| Work 계획 바 | `--kv2-timeline-work-bar`(진행 중, 스틸 블루) / `--kv2-timeline-work-bar-done`(완료, 차분한 녹색) / `--kv2-timeline-work-bar-fg` | 바는 *계획*이지 카드 상태가 아님 — 카드 상태 팔레트(`--kv2-status-*`)는 쓰지 않습니다. 단 Work 자체의 두 종착점은 구분해야 해서, 진행 중은 파랑·완료는 녹색 + `✔ 완료` 마크, 폐기는 회색입니다(회색 완료 바는 draft로 읽혔습니다). `--kv2-surface-inverse`를 쓰지 않는 이유는 다크에서 그 값이 기본 면색과 한 톤 차이라 바가 **빈 외곽선**처럼 읽혔기 때문 — 그래서 라이트/다크에 각각 명시값을 둔 계층 ② 토큰입니다 |
 | 세션 레일 | `--kv2-affinity-chain`(보라) | 어떤 카드 상태도 쓰지 않는 색조 → 레일이 상태로 오해되지 않습니다 |
 | 카드 날짜 칸 | `--kv2-status-{todo,progress,complete,done}-display` | 보드와 **같은 의미를 같은 색으로**. 여기서 색을 새로 정하면 보드와 어긋납니다 |
 
 규칙:
 
-- Work 바에 상태 색을 되돌리지 마세요. `.tl-bar--active`/`--done`은 클래스 이름만 상태이고 값은 `--kv2-timeline-work-bar*`(먹색 계열)입니다.
+- Work 바에 **카드** 상태 색(`--kv2-status-*`)을 쓰지 마세요. `.tl-bar--active`/`--done`의 값은 Work 전용 토큰 `--kv2-timeline-work-bar*`이고, 그 둘만이 Work의 상태를 말합니다.
 - 세션 레일에 디렉토리 팔레트 색을 쓰지 마세요. "같은 색 = 같은 디렉토리"가 무너집니다.
 - 날짜 칸이 하루에 여러 카드를 담을 때 칠하는 색은 **가장 살아있는 상태**입니다(`in_progress` > `todo` > `complete` > `done` — `timelineRows.ts`의 `CELL_STATUS_PRIORITY`). 정착 상태인 `done`이 손이 필요한 카드를 덮지 않게 하려는 것입니다.
 

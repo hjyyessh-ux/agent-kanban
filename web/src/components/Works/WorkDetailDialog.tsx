@@ -10,17 +10,17 @@ import type {
 } from '../../../../src/core/types';
 import { WORK_NOTES_MAX_LENGTH } from '../../../../src/core/types';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
+import { DirectoryPicker } from '../Card/DirectoryPicker';
 import { MoveSessionDialog } from './MoveSessionDialog';
 import { WorkMergeDialog } from './WorkMergeDialog';
 import { WorkResolveConfirmDialog, type WorkResolveMode } from './WorkResolveConfirmDialog';
 import type { WorkResolveOutcome } from '../../hooks/useWorks';
 import { WorkSessionMenu } from './WorkSessionMenu';
+import { WorkWikiDocDialog } from './WorkWikiDocDialog';
 import type { WorkSessionNoticeState } from './WorkSessionNotice';
 import {
   ROLE_LABELS,
-  WORK_STATUS_LABELS,
   confirmDeleteWorkMessage,
-  describeWorkArtifacts,
   describeWorkPlanOverrun,
   describeWorkStatusBadge,
   formatShortDate,
@@ -28,6 +28,7 @@ import {
   shortSessionId,
 } from './worksAssign';
 import { endFromDateInputValue, fromDateInputValue, toDateInputValue } from './timelineModel';
+import { dirAccentClass } from './worksAffinity';
 import './Works.css';
 
 interface WorkDetailDialogProps {
@@ -217,17 +218,12 @@ export function WorkDetailDialog({
     () => cards.filter((card) => card.sessionId && sessionIds.has(card.sessionId)),
     [cards, sessionIds],
   );
-  const boardDoneCount = workCards.filter((c) => c.status === 'done' || c.status === 'complete').length;
-  const boardInProgressCount = workCards.filter((c) => c.status === 'todo' || c.status === 'in_progress').length;
   const boardLastActivity = useMemo(() => {
     const times = workCards.map((c) => c.updatedAt).filter(Boolean);
     times.push(work.updatedAt);
     return times.sort().at(-1);
   }, [workCards, work.updatedAt]);
 
-  const cardCount = detail?.cardCount ?? workCards.length;
-  const doneCount = detail?.doneCount ?? boardDoneCount;
-  const inProgressCount = detail?.inProgressCount ?? boardInProgressCount;
   const lastActivity = detail?.lastActivityAt ?? boardLastActivity;
 
   // `work.sessionLinks` stays authoritative for *which* rows exist so an
@@ -416,12 +412,12 @@ export function WorkDetailDialog({
   };
 
   const datesDisabled = !onUpdateDates || dateBusy || busy;
-  const endLabel = isOpenWork ? '종료 예정' : '종료';
-  const dateHint = !isOpenWork
-    ? ''
-    : work.resolvedAt
-      ? '완료 처리하면 이 날짜가 종료일로 기록됩니다.'
-      : '비워두면 타임라인 바가 오늘까지 이어집니다.';
+  // Tile labels are English like the card detail's (RUNTIME · MODEL · DIRECTORY);
+  // `.kv2-meta-label` uppercases them. `End` becomes `Planned end` while the
+  // Work is open because that date is a forecast, not a record.
+  const endLabel = isOpenWork ? 'Planned end' : 'End';
+  const canEditMeta = Boolean(onUpdateMeta) && !metaBusy && !busy;
+  const directoryValue = work.projectDir?.trim() || 'Not set';
 
   /**
    * 메모 — the Work's one human-owned free-text field.
@@ -439,6 +435,10 @@ export function WorkDetailDialog({
    * sentence on every stray click.
    */
   const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  // Collapsed like the card detail's sidebar panels, unless there is already
+  // something to read; a draft in progress keeps it open regardless.
+  const [notesOpen, setNotesOpen] = useState(() => Boolean((work.notes ?? '').trim()));
+  const [openWikiDoc, setOpenWikiDoc] = useState<string | null>(null);
   const [notesBusy, setNotesBusy] = useState(false);
   const [notesError, setNotesError] = useState<string | null>(null);
   const notesValue = notesDraft ?? work.notes ?? '';
@@ -638,96 +638,227 @@ export function WorkDetailDialog({
 
   return (
     <DialogSkeleton
+      // The title still names the dialog (aria-labelledby) even though the
+      // `kv2-dialog--detail` chrome hides the skeleton's own header: the hero
+      // below draws the title the way the card detail does.
       title={work.title}
       onClose={closeGuarded}
       width="920px"
       persistSizeKey="work-detail"
       defaultSize={{ width: 920, height: 760 }}
-      className="work-detail-dialog"
+      className={`kv2-dialog--detail work-detail-dialog work-detail-dialog--${work.status}`}
     >
-      <div className="work-detail">
-        {/* The one status badge on this screen. It used to be joined by
-            "3일째 active" in the 기간 row below, which said the same two facts
-            in a second language. */}
-        <div className="work-detail-status">
-          <span className={`kv2-badge work-status work-status--${work.status}`}>
+      <div className="kv2-detail-shell work-detail">
+        {/* ── Hero: status badge + meta, then the title ─────────────
+            Same shell as CardDetailDialog: a status badge top-left, the id
+            and close top-right, the title as the one large line underneath. */}
+        <div className="kv2-status-row kv2-status-row--hero work-detail-status">
+          <span className={`kv2-status-badge work-status work-status--${work.status}`}>
             {describeWorkStatusBadge(work)}
           </span>
+          <div className="kv2-status-row-meta">
+            {describeWorkPlanOverrun(work) && (
+              <span className="kv2-badge work-overrun-chip">{describeWorkPlanOverrun(work)}</span>
+            )}
+            <span className="kv2-card-id-meta" title={work.id}>🆔 {work.id.slice(0, 8)}</span>
+            <button
+              type="button"
+              className="kv2-dialog-close"
+              onClick={closeGuarded}
+              aria-label="Close dialog"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
-        {/* 제목 · 디렉토리 — inline, because a Work seeded from a session's
-            first prompt is titled by that prompt, and that is rarely the name
-            the work ends up having. */}
-        <section className="work-detail-row work-detail-meta">
-          <div className="work-detail-panel-title">기본 정보</div>
-          <div className="work-detail-row-body work-detail-meta-body">
-            <label className="work-meta-field work-meta-field--title">
-              <span className="work-date-label">제목</span>
+        <div className="kv2-title-row work-detail-title-row">
+          <div className="kv2-title-block">
+            {titleDraft !== null ? (
               <input
                 type="text"
-                className="kv2-input work-meta-input"
-                value={titleDraft ?? work.title}
-                disabled={!onUpdateMeta || metaBusy || busy}
-                readOnly={!onUpdateMeta}
-                title={onUpdateMeta ? 'Enter 저장 · Esc 취소' : undefined}
+                className="kv2-input kv2-title-input work-title-input"
+                value={titleDraft}
+                autoFocus
+                aria-label="제목"
+                disabled={metaBusy || busy}
+                title="Enter 저장 · Esc 취소"
                 onChange={(e) => setDraft('title', e.target.value)}
                 onKeyDown={(e) => metaKeyDown('title', e)}
                 onBlur={(e) => blurMeta('title', e.target.value)}
               />
-            </label>
-            <label className="work-meta-field">
-              <span className="work-date-label">디렉토리</span>
-              <input
-                type="text"
-                className="kv2-input work-meta-input works-mono"
-                value={dirDraft ?? work.projectDir ?? ''}
-                placeholder="비워두면 특정 폴더에 묶이지 않습니다"
+            ) : (
+              <button
+                type="button"
+                className={`kv2-title-text kv2-unstyled-button work-title-text${onUpdateMeta ? ' kv2-editable-text' : ''}`}
+                title={onUpdateMeta ? '클릭해서 제목 편집' : undefined}
                 disabled={!onUpdateMeta || metaBusy || busy}
-                readOnly={!onUpdateMeta}
-                title={onUpdateMeta ? 'Enter 저장 · Esc 취소' : undefined}
-                onChange={(e) => setDraft('projectDir', e.target.value)}
-                onKeyDown={(e) => metaKeyDown('projectDir', e)}
-                onBlur={(e) => blurMeta('projectDir', e.target.value)}
-              />
-            </label>
+                onClick={() => setDraft('title', work.title)}
+              >
+                {work.title}
+              </button>
+            )}
+            {metaError && <p className="work-date-error">⚠ {metaError}</p>}
           </div>
-          {metaError && <p className="work-date-error">⚠ {metaError}</p>}
-        </section>
+        </div>
 
-        {/* Summary hero — full-width, right under the title (mockup ③). */}
-        <section className="work-summary-hero">
-          {work.summary ? (
-            <>
-              <div className="work-summary-head">
-                📝 Summary
-                <span className="kv2-badge work-summary-model">{work.summary.model}</span>
-              </div>
-              <ul className="work-summary-lines">
-                {work.summary.lines.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-              <div className="work-summary-meta">
-                <span>{formatDateTime(work.summary.generatedAt)} 생성</span>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--small work-summary-regen"
-                  disabled={summaryDisabled}
-                  title={onRegenerateSummary ? undefined : '요약 생성은 준비 중입니다'}
-                  onClick={runSummary}
+        {/* ── Meta tiles ───────────────────────────────────────────
+            The card detail's RUNTIME · MODEL · PERMISSION row, for a Work:
+            DIRECTORY on its own tile (it is a project identity, not a sub-field
+            of the title) — the card detail's tile verbatim, a click-to-edit
+            `kv2-meta-editable` that swaps to `DirectoryPicker` — then the
+            dates as three equal tiles across the full width. */}
+        <div className="kv2-detail-overview work-detail-overview">
+          <div className="kv2-meta-panel work-meta-panel work-meta-panel--dates">
+            {dirDraft !== null ? (
+              <div className={`kv2-meta-card kv2-meta-card--edit kv2-meta-card--directory work-meta-card ${dirAccentClass(work.projectDir)}`}>
+                <span className="kv2-meta-label">Directory</span>
+                {/* Escape abandons the draft only — the same contract as the
+                    title's Escape. `DialogSkeleton` would otherwise read the
+                    keystroke as "close the dialog" as well. */}
+                <div
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') e.stopPropagation();
+                  }}
                 >
-                  {summaryBusy ? '생성 중…' : '↻ 다시 생성'}
-                </button>
+                  <DirectoryPicker
+                    id={`work-${work.id}-directory-input`}
+                    value={dirDraft}
+                    onChange={(value) => setDraft('projectDir', value)}
+                    onCommit={(value) => commitMeta('projectDir', value)}
+                    onCancel={() => {
+                      setDraft('projectDir', null);
+                      setMetaError(null);
+                    }}
+                    commitLabel="Save"
+                    placeholder="/path/to/project"
+                    autoFocus
+                    variant="meta"
+                  />
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="work-summary-empty">
-              <p className="work-summary-empty-text">
-                아직 요약이 없습니다. 연결된 세션 transcript를 종합해 3~5줄 요약을 생성합니다.
-              </p>
-              {/* Outline, not primary: this spends an LLM call, and it was the
-                  strongest-looking target on a dialog whose actual purpose is
-                  reading a Work and closing it. */}
+            ) : onUpdateMeta ? (
+              <button
+                type="button"
+                className={`kv2-meta-card kv2-meta-card--directory kv2-meta-editable work-meta-card ${dirAccentClass(work.projectDir)}`}
+                disabled={!canEditMeta}
+                onClick={() => setDraft('projectDir', work.projectDir ?? '')}
+                title={work.projectDir ? work.projectDir : 'Click to edit directory'}
+              >
+                <span className="kv2-meta-label">Directory</span>
+                <span className={`kv2-meta-value${work.projectDir ? ' kv2-meta-value--mono' : ' kv2-meta-placeholder'}`}>
+                  {directoryValue}
+                </span>
+              </button>
+            ) : (
+              <div
+                className={`kv2-meta-card kv2-meta-card--directory work-meta-card ${dirAccentClass(work.projectDir)}`}
+                title={work.projectDir ?? undefined}
+              >
+                <span className="kv2-meta-label">Directory</span>
+                <span className={`kv2-meta-value${work.projectDir ? ' kv2-meta-value--mono' : ' kv2-meta-placeholder'}`}>
+                  {directoryValue}
+                </span>
+              </div>
+            )}
+            <div className="kv2-meta-card work-meta-card">
+              <span className="kv2-meta-label">Start</span>
+              <input
+                type="date"
+                className="kv2-input work-date-input"
+                aria-label="Start"
+                value={startInput}
+                max={endInput || undefined}
+                disabled={datesDisabled}
+                onChange={(e) => commitDate('startedAt', e.target.value)}
+              />
+            </div>
+            <div className="kv2-meta-card work-meta-card">
+              <span className="kv2-meta-label">{endLabel}</span>
+              <div className="work-meta-card-line">
+                <input
+                  type="date"
+                  className="kv2-input work-date-input"
+                  aria-label={endLabel}
+                  value={endInput}
+                  min={startInput || undefined}
+                  disabled={datesDisabled}
+                  onChange={(e) => commitDate('resolvedAt', e.target.value)}
+                />
+                {isOpenWork && endInput && (
+                  <button
+                    type="button"
+                    className="kv2-btn kv2-btn--small kv2-btn--ghost"
+                    disabled={datesDisabled}
+                    title="종료 예정일 지우기"
+                    onClick={() => commitDate('resolvedAt', '')}
+                  >
+                    지우기
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="kv2-meta-card work-meta-card">
+              <span className="kv2-meta-label">Last activity</span>
+              {/* Read-only, but in the same field chrome as the two date inputs
+                  beside it — a bare bold value next to two bordered pickers read
+                  as a different kind of thing. The resolution date is not
+                  repeated here: the End input already holds it. */}
+              <div className="kv2-input work-meta-input work-meta-readonly work-detail-facts" aria-label="Last activity">
+                {formatDateTime(lastActivity) || '-'}
+              </div>
+            </div>
+          </div>
+          {dateError && <p className="work-date-error">⚠ {dateError}</p>}
+
+          {/* 산출물 — the wiki documents, full width. The card counts that used
+              to sit beside them are the sweep's bookkeeping, not something to
+              read here; the 완료 확인 dialog still states them before the sweep. */}
+          <section className="kv2-meta-panel work-meta-panel work-meta-panel--artifacts work-detail-row" aria-label="산출물">
+            <div className="kv2-meta-card work-meta-card work-meta-card--wiki">
+              <span className="kv2-meta-label">Wiki 문서</span>
+              {wikiLabel ? (
+                <span className="kv2-meta-value work-detail-fact">{wikiLabel}</span>
+              ) : (
+                <ul className="kv2-meta-value work-detail-fact work-detail-wiki">
+                  {wikiDocPaths.map((docPath) => (
+                    <li key={docPath}>
+                      <button
+                        type="button"
+                        className="kv2-unstyled-button works-mono work-detail-wiki-doc"
+                        title={`${docPath} — 클릭해서 문서 보기`}
+                        onClick={() => setOpenWikiDoc(docPath)}
+                      >
+                        {docPath}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+          {detailError && (
+            <p className="work-date-error">
+              ⚠ 산출물을 불러오지 못했습니다 ({detailError}) — 보드에 남은 카드만 반영했습니다.
+            </p>
+          )}
+        </div>
+
+        <div className="kv2-detail-divider" />
+
+        {/* ── Summary ─────────────────────────────────────────────
+            The card detail's Prompt block: a heading line with its actions,
+            then the text in an accent-bordered box. */}
+        <section className="kv2-detail-primary-block work-detail-section work-summary">
+          <div className="kv2-panel-heading work-detail-heading">
+            <span className="kv2-session-title">Summary</span>
+            {work.summary && (
+              <span className="kv2-badge work-summary-model">{work.summary.model}</span>
+            )}
+            <span className="work-detail-heading-actions">
+              {work.summary && (
+                <span className="kv2-session-helper">{formatDateTime(work.summary.generatedAt)} 생성</span>
+              )}
               <button
                 type="button"
                 className="kv2-btn kv2-btn--small kv2-btn--outline"
@@ -735,225 +866,171 @@ export function WorkDetailDialog({
                 title={onRegenerateSummary ? undefined : '요약 생성은 준비 중입니다'}
                 onClick={runSummary}
               >
-                {summaryBusy ? '생성 중…' : '📝 요약 생성'}
+                {summaryBusy ? '생성 중…' : work.summary ? '↻ 다시 생성' : '📝 요약 생성'}
               </button>
-            </div>
+            </span>
+          </div>
+          {work.summary ? (
+            <ul className="work-summary-lines work-detail-box">
+              {work.summary.lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="work-summary-empty-text work-detail-box work-detail-box--empty">
+              아직 요약이 없습니다. 연결된 세션 transcript를 종합해 3~5줄 요약을 생성합니다.
+            </p>
           )}
           {summaryError && <p className="work-summary-error">⚠ {summaryError}</p>}
         </section>
 
-        {/* 메모 — human-owned, right under the machine-owned Summary and
-            visibly not part of it: no 📝 hero framing, its own bordered panel.
-            The two sit adjacent on purpose (both answer "what is this Work
-            about?") but only one of them survives a `↻ 다시 생성`. */}
-        <section className="work-detail-row work-notes">
-          <div className="work-detail-panel-title">메모</div>
-          <div className="work-detail-row-body work-notes-body">
-            <textarea
-              className="kv2-input work-notes-input"
-              value={notesValue}
-              rows={4}
-              maxLength={WORK_NOTES_MAX_LENGTH}
-              disabled={!onUpdateNotes || notesBusy}
-              readOnly={!onUpdateNotes}
-              placeholder={onUpdateNotes
-                ? '다음에 볼 것, 막힌 지점, 결정 사항… (Summary와 달리 자동으로 덮어쓰이지 않습니다)'
-                : '메모 편집은 준비 중입니다'}
-              aria-label="메모"
-              onChange={(e) => setNotesDraft(e.target.value)}
-            />
-            <div className="work-notes-foot">
-              <span className="work-notes-count">
-                {notesValue.length} / {WORK_NOTES_MAX_LENGTH}
-              </span>
-              {notesDirty && <span className="work-notes-dirty">저장하지 않은 변경</span>}
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--small kv2-btn--outline"
-                disabled={!onUpdateNotes || notesBusy || !notesDirty || notesTooLong}
-                onClick={saveNotes}
-              >
-                {notesBusy ? '저장 중…' : '메모 저장'}
-              </button>
-            </div>
-            {notesError && <p className="work-date-error">⚠ {notesError}</p>}
-          </div>
-        </section>
-
-        {/* 기간 — the dialog-side twin of the Timeline's bar-edge drag. Both
-            write day-level dates and preserve the original time-of-day. */}
-        <section className="work-detail-row">
-          <div className="work-detail-panel-title">기간</div>
-          <div className="work-detail-row-body">
-            <label className="work-date-field">
-              <span className="work-date-label">시작</span>
-              <input
-                type="date"
-                className="kv2-input work-date-input"
-                value={startInput}
-                max={endInput || undefined}
-                disabled={datesDisabled}
-                onChange={(e) => commitDate('startedAt', e.target.value)}
-              />
-            </label>
-            <span className="work-date-arrow" aria-hidden="true">→</span>
-            <label className="work-date-field">
-              <span className="work-date-label">{endLabel}</span>
-              <input
-                type="date"
-                className="kv2-input work-date-input"
-                value={endInput}
-                min={startInput || undefined}
-                disabled={datesDisabled}
-                onChange={(e) => commitDate('resolvedAt', e.target.value)}
-              />
-            </label>
-            {isOpenWork && endInput && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--small kv2-btn--ghost"
-                disabled={datesDisabled}
-                onClick={() => commitDate('resolvedAt', '')}
-              >
-                예정일 지우기
-              </button>
-            )}
-            <div className="work-detail-facts">
-              {/* An `active` Work whose planned end has passed. The date input
-                  above shows it either way, and a date in the past reads exactly
-                  like one in the future unless something says so. */}
-              {describeWorkPlanOverrun(work) && (
-                <span className="kv2-badge work-overrun-chip">{describeWorkPlanOverrun(work)}</span>
-              )}
-              {/* The day count lives in the badge at the top; what this row can
-                  add is when the Work was closed and when it last moved. */}
-              {!isOpenWork && work.resolvedAt && (
-                <span>{formatShortDate(work.resolvedAt)} {WORK_STATUS_LABELS[work.status]}</span>
-              )}
-              <span>마지막 활동 {formatDateTime(lastActivity) || '-'}</span>
-            </div>
-          </div>
-          {dateError && <p className="work-date-error">⚠ {dateError}</p>}
-          {dateHint && !dateError && <p className="work-date-hint">{dateHint}</p>}
-        </section>
-
-        <section className="work-detail-row">
-          <div className="work-detail-panel-title">산출물</div>
-          <div className="work-detail-row-body">
-            {describeWorkArtifacts({ cardCount, doneCount, inProgressCount }).map((chip) => (
-              <span className="kv2-badge" key={chip.label} title={chip.hint}>
-                {chip.label} {chip.count}
-              </span>
-            ))}
-            {wikiLabel ? (
-              <span className="work-detail-fact">wiki 문서: {wikiLabel}</span>
-            ) : (
-              <span className="work-detail-fact work-detail-wiki">
-                wiki 문서:
-                {wikiDocPaths.map((docPath) => (
-                  <code className="works-mono work-detail-wiki-doc" key={docPath} title={docPath}>
-                    {docPath}
-                  </code>
-                ))}
-              </span>
+        {/* ── 메모 — collapsible like the card detail's sidebar panels ──
+            Human-owned, visibly separate from the machine-owned Summary. Opens
+            by itself when there is something to read or a draft in progress. */}
+        <section className="kv2-detail-primary-block work-detail-section work-notes">
+          <div className="kv2-panel-heading work-detail-heading">
+            <button
+              type="button"
+              className="kv2-session-title work-detail-disclosure"
+              aria-expanded={notesOpen}
+              onClick={() => setNotesOpen((open) => !open)}
+            >
+              메모
+              <span className="kv2-chevron" style={{ transform: notesOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
+            </button>
+            {notesDirty && <span className="work-notes-dirty">저장하지 않은 변경</span>}
+            {!notesOpen && (work.notes ?? '').trim() && (
+              <span className="kv2-session-helper work-notes-peek">{(work.notes ?? '').trim().split('\n')[0]}</span>
             )}
           </div>
-          {detailError && (
-            <p className="work-date-error">
-              ⚠ 산출물 집계를 불러오지 못했습니다 ({detailError}) — 보드에 남은 카드만 세었습니다.
-            </p>
+          {!notesOpen && !(work.notes ?? '').trim() && (
+            <div className="kv2-session-helper">다음에 볼 것, 막힌 지점, 결정 사항. Summary와 달리 자동으로 덮어쓰이지 않습니다.</div>
+          )}
+          {notesOpen && (
+            <div className="work-notes-body">
+              <textarea
+                className="kv2-input work-notes-input"
+                value={notesValue}
+                rows={4}
+                maxLength={WORK_NOTES_MAX_LENGTH}
+                disabled={!onUpdateNotes || notesBusy}
+                readOnly={!onUpdateNotes}
+                placeholder={onUpdateNotes
+                  ? '다음에 볼 것, 막힌 지점, 결정 사항… (Summary와 달리 자동으로 덮어쓰이지 않습니다)'
+                  : '메모 편집은 준비 중입니다'}
+                aria-label="메모"
+                onChange={(e) => setNotesDraft(e.target.value)}
+              />
+              <div className="work-notes-foot">
+                <span className="work-notes-count">
+                  {notesValue.length} / {WORK_NOTES_MAX_LENGTH}
+                </span>
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--small kv2-btn--outline"
+                  disabled={!onUpdateNotes || notesBusy || !notesDirty || notesTooLong}
+                  onClick={saveNotes}
+                >
+                  {notesBusy ? '저장 중…' : '메모 저장'}
+                </button>
+              </div>
+              {notesError && <p className="work-date-error">⚠ {notesError}</p>}
+            </div>
           )}
         </section>
 
-        <section className="work-detail-sessions">
-          <div className="work-detail-panel-title">연결된 세션 {links.length}</div>
+        {/* ── 연결된 세션 ───────────────────────────────────────── */}
+        <section className="kv2-detail-primary-block work-detail-section work-detail-sessions">
+          <div className="kv2-panel-heading work-detail-heading">
+            <span className="kv2-session-title">연결된 세션</span>
+            <span className="kv2-badge kv2-badge--session">{links.length}</span>
+          </div>
           {links.length === 0 ? (
             <p className="works-empty">연결된 세션이 없습니다.</p>
           ) : (
-            sessionRows.map(({ link, title, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt }) => (
-              <div
-                className={`work-session-item${cardsMissingAt ? ' work-session-item--missing' : ''}`}
-                key={link.sessionId}
-              >
-                {link.role && (
-                  <span className={`kv2-badge works-role works-role--${link.role}`}>
-                    {ROLE_LABELS[link.role]}
-                  </span>
-                )}
-                <div className="work-session-body">
-                  <div className="work-session-title">{title}</div>
-                  <div className="work-session-meta">
-                    <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
-                      {formatShortDate(startedAt ?? link.linkedAt)}
-                      {startedAt ? '' : ' 연결'}
+            <div className="work-session-list">
+              {sessionRows.map(({ link, title, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt }) => (
+                <div
+                  className={[
+                    'work-session-item',
+                    // The role tints the whole row (background + left edge), not
+                    // just the chip: a list of 개발 / 리뷰 / 디버그 rows should
+                    // read as bands at a glance.
+                    link.role ? `work-session-item--role-${link.role}` : '',
+                    cardsMissingAt ? 'work-session-item--missing' : '',
+                  ].filter(Boolean).join(' ')}
+                  key={link.sessionId}
+                >
+                  {link.role && (
+                    <span className={`kv2-badge works-role works-role--${link.role}`}>
+                      {ROLE_LABELS[link.role]}
                     </span>
-                    {link.projectDir ? ` · ${projectDirLabel(link.projectDir)}` : ''}
-                    {` · 카드 ${sessionCardCount}`}
-                    {archived ? ' · 보관됨' : ''}
-                    {` · `}
-                    <span className="works-mono">{shortSessionId(link.sessionId)}</span>
-                  </div>
-                  {cardsMissingAt && (
-                    <div className="work-session-missing">
-                      ⚠ 카드가 하나도 남아 있지 않습니다 — 이 링크는 Work의 시작일을 연결 시각으로
-                      끌어내립니다. 아래 <b>끊긴 세션 정리</b>로 제거하세요.
+                  )}
+                  <div className="work-session-body">
+                    <div className="work-session-title">{title}</div>
+                    <div className="work-session-meta">
+                      <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
+                        {formatShortDate(startedAt ?? link.linkedAt)}
+                        {startedAt ? '' : ' 연결'}
+                      </span>
+                      {link.projectDir ? ` · ${projectDirLabel(link.projectDir)}` : ''}
+                      {` · 카드 ${sessionCardCount}`}
+                      {archived ? ' · 보관됨' : ''}
+                      {` · `}
+                      <span className="works-mono">{shortSessionId(link.sessionId)}</span>
                     </div>
+                    {cardsMissingAt && (
+                      <div className="work-session-missing">
+                        ⚠ 카드가 하나도 남아 있지 않습니다 — 이 링크는 Work의 시작일을 연결 시각으로
+                        끌어내립니다. 아래 <b>끊긴 세션 정리</b>로 제거하세요.
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="kv2-btn kv2-btn--small kv2-btn--outline"
+                    onClick={() => onOpenSession(link.sessionId)}
+                  >
+                    대화
+                  </button>
+                  {sessionActions && (
+                    <WorkSessionMenu
+                      role={link.role}
+                      disabled={busy}
+                      onMove={() => setMoveLink(link)}
+                      onSetRole={(role) => handleSetRole(link, role)}
+                      // The unlink rejects through the shared Works error alert;
+                      // swallowing here keeps that from becoming an unhandled
+                      // rejection (same contract as `handleSetRole`).
+                      onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
+                    />
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--small kv2-btn--ghost"
-                  onClick={() => onOpenSession(link.sessionId)}
-                >
-                  대화
-                </button>
-                {sessionActions && (
-                  <WorkSessionMenu
-                    role={link.role}
-                    disabled={busy}
-                    onMove={() => setMoveLink(link)}
-                    onSetRole={(role) => handleSetRole(link, role)}
-                    // The unlink rejects through the shared Works error alert;
-                    // swallowing here keeps that from becoming an unhandled
-                    // rejection (same contract as `handleSetRole`).
-                    onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
-                  />
-                )}
-              </div>
-            ))
+              ))}
+            </div>
           )}
           {/* No "＋ 세션 연결" button. It was a permanently disabled control —
               App never passed a handler — and linking a session already has a
               working home: Inbox triage, or ⋯ → 다른 Work로 이동 on the session
-              that owns it. A button that can never fire is worse than no
-              button, because it advertises a capability and then withholds it. */}
+              that owns it. */}
         </section>
 
-        {pruneError && <p className="work-date-error">⚠ {pruneError}</p>}
+        {pruneError && <p className="work-date-error work-detail-inline-error">⚠ {pruneError}</p>}
 
-        {/* Only meaningful while the Work can still be completed. A resolved
-            Work has already been swept (or was discarded), so the notice would
-            describe an action that is no longer available. */}
+        {/* Only meaningful while the Work can still be completed. */}
         {!isResolved && (
           <div className="work-detail-note">
             ✅ <b>완료</b> 시: 산하 카드를 일괄 done 처리 후 archive → wiki 파이프라인이 연결된 세션 transcript를 종합해 문서를 생성합니다.
           </div>
         )}
 
-        <div className="kv2-dialog-footer">
-          <div className="kv2-actions-split">
-            {/* Destructive actions grouped at the left edge, least severe first:
-                폐기 keeps everything and only closes the Work, 삭제 removes it. */}
-            <div className="kv2-actions-danger">
-              {/* 폐기 only closes the Work (cards and sessions stay put), 삭제
-                  removes it — so the softer variant carries the softer action
-                  instead of both reading as the same red. */}
+        {/* ── Footer: the card detail's rail — danger left, primary right ── */}
+        <div className="kv2-dialog-footer kv2-dialog-actions kv2-dialog-actions--detail work-detail-footer">
+          <div className="kv2-dialog-actions-rail kv2-actions-split">
+            <div className="kv2-dialog-danger-row kv2-actions-danger">
               <button
                 type="button"
                 className="kv2-btn kv2-btn--subtle-danger"
-                // 폐기 closes an *open* Work. A resolved one is already closed,
-                // and re-closing a completed Work would only overwrite the
-                // resolution that its archive sweep recorded.
                 disabled={busy || isResolved || resolveMode !== null}
                 title={isResolved ? '이미 종료된 Work입니다' : undefined}
                 onClick={() => setResolveMode('discard')}
@@ -970,60 +1047,55 @@ export function WorkDetailDialog({
                 삭제…
               </button>
             </div>
-            {/* 다시 열기 — the escape from what used to be a one-way door:
-                before this, a completed Work could only be DELETEd, which threw
-                the record away instead of undoing the completion. Only offered
-                on a resolved Work, and grouped with the constructive actions
-                (it restores rather than closes). */}
-            {isResolved && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--outline"
-                disabled={busy || !onReopen || resolveMode !== null}
-                title={onReopen ? undefined : 'Work 다시 열기는 준비 중입니다'}
-                onClick={() => setResolveMode('reopen')}
-              >
-                ↺ 다시 열기…
-              </button>
-            )}
-            {/* 병합 needs the Works list to pick a target from, which arrives
-                with `sessionActions`. */}
-            {!isResolved && onMerge && sessionActions && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--outline"
-                disabled={busy || merging || links.length === 0}
-                title={links.length === 0 ? '옮길 세션이 없습니다' : undefined}
-                onClick={() => setMerging(true)}
-              >
-                ⇉ 다른 Work에 병합…
-              </button>
-            )}
-            {missingLinkCount > 0 && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--outline"
-                disabled={busy || !onPruneSessions}
-                title={onPruneSessions ? undefined : '세션 정리는 준비 중입니다'}
-                onClick={handlePrune}
-              >
-                🧹 끊긴 세션 정리 ({missingLinkCount})
-              </button>
-            )}
-            <div className="kv2-actions-primary">
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--success"
-                disabled={busy || work.status !== 'active' || resolveMode !== null}
-                onClick={() => setResolveMode('complete')}
-              >
-                ✔ 완료 (일괄 archive)
-              </button>
+            <div className="kv2-dialog-actions-group work-detail-footer-secondary">
+              {!isResolved && onMerge && sessionActions && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--outline"
+                  disabled={busy || merging || links.length === 0}
+                  title={links.length === 0 ? '옮길 세션이 없습니다' : undefined}
+                  onClick={() => setMerging(true)}
+                >
+                  ⇉ 다른 Work에 병합…
+                </button>
+              )}
+              {missingLinkCount > 0 && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--outline"
+                  disabled={busy || !onPruneSessions}
+                  title={onPruneSessions ? undefined : '세션 정리는 준비 중입니다'}
+                  onClick={handlePrune}
+                >
+                  🧹 끊긴 세션 정리 ({missingLinkCount})
+                </button>
+              )}
+            </div>
+            {/* The primary slot holds 완료 while the Work is open and nothing
+                once it is resolved. A disabled 완료 on a finished Work was a
+                bright green button that did nothing, and the 다시 열기 that
+                briefly took its place only confused: a finished record has no
+                primary action. (Reopen stays reachable through the API and the
+                confirm dialog's `reopen` mode, should a surface want it.) */}
+            <div className="kv2-dialog-actions-group kv2-dialog-actions-group--detail-priority kv2-actions-primary">
+              {!isResolved && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--success"
+                  disabled={busy || resolveMode !== null}
+                  onClick={() => setResolveMode('complete')}
+                >
+                  ✔ 완료 (일괄 archive)
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
+      {openWikiDoc && (
+        <WorkWikiDocDialog docPath={openWikiDoc} onClose={() => setOpenWikiDoc(null)} />
+      )}
       {resolveMode && (
         <WorkResolveConfirmDialog
           work={work}

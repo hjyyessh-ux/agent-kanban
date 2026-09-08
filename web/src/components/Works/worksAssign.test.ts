@@ -555,7 +555,7 @@ describe('describeCompletionByStatus', () => {
   test('lists non-zero statuses in board order', () => {
     expect(describeCompletionByStatus(preview({
       byStatus: { todo: 2, in_progress: 1, complete: 0, done: 3 },
-    }))).toBe('대기 2 · 진행중 1 · done 3');
+    }))).toBe('대기 2 · 진행중 1 · 완료 3');
   });
 
   test('an empty Work reads as an empty string, not "0"', () => {

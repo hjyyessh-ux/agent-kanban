@@ -140,17 +140,35 @@ export function WorkResolveConfirmDialog({
   };
 
   return (
-    <DialogSkeleton title={copy.title} onClose={onCancel} width="560px">
+    <DialogSkeleton
+      title={copy.title}
+      onClose={onCancel}
+      width="560px"
+      className={`work-resolve-dialog work-resolve-dialog--${mode}`}
+    >
       <div className="work-resolve-confirm">
-        <p className="work-resolve-target">{work.title}</p>
+        {/* Which Work — the same label/value tile the detail dialog uses. */}
+        <div className="kv2-meta-card work-resolve-target-card">
+          <span className="kv2-meta-label">대상 Work</span>
+          <p className="work-resolve-target">{work.title}</p>
+        </div>
         {mode === 'complete' ? (
           <>
             <p className="work-resolve-headline">{describeWorkCompletion(preview)}</p>
             {keptFavorites && <p className="work-resolve-fact">{keptFavorites}</p>}
             <div className="work-resolve-facts">
-              <span className="kv2-badge kv2-badge--session">세션 {work.sessionLinks.length}</span>
-              {preview && <span className="kv2-badge">카드 {preview.cardCount}</span>}
-              {statusBreakdown && <span className="work-resolve-fact">{statusBreakdown}</span>}
+              <div className="kv2-meta-card work-resolve-fact-card">
+                <span className="kv2-meta-label">세션</span>
+                <span className="kv2-meta-value work-resolve-stat">{work.sessionLinks.length}</span>
+              </div>
+              <div className="kv2-meta-card work-resolve-fact-card">
+                <span className="kv2-meta-label">카드</span>
+                <span className="kv2-meta-value work-resolve-stat">{preview ? preview.cardCount : '…'}</span>
+              </div>
+              <div className="kv2-meta-card work-resolve-fact-card work-resolve-fact-card--wide">
+                <span className="kv2-meta-label">상태별</span>
+                <span className="kv2-meta-value">{statusBreakdown || (loading ? '확인 중…' : '-')}</span>
+              </div>
             </div>
             {loading && <p className="work-resolve-fact">영향 범위를 확인하는 중…</p>}
             {previewError && (
@@ -183,7 +201,14 @@ export function WorkResolveConfirmDialog({
               {describeWorkReopen(archivedCardCount ?? null)}
             </p>
             <div className="work-resolve-facts">
-              <span className="kv2-badge kv2-badge--session">세션 {work.sessionLinks.length}</span>
+              <div className="kv2-meta-card work-resolve-fact-card">
+                <span className="kv2-meta-label">세션</span>
+                <span className="kv2-meta-value work-resolve-stat">{work.sessionLinks.length}</span>
+              </div>
+              <div className="kv2-meta-card work-resolve-fact-card">
+                <span className="kv2-meta-label">돌아오는 카드</span>
+                <span className="kv2-meta-value work-resolve-stat">{archivedCardCount ?? '?'}</span>
+              </div>
             </div>
             <p className="work-resolve-fact">
               이미 만들어진 wiki 문서는 지워지지 않습니다. 다시 완료하면 같은 문서를 덮어씁니다.
@@ -192,11 +217,11 @@ export function WorkResolveConfirmDialog({
         )}
         {error && <p className="work-date-error">⚠ {error}</p>}
       </div>
-      <div className="kv2-dialog-footer">
+      <div className="kv2-dialog-footer work-resolve-footer">
         <div className="kv2-actions-split">
           <button
             type="button"
-            className="kv2-btn kv2-action-cancel"
+            className="kv2-btn kv2-btn--outline kv2-action-cancel"
             disabled={busy}
             onClick={onCancel}
           >
