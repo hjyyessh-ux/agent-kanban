@@ -9,9 +9,9 @@ export function WorkSessionPicker({ sessions, onAdd }: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const session = sessions.find(item => item.sessionId === selected);
-  return <details className="work-session-picker">
-    <summary>＋ 세션 추가</summary>
-    <p className="kv2-session-helper">이 목표로 진행한 미배정 세션을 연결하세요. 새 실행을 시작하지 않습니다.</p>
+  return <section className="work-session-picker" aria-label="세션 추가">
+    <div className="kv2-panel-heading"><span className="kv2-session-title">세션 추가</span></div>
+    <p className="kv2-session-helper">이 목표로 진행한 미배정 세션을 연결하세요.</p>
     {sessions.length === 0 ? <p className="works-empty">연결할 미배정 세션이 없습니다.</p> : <form
       className="works-active-toolbar" onSubmit={event => {
         event.preventDefault();
@@ -31,5 +31,5 @@ export function WorkSessionPicker({ sessions, onAdd }: {
       <button className="kv2-btn kv2-btn--primary" disabled={!session || busy}>{busy ? '연결 중…' : '이 Work에 연결'}</button>
     </form>}
     {error && <p role="alert">{error}</p>}
-  </details>;
+  </section>;
 }

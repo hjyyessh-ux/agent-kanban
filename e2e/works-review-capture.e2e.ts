@@ -19,7 +19,7 @@ import {
  * Locators are copied from `works.e2e.ts` on purpose — this file must not
  * invent a second vocabulary for the same screens.
  */
-const OUT_DIR = path.resolve(process.cwd(), '.playwright-mcp', 'works-fixes');
+const OUT_DIR = path.resolve(process.cwd(), '.playwright-mcp', 'works-flow-revision');
 mkdirSync(OUT_DIR, { recursive: true });
 
 const PROJECT_DIR = '/tmp/works-review-project';
@@ -130,10 +130,10 @@ test('capture: Works tab and Work detail in both themes', async ({ page, seedCar
 
   await setTheme(page, 'dark');
   await shot(page, '04-work-detail-dark');
-  await detail.getByRole('button', { name: '활동·타임라인', exact: true }).click();
-  await shot(page, '17-work-activity-dark');
-  await detail.getByRole('button', { name: '결과', exact: true }).click();
-  await shot(page, '18-work-results-dark');
+  await detail.getByLabel('세션 추가', { exact: true }).scrollIntoViewIfNeeded();
+  await shot(page, '17-work-sessions-dark');
+  await detail.getByRole('button', { name: '삭제…' }).scrollIntoViewIfNeeded();
+  await shot(page, '18-work-actions-dark');
 });
 
 test('capture: completion confirm, resolved layout, and reopen', async ({ page, seedCard, trackWork }) => {
@@ -168,9 +168,10 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   await expect(resolved).toBeVisible();
   await shot(page, '08-resolved-detail-light');
 
-  // A resolved Work's footer carries no forward action: neither 완료 nor the
-  // 다시 열기 that briefly replaced it (the reopen route and confirm mode
-  // remain, without a button).
+  await resolved.getByLabel('보관된 Work의 Wiki').scrollIntoViewIfNeeded();
+  await shot(page, '21-work-archived-wiki');
+
+  // Completed Works expose their archive and can be reopened.
   await expect(resolved.getByRole('button', { name: '다시 열기', exact: true })).toBeEnabled();
   await expect(resolved.getByRole('button', { name: /완료 \(일괄 archive\)/ })).toHaveCount(0);
   await setTheme(page, 'dark');
@@ -225,8 +226,11 @@ test('capture: 390px mobile, and nothing overflows sideways', async ({ page, see
   await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
   await expect(page.getByRole('dialog', { name: WORK_TITLE })).toBeVisible();
   await shot(page, '16-work-detail-mobile-390');
-  await page.getByRole('dialog', { name: WORK_TITLE }).getByRole('button', { name: '결과', exact: true }).click();
-  await shot(page, '19-work-results-mobile');
+  const detail = page.getByRole('dialog', { name: WORK_TITLE });
+  await detail.getByLabel('세션 추가', { exact: true }).scrollIntoViewIfNeeded();
+  await shot(page, '19-work-session-picker-mobile');
+  await detail.getByRole('button', { name: '삭제…' }).scrollIntoViewIfNeeded();
+  await shot(page, '20-work-actions-mobile');
 
   // The mobile failure mode this pass is looking for: the *page* must not gain a
   // horizontal scrollbar (an inner strip scrolling itself is fine and intended).

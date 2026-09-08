@@ -26,7 +26,7 @@ type DocState =
   | { status: 'error'; message: string };
 
 /**
- * A Work's wiki document, opened from the 산출물 tile of the Work detail.
+ * A Work's wiki document, opened from the archived Work's Wiki directory section.
  *
  * The Wiki tab reaches the same document through `WikiCardDialog`, but that
  * dialog is built around a *card* (its wiki decision, run, topics). A Work

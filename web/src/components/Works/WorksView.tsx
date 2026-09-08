@@ -477,7 +477,7 @@ function WorkListCard({
   );
 }
 
-/** Works are the default view; Inbox triage has its own navigation entry. */
+/** Active Works and Inbox assignment share the primary workspace. */
 export function WorksView({
   works,
   inbox,
@@ -503,7 +503,7 @@ export function WorksView({
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
-  const [section, setSection] = useState<'active' | 'resolved' | 'inbox'>('active');
+  const [section, setSection] = useState<'active' | 'resolved'>('active');
   // The Work whose completion is awaiting confirmation. One instance for the
   // whole list: the row button only names a target, it never mutates.
   const [completing, setCompleting] = useState<Work | null>(null);
@@ -836,14 +836,14 @@ export function WorksView({
         )}
       </div>
 
-      <p className="kv2-session-helper">하나의 목표로 진행한 세션을 묶고, 작업의 흐름과 결과를 함께 확인하세요.</p>
+      <p className="kv2-session-helper">미배정 세션을 하나의 목표로 묶고, 진행 중인 Work를 관리하세요.</p>
       <div className="works-navigation" role="group" aria-label="Work 목록 보기">
-        {(['active', 'resolved', 'inbox'] as const).map(value => (
+        {(['active', 'resolved'] as const).map(value => (
           <button key={value} type="button" aria-pressed={section === value}
             className={`kv2-btn${section === value ? ' kv2-btn--primary' : ' kv2-btn--ghost'}`}
             onClick={() => setSection(value)}>
             {value === 'active' ? `진행 중 ${works.filter(w => w.status === 'active').length}`
-              : value === 'resolved' ? `완료·폐기 ${works.filter(w => w.status !== 'active').length}` : `미배정 ${inbox.length}`}
+              : `완료·폐기 ${works.filter(w => w.status !== 'active').length}`}
           </button>
         ))}
       </div>
@@ -868,19 +868,18 @@ export function WorksView({
       {loading && works.length === 0 && inbox.length === 0 ? (
         <div className="loading-spinner" role="status" aria-label="Loading works..." />
       ) : (
-        <>
+        <div className={section === 'active' ? 'works-active-layout' : undefined}>
           {/* The section also renders with an empty Inbox when something is on
               the ignore list: the restore list is reached from this header, and
               hiding the header would make a discarded session unrecoverable
               exactly when the Inbox is finally clean. */}
-          {section === 'inbox' && (
-            <section className="works-section">
+          {section === 'active' && (
+            <section className="works-section works-triage-section" aria-label="미배정 세션">
               <div className="works-section-heading">
-                <span>📥 Inbox — 미배정 세션</span>
+                <span>📥 미배정 세션</span>
                 <span className="works-section-hint">함께 진행한 세션만 선택해 Work로 묶으세요</span>
                 <span className="works-section-rule" />
               </div>
-              {inbox.length === 0 && <p className="works-empty">미배정 세션이 없습니다. 새 세션이 생기면 여기에 표시됩니다.</p>}
               <div className="works-inbox">
                 <div className="works-inbox-header">
                   <span>미배정 세션 {inbox.length}개</span>
@@ -930,7 +929,7 @@ export function WorksView({
                 )}
 
                 <div
-                  className={`works-inbox-rows${dragging ? ' is-dragging' : ''}`}
+                  className={`works-inbox-rows${dragging ? ' is-dragging' : ''}${expandedSessionId ? ' works-inbox-rows--assigning' : ''}`}
                   ref={listRef}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
@@ -1059,7 +1058,7 @@ export function WorksView({
             </section>
           )}
 
-          {section !== 'inbox' && <section className="works-section">
+          <section className="works-section works-grouped-section">
             <div className="works-section-heading">
               <span>{section === 'resolved' ? '완료·폐기한 작업' : '진행 중인 작업'}</span>
               <span className="works-section-hint">
@@ -1105,7 +1104,6 @@ export function WorksView({
                   </select>
                 </label>
               </div>
-            {section === 'active' && activeTotal === 0 && <button type="button" className="kv2-btn kv2-btn--primary" onClick={() => setSection('inbox')}>미배정 세션 묶기</button>}
             {activeWorks.length === 0 ? (
               <p className="works-empty">
                 {activeTotal === 0
@@ -1125,10 +1123,10 @@ export function WorksView({
                 ))}
               </div>
             )}
-          </section>}
+          </section>
 
 
-        </>
+        </div>
       )}
 
       {completing && (

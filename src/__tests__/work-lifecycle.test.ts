@@ -1487,7 +1487,7 @@ describe('Work completion cascade safety', () => {
       const { handleRequest: handler } = handlerWith(store, new SettingsStore(dir), workStore);
       const detail = await (await handler(new Request(`http://localhost/api/works/${work.id}/sessions`)))!.json() as WorkSessionsResponse;
       expect(detail.cardCount).toBe(2);
-      expect(detail.activities.map(c => c.id)).toContain(child.id);
+      expect(detail.sessions.flatMap(session => session.cardIds)).toContain(child.id);
     });
   });
 });
