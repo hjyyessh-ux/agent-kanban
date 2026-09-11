@@ -212,9 +212,9 @@ const TELEGRAM_COMMAND_DEFINITIONS: readonly TelegramCommandDefinition[] = [
   {
     token: '/fable5',
     command: 'fable5',
-    description: 'Claude Fable 5로 전환',
+    description: 'Claude Fable 5.1로 전환',
     helpEntry: '/fable5 [작업 내용]',
-    modelShortcut: { runtime: 'claude', model: 'claude-fable-5' },
+    modelShortcut: { runtime: 'claude', model: 'claude-fable-5-1' },
   },
   {
     token: '/sonnet5',
