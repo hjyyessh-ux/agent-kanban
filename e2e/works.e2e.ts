@@ -629,6 +629,20 @@ test('배정 패널은 같은 디렉토리를 같은 색으로, 이어진 세션
   expect(await dirSlot(items.nth(0))).not.toBe(sessionSlot!);
 });
 
+test('Work 목록 카드 전체를 눌러 상세를 연다', async ({ page, seedWork }) => {
+  const title = `전체 클릭 Work ${Date.now()}`;
+  await seedWork({ title, projectDir: PROJECT_DIR });
+
+  await openWorksTab(page);
+  const card = workCard(page, title);
+  await expect(card.getByRole('button', { name: `${title} 상세 열기`, exact: true })).toBeVisible();
+
+  // 제목/상세 버튼이 아니라 카드의 가운데를 누르는 실제 사용자 경로입니다.
+  // 전면 버튼이 없던 구현에서는 이 클릭이 단순 div에서 끝났습니다.
+  await card.click();
+  await expect(page.getByRole('dialog', { name: title })).toBeVisible();
+});
+
 test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따라간다', async ({
   page, seedCard, seedWork, trackWork,
 }) => {

@@ -424,9 +424,16 @@ function WorkListCard({
 
   return (
     <div className={`works-card works-card--${work.status}${resolved ? ' works-card--resolved' : ''}${overrun ? ' works-card--overrun' : ''}`}>
+      {onOpenWork && (
+        <button
+          type="button"
+          className="works-card-open"
+          aria-label={`${work.title} 상세 열기`}
+          onClick={() => onOpenWork(work)}
+        />
+      )}
       <div className="works-card-body">
-        <button type="button" className="kv2-unstyled-button works-card-title"
-          disabled={!onOpenWork} onClick={() => onOpenWork?.(work)}>{work.title}</button>
+        <div className="works-card-title">{work.title}</div>
         <div className="works-card-meta">
           <DirChip projectDir={work.projectDir} />
           <span>
@@ -458,7 +465,7 @@ function WorkListCard({
             // Ghost, not the green primary it used to be: completing a Work is
             // the most destructive action on this screen, so it must not be the
             // most inviting target on a row people click to open 상세.
-            className="kv2-btn kv2-btn--small kv2-btn--ghost"
+            className="kv2-btn kv2-btn--small kv2-btn--ghost works-card-action"
             onClick={() => onRequestComplete(work)}
           >
             완료…
@@ -466,7 +473,7 @@ function WorkListCard({
         )}
         <button
           type="button"
-          className="kv2-btn kv2-btn--small kv2-btn--outline"
+          className="kv2-btn kv2-btn--small kv2-btn--outline works-card-action"
           disabled={!onOpenWork}
           onClick={onOpenWork ? () => onOpenWork(work) : undefined}
         >
