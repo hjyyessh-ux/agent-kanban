@@ -530,6 +530,22 @@
   opacity: 0.82;
 }
 
+.works-card-open {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.works-card-open:focus-visible {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: -6px;
+}
+
 .works-card-body {
   flex: 1;
   min-width: 0;
@@ -566,6 +582,11 @@
   align-items: center;
   gap: var(--kv2-sp-2);
   flex: none;
+}
+
+.works-card-action {
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Role chips (shared by modal + detail) ──────────────────── */
