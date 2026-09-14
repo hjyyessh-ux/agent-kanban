@@ -19,6 +19,7 @@ import { SkillVisibilityControl } from './VisibilityControl';
 import type { SkillRoot } from '../../../../src/core/types';
 import {
   CAPABILITY_RUNTIME_FILTERS,
+  filterNameFirst,
   inventoryRuntimeCounts,
   matchesRuntime,
   runtimeLabel,
@@ -111,29 +112,24 @@ export function InventoryView({
 
   const filteredMcp = useMemo(() => {
     if (typeFilter === 'skill') return [];
-    const q = search.toLowerCase();
-    return mcp.filter((item) => {
-      if (!matchesRuntime(item.runtime, runtimeFilter)) return false;
-      if (!q) return true;
-      return (
-        item.name.toLowerCase().includes(q) ||
-        item.placements.some((p) => p.scope.includes(q))
-      );
-    });
+    const candidates = mcp.filter((item) => matchesRuntime(item.runtime, runtimeFilter));
+    return filterNameFirst(
+      candidates,
+      search,
+      (item) => item.name,
+      (item) => item.placements.map((placement) => placement.scope),
+    );
   }, [mcp, search, typeFilter, runtimeFilter]);
 
   const filteredSkills = useMemo(() => {
     if (typeFilter === 'mcp') return [];
-    const q = search.toLowerCase();
-    return skills.filter((s) => {
-      if (!matchesRuntime(s.runtime, runtimeFilter)) return false;
-      if (!q) return true;
-      return (
-        s.skillName.toLowerCase().includes(q) ||
-        s.description.toLowerCase().includes(q) ||
-        s.source.toLowerCase().includes(q)
-      );
-    });
+    const candidates = skills.filter((skill) => matchesRuntime(skill.runtime, runtimeFilter));
+    return filterNameFirst(
+      candidates,
+      search,
+      (skill) => skill.skillName,
+      (skill) => [skill.description, skill.source],
+    );
   }, [skills, search, typeFilter, runtimeFilter]);
 
   const totalCount = filteredMcp.length + filteredSkills.length;
@@ -357,7 +353,7 @@ export function InventoryView({
               const isVisExpanded = expandedVisSkillId === identity;
               return (
                 <div
-                  key={skill.id}
+                  key={identity}
                   className={`inv-item inv-item--skill${skill.effectivelyHidden ? ' inv-item--hidden' : ''}`}
                 >
                   <div

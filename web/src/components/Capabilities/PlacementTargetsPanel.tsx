@@ -41,16 +41,22 @@ function targetLocations(runtime: McpRuntime, kind: CapScope, dir: string): Arra
   const skillDir = kind === 'user' ? dir : `${dir}/.${runtime}/skills`;
   return [
     { label: 'MCP', path: targetConfigPath(runtime, kind, dir) },
-    { label: 'Skill', path: skillDir },
+    { label: 'SKILL', path: skillDir },
   ];
 }
 
+export function compactPlacementPath(path: string): string {
+  return path
+    .replace(/\/Users\/[^/]+(?=\/)/g, '~')
+    .replace(/\/home\/[^/]+(?=\/)/g, '~');
+}
+
 /**
- * Inline (always-visible) Placement Targets manager shown at the top of the
- * Inventory view. Replaces the old header "Targets" button + modal so users
- * can see the MCP config and skill directory addressed by each target.
+ * Collapsible Placement Targets manager shown at the top of the Inventory view.
+ * The compact summary stays visible while paths and mutations are opt-in.
  */
 export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: PlacementTargetsPanelProps) {
+  const [expanded, setExpanded] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newLabel, setNewLabel] = useState('');
   const [newDir, setNewDir] = useState('');
@@ -59,7 +65,10 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
   const [newTeamShared, setNewTeamShared] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [copiedLocation, setCopiedLocation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const claudeCount = targets.filter((target) => target.runtime === 'claude').length;
+  const codexCount = targets.filter((target) => target.runtime === 'codex').length;
 
   const handleKindChange = (kind: CapScope) => {
     setNewKind(kind);
@@ -99,138 +108,188 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
     }
   };
 
+  const handleCopyLocation = async (key: string, path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopiedLocation(key);
+      window.setTimeout(() => {
+        setCopiedLocation((current) => current === key ? null : current);
+      }, 1500);
+    } catch {
+      setError('Failed to copy path');
+    }
+  };
+
   return (
     <section className="ptp-panel" aria-label="Placement targets">
       <div className="ptp-header">
         <div className="ptp-header-text">
           <h3 className="ptp-title">Placement Targets</h3>
           <p className="ptp-hint">
-            MCP 서버와 skill을 배치(copy / move / restore)할 수 있는 대상 위치입니다.
+            {loading && targets.length === 0
+              ? 'Loading targets…'
+              : `${targets.length} configured · Claude ${claudeCount} · Codex ${codexCount}`}
           </p>
         </div>
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--outline kv2-btn--small"
-          onClick={() => { setShowAddForm((v) => !v); setError(null); }}
-          aria-expanded={showAddForm}
-        >
-          {showAddForm ? 'Cancel' : '+ Add Target'}
-        </button>
-      </div>
-
-      {error && <p className="ptp-error">{error}</p>}
-
-      <div className="ptp-list">
-        {loading && targets.length === 0 && <p className="ptp-empty">Loading...</p>}
-        {!loading && targets.length === 0 && <p className="ptp-empty">No targets configured.</p>}
-        {targets.map((t) => {
-          const locations = targetLocations(t.runtime, t.kind, t.dir);
-          return (
-            <div key={t.id} className="ptp-item">
-              <span
-                className={`scope-chip scope-chip--${t.kind}`}
-                title={KIND_HINTS[t.runtime][t.kind] ?? t.kind}
-              >
-                {t.kind}
-              </span>
-              <RuntimeBadge runtime={t.runtime} />
-              <span className="ptp-item-label">{t.label}</span>
-              <span className="ptp-item-dir" title={locations.map(({ label, path }) => `${label}: ${path}`).join('\n')}>
-                {locations.map(({ label, path }) => (
-                  <span key={label} className="ptp-item-path">
-                    <span className="ptp-item-path-label">{label}</span>
-                    <span className="ptp-item-path-value">{path}</span>
-                  </span>
-                ))}
-              </span>
-              {t.teamShared && (
-                <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
-              )}
-              {t.builtin ? (
-                <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
-              ) : (
-                <button
-                  type="button"
-                  className="ptp-remove-btn"
-                  onClick={() => void handleRemove(t.id)}
-                  disabled={removingId === t.id}
-                  aria-label={`Remove ${t.label}`}
-                  title="Target 삭제 (파일은 삭제되지 않습니다)"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {showAddForm && (
-        <div className="ptp-add-form">
-          <div className="ptp-add-row">
-            <input
-              type="text"
-              className="kv2-input ptp-add-label"
-              placeholder="Label (e.g. my-project)"
-              aria-label="Target label"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-            />
-            <select
-              className="kv2-select ptp-add-kind"
-              value={newRuntime}
-              onChange={(e) => setNewRuntime(e.target.value as McpRuntime)}
-              aria-label="Target runtime"
-            >
-              <option value="claude">claude</option>
-              <option value="codex">codex</option>
-            </select>
-            <select
-              className="kv2-select ptp-add-kind"
-              value={newKind}
-              onChange={(e) => handleKindChange(e.target.value as CapScope)}
-              aria-label="Target kind"
-            >
-              {KIND_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-            <label className="ptp-team-shared">
-              <input
-                type="checkbox"
-                checked={newTeamShared}
-                onChange={(e) => setNewTeamShared(e.target.checked)}
-              />
-              team-shared (git)
-            </label>
-          </div>
-          <div className="ptp-add-row">
-            <div className="ptp-add-dir" role="group" aria-label="Target directory">
-              <DirectoryPicker
-                id="ptp-target-dir"
-                value={newDir}
-                onChange={setNewDir}
-                placeholder="~/workspace/my-project"
-                onCommit={(v) => setNewDir(v)}
-              />
-            </div>
+        <div className="ptp-header-actions">
+          {expanded && (
             <button
               type="button"
-              className="kv2-btn kv2-btn--primary kv2-btn--small"
-              onClick={() => void handleAdd()}
-              disabled={adding || !newLabel.trim() || !newDir.trim()}
+              className="kv2-btn kv2-btn--outline kv2-btn--small"
+              onClick={() => { setShowAddForm((current) => !current); setError(null); }}
+              aria-expanded={showAddForm}
             >
-              {adding ? 'Adding...' : '+ Add'}
+              {showAddForm ? 'Cancel' : '+ Add Target'}
             </button>
+          )}
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--outline kv2-btn--small"
+            onClick={() => {
+              setExpanded((current) => !current);
+              setShowAddForm(false);
+              setError(null);
+            }}
+            aria-expanded={expanded}
+            aria-controls="placement-targets-content"
+          >
+            {expanded ? 'Hide' : 'Show targets'}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div id="placement-targets-content" className="ptp-content">
+          {error && <p className="ptp-error">{error}</p>}
+
+          <div className="ptp-list">
+            {loading && targets.length === 0 && <p className="ptp-empty">Loading...</p>}
+            {!loading && targets.length === 0 && <p className="ptp-empty">No targets configured.</p>}
+            {targets.map((t) => {
+              const locations = targetLocations(t.runtime, t.kind, t.dir);
+              return (
+                <div key={t.id} className="ptp-item">
+                  <span
+                    className={`scope-chip scope-chip--${t.kind}`}
+                    title={KIND_HINTS[t.runtime][t.kind] ?? t.kind}
+                  >
+                    {t.kind}
+                  </span>
+                  <RuntimeBadge runtime={t.runtime} />
+                  <span className="ptp-item-label" title={t.label}>{t.label}</span>
+                  <span className="ptp-item-dir">
+                    {locations.map(({ label, path }) => {
+                      const locationKey = `${t.id}:${label}`;
+                      return (
+                        <button
+                          key={locationKey}
+                          type="button"
+                          className={`ptp-item-path ptp-item-path--${label.toLowerCase()}`}
+                          title={`Copy full path: ${path}`}
+                          aria-label={`Copy ${label} path for ${t.label}: ${path}`}
+                          onClick={() => void handleCopyLocation(locationKey, path)}
+                        >
+                          <span className="ptp-item-path-label">{label}</span>
+                          <span className="ptp-item-path-value">{compactPlacementPath(path)}</span>
+                          <span className="ptp-item-path-copy" aria-hidden="true">
+                            {copiedLocation === locationKey ? 'Copied' : '⎘'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </span>
+                  <span className="ptp-item-actions">
+                    {t.teamShared && (
+                      <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
+                    )}
+                    {t.builtin ? (
+                      <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ptp-remove-btn"
+                        onClick={() => void handleRemove(t.id)}
+                        disabled={removingId === t.id}
+                        aria-label={`Remove ${t.label}`}
+                        title="Target 삭제 (파일은 삭제되지 않습니다)"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
           </div>
-          <p className="ptp-hint">
-            {targetLocations(newRuntime, newKind, newDir.trim() || '<directory>')
-              .map(({ label, path }) => `${label}: ${path}`)
-              .join(' · ')}
-            {newRuntime === 'codex' && newKind !== 'user'
-              ? ' · trusted project에서만 로드되며 새 세션 또는 Codex 클라이언트 재시작이 필요할 수 있습니다.'
-              : ''}
-          </p>
+
+          {showAddForm && (
+            <div className="ptp-add-form">
+              <div className="ptp-add-row">
+                <input
+                  type="text"
+                  className="kv2-input ptp-add-label"
+                  placeholder="Label (e.g. my-project)"
+                  aria-label="Target label"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                />
+                <select
+                  className="kv2-select ptp-add-kind"
+                  value={newRuntime}
+                  onChange={(e) => setNewRuntime(e.target.value as McpRuntime)}
+                  aria-label="Target runtime"
+                >
+                  <option value="claude">claude</option>
+                  <option value="codex">codex</option>
+                </select>
+                <select
+                  className="kv2-select ptp-add-kind"
+                  value={newKind}
+                  onChange={(e) => handleKindChange(e.target.value as CapScope)}
+                  aria-label="Target kind"
+                >
+                  {KIND_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <label className="ptp-team-shared">
+                  <input
+                    type="checkbox"
+                    checked={newTeamShared}
+                    onChange={(e) => setNewTeamShared(e.target.checked)}
+                  />
+                  team-shared (git)
+                </label>
+              </div>
+              <div className="ptp-add-row">
+                <div className="ptp-add-dir" role="group" aria-label="Target directory">
+                  <DirectoryPicker
+                    id="ptp-target-dir"
+                    value={newDir}
+                    onChange={setNewDir}
+                    placeholder="~/workspace/my-project"
+                    onCommit={(v) => setNewDir(v)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--primary kv2-btn--small"
+                  onClick={() => void handleAdd()}
+                  disabled={adding || !newLabel.trim() || !newDir.trim()}
+                >
+                  {adding ? 'Adding...' : '+ Add'}
+                </button>
+              </div>
+              <p className="ptp-hint">
+                {targetLocations(newRuntime, newKind, newDir.trim() || '<directory>')
+                  .map(({ label, path }) => `${label}: ${path}`)
+                  .join(' · ')}
+                {newRuntime === 'codex' && newKind !== 'user'
+                  ? ' · trusted project에서만 로드되며 새 세션 또는 Codex 클라이언트 재시작이 필요할 수 있습니다.'
+                  : ''}
+              </p>
+            </div>
+          )}
         </div>
       )}
     </section>

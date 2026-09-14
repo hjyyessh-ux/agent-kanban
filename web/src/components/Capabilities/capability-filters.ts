@@ -39,6 +39,23 @@ export function matchesRuntime(
   return filter === 'all' || runtime === filter;
 }
 
+export function filterNameFirst<T>(
+  items: T[],
+  query: string,
+  nameOf: (item: T) => string,
+  secondaryTextOf: (item: T) => string[],
+): T[] {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return items;
+
+  const nameMatches = items.filter((item) => nameOf(item).toLowerCase().includes(normalized));
+  if (nameMatches.length > 0) return nameMatches;
+
+  return items.filter((item) =>
+    secondaryTextOf(item).some((value) => value.toLowerCase().includes(normalized)),
+  );
+}
+
 export function listRuntimeCounts(
   items: CapabilityItem[],
 ): Record<CapabilityRuntimeFilter, number> {

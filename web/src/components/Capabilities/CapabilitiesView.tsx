@@ -30,6 +30,7 @@ import { InventoryView } from './InventoryView';
 import { StorageDrawer } from './StorageDrawer';
 import {
   CAPABILITY_RUNTIME_FILTERS,
+  filterNameFirst,
   listRuntimeCounts,
   matchesRuntime,
   runtimeLabel,
@@ -113,17 +114,6 @@ function buildItems(skills: DiscoveredSkill[], scripts: ScriptEntry[]): Capabili
   return [...skillItems, ...scriptItems];
 }
 
-function matchesSearch(item: CapabilityItem, query: string): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  return (
-    item.name.toLowerCase().includes(q) ||
-    item.description.toLowerCase().includes(q) ||
-    item.directory.toLowerCase().includes(q) ||
-    (item.tools ?? []).some((t) => t.toLowerCase().includes(q))
-  );
-}
-
 export function CapabilitiesView({
   skills,
   skillsLoading,
@@ -200,11 +190,16 @@ export function CapabilitiesView({
   const allItems = useMemo(() => buildItems(skills, scripts), [skills, scripts]);
 
   const filteredItems = useMemo(() => {
-    return allItems.filter((item) => {
+    const candidates = allItems.filter((item) => {
       if (typeFilter !== 'all' && item.type !== typeFilter) return false;
-      if (!matchesRuntime(item.agent, runtimeFilter)) return false;
-      return matchesSearch(item, search);
+      return matchesRuntime(item.agent, runtimeFilter);
     });
+    return filterNameFirst(
+      candidates,
+      search,
+      (item) => item.name,
+      (item) => [item.description, item.directory, ...(item.tools ?? [])],
+    );
   }, [allItems, typeFilter, runtimeFilter, search]);
   const runtimeCounts = useMemo(() => listRuntimeCounts(
     typeFilter === 'all' ? allItems : allItems.filter((item) => item.type === typeFilter),
@@ -427,7 +422,9 @@ export function CapabilitiesView({
             const scriptEntry =
               item.type === 'script' ? scripts.find((s) => s.id === item.id) : undefined;
             const skillEntry =
-              item.type === 'skill' ? skills.find((s) => s.id === item.id) : undefined;
+              item.type === 'skill'
+                ? skills.find((s) => s.id === item.id && s.runtime === item.agent)
+                : undefined;
             const isClickable = (item.type === 'script' && Boolean(scriptEntry)) ||
               (item.type === 'skill' && Boolean(skillEntry));
 
@@ -438,7 +435,7 @@ export function CapabilitiesView({
 
             return (
               <div
-                key={`${item.type}:${item.id}`}
+                key={`${item.type}:${item.agent ?? 'none'}:${item.id}`}
                 className={`cap-item${isClickable ? ' cap-item--clickable' : ''}`}
                 onClick={handleClick}
                 role={isClickable ? 'button' : undefined}

@@ -37,6 +37,32 @@ interface ParsedFrontmatter {
   disableModelInvocation?: boolean;
 }
 
+function readBlockScalar(lines: string[], start: number, style: '>' | '|'): { value: string; next: number } {
+  const block: string[] = [];
+  let index = start;
+  while (index < lines.length && (lines[index].trim() === '' || /^\s+/.test(lines[index]))) {
+    block.push(lines[index]);
+    index++;
+  }
+
+  const indentation = block
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.match(/^\s*/)?.[0].length ?? 0)
+    .reduce((minimum, width) => Math.min(minimum, width), Number.POSITIVE_INFINITY);
+  const normalized = block.map((line) =>
+    Number.isFinite(indentation) ? line.slice(indentation) : line,
+  );
+  const value = style === '|'
+    ? normalized.join('\n').trim()
+    : normalized
+      .join('\n')
+      .split(/\n\s*\n/)
+      .map((paragraph) => paragraph.replace(/\s*\n\s*/g, ' ').trim())
+      .filter(Boolean)
+      .join('\n');
+  return { value, next: index };
+}
+
 /**
  * Parse the leading `---` YAML block of a SKILL.md. Extracts `name`,
  * `description`, and tool/MCP keys (`allowed-tools`, `tools`, `mcp`).
@@ -58,6 +84,13 @@ export function parseFrontmatter(content: string): ParsedFrontmatter {
     const scalar = line.match(/^(name|description):\s*(.*)$/);
     if (scalar) {
       let value = scalar[2].trim();
+      const blockStyle = value.match(/^([>|])[+-]?$/)?.[1] as '>' | '|' | undefined;
+      if (scalar[1] === 'description' && blockStyle) {
+        const block = readBlockScalar(lines, i + 1, blockStyle);
+        result.description = block.value;
+        i = block.next;
+        continue;
+      }
       if (
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))
