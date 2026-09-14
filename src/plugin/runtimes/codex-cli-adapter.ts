@@ -18,6 +18,7 @@ import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle 
 import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
+import { joinResultSegments } from './result-segments';
 import { captureGitEndAndUsage } from './git-capture';
 import { withSpawnLock } from './spawn-lock';
 import { notifyTelegramCompletion } from '../telegram-completion';
@@ -38,7 +39,9 @@ export interface CodexCliAdapterDeps {
 interface CodexRunState {
   threadId?: string;
   timedOut: boolean;
-  resultBuffer: string;
+  // Every agent_message seen this run, in order. Joined at completion
+  // (see result-segments.ts) so mid-turn answers are not lost.
+  resultSegments: string[];
   threadResolved: boolean;
   resolveThread?: (threadId: string) => void;
 }
@@ -129,7 +132,7 @@ async function startCodexRun(
   const state: CodexRunState = {
     threadId: input.resumeSessionId,
     timedOut: false,
-    resultBuffer: '',
+    resultSegments: [],
     threadResolved: Boolean(input.resumeSessionId),
   };
 
@@ -325,7 +328,7 @@ async function processCodexLine(
     return;
   }
   if (event.type === 'agent_message') {
-    state.resultBuffer = event.text;
+    state.resultSegments.push(event.text);
   }
 }
 
@@ -397,7 +400,7 @@ async function handleCodexCompletion(input: {
     };
   }
 
-  const finalResult = await readFinalResult(input.run, input.state.resultBuffer);
+  const finalResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
 
   if (exitCode === 0 && input.state.threadId) {
     await input.deps.runStore.finishRun(input.run.runId, {
@@ -465,15 +468,21 @@ async function handleCodexCompletion(input: {
   };
 }
 
-async function readFinalResult(run: RuntimeRun, fallback: string): Promise<string> {
+// The streamed agent_message segments are authoritative: `codex exec -o` writes
+// only the LAST agent message to the last-message file, so preferring that file
+// dropped every earlier mid-turn answer. The file is rewritten with the joined
+// segments so the run artifact matches the card, and is read only as a fallback
+// when the stream yielded no agent text.
+async function readFinalResult(run: RuntimeRun, streamed: string): Promise<string> {
+  if (streamed) {
+    await writeFile(run.lastMessagePath, streamed);
+    return streamed;
+  }
   if (existsSync(run.lastMessagePath)) {
     const text = await readFile(run.lastMessagePath, 'utf8');
     if (text.trim()) return text;
   }
-  if (fallback) {
-    await writeFile(run.lastMessagePath, fallback);
-  }
-  return fallback;
+  return '';
 }
 
 async function readTail(path: string): Promise<string> {

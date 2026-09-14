@@ -263,6 +263,78 @@ describe('runtime hook scripts', () => {
     });
   }
 
+  test('claude on-stop stores every assistant text block of the current turn from the transcript', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionId = HOOKS.claude.promptInput.session_id;
+        // Previous turn (must be excluded) + current turn: answer → tool call → tool result → answer.
+        // Mirrors the real Claude Code transcript shape, including a sidechain (subagent) entry
+        // and a tool_result `user` entry, neither of which starts or belongs to the turn.
+        const lines = [
+          { type: 'user', message: { role: 'user', content: 'earlier prompt' } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'earlier answer' }] } },
+          { type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'current prompt' }] } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'hmm' }] } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '1차 답변' }] } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: {} }] } },
+          { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'ok' }] } },
+          { type: 'assistant', isSidechain: true, message: { role: 'assistant', content: [{ type: 'text', text: 'subagent chatter' }] } },
+          { type: 'system', content: 'noise' },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '최종 답변\n\n---\n**요약**' }] } },
+        ];
+        const transcriptPath = join(dir, `${sessionId}.jsonl`);
+        writeFileSync(transcriptPath, lines.map(line => JSON.stringify(line)).join('\n') + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir });
+        await runClaudeStop({
+          session_id: sessionId,
+          transcript_path: transcriptPath,
+          last_assistant_message: '최종 답변\n\n---\n**요약**',
+        }, { apiUrl, dataDir: dir });
+
+        const completeRequest = requests.findLast(
+          request => request.method === 'PATCH' && request.path === '/api/cards/card-from-hook',
+        );
+        expect((completeRequest?.body as { result?: string }).result)
+          .toBe('1차 답변\n\n최종 답변\n\n---\n**요약**');
+      });
+    });
+  });
+
+  test('claude on-stop falls back to last_assistant_message when the transcript is missing or stale', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionId = HOOKS.claude.promptInput.session_id;
+        // Transcript that does NOT yet contain the harness's final message (unflushed file).
+        const stalePath = join(dir, 'stale.jsonl');
+        writeFileSync(stalePath, [
+          JSON.stringify({ type: 'user', message: { role: 'user', content: 'prompt' } }),
+          JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'partial' }] } }),
+        ].join('\n') + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir });
+        await runClaudeStop({
+          session_id: sessionId,
+          transcript_path: stalePath,
+          last_assistant_message: 'harness final',
+        }, { apiUrl, dataDir: dir });
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir });
+        await runClaudeStop({
+          session_id: sessionId,
+          transcript_path: join(dir, 'does-not-exist.jsonl'),
+          last_assistant_message: 'harness final 2',
+        }, { apiUrl, dataDir: dir });
+
+        const results = requests
+          .filter(request => request.method === 'PATCH' && request.path === '/api/cards/card-from-hook')
+          .map(request => request.body as { status?: string; result?: string })
+          .filter(body => body.status === 'complete')
+          .map(body => body.result);
+        expect(results).toEqual(['harness final', 'harness final 2']);
+      });
+    });
+  });
+
   test('claude on-stop drains earlier deferred cards even while background tasks remain', async () => {
     await withTempDir(async (dir) => {
       await withFakeApi(async (apiUrl, requests) => {

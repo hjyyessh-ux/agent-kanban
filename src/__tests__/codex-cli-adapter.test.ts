@@ -50,7 +50,12 @@ if (scenario === 'failure') {
   process.exit(1);
 }
 const output = scenario === 'echo' ? configuredOutput + ':' + prompt.trim() : configuredOutput;
+// Like the real binary, \`-o\` receives ONLY the last agent message.
 if (outputPath) fs.writeFileSync(outputPath, output);
+if (scenario === 'multi-message') {
+  emit({ type: 'item.completed', item: { type: 'agent_message', role: 'assistant', text: 'first answer' } });
+  emit({ type: 'item.completed', item: { type: 'command_execution', command: 'ls', exit_code: 0 } });
+}
 emit({ type: 'item.completed', item: { role: 'assistant', content: [{ type: 'text', text: output }] } });
 emit({ type: 'turn.completed' });
 process.exit(0);
@@ -112,6 +117,38 @@ describe('CodexCliAdapter', () => {
       const run = await runStore.getRun(handle.runId);
       expect(run?.status).toBe('completed');
       expect(await Bun.file(run!.lastMessagePath).text()).toBe('done');
+    });
+  });
+
+  test('dispatch keeps every agent message of the turn, not just the -o last-message file', async () => {
+    await withTempDir(async (dir) => {
+      const fakeCodex = await createFakeCodexBinary(dir, 'multi-message', { output: 'final answer' });
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const card = await store.createCard({
+        title: 'Codex multi-message turn',
+        description: 'Answer, run, answer again',
+        agentRuntime: 'codex',
+        projectDir: dir,
+        model: 'gpt-5.3-codex',
+      });
+      const adapter = createCodexCliAdapter({
+        store,
+        runStore,
+        commandOverride: [fakeCodex],
+        threadIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      const done = await handle.done;
+
+      // Regression: the -o file (last message only) used to win over the streamed
+      // messages, and each agent_message overwrote the previous one.
+      const expected = 'first answer\n\nfinal answer';
+      expect(done.result).toBe(expected);
+      expect((await store.getCard(card.id))?.result).toBe(expected);
+      const run = await runStore.getRun(handle.runId);
+      expect(await Bun.file(run!.lastMessagePath).text()).toBe(expected);
     });
   });
 

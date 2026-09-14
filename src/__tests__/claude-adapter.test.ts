@@ -50,6 +50,16 @@ if (scenario === 'failure') {
   process.exit(1);
 }
 const output = scenario === 'echo' ? configuredOutput + ':' + prompt.trim() : configuredOutput;
+if (scenario === 'multi-text') {
+  // A real turn: answer → tool call → tool result → final answer. The CLI's terminal
+  // \`result\` event carries ONLY the last text, exactly like the real binary.
+  emit({ type: 'assistant', message: { id: 'msg-1', content: [{ type: 'text', text: 'first answer' }] } });
+  emit({ type: 'assistant', message: { id: 'msg-1', content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: {} }] } });
+  emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'ok' }] } });
+  emit({ type: 'assistant', message: { id: 'msg-2', content: [{ type: 'text', text: output }] } });
+  emit({ type: 'result', result: output, session_id: emittedSessionId, total_cost_usd: 0.001 });
+  process.exit(0);
+}
 emit({ type: 'assistant', message: { id: 'msg-1', content: [{ type: 'text', text: output }] } });
 emit({ type: 'result', result: output, session_id: emittedSessionId, total_cost_usd: 0.001 });
 process.exit(0);
@@ -124,6 +134,39 @@ describe('ClaudeAdapter', () => {
       await handle.done;
 
       expect((await store.getCard(card.id))?.result).toBe(result);
+    });
+  });
+
+  test('dispatch keeps every assistant text block of the turn, not just the final result event', async () => {
+    await withTempDir(async (dir) => {
+      const fakeClaude = await createFakeClaudeBinary(dir, 'multi-text', { output: 'final answer' });
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const card = await store.createCard({
+        title: 'Claude multi-text turn',
+        description: 'Answer, check, answer again',
+        agentRuntime: 'claude',
+        projectDir: dir,
+      });
+      const adapter = createClaudeAdapter({
+        store,
+        settingsStore,
+        runStore,
+        commandOverride: [fakeClaude],
+        sessionIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      const done = await handle.done;
+
+      // Regression: the terminal `result` event (last text only) used to overwrite the
+      // accumulated buffer, silently dropping "first answer".
+      const expected = 'first answer\n\nfinal answer';
+      expect(done.result).toBe(expected);
+      expect((await store.getCard(card.id))?.result).toBe(expected);
+      const run = await runStore.getRun(handle.runId);
+      expect(await Bun.file(run!.lastMessagePath).text()).toBe(expected);
     });
   });
 

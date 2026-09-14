@@ -12,6 +12,7 @@ import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { createClaudeBinaryResolver } from './claude-binary';
 import { parseClaudeStreamLine } from './claude-stream-parser';
+import { joinResultSegments } from './result-segments';
 import type { ClaudeStreamEvent } from './claude-stream-parser';
 import { withSpawnLock } from './spawn-lock';
 import { notifyTelegramCompletion } from '../telegram-completion';
@@ -30,7 +31,9 @@ export interface ClaudeAdapterDeps {
 interface ClaudeRunState {
   sessionId?: string;
   timedOut: boolean;
-  resultBuffer: string;
+  // Every assistant text block seen this run, in order. Joined at completion
+  // (see result-segments.ts) so mid-turn answers are not lost.
+  resultSegments: string[];
   sessionResolved: boolean;
   resolveSession?: (sessionId: string) => void;
 }
@@ -133,7 +136,7 @@ async function startClaudeRun(
   const state: ClaudeRunState = {
     sessionId: input.resumeSessionId,
     timedOut: false,
-    resultBuffer: '',
+    resultSegments: [],
     sessionResolved: Boolean(input.resumeSessionId),
   };
 
@@ -300,11 +303,14 @@ async function processClaudeLine(
     return;
   }
   if (event.type === 'assistant' && event.text) {
-    state.resultBuffer += event.text;
+    state.resultSegments.push(event.text);
     return;
   }
   if (event.type === 'result') {
-    if (event.result) state.resultBuffer = event.result;
+    // `result` carries only the LAST assistant text. Never let it replace the
+    // accumulated segments — that dropped every earlier mid-turn answer. Use it
+    // only when the stream produced no assistant text at all (e.g. error subtypes).
+    if (event.result && state.resultSegments.length === 0) state.resultSegments.push(event.result);
     if (event.sessionId) await onSessionId(event.sessionId);
   }
 }
@@ -377,7 +383,7 @@ async function handleClaudeCompletion(input: {
     };
   }
 
-  const finalResult = input.state.resultBuffer || '';
+  const finalResult = joinResultSegments(input.state.resultSegments);
   if (finalResult) {
     await writeFile(input.run.lastMessagePath, finalResult);
   }
