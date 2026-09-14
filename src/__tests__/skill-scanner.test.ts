@@ -48,6 +48,17 @@ describe('skill-scanner', () => {
     expect(skills[0].filePath).toContain('SKILL.md');
   });
 
+  test('parses folded multiline descriptions instead of showing the YAML marker', () => {
+    writeSkill(
+      claudeRoot,
+      'folded-description',
+      '---\nname: folded-description\ndescription: >-\n  First line for the skill.\n  Second line continues it.\n---',
+    );
+
+    const skills = scanSkills([{ dir: claudeRoot, runtime: 'claude', source: 'claude-user' }]);
+    expect(skills[0].description).toBe('First line for the skill. Second line continues it.');
+  });
+
   test('maps codex skills to skills:<name> with a $name display token', () => {
     writeSkill(codexRoot, 'codex-skill', '---\nname: codex-skill\ndescription: Codex thing.\n---');
     const skills = scanSkills([{ dir: codexRoot, runtime: 'codex', source: 'codex-user' }]);

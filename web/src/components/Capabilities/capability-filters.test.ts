@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { DiscoveredSkill, McpInventoryItem, SkillVisibility } from '../../../../src/core/types';
-import { inventoryRuntimeCounts, listRuntimeCounts, matchesRuntime, runtimeLabel } from './capability-filters';
+import {
+  filterNameFirst,
+  inventoryRuntimeCounts,
+  listRuntimeCounts,
+  matchesRuntime,
+  runtimeLabel,
+} from './capability-filters';
 
 const placement = (runtime: 'claude' | 'codex', identity: string) => ({
   identity, runtime, scope: 'user' as const, location: `/${runtime}`,
@@ -35,5 +41,18 @@ describe('Capabilities runtime filters', () => {
       { id: 'x', type: 'skill', name: 'x', agent: 'codex', directory: '/', scope: 'user', description: '' },
       { id: 's', type: 'script', name: 's', agent: null, directory: '/', scope: 'user', description: '' },
     ])).toEqual({ all: 3, claude: 1, codex: 1, opencode: 0 });
+  });
+
+  test('prefers name matches before searching descriptive metadata', () => {
+    const items = [
+      { name: 'kanban-create', description: 'Create a card' },
+      { name: 'pr-review', description: 'Reviews an agent-kanban change' },
+      { name: 'deploy', description: 'Production release helper' },
+    ];
+
+    expect(filterNameFirst(items, 'kanban-', (item) => item.name, (item) => [item.description]))
+      .toEqual([items[0]]);
+    expect(filterNameFirst(items, 'production', (item) => item.name, (item) => [item.description]))
+      .toEqual([items[2]]);
   });
 });
