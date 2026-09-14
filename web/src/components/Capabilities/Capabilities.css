@@ -441,9 +441,28 @@
 .ptp-item-dir {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-secondary);
+}
+
+.ptp-item-path {
+  display: flex;
+  min-width: 0;
+  gap: var(--kv2-sp-2);
+}
+
+.ptp-item-path-label {
+  flex: 0 0 48px;
+  color: var(--kv2-text-muted);
+  font-weight: 700;
+}
+
+.ptp-item-path-value {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2079,6 +2098,9 @@
   .ptp-item-dir {
     grid-column: 3;
     grid-row: 2;
+  }
+
+  .ptp-item-path-value {
     white-space: normal;
     overflow-wrap: anywhere;
   }

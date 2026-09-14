@@ -160,20 +160,36 @@ describe('skill-scanner', () => {
 
   // ─── inode / symlink dedup ───────────────────────────────────
 
-  test('deduplicates symlinked directories by inode', () => {
+  test('keeps a symlinked skill once per runtime', () => {
     writeSkill(claudeRoot, 'shared', '---\nname: shared\ndescription: from claude\n---');
 
+    const codexLinkRoot = join(base, 'codex-links');
     const agentsRoot = join(base, 'agents');
+    mkdirSync(codexLinkRoot, { recursive: true });
     mkdirSync(agentsRoot, { recursive: true });
-    // Symlink agentsRoot/shared → claudeRoot/shared (same physical directory)
+    symlinkSync(join(claudeRoot, 'shared'), join(codexLinkRoot, 'shared'));
     symlinkSync(join(claudeRoot, 'shared'), join(agentsRoot, 'shared'));
 
     const skills = scanSkills([
       { dir: claudeRoot, runtime: 'claude', source: 'claude-user' },
+      { dir: codexLinkRoot, runtime: 'codex', source: 'codex-user' },
       { dir: agentsRoot, runtime: 'opencode', source: 'opencode-user' },
     ]);
-    // Should appear only once — first root (claude) wins
+    expect(skills.filter((s) => s.skillName === 'shared')).toHaveLength(3);
+    expect(skills.map((s) => s.runtime)).toEqual(['claude', 'codex', 'opencode']);
+  });
+
+  test('deduplicates symlinked directories within the same runtime', () => {
+    writeSkill(claudeRoot, 'shared', '---\nname: shared\ndescription: from claude\n---');
+    const duplicateRoot = join(base, 'claude-links');
+    mkdirSync(duplicateRoot, { recursive: true });
+    symlinkSync(join(claudeRoot, 'shared'), join(duplicateRoot, 'shared'));
+
+    const skills = scanSkills([
+      { dir: claudeRoot, runtime: 'claude', source: 'claude-user' },
+      { dir: duplicateRoot, runtime: 'claude', source: 'claude-custom' },
+    ]);
     expect(skills.filter((s) => s.skillName === 'shared')).toHaveLength(1);
-    expect(skills[0].runtime).toBe('claude');
+    expect(skills[0].source).toBe('claude-user');
   });
 });

@@ -36,10 +36,19 @@ function targetConfigPath(runtime: McpRuntime, kind: CapScope, dir: string): str
   return kind === 'local' ? `~/.claude.json → projects[${dir}]` : '~/.claude.json';
 }
 
+function targetLocations(runtime: McpRuntime, kind: CapScope, dir: string): Array<{ label: string; path: string }> {
+  if (kind === 'cold') return [{ label: 'Storage', path: dir }];
+  const skillDir = kind === 'user' ? dir : `${dir}/.${runtime}/skills`;
+  return [
+    { label: 'MCP', path: targetConfigPath(runtime, kind, dir) },
+    { label: 'Skill', path: skillDir },
+  ];
+}
+
 /**
  * Inline (always-visible) Placement Targets manager shown at the top of the
  * Inventory view. Replaces the old header "Targets" button + modal so users
- * can see at a glance *where* MCP servers / skills can be placed.
+ * can see the MCP config and skill directory addressed by each target.
  */
 export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: PlacementTargetsPanelProps) {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -114,38 +123,46 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
       <div className="ptp-list">
         {loading && targets.length === 0 && <p className="ptp-empty">Loading...</p>}
         {!loading && targets.length === 0 && <p className="ptp-empty">No targets configured.</p>}
-        {targets.map((t) => (
-          <div key={t.id} className="ptp-item">
-            <span
-              className={`scope-chip scope-chip--${t.kind}`}
-              title={KIND_HINTS[t.runtime][t.kind] ?? t.kind}
-            >
-              {t.kind}
-            </span>
-            <RuntimeBadge runtime={t.runtime} />
-            <span className="ptp-item-label">{t.label}</span>
-            <span className="ptp-item-dir" title={targetConfigPath(t.runtime, t.kind, t.dir)}>
-              {targetConfigPath(t.runtime, t.kind, t.dir)}
-            </span>
-            {t.teamShared && (
-              <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
-            )}
-            {t.builtin ? (
-              <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
-            ) : (
-              <button
-                type="button"
-                className="ptp-remove-btn"
-                onClick={() => void handleRemove(t.id)}
-                disabled={removingId === t.id}
-                aria-label={`Remove ${t.label}`}
-                title="Target 삭제 (파일은 삭제되지 않습니다)"
+        {targets.map((t) => {
+          const locations = targetLocations(t.runtime, t.kind, t.dir);
+          return (
+            <div key={t.id} className="ptp-item">
+              <span
+                className={`scope-chip scope-chip--${t.kind}`}
+                title={KIND_HINTS[t.runtime][t.kind] ?? t.kind}
               >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
+                {t.kind}
+              </span>
+              <RuntimeBadge runtime={t.runtime} />
+              <span className="ptp-item-label">{t.label}</span>
+              <span className="ptp-item-dir" title={locations.map(({ label, path }) => `${label}: ${path}`).join('\n')}>
+                {locations.map(({ label, path }) => (
+                  <span key={label} className="ptp-item-path">
+                    <span className="ptp-item-path-label">{label}</span>
+                    <span className="ptp-item-path-value">{path}</span>
+                  </span>
+                ))}
+              </span>
+              {t.teamShared && (
+                <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
+              )}
+              {t.builtin ? (
+                <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
+              ) : (
+                <button
+                  type="button"
+                  className="ptp-remove-btn"
+                  onClick={() => void handleRemove(t.id)}
+                  disabled={removingId === t.id}
+                  aria-label={`Remove ${t.label}`}
+                  title="Target 삭제 (파일은 삭제되지 않습니다)"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {showAddForm && (
@@ -207,7 +224,9 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
             </button>
           </div>
           <p className="ptp-hint">
-            설정 파일: {targetConfigPath(newRuntime, newKind, newDir.trim() || '<directory>')}
+            {targetLocations(newRuntime, newKind, newDir.trim() || '<directory>')
+              .map(({ label, path }) => `${label}: ${path}`)
+              .join(' · ')}
             {newRuntime === 'codex' && newKind !== 'user'
               ? ' · trusted project에서만 로드되며 새 세션 또는 Codex 클라이언트 재시작이 필요할 수 있습니다.'
               : ''}
