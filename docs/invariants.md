@@ -55,6 +55,7 @@
 - 자식 liveness는 store(`GET /api/cards?status=in_progress`에서 `parentCardId` 일치)로 판정하며, 서버 조회 실패 시 fail-closed(=defer)로 동작해 검증 불가 상태가 카드를 조기 완료시키지 않는다.
 - subagent를 spawn한 부모 카드(`has-subagents` 마커 보유)는 완료해도 **트래킹 파일(`<session>.card-id`)을 삭제하지 않는다.** named teammate가 rest/resume하고 그 inter-agent 메시지가 main 세션의 추가 턴을 유발하는 동안 Stop이 계속 발생하므로, 트래킹 파일을 보존해 매 Stop이 카드를 최신 assistant 메시지로 **재완료(last-writer-wins)** 하게 한다 → 최종 턴(예: 마무리 요약)이 최종 결과로 수렴하고, defer 가드를 먼저 통과한 중간 메시지에 동결되지 않는다. (`on-subagent-realstop.sh`가 매핑을 보존하고 rest마다 자식을 재완료하는 것과 동일 패턴.) 자식 없는 카드는 후속 Stop이 없으므로 기존대로 즉시 트래킹 파일을 지운다. 보존된 파일은 다음 실제 프롬프트에서 on-prompt.sh가 덮어쓰거나 세션 종료 시 무해한 잔재로 남는다.
 - defer된 카드는 후속 Stop의 drain 루프가 완료시킨다. drain 루프는 background task 잔존 여부와 무관하게(early-exit 앞에서) 항상 실행되어야 한다.
+- 카드 `result`는 Stop 입력의 `transcript_path`에서 **현재 턴(마지막 실제 사용자 프롬프트 이후)의 assistant text 블록 전부**를 모아 만든다(`collect_turn_text`). `last_assistant_message`는 마지막 메시지 하나뿐이라 단독으로 쓰면 중간 답변이 사라진다. transcript를 못 읽었거나 수집 결과에 `last_assistant_message`가 포함되지 않으면(미flush) `last_assistant_message`로 fallback한다. tool_result만 담긴 `user` 엔트리와 `isSidechain` 엔트리는 턴 경계/본문에서 제외한다.
 
 ### Telegram 라우팅
 
@@ -88,6 +89,7 @@
 - runtime 실패는 card를 `todo`로 되돌리고 `progressSummary`에 `[failed] ...`를 남겨야 한다.
 - runtime 실패로 `todo`에 복귀한 card는 `command`/`arguments`, `resumeSessionId`, queue 설정, `projectDir`, `model`, `agentRuntime`, runtime options, `screenshots`를 dispatch 전과 동일하게 유지해야 한다.
 - Codex `thread_id` timeout과 Claude `session_id` timeout은 runtime run을 failed로 만들고 card를 `todo`로 되돌린다.
+- 카드 `result`는 그 run에서 스트리밍된 **모든 assistant text 블록을 순서대로 이어붙인 값**이다(`result-segments.ts`). Claude `result` 이벤트의 `result` 필드와 Codex `-o` last-message 파일은 마지막 메시지 하나만 담으므로, 누적 버퍼를 이 값으로 덮어쓰거나 이 파일을 우선하면 안 된다 — 스트리밍 텍스트가 전혀 없을 때의 fallback으로만 쓴다. (한 턴에서 `text → tool_use → text`가 이어질 때 1차 답변이 통째로 사라졌던 결함.)
 - opencode dispatch 순서 `store.updateCard -> trackDispatch -> promptAsync`는 `OpencodeAdapter` 안에서 보존한다.
 - `StaleCardChecker`의 opencode native session list 검사는 legacy/opencode card에만 적용한다.
 - Codex/Claude stale run은 `RuntimeRunStore.reconcileStale(store)`가 처리한다.

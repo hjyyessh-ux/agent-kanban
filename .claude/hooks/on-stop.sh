@@ -1,6 +1,7 @@
 #!/bin/bash
 # Claude Code Hook: Stop
-# Updates the kanban card with the assistant's final response.
+# Updates the kanban card with the full assistant text of the finished turn
+# (all text blocks, not just the last message — see collect_turn_text).
 # Hook input is received via stdin as JSON.
 
 set -euo pipefail
@@ -40,7 +41,53 @@ if [ -n "${AGENT_KANBAN_DISPATCH_CARD_ID:-}" ]; then
 fi
 
 SESSION_ID=$(echo "$HOOK_INPUT" | jq -r '.session_id // empty')
-RESULT=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // empty')
+LAST_MESSAGE=$(echo "$HOOK_INPUT" | jq -r '.last_assistant_message // empty')
+TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // empty')
+
+# collect_turn_text <transcript.jsonl>: every assistant text block of the CURRENT turn, in order,
+# joined by blank lines. The card result is a lossless task artifact, and `last_assistant_message`
+# is only the LAST assistant text — a turn that answers, runs more tools, then answers again
+# ("text → tool_use → text") would lose its first answer if we trusted that field alone.
+#
+# The current turn starts at the last real user prompt: a non-sidechain `user` entry whose content
+# is a plain string, or a block array that has a `text` block and no `tool_result` block
+# (tool results also arrive as `user` entries, but they do not start a turn). Sidechain (subagent)
+# entries are skipped. Prints nothing on any parse problem so the caller falls back.
+collect_turn_text() {
+  local path="$1"
+  [ -n "$path" ] && [ -f "$path" ] || return 0
+  jq -n -r '
+    def is_prompt:
+      .type == "user"
+      and ((.isSidechain // false) | not)
+      and (
+        (.message.content | type) == "string"
+        or (
+          (.message.content | type) == "array"
+          and any(.message.content[]; .type == "text")
+          and (any(.message.content[]; .type == "tool_result") | not)
+        )
+      );
+    [ inputs | select(.type == "user" or .type == "assistant") ] as $m
+    | ([ $m | to_entries[] | select(.value | is_prompt) | .key ] | last // -1) as $start
+    | [ $m[($start + 1):][]
+        | select(.type == "assistant" and ((.isSidechain // false) | not))
+        | .message.content[]?
+        | select(.type == "text")
+        | .text
+        | select(type == "string" and length > 0)
+      ]
+    | join("\n\n")
+  ' "$path" 2>/dev/null || true
+}
+
+RESULT=$(collect_turn_text "$TRANSCRIPT_PATH")
+# Fall back to the harness field when the transcript yielded nothing (missing/unflushed file,
+# unknown format) or does not even contain the harness's own final message — never regress
+# below what `last_assistant_message` already provided.
+if [ -z "$RESULT" ] || { [ -n "$LAST_MESSAGE" ] && [[ "$RESULT" != *"$LAST_MESSAGE"* ]]; }; then
+  RESULT="$LAST_MESSAGE"
+fi
 
 TRACKING_DIR="${KANBAN_DATA_DIR_RESOLVED}/.claude-hooks"
 TRACKING_FILE="${TRACKING_DIR}/${SESSION_ID}.card-id"
