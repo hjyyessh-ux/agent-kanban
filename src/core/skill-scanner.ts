@@ -258,14 +258,15 @@ function scanRoot(root: SkillRoot): DiscoveredSkill[] {
 /**
  * Scan all skill roots and return discovered skills, de-duplicated in two passes:
  *
- * 1. **Inode dedup** — symlinked or hardlinked directories that resolve to the
- *    same filesystem entry are counted once (first root wins). This prevents
- *    `~/.claude/skills/foo` and `~/.agents/skills/foo` from appearing twice when
- *    they share an inode.
+ * 1. **Runtime + inode dedup** — symlinked or hardlinked directories that resolve
+ *    to the same filesystem entry are counted once per runtime (first root wins).
+ *    The same physical skill may intentionally be exposed to Claude, Codex, and
+ *    OpenCode through runtime-specific symlinks.
  *
- * 2. **Id dedup** — different physical directories that produce the same logical
- *    command id also deduplicate (first occurrence wins), so a user-level skill
- *    shadows a system one.
+ * 2. **Runtime + id dedup** — different physical directories that produce the
+ *    same logical command id also deduplicate within one runtime (first occurrence
+ *    wins), so a user-level skill shadows a system one without hiding another
+ *    runtime's registration.
  */
 export function scanSkills(roots: SkillRoot[] = defaultSkillRoots()): DiscoveredSkill[] {
   const byId = new Map<string, DiscoveredSkill>();
@@ -273,11 +274,12 @@ export function scanSkills(roots: SkillRoot[] = defaultSkillRoots()): Discovered
 
   for (const root of roots) {
     for (const skill of scanRoot(root)) {
-      const inode = inodeKey(skill.directory);
+      const inode = `${skill.runtime}:${inodeKey(skill.directory)}`;
       if (seenInodes.has(inode)) continue;
       seenInodes.add(inode);
 
-      if (!byId.has(skill.id)) byId.set(skill.id, skill);
+      const id = `${skill.runtime}:${skill.id}`;
+      if (!byId.has(id)) byId.set(id, skill);
     }
   }
   return [...byId.values()];

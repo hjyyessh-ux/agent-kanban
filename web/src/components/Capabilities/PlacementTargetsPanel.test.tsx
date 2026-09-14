@@ -27,8 +27,12 @@ describe('PlacementTargetsPanel runtime paths', () => {
 
     expect(html).toContain('~/.claude.json');
     expect(html).toContain('~/.codex/config.toml');
+    expect(html).toContain('~/.codex/skills');
     expect(html).toContain('/repo/a/.codex/config.toml');
+    expect(html).toContain('/repo/a/.codex/skills');
     expect(html).toContain('/repo/b/.codex/config.toml');
+    expect(html).toContain('>MCP<');
+    expect(html).toContain('>Skill<');
     expect(html).toContain('kv2-runtime-badge--claude');
     expect((html.match(/kv2-runtime-badge--codex/g) ?? [])).toHaveLength(3);
     expect(html).toContain('aria-expanded="false"');
