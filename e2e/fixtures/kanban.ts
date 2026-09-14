@@ -2,6 +2,7 @@ import { test as base } from '@playwright/test';
 import type {
   CreateQuickActionInput,
   CreateWorkInput,
+  KanbanCard as Card,
   QuickActionView,
   Work,
 } from '../../src/core/types';
@@ -17,14 +18,6 @@ import {
   apiUpdateCard,
   type ScriptEntry,
 } from '../helpers/api';
-
-interface Card {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  [key: string]: unknown;
-}
 
 export const test = base.extend<{
   trackCard: (id: string) => void;

@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/kanban';
 import type { Page } from '@playwright/test';
+import type { ScheduledDispatchStatus } from '../src/core/types';
 import {
   apiCreateCard,
   apiE2EAdvanceClock,
@@ -56,11 +57,10 @@ async function waitForCardStatus(title: string, status: string) {
   }).toBe(status);
 }
 
-async function waitForScheduledStatus(title: string, status: string) {
+async function waitForScheduledStatus(title: string, status: ScheduledDispatchStatus) {
   await expect.poll(async () => {
     const card = await findCardByTitle(title);
-    const scheduled = card?.scheduledDispatch as { status?: string } | undefined;
-    return scheduled?.status ?? null;
+    return card?.scheduledDispatch?.status ?? null;
   }).toBe(status);
 }
 
