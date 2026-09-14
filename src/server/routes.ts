@@ -443,6 +443,8 @@ export type AggregateSessionsFn = () => Promise<NativeSessionInfo[]>;
 export interface SessionAggregate {
   sessionId: string;
   sessionTitle?: string;
+  /** Oldest top-level card's title, including archives; the stable Inbox label. */
+  firstCardTitle?: string;
   sessionCreatedAt?: string;
   cardTitle: string;
   cardId: string;
@@ -631,6 +633,17 @@ export async function computeSessionAggregates(
   const chains = buildSessionChainMap(allCards);
   const subagentTree = buildSubagentSessionTree(allCards);
   for (const session of sessions) {
+    // The label follows the first conversation, while the representative card
+    // still supplies the latest status, runtime, and activity timestamp.
+    const cards = cardsBySession.get(session.sessionId) ?? [];
+    const topLevelCards = cards.filter(card => !card.parentCardId);
+    const firstCard = (topLevelCards.length > 0 ? topLevelCards : cards)
+      .reduce<KanbanCard | undefined>((first, card) => {
+        if (!first) return card;
+        const order = new Date(card.createdAt).getTime() - new Date(first.createdAt).getTime();
+        return order < 0 || (order === 0 && card.id.localeCompare(first.id) < 0) ? card : first;
+      }, undefined);
+    session.firstCardTitle = firstCard?.title.trim() || undefined;
     const related = chains.get(session.sessionId);
     if (related) session.relatedSessionIds = related;
     const ancestors = subagentAncestorSessions(subagentTree, session.sessionId);
@@ -757,7 +770,7 @@ export function isInboxTriageMaterial(
 export function toInboxSession(session: SessionAggregate): WorkInboxSession {
   return {
     sessionId: session.sessionId,
-    sessionTitle: session.sessionTitle,
+    sessionTitle: session.firstCardTitle ?? session.sessionTitle,
     cardTitle: session.cardTitle,
     cardId: session.cardId,
     cardStatus: session.cardStatus,

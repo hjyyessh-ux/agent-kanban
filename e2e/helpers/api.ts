@@ -2,6 +2,7 @@ import type {
   AddWorkSessionInput,
   CreateQuickActionInput,
   CreateWorkInput,
+  KanbanCard as Card,
   MergeWorkResponse,
   QuickActionView,
   RunQuickActionInput,
@@ -32,23 +33,6 @@ interface Screenshot {
   mimeType: string;
   size: number;
   createdAt: string;
-}
-
-interface Card {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  agentType?: string;
-  sessionId?: string;
-  progressSummary?: string;
-  result?: string;
-  createdAt: string;
-  updatedAt: string;
-  model?: string;
-  projectDir?: string;
-  screenshots?: Screenshot[];
-  [key: string]: unknown;
 }
 
 export async function apiCreateCard(data: { title: string; description: string } & Record<string, unknown>): Promise<Card> {

@@ -53,6 +53,7 @@ async function seedCard(
     sessionId: string;
     parentCardId?: string;
     status?: 'todo' | 'in_progress' | 'complete' | 'done';
+    createdAt?: string;
     updatedAt?: string;
   },
 ): Promise<string> {
@@ -66,13 +67,16 @@ async function seedCard(
   if (input.status && input.status !== 'todo') {
     await store.updateCard(card.id, { status: input.status });
   }
-  if (input.updatedAt) {
+  if (input.createdAt || input.updatedAt) {
     // The Inbox window is measured on `updatedAt`, which the store stamps on
     // every write — backdating it means editing the board directly, after the
     // last write.
     const board = await store.load();
     const target = board.cards.find(c => c.id === card.id);
-    if (target) target.updatedAt = input.updatedAt;
+    if (target) {
+      if (input.createdAt) target.createdAt = input.createdAt;
+      if (input.updatedAt) target.updatedAt = input.updatedAt;
+    }
     await store.save(board);
   }
   return card.id;
@@ -86,6 +90,94 @@ async function readInbox(
   expect(res.status).toBe(200);
   return await res.json() as WorkInboxSession[];
 }
+
+describe('GET /api/works/inbox — first conversation title', () => {
+  for (const source of ['cards', 'native', 'native fallback'] as const) {
+    test(`keeps the archived first title after feedback and a PR request (${source})`, async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const workStore = new WorkStore(dir);
+        const sessionId = 'ses-title';
+        const aggregate = source === 'cards' ? undefined
+          : source === 'native' ? nativeSessions(sessionId) : nativeSessions();
+        const { handleRequest } = handlerWith(store, workStore, aggregate);
+        const firstTitle = 'Works 미배정 세션의 이름과 대화 진입 개선';
+        const first = await seedCard(store, {
+          title: firstTitle, sessionId, status: 'done',
+          createdAt: '2026-08-01T00:00:00.000Z',
+          updatedAt: '2026-08-02T00:00:00.000Z',
+        });
+        expect((await readInbox(handleRequest, '?since=all'))[0]?.sessionTitle).toBe(firstTitle);
+        await store.archiveCards([first]);
+
+        await seedCard(store, {
+          title: 'Feedback # 42', sessionId, status: 'complete',
+          createdAt: '2026-09-01T00:00:00.000Z',
+          updatedAt: '2026-09-02T00:00:00.000Z',
+        });
+        expect((await readInbox(handleRequest, '?since=all'))[0]?.sessionTitle).toBe(firstTitle);
+        const latest = await seedCard(store, {
+          title: 'PR 생성해', sessionId, status: 'in_progress',
+          createdAt: '2026-09-03T00:00:00.000Z',
+          updatedAt: '2026-09-04T00:00:00.000Z',
+        });
+        await store.updateCard(latest, { sessionTitle: 'PR 생성해' });
+        const latestCard = await store.getCard(latest);
+
+        // A second session proves sorting still follows activity, not the
+        // first conversation's date. Native listing titles cannot replace it.
+        await seedCard(store, {
+          title: 'another session', sessionId: 'ses-other',
+          updatedAt: '2026-09-03T00:00:00.000Z',
+        });
+        const inbox = await readInbox(handleRequest, '?since=all');
+        expect(inbox[0]).toMatchObject({
+          sessionId, sessionTitle: firstTitle, cardTitle: 'PR 생성해',
+          cardId: latest, cardStatus: 'in_progress', relatedCardCount: 3,
+          updatedAt: latestCard?.updatedAt,
+        });
+
+        await workStore.ignoreSession(sessionId);
+        const ignoredRes = await handleRequest(new Request('http://localhost/api/works/ignored-sessions?since=all'));
+        const ignored = await ignoredRes.json() as { session?: WorkInboxSession }[];
+        expect(ignored[0]?.session?.sessionTitle).toBe(firstTitle);
+      });
+    });
+  }
+
+  test('uses creation order and prefers a main card over a child on the same session', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const workStore = new WorkStore(dir);
+      const first = await seedCard(store, {
+        title: 'original topic', sessionId: 'ses-main',
+        createdAt: '2026-09-02T00:00:00.000Z',
+        updatedAt: '2026-09-06T00:00:00.000Z',
+      });
+      await seedCard(store, {
+        title: 'later instruction', sessionId: 'ses-main',
+        createdAt: '2026-09-03T00:00:00.000Z',
+        updatedAt: '2026-09-04T00:00:00.000Z',
+      });
+      await seedCard(store, {
+        title: 'child label', sessionId: 'ses-main', parentCardId: first,
+        createdAt: '2026-09-01T00:00:00.000Z',
+      });
+      await seedCard(store, {
+        title: 'first subagent task', sessionId: 'ses-child', parentCardId: first,
+        createdAt: '2026-09-02T00:00:00.000Z',
+      });
+      await seedCard(store, {
+        title: 'subagent follow-up', sessionId: 'ses-child', parentCardId: first,
+        createdAt: '2026-09-03T00:00:00.000Z',
+      });
+      const { handleRequest } = handlerWith(store, workStore, nativeSessions('ses-main', 'ses-child'));
+      const inbox = await readInbox(handleRequest, '?since=all');
+      expect(inbox.find(s => s.sessionId === 'ses-main')?.sessionTitle).toBe('original topic');
+      expect(inbox.find(s => s.sessionId === 'ses-child')?.sessionTitle).toBe('first subagent task');
+    });
+  });
+});
 
 describe('GET /api/works/inbox — session lineage on the native path', () => {
   test('populates relatedSessionIds when aggregateSessionsFn is injected', async () => {

@@ -467,9 +467,11 @@ describe('GET /api/works — filter and sort', () => {
       const store = new KanbanStore(dir);
       const workStore = new WorkStore(dir);
       const { handleRequest } = handlerWith(store, workStore);
-      const soon = await workStore.createWork({ title: 'due soon' });
-      const later = await workStore.createWork({ title: 'due later' });
-      const undated = await workStore.createWork({ title: 'no plan' });
+      // Keep the fixed planned ends after the start even when today advances.
+      const startedAt = '2026-09-01T00:00:00.000Z';
+      const soon = await workStore.createWork({ title: 'due soon', startedAt });
+      const later = await workStore.createWork({ title: 'due later', startedAt });
+      const undated = await workStore.createWork({ title: 'no plan', startedAt });
       await patch(handleRequest, `/api/works/${soon.id}`, { resolvedAt: '2026-09-11T00:00:00.000Z' });
       await patch(handleRequest, `/api/works/${later.id}`, { resolvedAt: '2026-09-20T00:00:00.000Z' });
 

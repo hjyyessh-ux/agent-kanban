@@ -402,6 +402,8 @@ Inbox는 보관소가 아니라 **정리 대기열**이므로, 다음 네 가지
 
 주요 필드:
 
+- `sessionTitle` — 보관된 카드까지 포함한 **첫 대화의 카드 제목**(`createdAt` 기준, 최상위 카드 우선). 후속 대화나 런타임 제목 갱신에 따라 바뀌지 않습니다. 첫 카드 제목이 비어 있으면 기존 세션 제목으로 폴백합니다. `GET /api/sessions`에서는 같은 값을 `firstCardTitle`로 제공하며 기존 `sessionTitle`은 유지합니다.
+- `cardTitle` / `cardId` — 최근 대표 카드의 제목과 id. 세션 이름과 별개로 최신 카드 정보를 유지합니다.
 - `cardStatus` — 대표 카드의 상태. Inbox 행의 상태 칩(`실행 중` / `미실행`)이 이 값으로 그려집니다
 - `sessionKind` — `'main' | 'subagent'`. subagent 세션이지만 부모가 아직 미배정이면 `'subagent'`로 내려오고 행에 칩이 붙습니다
 - `relatedSessionIds` — 그 세션의 계보(subagent 부모 / 큐 체인 / 이어받은 세션, archive된 카드 포함). 배정 UI의 `🔗 이어진 세션` 신호이며, **두 집계 경로(카드 파생 / 네이티브) 모두에서 채워집니다** — [`works.md`](./works.md) 참고
