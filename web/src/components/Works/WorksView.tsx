@@ -77,8 +77,8 @@ export interface WorksViewProps {
   onCompleteWork: (workId: string, options?: { confirmed?: boolean }) => Promise<WorkResolveOutcome>;
   onRefresh: () => Promise<void>;
   onClearError: () => void;
-  /** Open the source card's conversation ("대화 보기"). */
-  onOpenCard?: (cardId: string) => void;
+  /** Open all turns of the session, including archived cards. */
+  onOpenSession?: (sessionId: string) => void;
   /** Open the Work detail dialog (card 3/7 — undefined disables the button). */
   onOpenWork?: (work: Work) => void;
   /** Open the assign-all modal (card 3/7 — undefined disables the button). */
@@ -116,7 +116,7 @@ function InboxRow({
   onCreateWorkFromSession,
   onLinkSessionToWork,
   onIgnoreSession,
-  onOpenCard,
+  onOpenSession,
 }: {
   session: WorkInboxSession;
   works: WorkListEntry[];
@@ -137,7 +137,7 @@ function InboxRow({
   onCreateWorkFromSession: WorksViewProps['onCreateWorkFromSession'];
   onLinkSessionToWork: WorksViewProps['onLinkSessionToWork'];
   onIgnoreSession: WorksViewProps['onIgnoreSession'];
-  onOpenCard?: (cardId: string) => void;
+  onOpenSession?: (sessionId: string) => void;
 }) {
   const isOld = daysSince(session.updatedAt) >= OLD_SESSION_DAYS;
   const title = session.sessionTitle?.trim() || session.cardTitle;
@@ -167,34 +167,38 @@ function InboxRow({
         }
         : null;
 
-  // In selection mode the whole row is a toggle, so clicking a session that is
-  // already checked unchecks it. The row's own buttons keep their behaviour.
-  const handleRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!selectionMode) return;
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
-    onToggleSelect();
+  const activateRow = () => {
+    if (selectionMode) onToggleSelect();
+    else onOpenSession?.(session.sessionId);
   };
 
-  // The clickable row needs to be operable without a pointer: in selection mode
-  // it is a toggle button (`role`/`tabIndex`/`aria-pressed` below), so Enter and
-  // Space have to do what a click does. The checkbox keeps its own Space.
+  // Assignment controls keep their own actions; the remaining row opens the
+  // conversation, or toggles this session while selecting a batch.
+  const handleRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+    activateRow();
+  };
+
+  // Enter and Space mirror a click. The checkbox keeps its own Space.
   const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
     event.preventDefault();
-    onToggleSelect();
+    activateRow();
   };
 
   return (
     <div className="works-inbox-row-group">
       <div
-        className={`works-inbox-row${selectionMode ? ' works-inbox-row--selectable' : ''}${selected ? ' is-selected' : ''}`}
+        className={`works-inbox-row${selectionMode ? ' works-inbox-row--selectable' : onOpenSession ? ' works-inbox-row--clickable' : ''}${selected ? ' is-selected' : ''}`}
         ref={(node) => registerRow(session.sessionId, node)}
         onClick={handleRowClick}
-        role={selectionMode ? 'button' : undefined}
-        tabIndex={selectionMode ? 0 : undefined}
+        role={selectionMode || onOpenSession ? 'button' : undefined}
+        tabIndex={selectionMode || onOpenSession ? 0 : undefined}
+        aria-label={!selectionMode && onOpenSession ? `${title} 대화 보기` : undefined}
+        aria-haspopup={!selectionMode && onOpenSession ? 'dialog' : undefined}
         aria-pressed={selectionMode ? selected : undefined}
-        onKeyDown={selectionMode ? handleRowKeyDown : undefined}
+        onKeyDown={selectionMode || onOpenSession ? handleRowKeyDown : undefined}
       >
         {selectionMode && (
           <input
@@ -237,7 +241,7 @@ function InboxRow({
           )}
         </div>
         {/* Hidden while selecting: in selection mode the row *is* a toggle, and
-            three per-row actions next to it both invited the wrong click and
+            per-row actions next to it both invited the wrong click and
             put button surface in the way of the range drag. The batch panel
             below the list owns the actions for a selection. */}
         {!selectionMode && (
@@ -250,15 +254,6 @@ function InboxRow({
             >
               {expanded ? '접기 ▲' : '배정'}
             </button>
-            {onOpenCard && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--small kv2-btn--ghost"
-                onClick={() => onOpenCard(session.cardId)}
-              >
-                대화 보기
-              </button>
-            )}
             {!expanded && (
               <button
                 type="button"
@@ -501,7 +496,7 @@ export function WorksView({
   onCompleteWork,
   onRefresh,
   onClearError,
-  onOpenCard,
+  onOpenSession,
   onOpenWork,
   onAssignAll,
   config,
@@ -966,7 +961,7 @@ export function WorksView({
                       onCreateWorkFromSession={createWorkFromSession}
                       onLinkSessionToWork={linkSessionToWork}
                       onIgnoreSession={ignoreSession}
-                      onOpenCard={onOpenCard}
+                      onOpenSession={onOpenSession}
                     />
                   ))}
                 </div>
@@ -1065,13 +1060,15 @@ export function WorksView({
             </section>
           )}
 
-          <section className="works-section works-grouped-section">
-            <div className="works-section-heading">
-              <span>{section === 'resolved' ? '완료·폐기한 작업' : '진행 중인 작업'}</span>
-              <span className="works-section-hint">
+          <section className="works-section works-grouped-section" aria-labelledby="works-grouped-heading">
+            <div className="works-grouped-header">
+              <h2 id="works-grouped-heading" className="kv2-panel-heading works-grouped-title">
+                <span aria-hidden="true">{section === 'resolved' ? '🗂️' : '🎯'}</span>
+                {section === 'resolved' ? '완료·폐기한 작업' : '진행 중인 작업'}
+              </h2>
+              <span className="kv2-badge">
                 {activeFiltered ? `${activeWorks.length} / ${activeTotal}개` : `전체 ${activeTotal}개`}
               </span>
-              <span className="works-section-rule" />
             </div>
               <div className="works-active-toolbar">
                 <input

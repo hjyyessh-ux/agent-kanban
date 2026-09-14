@@ -136,6 +136,71 @@ test.beforeEach(async () => {
   await apiResetWorksState();
 });
 
+test('Inbox keeps the first title and opens the full conversation from the row', async ({ page, seedCard }) => {
+  const sessionId = `claude-works-first-title-${Date.now()}`;
+  const first = await seedCard({
+    title: '미배정 세션 제목과 대화 보기 개선',
+    description: '첫 대화의 요청 본문입니다.',
+    projectDir: PROJECT_DIR, sessionId,
+  });
+  await apiUpdateCard(first.id, { status: 'done', result: '첫 대화의 결과입니다.' });
+  await apiArchiveCards([first.id]);
+  const feedback = await seedCard({
+    title: 'Feedback # 42', description: '추가 수정 요청입니다.',
+    projectDir: PROJECT_DIR, sessionId,
+  });
+  await apiUpdateCard(feedback.id, { status: 'complete' });
+  const latest = await seedCard({
+    title: 'PR 생성해', description: '수정한 내용으로 PR을 생성해 주세요.',
+    projectDir: PROJECT_DIR, sessionId,
+  });
+  await apiUpdateCard(latest.id, { status: 'in_progress', sessionTitle: 'PR 생성해' });
+  await openWorksTab(page);
+  const row = inboxRow(page, first.title);
+  await expect(row.locator('.works-inbox-title')).toHaveText(first.title);
+  await expect(row).toContainText('실행 중');
+  await expect(row).toContainText('카드 3');
+  await expect(row.locator('.works-inbox-actions button')).toHaveText(['배정', '폐기']);
+
+  await row.locator('.works-inbox-title').click();
+  const conversation = page.locator('.session-conversation-dialog');
+  const closeConversation = async () => {
+    // Dialog focus marks the accessibility effect (and Escape listener) ready.
+    await expect(conversation.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(conversation).toHaveCount(0);
+  };
+  await expect(conversation).toBeVisible();
+  await expect(conversation.locator('.kv2-complete-session-turn')).toHaveCount(3);
+  await expect(conversation).toContainText('첫 대화의 요청 본문입니다.');
+  await expect(conversation).toContainText('첫 대화의 결과입니다.');
+  await expect(conversation).toContainText('수정한 내용으로 PR을 생성해 주세요.');
+  await closeConversation();
+
+  // Keyboard activation uses the same conversation path.
+  await row.getByRole('button', { name: `${first.title} 대화 보기`, exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(conversation).toBeVisible();
+  await closeConversation();
+  await row.getByRole('button', { name: `${first.title} 대화 보기`, exact: true }).focus();
+  await page.keyboard.press('Space');
+  await expect(conversation).toBeVisible();
+  await closeConversation();
+
+  // Assignment and selection must not also open the conversation.
+  await row.getByRole('button', { name: '배정', exact: true }).click();
+  await expect(row.locator('.works-assign-inline')).toBeVisible();
+  await expect(conversation).toHaveCount(0);
+  await page.getByRole('button', { name: '☑ 선택', exact: true }).click();
+  await row.locator('.works-inbox-title').click();
+  await expect(row.getByRole('checkbox')).toBeChecked();
+  await expect(conversation).toHaveCount(0);
+  await row.locator('.works-inbox-row').focus();
+  await page.keyboard.press('Space');
+  await expect(row.getByRole('checkbox')).not.toBeChecked();
+  await expect(conversation).toHaveCount(0);
+});
+
 test('Inbox session becomes a new Work and drops the tab badge', async ({ page, seedCard, trackWork }) => {
   const runId = `works-new-${Date.now()}`;
   const first = await seedCard({
@@ -554,7 +619,7 @@ test('추천에서 사라진 완료 Work로는 연결 버튼이 비활성된다'
   });
 
   await openWorksTab(page);
-  await inboxRow(page, card.title).getByRole('button', { name: '배정' }).click();
+  await inboxRow(page, card.title).getByRole('button', { name: '배정', exact: true }).click();
 
   // Same directory → the seeded Work is the default target and 연결 is live.
   const submit = page.getByRole('button', { name: `"${target.title}"에 연결` });
@@ -609,7 +674,7 @@ test('배정 패널은 같은 디렉토리를 같은 색으로, 이어진 세션
   });
 
   await openWorksTab(page);
-  await inboxRow(page, target.title).getByRole('button', { name: '배정' }).click();
+  await inboxRow(page, target.title).getByRole('button', { name: '배정', exact: true }).click();
   const panel = page.locator('.works-assign-inline');
 
   // Lineage first, shared directory second — a directory says "same project",

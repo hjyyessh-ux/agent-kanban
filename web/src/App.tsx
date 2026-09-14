@@ -622,9 +622,7 @@ export default function App() {
             onCompleteWork={works.completeWork}
             onRefresh={works.refreshWorks}
             onClearError={works.clearError}
-            onOpenCard={(cardId) => {
-              void handleOpenCardById(cardId);
-            }}
+            onOpenSession={handleOpenWorkSession}
             onOpenWork={(work: Work) => setOpenWorkId(work.id)}
             onAssignAll={handleAssignAll}
             config={works.config}
