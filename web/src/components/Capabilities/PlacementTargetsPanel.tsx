@@ -45,6 +45,12 @@ function targetLocations(runtime: McpRuntime, kind: CapScope, dir: string): Arra
   ];
 }
 
+export function compactPlacementPath(path: string): string {
+  return path
+    .replace(/\/Users\/[^/]+(?=\/)/g, '~')
+    .replace(/\/home\/[^/]+(?=\/)/g, '~');
+}
+
 /**
  * Collapsible Placement Targets manager shown at the top of the Inventory view.
  * The compact summary stays visible while paths and mutations are opt-in.
@@ -59,6 +65,7 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
   const [newTeamShared, setNewTeamShared] = useState(false);
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [copiedLocation, setCopiedLocation] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const claudeCount = targets.filter((target) => target.runtime === 'claude').length;
   const codexCount = targets.filter((target) => target.runtime === 'codex').length;
@@ -98,6 +105,18 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
       setError(err instanceof Error ? err.message : 'Failed to remove target');
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handleCopyLocation = async (key: string, path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopiedLocation(key);
+      window.setTimeout(() => {
+        setCopiedLocation((current) => current === key ? null : current);
+      }, 1500);
+    } catch {
+      setError('Failed to copy path');
     }
   };
 
@@ -157,35 +176,47 @@ export function PlacementTargetsPanel({ targets, loading, onAdd, onRemove }: Pla
                     {t.kind}
                   </span>
                   <RuntimeBadge runtime={t.runtime} />
-                  <span className="ptp-item-label">{t.label}</span>
-                  <span className="ptp-item-dir" title={locations.map(({ label, path }) => `${label}: ${path}`).join('\n')}>
-                    {locations.map(({ label, path }) => (
-                      <span
-                        key={label}
-                        className={`ptp-item-path ptp-item-path--${label.toLowerCase()}`}
-                      >
-                        <span className="ptp-item-path-label">{label}</span>
-                        <span className="ptp-item-path-value">{path}</span>
-                      </span>
-                    ))}
+                  <span className="ptp-item-label" title={t.label}>{t.label}</span>
+                  <span className="ptp-item-dir">
+                    {locations.map(({ label, path }) => {
+                      const locationKey = `${t.id}:${label}`;
+                      return (
+                        <button
+                          key={locationKey}
+                          type="button"
+                          className={`ptp-item-path ptp-item-path--${label.toLowerCase()}`}
+                          title={`Copy full path: ${path}`}
+                          aria-label={`Copy ${label} path for ${t.label}: ${path}`}
+                          onClick={() => void handleCopyLocation(locationKey, path)}
+                        >
+                          <span className="ptp-item-path-label">{label}</span>
+                          <span className="ptp-item-path-value">{compactPlacementPath(path)}</span>
+                          <span className="ptp-item-path-copy" aria-hidden="true">
+                            {copiedLocation === locationKey ? 'Copied' : '⎘'}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </span>
-                  {t.teamShared && (
-                    <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
-                  )}
-                  {t.builtin ? (
-                    <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="ptp-remove-btn"
-                      onClick={() => void handleRemove(t.id)}
-                      disabled={removingId === t.id}
-                      aria-label={`Remove ${t.label}`}
-                      title="Target 삭제 (파일은 삭제되지 않습니다)"
-                    >
-                      ✕
-                    </button>
-                  )}
+                  <span className="ptp-item-actions">
+                    {t.teamShared && (
+                      <span className="ptp-git-badge" title="git으로 팀과 공유되는 설정 파일입니다">git</span>
+                    )}
+                    {t.builtin ? (
+                      <span className="ptp-builtin" title="기본 제공 target — 삭제할 수 없습니다">🔒</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ptp-remove-btn"
+                        onClick={() => void handleRemove(t.id)}
+                        disabled={removingId === t.id}
+                        aria-label={`Remove ${t.label}`}
+                        title="Target 삭제 (파일은 삭제되지 않습니다)"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
                 </div>
               );
             })}

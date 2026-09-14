@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { PlacementTarget } from '../../../../src/core/types';
-import { PlacementTargetsPanel } from './PlacementTargetsPanel';
+import { compactPlacementPath, PlacementTargetsPanel } from './PlacementTargetsPanel';
 
 const target = (overrides: Partial<PlacementTarget>): PlacementTarget => ({
   id: 'target', label: 'Target', dir: '/repo', kind: 'project', runtime: 'claude',
@@ -10,6 +10,13 @@ const target = (overrides: Partial<PlacementTarget>): PlacementTarget => ({
 });
 
 describe('PlacementTargetsPanel runtime paths', () => {
+  test('compacts common home directories without losing the rest of the path', () => {
+    expect(compactPlacementPath('/Users/alice/workspace/agent-kanban/.claude/skills'))
+      .toBe('~/workspace/agent-kanban/.claude/skills');
+    expect(compactPlacementPath('~/.claude.json → projects[/home/alice/workspace/agent-kanban]'))
+      .toBe('~/.claude.json → projects[~/workspace/agent-kanban]');
+  });
+
   test('starts collapsed with only the target summary visible', () => {
     const html = renderToStaticMarkup(
       <PlacementTargetsPanel
