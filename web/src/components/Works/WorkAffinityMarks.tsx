@@ -43,11 +43,18 @@ export function WorkAffinityMarks({
   projectDir,
   sameDirectory,
   chained,
+  keywords,
   extra,
 }: {
   projectDir: string | undefined;
   sameDirectory: boolean;
   chained: boolean;
+  /**
+   * Title words this Work shares with the session (`sharedAssignKeywords`).
+   * Rendered as the words themselves rather than a count — "✎ mention, 토큰"
+   * is checkable at a glance, "키워드 2개" asks the reader to take it on faith.
+   */
+  keywords?: string[];
   /** Trailing free-form meta (e.g. "3일째"). */
   extra?: string;
 }) {
@@ -58,6 +65,11 @@ export function WorkAffinityMarks({
         {projectDir ? projectDirLabel(projectDir) : '디렉토리 없음'}
       </span>
       {sameDirectory && <span className="works-dir-same">같은 디렉토리</span>}
+      {keywords && keywords.length > 0 && (
+        <span className="works-keyword-mark" title={`제목이 겹치는 단어: ${keywords.join(', ')}`}>
+          ✎ {keywords.slice(0, 3).join(' · ')}
+        </span>
+      )}
       {extra && <span className="works-affinity-extra">{extra}</span>}
     </>
   );

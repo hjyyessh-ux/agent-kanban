@@ -8,7 +8,9 @@ import type {
   WorksConfigDto,
 } from '../../../../src/core/types';
 import {
+  assignKeywords,
   confirmDeleteWorkMessage,
+  describeAssignSuggestion,
   describeBulkAssignProgress,
   describeCompletionByStatus,
   describeSessionState,
@@ -25,6 +27,8 @@ import {
   resolvedWorksNewestFirst,
   rowIndexAtPointer,
   sessionIdsBetween,
+  sharedAssignKeywords,
+  suggestWorkAssignments,
   workAgeDays,
   workCompletionBlock,
   WORK_STATUS_LABELS,
@@ -821,5 +825,187 @@ describe('mergeTargetsFor', () => {
       work({ id: 'c', title: 'Timeline 드래그' }),
     ];
     expect(mergeTargetsFor(source, works, 'wiki').map((w) => w.id)).toEqual(['b', 'a']);
+  });
+});
+
+// ── keyword affinity (the cheap, model-free half of triage) ────────────────
+
+function inboxSession(overrides: Partial<WorkInboxSession> = {}): WorkInboxSession {
+  return {
+    sessionId: 'ses-x',
+    cardTitle: '',
+    cardId: 'card-1',
+    cardStatus: 'done',
+    projectDir: '/repo',
+    agentRuntime: 'claude',
+    relatedCardCount: 1,
+    sessionKind: 'main',
+    updatedAt: '2026-09-10T00:00:00.000Z',
+    ...overrides,
+  } as WorkInboxSession;
+}
+
+describe('assignKeywords', () => {
+  test('splits on punctuation and keeps digits that live inside a word', () => {
+    expect(assignKeywords('mcp-server-springboot keyset')).toEqual([
+      'mcp', 'server', 'springboot', 'keyset',
+    ]);
+    expect(assignKeywords('zetta2-ingestion 모니터링')).toEqual([
+      'zetta2', 'ingestion', '모니터링',
+    ]);
+  });
+
+  test('drops bare numbers — version strings and card prefixes collide across sessions', () => {
+    // "1.30.1 이상의 최신버전으로 nginx" and "4/6 web:" would otherwise share `1`/`6`.
+    expect(assignKeywords('1.30.1 nginx')).toEqual(['nginx']);
+    expect(assignKeywords('4/6 web')).toEqual(['web']);
+  });
+
+  test('drops stopwords, so "수정" never makes two unrelated Works look related', () => {
+    expect(assignKeywords('agent-kanban 수정')).toEqual(['agent', 'kanban']);
+    expect(assignKeywords('fix the bug')).toEqual([]);
+  });
+
+  test('is case-insensitive and de-duplicates', () => {
+    expect(assignKeywords('Telegram telegram TELEGRAM')).toEqual(['telegram']);
+  });
+});
+
+describe('sharedAssignKeywords', () => {
+  test('matches exactly', () => {
+    expect(sharedAssignKeywords(['mention', 'css'], ['css', 'tokens'])).toEqual(['css']);
+  });
+
+  test('matches by prefix once both tokens are long enough', () => {
+    // An attached Korean particle or an English plural must not break the match.
+    expect(sharedAssignKeywords(['칸반보드'], ['칸반보드를'])).toEqual(['칸반보드']);
+    expect(sharedAssignKeywords(['hook'], ['hooks'])).toEqual(['hook']);
+  });
+
+  test('short tokens are held to exact equality — a 3-char prefix is a coincidence', () => {
+    expect(sharedAssignKeywords(['api'], ['apiary'])).toEqual([]);
+  });
+
+  test('empty on either side is empty', () => {
+    expect(sharedAssignKeywords([], ['css'])).toEqual([]);
+    expect(sharedAssignKeywords(['css'], [])).toEqual([]);
+  });
+});
+
+describe('suggestWorkAssignments', () => {
+  const session = inboxSession({
+    sessionTitle: '4/6 web: 디자인 토큰 + mention.css',
+    projectDir: '/repo',
+  });
+
+  test('only suggests Works with an actual signal — recency alone is not a reason', () => {
+    const works = [
+      work({ id: 'unrelated', title: 'nginx 업데이트', projectDir: '/other', updatedAt: '2026-09-09T00:00:00.000Z' }),
+      work({ id: 'keyword', title: 'mention 참조 블록', projectDir: '/other' }),
+    ];
+    expect(suggestWorkAssignments(session, works).map((s) => s.work.id)).toEqual(['keyword']);
+  });
+
+  test('lineage outranks everything', () => {
+    const works = [
+      work({ id: 'keyword', title: 'mention 토큰 렌더러', projectDir: '/other' }),
+      work({ id: 'lineage', title: '또 다른 이름', projectDir: '/other' }),
+    ];
+    const ranked = suggestWorkAssignments(session, works, { chained: new Set(['lineage']) });
+    expect(ranked.map((s) => s.work.id)).toEqual(['lineage', 'keyword']);
+  });
+
+  test('a word only one Work uses beats a bare same-directory match', () => {
+    // The 9/15 report: a session about `keyset` was offered the Work that merely
+    // shared its checkout first. `mcp-server` is where half the board lives;
+    // `keyset` names one Work.
+    const keysetSession = inboxSession({
+      sessionTitle: 'ZEPETOFUL - keyset 실측 데이터 수집',
+      projectDir: '/src/mcp-server',
+    });
+    const works = [
+      work({ id: 'same-dir', title: 'mcp-server cloudflare cache 개선', projectDir: '/src/mcp-server' }),
+      work({ id: 'keyset', title: 'mcp-server-springboot keyset 개발', projectDir: '/src/mcp-server-springboot' }),
+    ];
+    expect(suggestWorkAssignments(keysetSession, works).map((s) => s.work.id))
+      .toEqual(['keyset', 'same-dir']);
+  });
+
+  test('a directory shared by many Works is worth proportionally less', () => {
+    const alone = [work({ id: 'only', title: '전혀 다른 이름', projectDir: '/repo' })];
+    const crowded = Array.from({ length: 3 }, (_, i) =>
+      work({ id: `dir-${i}`, title: `전혀 다른 이름 ${i}`, projectDir: '/repo' }));
+    // Same signal, three times as many Works carrying it, a third of the score:
+    // "같은 디렉토리" that points at three Works has not answered the question.
+    expect(suggestWorkAssignments(session, crowded)[0].score)
+      .toBeCloseTo(suggestWorkAssignments(session, alone)[0].score / 3, 5);
+  });
+
+  test('one distinctive word already outranks a checkout that holds one Work', () => {
+    const works = [
+      work({ id: 'same-dir', title: '전혀 다른 이름', projectDir: '/repo' }),
+      work({ id: 'one-word', title: 'mention 정리', projectDir: '/other' }),
+    ];
+    expect(suggestWorkAssignments(session, works).map((s) => s.work.id))
+      .toEqual(['one-word', 'same-dir']);
+  });
+
+  test('a word many Works share is worth proportionally less than a directory', () => {
+    const works = [
+      work({ id: 'same-dir', title: '전혀 다른 이름', projectDir: '/repo' }),
+      ...Array.from({ length: 3 }, (_, i) =>
+        work({ id: `wordy-${i}`, title: `토큰 작업 ${i}`, projectDir: '/other' })),
+    ];
+    expect(suggestWorkAssignments(session, works)[0].work.id).toBe('same-dir');
+  });
+
+  test('preferSameDir: false drops a directory-only match out of the suggestions', () => {
+    const works = [work({ id: 'same-dir', title: '전혀 다른 이름', projectDir: '/repo' })];
+    expect(suggestWorkAssignments(session, works).map((s) => s.work.id)).toEqual(['same-dir']);
+    expect(suggestWorkAssignments(session, works, { preferSameDir: false })).toEqual([]);
+  });
+
+  test('never suggests a terminal Work, or the Work being moved out of', () => {
+    const works = [
+      work({ id: 'done', title: 'mention 토큰', projectDir: '/repo', status: 'done' }),
+      work({ id: 'current', title: 'mention 토큰', projectDir: '/repo' }),
+    ];
+    expect(suggestWorkAssignments(session, works, { excludeWorkId: 'current' })).toEqual([]);
+  });
+
+  test('caps the list at two, because each suggestion is a full row', () => {
+    const works = Array.from({ length: 6 }, (_, i) =>
+      work({ id: `w${i}`, title: `mention 토큰 ${i}`, projectDir: '/repo' }));
+    expect(suggestWorkAssignments(session, works).length).toBe(2);
+    expect(suggestWorkAssignments(session, works, { limit: 1 }).length).toBe(1);
+  });
+});
+
+describe('describeAssignSuggestion', () => {
+  test('names every matched signal, strongest first', () => {
+    const session = inboxSession({ sessionTitle: 'mention 토큰 파서', projectDir: '/repo' });
+    const works = [work({ id: 'a', title: 'mention 토큰 렌더러', projectDir: '/repo' })];
+    const [suggestion] = suggestWorkAssignments(session, works, { chained: new Set(['a']) });
+    expect(describeAssignSuggestion(suggestion)).toBe('🔗 이어진 세션 · 📁 같은 디렉토리 · ✎ mention · 토큰');
+  });
+
+  test('a keyword-only match says only that', () => {
+    const session = inboxSession({ sessionTitle: 'telegram poller', projectDir: '/repo' });
+    const works = [work({ id: 'a', title: 'telegram 재시도', projectDir: '/other' })];
+    const [suggestion] = suggestWorkAssignments(session, works);
+    expect(describeAssignSuggestion(suggestion)).toBe('✎ telegram');
+  });
+});
+
+describe('recommendWorksForSession keyword tiebreak', () => {
+  test('inside the same directory, shared words decide before recency', () => {
+    const session = inboxSession({ sessionTitle: 'telegram poller 재시도', projectDir: '/repo' });
+    const works = [
+      work({ id: 'recent', title: '보드 드래그', projectDir: '/repo', updatedAt: '2026-09-10T00:00:00.000Z' }),
+      work({ id: 'wordy', title: 'telegram poller 정리', projectDir: '/repo', updatedAt: '2026-09-01T00:00:00.000Z' }),
+    ];
+    expect(recommendWorksForSession(session, works).map((r) => r.work.id))
+      .toEqual(['wordy', 'recent']);
+    expect(recommendWorksForSession(session, works)[0].keywords).toEqual(['telegram', 'poller']);
   });
 });

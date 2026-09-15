@@ -304,7 +304,12 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   await expect(page.locator('.works-inbox-check:checked')).toHaveCount(2);
   await expect(page.getByText('선택 2개')).toBeVisible();
 
-  await page.getByRole('button', { name: '배정하기 (2)' }).click();
+  // The header's 모두 배정하기 is dimmed for the whole of selection mode: it
+  // assigns the entire Inbox, not the selection, and two live primaries with
+  // opposite scopes is exactly the ambiguity this bar exists to resolve.
+  await expect(page.getByRole('button', { name: '⚡ 모두 배정하기' })).toBeDisabled();
+
+  await page.getByRole('button', { name: '선택한 2개 배정하기' }).click();
   const newWorkOption = page.locator('.works-assign-option').filter({ hasText: '새 Work 만들기' });
   await newWorkOption.click();
 

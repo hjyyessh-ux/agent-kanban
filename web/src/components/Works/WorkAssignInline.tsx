@@ -4,6 +4,7 @@ import {
   ROLE_LABELS,
   ROLE_OPTIONS,
   recommendWorksForSession,
+  suggestWorkAssignments,
   suggestWorkTitle,
   daysSince,
 } from './worksAssign';
@@ -78,6 +79,13 @@ interface WorkAssignInlineProps {
   preferSameDir?: boolean;
   /** Pre-selected role — the link's existing role when moving. */
   initialRole?: WorkSessionRole;
+  /**
+   * Target the panel opens on, set when the row's suggestion chip was what
+   * opened it. `{ kind: 'work' }` lands on that Work already selected — the
+   * chip already showed the reason, so the panel's job is to confirm, not to
+   * make the user find the same row again in the list.
+   */
+  initialTarget?: { kind: 'work'; workId: string } | { kind: 'new' };
 }
 
 type AssignMode = 'new' | 'existing';
@@ -130,6 +138,7 @@ export function WorkAssignInline({
   chained,
   preferSameDir = true,
   initialRole,
+  initialTarget,
 }: WorkAssignInlineProps) {
   const recommendations = useMemo(
     () => recommendWorksForSession(session, works, move?.currentWork.id, chained, {
@@ -139,12 +148,37 @@ export function WorkAssignInline({
   );
   const suggestedTitle = useMemo(() => suggestWorkTitle(session), [session]);
 
-  const [mode, setMode] = useState<AssignMode>(
-    recommendations.length > 0 ? 'existing' : 'new',
+  // A preselected Work only counts if it is still a legal target: the Inbox
+  // polls, so the Work behind a suggestion can be completed between the render
+  // that drew it and the click that opens this panel.
+  const presetWorkId =
+    initialTarget?.kind === 'work'
+    && recommendations.some((r) => r.work.id === initialTarget.workId)
+      ? initialTarget.workId
+      : null;
+
+  // What the *row* would have suggested, so plain 배정 lands on the same Work
+  // the row was offering. The list below stays grouped by lineage/directory
+  // (that is the browse order), but the thing the button would commit must not
+  // disagree with the thing the Inbox just recommended.
+  const topSuggestion = useMemo(
+    () => suggestWorkAssignments(session, works, {
+      excludeWorkId: move?.currentWork.id,
+      chained,
+      preferSameDir,
+      limit: 1,
+    })[0],
+    [session, works, move?.currentWork.id, chained, preferSameDir],
   );
+
+  const [mode, setMode] = useState<AssignMode>(() => {
+    if (initialTarget?.kind === 'new') return 'new';
+    if (presetWorkId) return 'existing';
+    return recommendations.length > 0 ? 'existing' : 'new';
+  });
   const [title, setTitle] = useState(suggestedTitle);
   const [selectedWorkId, setSelectedWorkId] = useState<string>(
-    recommendations[0]?.work.id ?? '',
+    presetWorkId ?? topSuggestion?.work.id ?? recommendations[0]?.work.id ?? '',
   );
   const [role, setRole] = useState<WorkSessionRole>(initialRole ?? 'dev');
   const [busy, setBusy] = useState(false);
@@ -188,23 +222,56 @@ export function WorkAssignInline({
     role,
   });
 
+  const primary = (
+    <button
+      type="button"
+      className="kv2-btn kv2-btn--small kv2-btn--primary works-assign-submit"
+      disabled={!canSubmit || busy}
+      onClick={handleSubmit}
+    >
+      {submitLabel({ mode, title: title.trim() || suggestedTitle, selectedWork, move, bulk })}
+    </button>
+  );
+
   return (
     <div className="works-assign-inline">
-      {move ? (
-        <>
-          <div className="works-assign-current">
-            현재:
-            <span className="works-assign-current-dot" aria-hidden="true" />
-            <b>{move.currentWork.title}</b>
-          </div>
-          <div className="works-assign-lead">이 세션을 어디로 옮길까요?</div>
-        </>
-      ) : (
-        <div className="works-assign-lead">
-          {bulk ? `선택한 세션 ${bulk.count}개를 어디에 연결할까요?` : '이 세션을 어디에 연결할까요?'}
-          <DirChip projectDir={session.projectDir} />
+      {move && (
+        <div className="works-assign-current">
+          현재:
+          <span className="works-assign-current-dot" aria-hidden="true" />
+          <b>{move.currentWork.title}</b>
         </div>
       )}
+
+      {/* The commit lives at the *top* of the panel, above the option list it
+          applies to. It used to sit in the footer, under a recommendation list
+          that is as tall as the number of active Works: on the Inbox the panel
+          opens inline under a row, so pressing 배정 scrolled the button that
+          finishes the job off the bottom of the screen. Reading order loses
+          nothing — the label always names the exact target ("X에 연결"), so the
+          top bar is a statement of what will happen and the list below is how
+          to change it. */}
+      <div className="works-assign-actionbar">
+        <div className="works-assign-lead">
+          {move
+            ? '이 세션을 어디로 옮길까요?'
+            : bulk
+              ? `선택한 세션 ${bulk.count}개를 어디에 연결할까요?`
+              : '이 세션을 어디에 연결할까요?'}
+          {!move && <DirChip projectDir={session.projectDir} />}
+        </div>
+        <div className="works-assign-actionbar-actions">
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--small kv2-btn--ghost"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            취소
+          </button>
+          {primary}
+        </div>
+      </div>
 
       <div className="works-assign-options">
         <button
@@ -271,7 +338,7 @@ export function WorkAssignInline({
               the assign-all modal's option list and `works-assign-option`
               above. */}
           <div className="works-assign-work-list" role="group" aria-label="연결할 Work">
-            {recommendations.map(({ work, sameDirectory, chained: isChained }) => {
+            {recommendations.map(({ work, sameDirectory, chained: isChained, keywords }) => {
               const selected = work.id === selectedWorkId;
               return (
                 <button
@@ -288,6 +355,7 @@ export function WorkAssignInline({
                       projectDir={work.projectDir}
                       sameDirectory={sameDirectory}
                       chained={isChained}
+                      keywords={keywords}
                       extra={`${daysSince(work.startedAt) + 1}일째`}
                     />
                   </span>
@@ -317,13 +385,11 @@ export function WorkAssignInline({
 
       {preview}
 
-      {/* kv2-actions-split. `secondary` (무시 / Inbox로 되돌리기) takes the left
-          edge in the danger zone, exactly where the assign-all modal keeps
-          `X 폐기`, with 취소 beside it — the three assign surfaces now agree on
-          where the irreversible action lives. Both left buttons share one
-          `kv2-actions-danger` group on purpose: a lone button between
-          `kv2-action-cancel`'s and `kv2-actions-primary`'s `auto` margins
-          floats in mid-footer (see docs/design-system.md). */}
+      {/* What is left in the footer is only the escape hatch: 무시 / Inbox로
+          되돌리기, in the `kv2-actions-danger` zone, exactly where the
+          assign-all modal keeps `X 폐기`. The forward actions (취소 + the
+          commit) moved to the top action bar, so this footer holds one group
+          and its `margin-right: auto` pins it to the left edge. */}
       <div className="works-assign-footer kv2-actions-split">
         <div className="kv2-actions-danger">
           <button
@@ -335,24 +401,6 @@ export function WorkAssignInline({
             onClick={() => void runAction(secondary.run)}
           >
             {secondary.label}
-          </button>
-          <button
-            type="button"
-            className="kv2-btn kv2-btn--small kv2-btn--ghost"
-            disabled={busy}
-            onClick={onCancel}
-          >
-            취소
-          </button>
-        </div>
-        <div className="kv2-actions-primary">
-          <button
-            type="button"
-            className="kv2-btn kv2-btn--small kv2-btn--primary"
-            disabled={!canSubmit || busy}
-            onClick={handleSubmit}
-          >
-            {submitLabel({ mode, title: title.trim() || suggestedTitle, selectedWork, move, bulk })}
           </button>
         </div>
       </div>

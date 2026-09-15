@@ -251,6 +251,87 @@ export interface WorkRecommendation {
    * directory says "same project", lineage says "same piece of work".
    */
   chained: boolean;
+  /**
+   * Title tokens this Work shares with the session (`sharedAssignKeywords`).
+   * The weakest of the three signals and the only one that works *inside* a
+   * directory — two Works in the same checkout are both `sameDirectory`, and
+   * the shared words are what tells them apart.
+   */
+  keywords: string[];
+}
+
+/**
+ * Tokens that appear in half the titles on this board and therefore say nothing
+ * about *which* Work a session belongs to. Dropping them is what keeps
+ * "agent-kanban 수정" from looking related to "zetta ingestion 수정".
+ */
+const ASSIGN_STOPWORDS = new Set([
+  '작업', '수정', '개선', '추가', '구현', '적용', '확인', '변경', '정리', '대응',
+  '버그', '이슈', '리뷰', '테스트', '문제', '세션', '관련', '기능', '진행',
+  'fix', 'fixes', 'add', 'update', 'feat', 'chore', 'refactor', 'test', 'tests',
+  'bug', 'issue', 'work', 'task', 'the', 'and', 'for', 'with', 'new', 'from',
+]);
+
+/** Below this a token is a fragment, not a word. */
+const MIN_KEYWORD_LENGTH = 2;
+/** Two tokens may match by prefix only once both are at least this long. */
+const MIN_PREFIX_MATCH_LENGTH = 4;
+
+/**
+ * Title tokens worth matching on: lowercased, split on everything that is not a
+ * letter/digit/hangul syllable (so `mcp-server-springboot` becomes three
+ * tokens), with stopwords, one-character fragments and bare numbers removed.
+ *
+ * Bare numbers go because version strings and card prefixes (`1.30.1`, `4/6`)
+ * tokenise into digits that collide across unrelated sessions; a digit *inside*
+ * a word (`zetta2`) is kept, because there it is part of the name.
+ */
+export function assignKeywords(text: string | undefined): string[] {
+  if (!text) return [];
+  const seen = new Set<string>();
+  for (const raw of text.toLowerCase().split(/[^0-9a-z\u3131-\u318e\uac00-\ud7a3]+/)) {
+    if (raw.length < MIN_KEYWORD_LENGTH) continue;
+    if (/^[0-9]+$/.test(raw)) continue;
+    if (ASSIGN_STOPWORDS.has(raw)) continue;
+    seen.add(raw);
+  }
+  return [...seen];
+}
+
+/**
+ * Tokens two titles share, in the order they appear in `a`.
+ *
+ * Matching is exact, plus a prefix rule for tokens of at least
+ * `MIN_PREFIX_MATCH_LENGTH` characters so an attached Korean particle or an
+ * English plural still matches (`칸반보드` ↔ `칸반보드를`, `hook` ↔ `hooks`).
+ * Short tokens are held to exact equality — at three characters a prefix match
+ * is a coincidence, not a signal.
+ */
+export function sharedAssignKeywords(a: string[], b: string[]): string[] {
+  if (a.length === 0 || b.length === 0) return [];
+  const other = new Set(b);
+  const matched: string[] = [];
+  for (const token of a) {
+    if (other.has(token)) {
+      matched.push(token);
+      continue;
+    }
+    if (token.length < MIN_PREFIX_MATCH_LENGTH) continue;
+    const near = b.find(
+      (candidate) =>
+        candidate.length >= MIN_PREFIX_MATCH_LENGTH &&
+        (candidate.startsWith(token) || token.startsWith(candidate)),
+    );
+    if (near) matched.push(token);
+  }
+  return matched;
+}
+
+/** The session-side token set a Work title is compared against. */
+export function sessionAssignKeywords(session: WorkInboxSession): string[] {
+  return assignKeywords(
+    [session.sessionTitle, session.cardTitle].filter(Boolean).join(' '),
+  );
 }
 
 /**
@@ -286,25 +367,167 @@ export function recommendWorksForSession(
   const active = works.filter(
     (work) => work.status === 'active' && work.id !== excludeWorkId,
   );
-  const byRecency = (a: Work, b: Work) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+
+  const sessionKeywords = sessionAssignKeywords(session);
+  const keywordsFor = new Map<string, string[]>(
+    active.map((work) => [
+      work.id,
+      sharedAssignKeywords(sessionKeywords, assignKeywords(work.title)),
+    ]),
+  );
+
+  // Within a group, more shared words wins; recency only breaks the tie. Two
+  // Works in the same checkout are both `sameDirectory` and the group ordering
+  // alone put whichever one was touched last on top, which is not the same
+  // question as "which one is this session about".
+  const byKeywordsThenRecency = (a: Work, b: Work) => {
+    const delta = (keywordsFor.get(b.id)?.length ?? 0) - (keywordsFor.get(a.id)?.length ?? 0);
+    if (delta !== 0) return delta;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  };
 
   const isSameDir = (work: Work) =>
     Boolean(session.projectDir) && work.projectDir === session.projectDir;
   const isChained = (work: Work) => Boolean(chained?.has(work.id));
 
-  const lineage = active.filter(isChained).sort(byRecency);
+  const lineage = active.filter(isChained).sort(byKeywordsThenRecency);
   const sameDir = preferSameDir
-    ? active.filter((work) => !isChained(work) && isSameDir(work)).sort(byRecency)
+    ? active.filter((work) => !isChained(work) && isSameDir(work)).sort(byKeywordsThenRecency)
     : [];
   const chosen = new Set([...lineage, ...sameDir].map((work) => work.id));
-  const rest = active.filter((work) => !chosen.has(work.id)).sort(byRecency);
+  const rest = active.filter((work) => !chosen.has(work.id)).sort(byKeywordsThenRecency);
 
   return [...lineage, ...sameDir, ...rest].map((work) => ({
     work,
     sameDirectory: isSameDir(work),
     chained: isChained(work),
+    keywords: keywordsFor.get(work.id) ?? [],
   }));
+}
+
+/**
+ * Weights behind `suggestWorkAssignments`.
+ *
+ * A signal is worth **less the more Works it points at** — its raw weight is
+ * divided by how many candidates carry it. "같은 디렉토리" with five active
+ * Works in that checkout narrows nothing; a title word that only one Work uses
+ * names that Work. That division, not the raw numbers, is what decides the
+ * common case, which is why a distinctive word now outranks a bare directory
+ * match: `keyset` appears in one Work title, while `mcp-server` is merely where
+ * half the board lives.
+ *
+ * Lineage is the exception and is **not** divided: it is a fact about this
+ * session (it came out of one the Work already holds), not a grouping the
+ * session happens to fall into.
+ */
+const SUGGESTION_WEIGHTS = {
+  chained: 200,
+  sameDirectory: 45,
+  perKeyword: 50,
+  /** Past this, more shared words stop adding — long titles would run away with it. */
+  keywordCap: 3,
+} as const;
+
+/**
+ * How many suggestions an Inbox row offers. Two, because each one renders as a
+ * **full row** (title + directory + reason, none of it truncated) rather than a
+ * chip: a third row costs more Inbox height than a third guess is worth, and
+ * the full ranked list is one click away in the assign panel.
+ */
+export const MAX_ASSIGN_SUGGESTIONS = 2;
+
+export interface WorkAssignSuggestion extends WorkRecommendation {
+  /** Sum of the matched signals; only Works above zero are ever suggested. */
+  score: number;
+}
+
+/**
+ * The Inbox row's pre-assignment suggestions — the Works this session plausibly
+ * belongs to, ranked by how much evidence there is, **not** by recency.
+ *
+ * This is deliberately the cheap deterministic half of `recommendWorksForSession`
+ * (no model, no server round-trip): a session and a Work are related when they
+ * share a lineage, a checkout, or words in their titles. A Work with none of
+ * those is not returned at all — the row promises a *reason*, and "it was
+ * active recently" is not one. The full ranked list is still one click away in
+ * the assign panel, which is where "none of these, show me everything" lives.
+ *
+ * `options.preferSameDir` mirrors `works.assign_prefer_same_dir`: with it off,
+ * a shared directory stops scoring (a dir-only match then drops out of the
+ * suggestions entirely), though the flag is still reported so the mark renders.
+ */
+export function suggestWorkAssignments(
+  session: WorkInboxSession,
+  works: Work[],
+  options?: {
+    excludeWorkId?: string;
+    chained?: ReadonlySet<string>;
+    preferSameDir?: boolean;
+    limit?: number;
+  },
+): WorkAssignSuggestion[] {
+  const preferSameDir = options?.preferSameDir !== false;
+  const ranked = recommendWorksForSession(
+    session,
+    works,
+    options?.excludeWorkId,
+    options?.chained,
+    { preferSameDir },
+  );
+  if (ranked.length === 0) return [];
+
+  // How many of the candidates each signal points at. Computed over the same
+  // candidate set that is being ranked, so excluding a Work (the move dialog)
+  // or completing one changes what the remaining signals are worth.
+  const titleKeywords = new Map(
+    ranked.map(({ work }) => [work.id, assignKeywords(work.title)] as const),
+  );
+  const sameDirectoryCount = ranked.filter((r) => r.sameDirectory).length;
+  const wordShare = new Map<string, number>();
+  const shareOf = (word: string): number => {
+    const cached = wordShare.get(word);
+    if (cached !== undefined) return cached;
+    const count = ranked.reduce(
+      (total, { work }) =>
+        total + (sharedAssignKeywords([word], titleKeywords.get(work.id) ?? []).length > 0 ? 1 : 0),
+      0,
+    );
+    // At least 1: the Work the word was matched against always carries it.
+    const share = Math.max(1, count);
+    wordShare.set(word, share);
+    return share;
+  };
+
+  return ranked
+    .map((recommendation) => {
+      const keywordScore = recommendation.keywords
+        .slice(0, SUGGESTION_WEIGHTS.keywordCap)
+        .reduce((total, word) => total + SUGGESTION_WEIGHTS.perKeyword / shareOf(word), 0);
+      const score =
+        (recommendation.chained ? SUGGESTION_WEIGHTS.chained : 0) +
+        (recommendation.sameDirectory && preferSameDir
+          ? SUGGESTION_WEIGHTS.sameDirectory / Math.max(1, sameDirectoryCount)
+          : 0) +
+        keywordScore;
+      return { ...recommendation, score };
+    })
+    .filter((suggestion) => suggestion.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, options?.limit ?? MAX_ASSIGN_SUGGESTIONS);
+}
+
+/**
+ * Why a suggestion is being offered, in one line, strongest signal first.
+ * Pure so the chip's copy is testable — the chip itself only renders it.
+ */
+export function describeAssignSuggestion(suggestion: WorkAssignSuggestion): string {
+  const parts: string[] = [];
+  if (suggestion.chained) parts.push('🔗 이어진 세션');
+  if (suggestion.sameDirectory) parts.push('📁 같은 디렉토리');
+  if (suggestion.keywords.length > 0) {
+    parts.push(`✎ ${suggestion.keywords.slice(0, SUGGESTION_WEIGHTS.keywordCap).join(' · ')}`);
+  }
+  return parts.join(' · ');
 }
 
 /**

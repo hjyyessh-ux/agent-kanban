@@ -241,6 +241,14 @@
   font-size: var(--kv2-text-xs);
   font-weight: 800;
   color: var(--kv2-text-primary);
+  /* Pinned to the bottom of the viewport while the Inbox is on screen: the bar
+     has to render below the rows (mounting it above pushes the list out from
+     under a starting drag), and on an Inbox longer than the screen that put the
+     only button that assigns a selection out of sight — which is how the
+     header's 모두 배정하기 ended up looking like the one to press. */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .works-inbox-selection-count {
@@ -366,6 +374,116 @@
   font-size: var(--kv2-text-xs);
 }
 
+/* ── Row-level assign suggestions ───────────────────────────────
+   A header line plus one full row per suggestion. Chips on a single line forced
+   every Work title to ~22 characters and dropped the directory off all but the
+   first — see the note in InboxSuggestions.tsx. */
+.works-inbox-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  margin-top: var(--kv2-sp-2);
+  font-size: var(--kv2-text-xs);
+}
+
+.works-inbox-suggest-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.works-inbox-suggest-label {
+  font-weight: 800;
+  color: var(--kv2-text-muted);
+}
+
+/* The escape hatch rides the header line rather than taking a row of its own:
+   "none of these" must cost the same one click as accepting one, but it does
+   not need a Work title's worth of width. */
+.works-inbox-suggest-new {
+  padding: 1px var(--kv2-sp-2);
+  border: 2px dashed var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: transparent;
+  color: var(--kv2-text-secondary);
+  font: inherit;
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.works-inbox-suggest-new:hover {
+  border-style: solid;
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-info-surface);
+}
+
+.works-inbox-suggest-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+}
+
+/* Same vocabulary as `.works-assign-work-item` in the panel — a suggestion and
+   the panel row it opens must not look like two different objects. */
+.works-inbox-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  width: 100%;
+  min-width: 0;
+  padding: 2px var(--kv2-sp-2);
+  border: 2px solid color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 55%, transparent);
+  border-radius: var(--kv2-radius-sm);
+  background: color-mix(in srgb, var(--works-dir-accent, transparent) 10%, var(--kv2-surface));
+  color: var(--kv2-text-primary);
+  font: inherit;
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.works-inbox-suggest-row:hover {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-info-surface);
+}
+
+.works-inbox-suggest-row:focus-visible,
+.works-inbox-suggest-new:focus-visible {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: 1px;
+}
+
+.works-inbox-suggest-bar {
+  width: 4px;
+  height: 14px;
+  border-radius: var(--kv2-radius-sm);
+  background: var(--works-dir-accent, var(--kv2-status-todo-accent));
+  flex: none;
+}
+
+/* The title gets the slack; the marks keep their natural width. A title long
+   enough to still clip is reachable through the row's `title` tooltip. */
+.works-inbox-suggest-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.works-inbox-suggest-why {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--kv2-text-muted);
+}
+
 .works-inbox-actions {
   display: flex;
   gap: var(--kv2-sp-2);
@@ -386,10 +504,44 @@
   align-items: center;
   gap: var(--kv2-sp-2);
   flex-wrap: wrap;
-  margin-bottom: var(--kv2-sp-3);
+  min-width: 0;
   font-size: var(--kv2-text-xs);
   font-weight: 700;
   color: var(--kv2-text-secondary);
+}
+
+/* The panel's commit, at the top. See the note in WorkAssignInline.tsx: the
+   recommendation list is as tall as the number of active Works, so a footer
+   button opened below the fold on the Inbox. */
+.works-assign-actionbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-3);
+  padding-bottom: var(--kv2-sp-2);
+  border-bottom: 2px solid var(--kv2-border);
+}
+
+.works-assign-actionbar > .works-assign-lead {
+  flex: 1 1 200px;
+}
+
+.works-assign-actionbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-left: auto;
+  flex: none;
+}
+
+/* The button names its target ("X에 연결"), which is as long as a Work title —
+   ellipsis rather than a bar that grows past the panel. */
+.works-assign-submit {
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .works-assign-options {
@@ -458,6 +610,10 @@
   flex-direction: column;
   gap: var(--kv2-sp-2);
   margin-top: var(--kv2-sp-3);
+  /* Capped so the rest of the panel — role, 무시 — cannot be pushed an
+     unbounded distance down by an account with thirty active Works. */
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .works-assign-work-item {
@@ -1156,6 +1312,32 @@
   color: var(--kv2-text-muted);
 }
 
+/* The board's runtime chip, reused verbatim, inside a meta line.
+   `.kv2-runtime-badge` is sized for a card header (24px min-height, 17px icon)
+   and pushes this row several pixels taller, so it is scaled down *in place*
+   rather than re-implemented — same class, same colours, same icon, only this
+   line's metrics. The meta line is inline flow (the ` · ` separators are bare
+   text nodes), hence `vertical-align` rather than flex alignment. */
+.work-session-meta .kv2-runtime-badge {
+  min-height: 0;
+  padding: 1px 6px 1px 4px;
+  margin-right: 6px;
+  vertical-align: -3px;
+  gap: 4px;
+}
+
+.work-session-meta .kv2-runtime-badge-icon {
+  width: 13px;
+  height: 13px;
+  flex-basis: 13px;
+}
+
+.work-session-meta .kv2-runtime-badge-icon--claude svg,
+.work-session-meta .kv2-runtime-badge-image {
+  width: 11px;
+  height: 11px;
+}
+
 /* A link whose session has no cards left anywhere (`cardsMissingAt`). Warn, not
    danger: nothing is broken, but the link is silently dragging the Work's
    Timeline start back to its 연결 time and the row has to say so. Wins over the
@@ -1334,6 +1516,35 @@
   /* Wrapping the meta into a tight column beats wrapping it mid-phrase. */
   .works-inbox-meta {
     gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  }
+
+  /* Title and reason stack instead of competing for one line: at 390px the
+     reason (directory + 같은 디렉토리 + words) is wider than the title it
+     explains, and side by side neither was readable. */
+  .works-inbox-suggest-row {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .works-inbox-suggest-title {
+    flex: 1 0 calc(100% - 20px);
+  }
+
+  .works-inbox-suggest-why {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  }
+
+  /* The commit names its target, so it is the widest control in the panel;
+     give it the whole line rather than letting it overflow next to 취소. */
+  .works-assign-actionbar-actions {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+
+  .works-assign-submit {
+    max-width: 100%;
   }
 
   .works-dir-chip,
@@ -1715,6 +1926,21 @@
 .works-dir-same {
   font-weight: 800;
   color: var(--works-dir-text, var(--kv2-text-secondary));
+}
+
+/* The third signal: words the two titles share. Deliberately the quietest of
+   the three — it is the only one that can match by coincidence. */
+.works-keyword-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kv2-text-muted);
+  font-weight: 700;
 }
 
 /* The other signal: lineage, deliberately a hue no directory slot uses. */

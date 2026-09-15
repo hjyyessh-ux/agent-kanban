@@ -14,6 +14,7 @@ import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
 import type { BulkAssignResult, UseWorksResult, WorkResolveOutcome } from '../../hooks/useWorks';
 import { WorkAssignInline } from './WorkAssignInline';
+import { InboxSuggestions } from './InboxSuggestions';
 import { DirChip } from './WorkAffinityMarks';
 import { chainedWorkIds } from './worksAffinity';
 import { WorksConfigPanel } from './WorksConfigPanel';
@@ -38,6 +39,8 @@ import {
   rowIndexAtPointer,
   sessionIdsBetween,
   shortSessionId,
+  suggestWorkAssignments,
+  suggestWorkTitle,
   summarizeRoles,
   type InboxRowExtent,
 } from './worksAssign';
@@ -100,11 +103,19 @@ export interface WorksViewProps {
  */
 const DRAG_SELECT_THRESHOLD_PX = 4;
 
+/**
+ * Which choice the assign panel opens on. `null` (no target) is the plain 배정
+ * button: the panel picks its own top recommendation. A suggestion chip passes
+ * the Work it named, so the panel confirms that one instead of re-ranking.
+ */
+type AssignTarget = { kind: 'work'; workId: string } | { kind: 'new' };
+
 /** One Inbox row + its inline assignment panel when expanded. */
 function InboxRow({
   session,
   works,
   expanded,
+  expandedTarget,
   onToggle,
   selectionMode,
   selected,
@@ -121,7 +132,10 @@ function InboxRow({
   session: WorkInboxSession;
   works: WorkListEntry[];
   expanded: boolean;
-  onToggle: () => void;
+  /** Target the panel opens on when a suggestion chip is what opened it. */
+  expandedTarget: AssignTarget | null;
+  /** `target` set = open the panel on that choice; omitted = plain toggle. */
+  onToggle: (target?: AssignTarget) => void;
   /** Checkboxes are only rendered once a selection exists (or was requested). */
   selectionMode: boolean;
   selected: boolean;
@@ -153,6 +167,14 @@ function InboxRow({
   // actionable form — and the bare lineage otherwise.
   const chainedCount = chained?.size ?? 0;
   const lineageCount = session.relatedSessionIds?.length ?? 0;
+  // Computed on the row, before 배정 is ever pressed: the whole point is that
+  // the obvious assignment is visible while scanning the list, so a session
+  // that clearly belongs somewhere never costs a panel open to find out.
+  const suggestions = useMemo(
+    () => suggestWorkAssignments(session, works, { chained, preferSameDir }),
+    [session, works, chained, preferSameDir],
+  );
+  const newWorkTitle = useMemo(() => suggestWorkTitle(session), [session]);
   const chainMark = !suggestSessionChain
     ? null
     : chainedCount > 0
@@ -239,6 +261,18 @@ function InboxRow({
               ⚠ 배정 실패 — {assignFailure}
             </div>
           )}
+          {/* Hidden while selecting (the row is a toggle then) and while the
+              panel is open (the panel lists the same Works, ranked, right
+              below — two places offering the same choice is the confusion the
+              header's 모두 배정하기 already caused). */}
+          {!selectionMode && !expanded && (
+            <InboxSuggestions
+              suggestions={suggestions}
+              newWorkTitle={newWorkTitle}
+              onPickWork={(workId) => onToggle({ kind: 'work', workId })}
+              onPickNew={() => onToggle({ kind: 'new' })}
+            />
+          )}
         </div>
         {/* Hidden while selecting: in selection mode the row *is* a toggle, and
             per-row actions next to it both invited the wrong click and
@@ -250,7 +284,7 @@ function InboxRow({
               type="button"
               className={`kv2-btn kv2-btn--small${expanded ? '' : ' kv2-btn--primary'}`}
               aria-expanded={expanded}
-              onClick={onToggle}
+              onClick={() => onToggle()}
             >
               {expanded ? '접기 ▲' : '배정'}
             </button>
@@ -271,11 +305,16 @@ function InboxRow({
       </div>
       {expanded && !selectionMode && (
         <WorkAssignInline
+          // Re-seeded when a different chip opens the panel: mode and the
+          // selected Work are initial state, so without a key a second chip on
+          // an already-open panel would change nothing.
+          key={expandedTarget?.kind === 'work' ? expandedTarget.workId : expandedTarget?.kind ?? 'default'}
           session={session}
           works={works}
           chained={chained}
           preferSameDir={preferSameDir}
-          onCancel={onToggle}
+          initialTarget={expandedTarget ?? undefined}
+          onCancel={() => onToggle()}
           onCreateWork={async (title, role) => {
             await onCreateWorkFromSession(session, title, role);
           }}
@@ -503,6 +542,9 @@ export function WorksView({
   onSaveConfig,
 }: WorksViewProps) {
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  // Which suggestion opened the panel, if one did. Held next to the expanded id
+  // rather than inside the row so the row stays a pure render of Inbox state.
+  const [expandedTarget, setExpandedTarget] = useState<AssignTarget | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [section, setSection] = useState<'active' | 'resolved'>('active');
@@ -575,7 +617,9 @@ export function WorksView({
   // hidden while selecting, so an open panel would be the one piece of the row
   // UI left pointing at a single session mid-batch.
   useEffect(() => {
-    if (selectionMode) setExpandedSessionId(null);
+    if (!selectionMode) return;
+    setExpandedSessionId(null);
+    setExpandedTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionMode]);
 
@@ -907,10 +951,23 @@ export function WorksView({
                   >
                     {selectionMode ? '☑ 선택 끝내기' : '☑ 선택'}
                   </button>
+                  {/* Disabled for the whole of selection mode, not just when
+                      something is checked. It assigns the *entire* Inbox one
+                      row at a time — it has never had anything to do with the
+                      selection — but sitting live above a list of checkboxes it
+                      read as "배정 the ones I picked", and the button that
+                      actually does that is the one at the bottom of the list.
+                      Two enabled primaries with opposite scopes is the
+                      ambiguity; dimming one of them resolves it. */}
                   <button
                     type="button"
                     className="kv2-btn kv2-btn--small kv2-btn--primary"
-                    disabled={inbox.length === 0}
+                    disabled={inbox.length === 0 || selectionMode}
+                    title={
+                      selectionMode
+                        ? '선택한 세션만 배정하려면 목록 아래 "배정하기"를 사용하세요. 미배정 세션 전체를 한 건씩 배정하려면 먼저 "선택 끝내기"를 누르세요.'
+                        : '미배정 세션을 하나씩 순서대로 배정합니다'
+                    }
                     onClick={onAssignAll}
                   >
                     ⚡ 모두 배정하기
@@ -945,11 +1002,19 @@ export function WorksView({
                       session={session}
                       works={works}
                       expanded={expandedSessionId === session.sessionId}
-                      onToggle={() => {
+                      expandedTarget={
+                        expandedSessionId === session.sessionId ? expandedTarget : null
+                      }
+                      onToggle={(target) => {
                         setBulkPanelOpen(false);
-                        setExpandedSessionId((current) =>
-                          current === session.sessionId ? null : session.sessionId,
-                        );
+                        setExpandedSessionId((current) => {
+                          // A chip on a row whose panel is already open re-aims
+                          // it rather than closing it — only the bare 배정 /
+                          // 접기 button toggles.
+                          if (current !== session.sessionId) return session.sessionId;
+                          return target ? session.sessionId : null;
+                        });
+                        setExpandedTarget(target ?? null);
                       }}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(session.sessionId)}
@@ -996,12 +1061,20 @@ export function WorksView({
                       className="kv2-btn kv2-btn--small kv2-btn--primary"
                       disabled={selectedIds.size === 0}
                       aria-expanded={showBulkPanel}
+                      title={
+                        selectedIds.size === 0
+                          ? '먼저 세션을 선택하세요'
+                          : `선택한 ${selectedIds.size}개를 하나의 Work에 배정합니다`
+                      }
                       onClick={() => {
                         setBulkPanelOpen((open) => !open);
                         setExpandedSessionId(null);
+                        setExpandedTarget(null);
                       }}
                     >
-                      {showBulkPanel ? '접기 ▲' : `배정하기 (${selectedIds.size})`}
+                      {showBulkPanel
+                        ? '접기 ▲'
+                        : `선택한 ${selectedIds.size}개 배정하기`}
                     </button>
                   </div>
                 )}
