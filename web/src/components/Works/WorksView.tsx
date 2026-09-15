@@ -14,6 +14,7 @@ import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
 import type { BulkAssignResult, UseWorksResult, WorkResolveOutcome } from '../../hooks/useWorks';
 import { WorkAssignInline } from './WorkAssignInline';
+import { InboxSuggestions } from './InboxSuggestions';
 import { DirChip } from './WorkAffinityMarks';
 import { chainedWorkIds } from './worksAffinity';
 import { WorksConfigPanel } from './WorksConfigPanel';
@@ -38,6 +39,9 @@ import {
   rowIndexAtPointer,
   sessionIdsBetween,
   shortSessionId,
+  DEFAULT_SESSION_ROLE,
+  suggestWorkAssignments,
+  suggestWorkTitle,
   summarizeRoles,
   type InboxRowExtent,
 } from './worksAssign';
@@ -153,6 +157,14 @@ function InboxRow({
   // actionable form — and the bare lineage otherwise.
   const chainedCount = chained?.size ?? 0;
   const lineageCount = session.relatedSessionIds?.length ?? 0;
+  // Computed on the row, before 배정 is ever pressed: the whole point is that
+  // the obvious assignment is visible while scanning the list, so a session
+  // that clearly belongs somewhere never costs a panel open to find out.
+  const suggestions = useMemo(
+    () => suggestWorkAssignments(session, works, { chained, preferSameDir }),
+    [session, works, chained, preferSameDir],
+  );
+  const newWorkTitle = useMemo(() => suggestWorkTitle(session), [session]);
   const chainMark = !suggestSessionChain
     ? null
     : chainedCount > 0
@@ -238,6 +250,22 @@ function InboxRow({
             <div className="works-inbox-failure" role="alert">
               ⚠ 배정 실패 — {assignFailure}
             </div>
+          )}
+          {/* Hidden while selecting (the row is a toggle then) and while the
+              panel is open (the panel lists the same Works, ranked, right
+              below — two places offering the same choice is the confusion the
+              header's 모두 배정하기 already caused). */}
+          {!selectionMode && !expanded && (
+            <InboxSuggestions
+              suggestions={suggestions}
+              newWorkTitle={newWorkTitle}
+              onAssignWork={async (workId) => {
+                await onLinkSessionToWork(workId, session, DEFAULT_SESSION_ROLE);
+              }}
+              onCreateWork={async () => {
+                await onCreateWorkFromSession(session, newWorkTitle, DEFAULT_SESSION_ROLE);
+              }}
+            />
           )}
         </div>
         {/* Hidden while selecting: in selection mode the row *is* a toggle, and
@@ -907,10 +935,23 @@ export function WorksView({
                   >
                     {selectionMode ? '☑ 선택 끝내기' : '☑ 선택'}
                   </button>
+                  {/* Disabled for the whole of selection mode, not just when
+                      something is checked. It assigns the *entire* Inbox one
+                      row at a time — it has never had anything to do with the
+                      selection — but sitting live above a list of checkboxes it
+                      read as "배정 the ones I picked", and the button that
+                      actually does that is the one at the bottom of the list.
+                      Two enabled primaries with opposite scopes is the
+                      ambiguity; dimming one of them resolves it. */}
                   <button
                     type="button"
                     className="kv2-btn kv2-btn--small kv2-btn--primary"
-                    disabled={inbox.length === 0}
+                    disabled={inbox.length === 0 || selectionMode}
+                    title={
+                      selectionMode
+                        ? '선택한 세션만 배정하려면 목록 아래 "배정하기"를 사용하세요. 미배정 세션 전체를 한 건씩 배정하려면 먼저 "선택 끝내기"를 누르세요.'
+                        : '미배정 세션을 하나씩 순서대로 배정합니다'
+                    }
                     onClick={onAssignAll}
                   >
                     ⚡ 모두 배정하기
@@ -996,12 +1037,19 @@ export function WorksView({
                       className="kv2-btn kv2-btn--small kv2-btn--primary"
                       disabled={selectedIds.size === 0}
                       aria-expanded={showBulkPanel}
+                      title={
+                        selectedIds.size === 0
+                          ? '먼저 세션을 선택하세요'
+                          : `선택한 ${selectedIds.size}개를 하나의 Work에 배정합니다`
+                      }
                       onClick={() => {
                         setBulkPanelOpen((open) => !open);
                         setExpandedSessionId(null);
                       }}
                     >
-                      {showBulkPanel ? '접기 ▲' : `배정하기 (${selectedIds.size})`}
+                      {showBulkPanel
+                        ? '접기 ▲'
+                        : `선택한 ${selectedIds.size}개 배정하기`}
                     </button>
                   </div>
                 )}

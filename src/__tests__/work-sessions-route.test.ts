@@ -257,6 +257,25 @@ describe('buildWorkSessionsResponse', () => {
     expect(response.sessions[1].role).toBe('review');
   });
 
+  // The Work detail row's runtime chip. Resolved here rather than in the dialog
+  // because a completed Work has every card off the board — the rows that most
+  // need a label are exactly the ones a client-side board lookup cannot reach.
+  test('reports each session runtime from its oldest card', () => {
+    const response = buildWorkSessionsResponse(base, [
+      card({ id: 'c1', sessionId: 's-a', agentRuntime: 'codex', startedAt: '2026-09-01T02:00:00.000Z' }),
+      card({ id: 'c2', sessionId: 's-a', agentRuntime: 'codex', startedAt: '2026-09-01T03:00:00.000Z' }),
+      card({ id: 'c3', sessionId: 's-b', agentRuntime: 'claude' }),
+    ]);
+    expect(response.sessions.map((s) => [s.sessionId, s.agentRuntime]))
+      .toEqual([['s-a', 'codex'], ['s-b', 'claude']]);
+  });
+
+  test('a legacy card with no runtime field still resolves one, and an empty session none', () => {
+    const response = buildWorkSessionsResponse(base, [card({ id: 'c1', sessionId: 's-a' })]);
+    expect(response.sessions[0].agentRuntime).toBe('opencode');
+    expect(response.sessions[1].agentRuntime).toBeUndefined();
+  });
+
   test('counts a card once when the sweep raced the read', () => {
     const duplicated = card({ id: 'c1', sessionId: 's-a' });
     const response = buildWorkSessionsResponse(base, [duplicated, duplicated]);

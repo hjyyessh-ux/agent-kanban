@@ -358,6 +358,10 @@ export function buildWorkSessionsResponse(
         linkedAt: link.linkedAt,
         projectDir: link.projectDir ?? oldest?.projectDir,
         title: oldest?.title?.trim() || oldest?.sessionTitle?.trim() || '',
+        // From the oldest card, matching `title`/`projectDir` above: a session
+        // is one runtime's conversation, and feedback cards appended later
+        // inherit it. `resolveAgentRuntime` covers legacy cards with no field.
+        agentRuntime: oldest ? resolveAgentRuntime(oldest) : undefined,
         cardCount: owned.length,
         doneCount,
         inProgressCount,

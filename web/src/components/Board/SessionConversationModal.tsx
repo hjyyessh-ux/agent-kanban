@@ -407,6 +407,9 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
             setIsSubmittingFeedback={setIsSubmittingFeedback}
             onCreateFeedback={onCreateFeedback}
             onClose={onClose}
+            projectDir={feedbackTarget.projectDir ?? group.projectDir}
+            // 지금 읽고 있는 바로 그 세션이다 — 자기 참조는 후보에서 막는다.
+            excludeSessionIds={group.sessionId ? [group.sessionId] : undefined}
           />
         ) : (
           <p className="session-conversation-feedbackDisabled">

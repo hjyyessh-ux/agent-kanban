@@ -364,7 +364,7 @@ export function BulkAssignModal({
           </button>
           {selection.mode === 'new' && detail}
 
-          {recommendations.map(({ work, sameDirectory, chained: isChained }, i) => {
+          {recommendations.map(({ work, sameDirectory, chained: isChained, keywords }, i) => {
             const selected = selection.mode === 'existing' && selection.workId === work.id;
             return (
               <Fragment key={work.id}>
@@ -382,6 +382,7 @@ export function BulkAssignModal({
                       projectDir={work.projectDir}
                       sameDirectory={sameDirectory}
                       chained={isChained}
+                      keywords={keywords}
                     />
                   </span>
                 </button>

@@ -250,6 +250,94 @@ function stepsFromCodexLines(lines: string[]): RunProgressStep[] {
   return steps;
 }
 
+/**
+ * Steps from a **Codex rollout** (`~/.codex/sessions/.../rollout-*.jsonl`).
+ *
+ * Deliberately not `stepsFromCodexLines`: that one parses `codex exec --json`,
+ * which the board dispatch path writes to the run's events.jsonl. The rollout
+ * the interactive CLI leaves behind is a different wire format for the same
+ * facts — the envelope is `{type: "event_msg", payload: {type: "item_completed",
+ * item}}` and the item types are PascalCase (`CommandExecution`) rather than
+ * snake_case (`command_execution`). Feeding rollout lines to the exec parser
+ * yields zero steps, not an error, so the two must stay separate.
+ */
+function stepsFromCodexRolloutLines(lines: string[]): RunProgressStep[] {
+  const steps: RunProgressStep[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const record = asRecord(raw);
+    if (!record || asString(record.type) !== 'event_msg') continue;
+    const payload = asRecord(record.payload);
+    // Count each item once via item_completed (item_started would double count).
+    if (!payload || asString(payload.type) !== 'item_completed') continue;
+    const item = asRecord(payload.item);
+    if (!item) continue;
+
+    switch (asString(item.type)) {
+      case 'CommandExecution': {
+        // `command` is the argv array the sandbox ran, e.g.
+        // `["/bin/zsh", "-lc", "cat SKILL.md"]` — the last element is the part
+        // a human recognises.
+        const argv = Array.isArray(item.command)
+          ? item.command.filter((part): part is string => typeof part === 'string')
+          : [];
+        const command = argv.length > 0 ? (argv[argv.length - 1] ?? '') : asString(item.command) ?? '';
+        steps.push({
+          kind: 'command',
+          label: 'Shell',
+          ...(command ? { detail: formatDetail(command) } : {}),
+          ...(command ? { body: command } : {}),
+        });
+        break;
+      }
+      case 'FileChange': {
+        steps.push({ kind: 'tool', label: 'Edit' });
+        break;
+      }
+      case 'McpToolCall': {
+        const server = asString(item.server);
+        const tool = asString(item.tool);
+        if (!server) break;
+        steps.push({ kind: 'mcp', label: tool ? `${server} · ${tool}` : server });
+        break;
+      }
+      case 'SubAgentActivity': {
+        // Only the start: `kind` also carries `completed`/`failed` for the same
+        // `agent_path`, and counting those would list every subagent twice.
+        if (asString(item.kind) !== 'started') break;
+        const agentPath = asString(item.agent_path);
+        if (!agentPath) break;
+        steps.push({ kind: 'agent', label: agentPath.replace(/^\/+/, '') });
+        break;
+      }
+      case 'Extension': {
+        // `kind` is the extension id, e.g. `web.search`.
+        const kind = asString(item.kind);
+        if (!kind) break;
+        const query = asString(item.query);
+        steps.push({
+          kind: 'tool',
+          label: kind,
+          ...(query ? { detail: formatDetail(query) } : {}),
+        });
+        break;
+      }
+      default:
+    }
+  }
+
+  return steps;
+}
+
 function summarize(steps: RunProgressStep[]): CardRunProgress['summary'] {
   const skills = new Set<string>();
   const mcpServers = new Set<string>();
@@ -308,22 +396,29 @@ export function buildRunProgress(run: RuntimeRun, lines: string[]): CardRunProgr
 
 /**
  * Fallback for cards that were never dispatched through a claude/codex run —
- * e.g. cards minted by the UserPromptSubmit hook for an interactive Claude
- * Code session. Parses the session transcript
- * (`~/.claude/projects/<munged-dir>/<sessionId>.jsonl`), whose assistant lines
- * share the tool_use shape with stream-json but carry no system/task_started
- * events (subagents are read from the Task tool_use instead).
+ * cards minted by the UserPromptSubmit hook for an interactive CLI session.
+ *
+ * `format` is the **file's** dialect as decided by `locateSessionTranscript`,
+ * not the card's `agentRuntime`: the lookup is by file existence, so a card
+ * tagged one way can legitimately resolve the other runtime's file. Claude's
+ * transcript shares the tool_use shape with stream-json but carries no
+ * system/task_started events (subagents are read from the Task tool_use
+ * instead); Codex's rollout is its own envelope, see
+ * `stepsFromCodexRolloutLines`.
  */
 export function buildTranscriptProgress(
   card: Pick<KanbanCard, 'sessionId' | 'status' | 'startedAt' | 'createdAt'>,
   lines: string[],
+  format: 'claude' | 'codex' = 'claude',
 ): CardRunProgress {
-  const steps = stepsFromClaudeLines(lines, { agentFromTaskToolUse: true });
+  const steps = format === 'codex'
+    ? stepsFromCodexRolloutLines(lines)
+    : stepsFromClaudeLines(lines, { agentFromTaskToolUse: true });
 
   return assembleProgress({
     runId: `session-${card.sessionId ?? 'unknown'}`,
     source: 'transcript',
-    runtime: 'claude',
+    runtime: format,
     runStatus: card.status === 'in_progress' ? 'running' : 'completed',
     startedAt: card.startedAt ?? card.createdAt,
   }, steps);

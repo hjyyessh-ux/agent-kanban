@@ -13,6 +13,9 @@ import {
   isCommandAvailableForRuntime,
   type CommandId,
 } from "../../constants/commands";
+import { appendReferenceBlock, type ResolvedReference } from "../../../../src/core/mention-reference";
+import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
+import { MentionTextarea } from "../Mention/MentionTextarea";
 import { DialogSkeleton } from "./DialogSkeleton";
 import { ErrorAlert } from "../shared/ErrorAlert";
 import { SessionPickerPanel } from "./SessionPickerPanel";
@@ -136,6 +139,12 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
   const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
+  /**
+   * `@` 멘션 참조. `MentionTextarea`가 본문에서 파싱한 토큰을 해석해 올려 준다.
+   * 여기에는 선택 기록이 아니라 **본문의 현재 상태**만 담긴다 — 사용자가 본문에서
+   * 토큰을 지우면 다음 통지에서 그 참조는 그냥 빠진다.
+   */
+  const [resolvedRefs, setResolvedRefs] = useState<ResolvedReference[]>([]);
 
   const firstInputRef = useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -375,11 +384,19 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
       setModel(resolvedModel);
     }
 
+    // 디바운스된 해석이 아직 안 돌아왔을 수 있다 — 고르자마자 CREATE를 누르면
+    // 사람이 이긴다. 본문을 다시 읽어 확정한다.
+    const submitRefs = isCommandOnly
+      ? []
+      : await resolveReferencesForSubmit(description, resolvedRefs);
+
     let newCard: KanbanCard;
     try {
       newCard = await onCreate({
         title,
-        description: isCommandOnly ? '' : description,
+        // 참조 블록은 **여기서, 제출 직전에** 한 번 붙는다. 그 아래로는 그냥
+        // `description` 문자열이라 store·훅·dispatch 경로가 전부 무변경이다.
+        description: isCommandOnly ? '' : appendReferenceBlock(description, submitRefs),
         projectDir: projectDir.trim() || undefined,
         model: resolvedModel || undefined,
         agentRuntime: runtime,
@@ -527,23 +544,27 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
 
           <div className="kv2-create-field">
             <label className="kv2-create-label" htmlFor="create-card-description-input">Prompt {promptRequired ? '*' : '(ignored)'}</label>
-            <textarea
+            <MentionTextarea
               id="create-card-description-input"
-              ref={descriptionRef}
+              textareaRef={descriptionRef}
               className={`kv2-create-textarea${isCommandOnly ? ' kv2-create-textarea--ignored' : ''}${fieldErrors.description ? ' kv2-create-textarea--error' : ''}`}
               value={description}
-              onChange={(e) => {
-                setDescription(e.target.value);
+              onChange={(next) => {
+                setDescription(next);
                 clearFieldError('description');
               }}
               onPaste={handlePaste}
               placeholder={isCommandOnly
                 ? 'Ignored for this command type'
-                : 'Describe the task in detail. Be specific about requirements, constraints, and expected outcomes. (스크린샷은 붙여넣기로 첨부할 수 있습니다)'}
+                : 'Describe the task in detail. Be specific about requirements, constraints, and expected outcomes. (@로 세션·Work·문서를 참조할 수 있고, 스크린샷은 붙여넣기로 첨부합니다)'}
               rows={3}
               disabled={isSubmitting || isCommandOnly}
-              aria-invalid={fieldErrors.description ? 'true' : 'false'}
-              aria-describedby={fieldErrors.description ? 'create-card-description-error' : undefined}
+              ariaInvalid={Boolean(fieldErrors.description)}
+              ariaDescribedBy={fieldErrors.description ? 'create-card-description-error' : undefined}
+              // 팝오버가 다이얼로그 아래로 삐져나가지 않게 가둔다.
+              boundarySelector=".kv2-dialog"
+              projectDir={projectDir.trim() || undefined}
+              onReferencesChange={setResolvedRefs}
             />
             {fieldErrors.description && (
               <span id="create-card-description-error" className="kv2-create-helper kv2-create-helper--error">

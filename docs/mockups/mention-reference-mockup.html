@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@ 멘션 참조 목업 — Agent Kanban</title>
+<style>
+/* ============================================================
+   목업 전용 스타일 — kv2 토큰 값을 복제해 실제 앱과 동일한 룩을
+   재현한다. 실제 구현 시에는 kanban-v2.tokens.css 의 토큰과
+   primitives.css 의 kv2-btn / kv2-badge / DialogSkeleton 을 사용.
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --bg: #FFF8E7;
+  --frame: #1A1A2E;
+  --surface: #FFFFFF;
+  --surface-sunken: #f8fafc;
+  --surface-hover: #f3f4f6;
+  --text-primary: #1A1A2E;
+  --text-secondary: #536074;
+  --text-muted: #8190a8;
+  --border: #D7DCE6;
+  --border-strong: #1f2233;
+  --border-subtle: #e2e8f0;
+  --shadow-color: rgba(31, 34, 51, 0.85);
+  --scrim: rgba(0, 0, 0, 0.5);
+
+  --status-todo: #3b82f6;
+  --status-progress: #facc15;
+  --status-complete: #ff3b6b;
+  --status-done: #22c55e;
+
+  --runtime-claude: #d97757;
+  --runtime-codex: #10a37f;
+  --runtime-opencode: #6366F1;
+
+  --info-surface: #eff6ff;
+  --info-border: #93c5fd;
+  --info-text: #1d4ed8;
+  --warn-surface: #fef3c7;
+  --warn-border: #fcd34d;
+  --warn-text: #b45309;
+  --success-surface: #f0fdf4;
+  --success-border: #86efac;
+  --success-text: #166534;
+  --neutral-chip-bg: #f1f5f9;
+  --neutral-chip-text: #475569;
+
+  /* 참조 종류별 색 — kv2 계층 ① 신설 대상 (--kv2-ref-*) */
+  --ref-session: #1668e8;
+  --ref-work: #8b5cf0;
+  --ref-card: #d97757;
+  --ref-doc: #0d9488;
+
+  --dir-1: #a7361b; --dir-2: #a9a019; --dir-3: #357718; --dir-4: #34b76e;
+  --dir-5: #107a93; --dir-6: #787fed; --dir-7: #712593; --dir-8: #dd4b9c;
+
+  --btn-primary-bg: #1668e8;
+  --btn-primary-fg: #fffdf7;
+
+  --font-sans: 'Work Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --font-heading: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  --shadow-sm: 3px 3px 0 var(--shadow-color);
+  --shadow-md: 4px 4px 0 var(--shadow-color);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b1d20;
+  --frame: #0e0e15;
+  --surface: #272a2e;
+  --surface-sunken: #202327;
+  --surface-hover: #30343a;
+  --text-primary: #d4d7db;
+  --text-secondary: #a3a8ae;
+  --text-muted: #737a82;
+  --border: #34383d;
+  --border-strong: #454a50;
+  --border-subtle: #30343a;
+  --shadow-color: rgba(8, 10, 12, 0.55);
+  --scrim: rgba(0, 0, 0, 0.72);
+  --info-surface: #29303a; --info-border: #3d4a5e; --info-text: #8fa9d6;
+  --warn-surface: #322e22; --warn-border: #5c5130; --warn-text: #d2b271;
+  --success-surface: #283229; --success-border: #3d5a44; --success-text: #9bc0a4;
+  --neutral-chip-bg: #30343a; --neutral-chip-text: #a3a8ae;
+  --ref-session: #6f9bf0; --ref-work: #a98af5; --ref-card: #e0917a; --ref-doc: #3fb7a8;
+  --btn-primary-bg: #2f6fed; --btn-primary-fg: #f4f6fb;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text-primary);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
+}
+code, .mono { font-family: var(--font-mono); }
+
+/* ── 목업 툴바 ─────────────────────────────────────────────── */
+.mock-toolbar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--frame); color: #f9fafb; font-size: 12px;
+}
+.mock-toolbar .mk-note { opacity: .65; margin-right: 8px; }
+.mock-toolbar button {
+  font: inherit; cursor: pointer; padding: 5px 12px;
+  background: transparent; color: #f9fafb;
+  border: 2px solid #4b5563; border-radius: 999px;
+}
+.mock-toolbar button.active { background: #f9fafb; color: #1A1A2E; border-color: #f9fafb; font-weight: 700; }
+.mock-toolbar .spacer { flex: 1; }
+
+/* ── 앱 크롬 ───────────────────────────────────────────────── */
+.app { max-width: 1180px; margin: 0 auto; padding: 20px 24px 80px; }
+.app-header {
+  display: flex; align-items: center; gap: 20px;
+  padding-bottom: 14px; margin-bottom: 20px; border-bottom: 3px solid var(--border-strong);
+}
+.app-logo { font-family: var(--font-heading); font-weight: 900; font-size: 20px; letter-spacing: .5px; }
+.app-tabs { display: flex; gap: 6px; }
+.app-tab {
+  padding: 6px 14px; border: 2px solid transparent; border-radius: 999px;
+  color: var(--text-secondary); font-weight: 600; cursor: default;
+}
+.app-tab.active { background: var(--frame); color: #fffdf7; border-color: var(--frame); }
+
+.screen { display: none; }
+.screen.visible { display: block; }
+.screen-caption {
+  background: var(--info-surface); border: 2px solid var(--info-border); color: var(--info-text);
+  padding: 10px 14px; margin: 0 0 18px; font-size: 13px; border-radius: 2px;
+}
+.screen-caption b { font-weight: 800; }
+.section-heading {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-heading); font-weight: 800; font-size: 15px; margin: 26px 0 12px;
+}
+.section-heading .rule { flex: 1; height: 2px; background: var(--border); }
+.section-heading .hint { font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-muted); }
+
+/* ── 다이얼로그 셸 (DialogSkeleton 재현) ───────────────────── */
+.dialog-stage {
+  background: var(--scrim); padding: 28px; border-radius: 2px;
+  display: flex; justify-content: center;
+}
+.dialog {
+  width: 100%; max-width: 880px; background: var(--surface);
+  border: 3px solid var(--border-strong); box-shadow: var(--shadow-md); border-radius: 2px;
+}
+.dialog-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-bottom: 3px solid var(--border-strong);
+}
+.dialog-title { font-family: var(--font-heading); font-weight: 900; font-size: 17px; margin: 0; flex: 1; }
+.dialog-close {
+  width: 28px; height: 28px; border: 2px solid var(--border); background: transparent;
+  color: var(--text-secondary); font-size: 16px; cursor: default; border-radius: 2px;
+}
+.dialog-content { padding: 18px; }
+.dialog-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-top: 2px solid var(--border-subtle);
+}
+.dialog-footer .cancel { margin-right: auto; }
+
+/* ── 폼 프리미티브 ─────────────────────────────────────────── */
+.form-group { margin-bottom: 14px; }
+.label {
+  display: block; font-size: 11px; font-weight: 800; letter-spacing: .8px;
+  text-transform: uppercase; color: var(--text-secondary); margin-bottom: 6px;
+}
+.input, .textarea {
+  width: 100%; padding: 9px 11px; font: inherit;
+  background: var(--surface); color: var(--text-primary);
+  border: 2px solid var(--border-strong); border-radius: 2px;
+}
+.textarea { min-height: 108px; resize: vertical; white-space: pre-wrap; }
+.textarea.focused { outline: 3px solid color-mix(in srgb, var(--btn-primary-bg) 35%, transparent); outline-offset: 1px; }
+.caret { display: inline-block; width: 2px; height: 1.1em; background: var(--text-primary); vertical-align: -3px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.btn {
+  font: inherit; font-weight: 700; padding: 8px 16px; cursor: default;
+  background: var(--surface); color: var(--text-primary);
+  border: 2px solid var(--border-strong); border-radius: 2px; box-shadow: var(--shadow-sm);
+}
+.btn--primary { background: var(--btn-primary-bg); color: var(--btn-primary-fg); border-color: var(--btn-primary-bg); }
+.btn--outline { box-shadow: none; }
+.btn--small { padding: 5px 11px; font-size: 12px; box-shadow: none; }
+
+/* ── @ 멘션 팝오버 (핵심) ──────────────────────────────────── */
+.mention-host { position: relative; }
+.mention-pop {
+  position: absolute; z-index: 40; width: 520px;
+  background: var(--surface); border: 3px solid var(--border-strong);
+  box-shadow: var(--shadow-md); border-radius: 2px; overflow: hidden;
+}
+.mention-pop--below { top: calc(100% + 8px); left: 18px; }
+
+.mention-tabs {
+  display: flex; gap: 4px; padding: 8px 8px 0;
+  border-bottom: 2px solid var(--border-subtle); background: var(--surface-sunken);
+}
+.mention-tab {
+  padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: default;
+  color: var(--text-secondary); background: transparent;
+  border: 2px solid transparent; border-bottom: none; border-radius: 2px 2px 0 0;
+}
+.mention-tab.active {
+  background: var(--surface); color: var(--text-primary);
+  border-color: var(--border-strong); margin-bottom: -2px; padding-bottom: 8px;
+}
+.mention-tab .cnt { font-size: 10px; opacity: .65; margin-left: 4px; }
+
+.mention-query {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-bottom: 2px solid var(--border-subtle); background: var(--surface-sunken);
+  font-size: 12px; color: var(--text-secondary);
+}
+.mention-query .q { font-family: var(--font-mono); color: var(--text-primary); font-weight: 700; }
+.mention-query .kbd {
+  margin-left: auto; display: flex; gap: 5px;
+}
+.mention-query .kbd span {
+  font-family: var(--font-mono); font-size: 10px; padding: 2px 6px;
+  background: var(--neutral-chip-bg); color: var(--neutral-chip-text);
+  border: 1px solid var(--border); border-radius: 2px;
+}
+
+.mention-list { max-height: 330px; overflow-y: auto; }
+.mention-group {
+  padding: 8px 12px 4px; font-size: 10px; font-weight: 800; letter-spacing: .9px;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.mention-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-left: 4px solid transparent; cursor: default;
+}
+.mention-row.sel { background: var(--surface-hover); border-left-color: var(--btn-primary-bg); }
+.mention-row .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.mention-row .kind {
+  width: 22px; text-align: center; font-size: 13px; flex: none;
+}
+.mention-row .body { min-width: 0; flex: 1; }
+.mention-row .t {
+  display: block; font-weight: 600; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mention-row .t mark { background: color-mix(in srgb, var(--status-progress) 55%, transparent); color: inherit; padding: 0 1px; }
+.mention-row .m {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-size: 11px; color: var(--text-muted); margin-top: 2px;
+}
+.mention-row .m .mono { font-size: 10.5px; }
+.mention-row .snip {
+  display: block; margin-top: 3px; font-size: 11px; line-height: 1.45;
+  color: var(--text-secondary); border-left: 3px solid var(--border);
+  padding-left: 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mention-row .snip .fld {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .3px;
+  text-transform: uppercase; color: var(--text-muted); margin-right: 5px;
+}
+.mention-row .right { display: flex; align-items: center; gap: 6px; flex: none; }
+.mention-row .enter {
+  font-size: 11px; padding: 2px 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-muted); border-radius: 2px;
+}
+.mention-empty { padding: 26px 12px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+.rt-badge {
+  font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 2px; color: #fff;
+}
+.rt-claude { background: var(--runtime-claude); }
+.rt-codex { background: var(--runtime-codex); }
+.rt-opencode { background: var(--runtime-opencode); }
+
+.dir-mark {
+  font-family: var(--font-mono); font-size: 10.5px; padding: 1px 5px; border-radius: 2px;
+  background: color-mix(in srgb, var(--dc) 14%, var(--surface));
+  color: color-mix(in srgb, var(--dc) 45%, var(--text-primary));
+}
+.st-badge {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px;
+  padding: 1px 6px; border-radius: 2px;
+  background: color-mix(in srgb, var(--sc) 18%, var(--surface));
+  color: color-mix(in srgb, var(--sc) 50%, var(--text-primary));
+  border: 1px solid color-mix(in srgb, var(--sc) 40%, transparent);
+}
+
+/* ── 참조 칩 스트립 ────────────────────────────────────────── */
+.ref-strip {
+  margin-top: 10px; padding: 10px 12px;
+  background: var(--surface-sunken); border: 2px dashed var(--border); border-radius: 2px;
+}
+.ref-strip-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  font-size: 11px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; color: var(--text-secondary);
+}
+.ref-strip-head .count {
+  font-size: 10px; padding: 1px 6px; border-radius: 999px;
+  background: var(--neutral-chip-bg); color: var(--neutral-chip-text); letter-spacing: 0;
+}
+.ref-strip-head .spacer { flex: 1; }
+.ref-strip-head .toggle { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: none; letter-spacing: 0; }
+.ref-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.ref-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 320px;
+  padding: 4px 6px 4px 8px; font-size: 12px;
+  background: color-mix(in srgb, var(--rc) 11%, var(--surface));
+  border: 2px solid color-mix(in srgb, var(--rc) 45%, transparent);
+  color: var(--text-primary); border-radius: 2px;
+}
+.ref-chip .ico { font-size: 12px; }
+.ref-chip .tok { font-family: var(--font-mono); font-size: 10.5px; white-space: nowrap; flex: none; color: color-mix(in srgb, var(--rc) 55%, var(--text-primary)); }
+.ref-chip .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ref-chip .x {
+  width: 17px; height: 17px; line-height: 1; flex: none;
+  border: none; background: color-mix(in srgb, var(--rc) 20%, transparent);
+  color: var(--text-secondary); font-size: 12px; cursor: default; border-radius: 2px;
+}
+.ref-chip.warn { --rc: #b45309; }
+.ref-chip .warnmark { font-size: 11px; }
+
+/* ── 프롬프트 프리뷰 ───────────────────────────────────────── */
+.preview {
+  background: var(--surface); border: 3px solid var(--border-strong); box-shadow: var(--shadow-md);
+  border-radius: 2px; overflow: hidden;
+}
+.preview-head {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 2px solid var(--border-subtle); background: var(--surface-sunken);
+  font-weight: 800; font-size: 13px;
+}
+.preview-head .tagline { font-weight: 500; font-size: 12px; color: var(--text-muted); }
+pre.code {
+  margin: 0; padding: 14px 16px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.65;
+  background: var(--surface); color: var(--text-primary); white-space: pre-wrap;
+}
+pre.code .c { color: var(--text-muted); }
+pre.code .k { color: var(--ref-session); font-weight: 700; }
+pre.code .w { color: var(--ref-work); font-weight: 700; }
+pre.code .d { color: var(--ref-doc); font-weight: 700; }
+pre.code .u { color: var(--warn-text); }
+pre.code .hl { background: color-mix(in srgb, var(--status-progress) 30%, transparent); }
+
+.note {
+  margin-top: 14px; padding: 10px 14px; font-size: 12.5px;
+  background: var(--warn-surface); border: 2px solid var(--warn-border); color: var(--warn-text); border-radius: 2px;
+}
+.note.ok { background: var(--success-surface); border-color: var(--success-border); color: var(--success-text); }
+.note b { font-weight: 800; }
+
+/* ── 피드백 패널 ───────────────────────────────────────────── */
+.fb-panel {
+  background: var(--surface); border: 3px solid var(--border-strong);
+  box-shadow: var(--shadow-md); border-radius: 2px; padding: 14px; max-width: 640px;
+}
+.fb-head {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-family: var(--font-heading); font-weight: 900; font-size: 15px;
+}
+.fb-actions { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+.fb-panel .mention-host { position: relative; }
+.fb-stage-pad { padding-bottom: 22px; }
+.fb-ghost {
+  margin-top: 8px; height: 320px;
+  border: 2px dashed var(--border); border-radius: 2px;
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10px;
+}
+.fb-ghost-label { font-size: 11.5px; color: var(--text-muted); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="mock-toolbar">
+  <span class="mk-note">📐 @ 멘션 참조 목업 — 클릭 동작 없음</span>
+  <button data-screen="all" class="active">① @ 팝오버 (All)</button>
+  <button data-screen="filter">② 검색 + Sessions 탭</button>
+  <button data-screen="chips">③ 참조 칩 확정</button>
+  <button data-screen="feedback">④ Feedback 패널</button>
+  <button data-screen="preview">⑤ 전송 프롬프트</button>
+  <span class="spacer"></span>
+  <button id="theme-toggle">🌙 다크</button>
+</div>
+
+<div class="app">
+  <header class="app-header">
+    <div class="app-logo">AGENT KANBAN</div>
+    <nav class="app-tabs">
+      <span class="app-tab active">Board</span>
+      <span class="app-tab">Works</span>
+      <span class="app-tab">Timeline</span>
+      <span class="app-tab">Wiki</span>
+      <span class="app-tab">Capabilities</span>
+      <span class="app-tab">Scheduler</span>
+      <span class="app-tab">Settings</span>
+    </nav>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════
+       ① @ 입력 직후 — All 탭
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen visible" id="screen-all">
+    <p class="screen-caption"><b>New Task 다이얼로그의 Prompt 입력에서 <code>@</code>를 치면 캐럿 아래에 팝오버가 뜬다.</b>
+      기본 탭은 <b>All</b> — 종류별로 최근 항목을 3개씩 섞어 보여준다.
+      탭은 <b>All / Sessions / Works / Docs</b> 4개 — 카드 단위 참조는 세션 참조에 포함되므로 Cards 탭은 두지 않는다.
+      팝오버는 모달이 아니라 <code>useAnchoredPopover</code> 기반 캐럿 앵커 팝오버다 — 아래 공간이 부족하면 캐럿 <b>위로 뒤집히고</b>, <code>boundarySelector: '.kv2-dialog'</code>로 다이얼로그 경계를 넘지 않는다.</p>
+
+    <div class="dialog-stage">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h2 class="dialog-title">New Task</h2>
+          <button class="dialog-close">×</button>
+        </div>
+        <div class="dialog-content">
+          <div class="form-group">
+            <label class="label">Title *</label>
+            <input class="input" value="텔레그램 폴러 중복 카드 재발 방지">
+          </div>
+
+          <div class="form-group mention-host">
+            <label class="label">Prompt *</label>
+            <div class="textarea focused">예전에 고쳤던 중복 카드 이슈랑 같은 증상이 다시 보입니다.
+그때 작업이랑 같은 원인인지 확인해주세요. 참고: @<span class="caret"></span></div>
+
+            <!-- ▼ 멘션 팝오버 -->
+            <div class="mention-pop mention-pop--below">
+              <div class="mention-tabs">
+                <div class="mention-tab active">All</div>
+                <div class="mention-tab">Sessions<span class="cnt">26</span></div>
+                <div class="mention-tab">Works<span class="cnt">7</span></div>
+                <div class="mention-tab">Docs<span class="cnt">1572</span></div>
+              </div>
+              <div class="mention-query">
+                <span>검색어 없음 — 최근 항목</span>
+                <span class="kbd"><span>↑↓</span><span>Tab 탭이동</span><span>⏎ 선택</span><span>Esc</span></span>
+              </div>
+              <div class="mention-list">
+                <div class="mention-group">🧵 Recent Sessions</div>
+                <div class="mention-row sel">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-done)"></span>
+                  <span class="body">
+                    <span class="t">텔레그램 폴러 중복 카드 수정</span>
+                    <span class="m">
+                      <span class="mono">kx9f2a1b</span>
+                      <span class="st-badge" style="--sc:var(--status-done)">done</span>
+                      <span class="dir-mark" style="--dc:var(--dir-6)">agent-kanban</span>
+                      <span>2시간 전</span>
+                    </span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-claude">claude</span><span class="enter">⏎</span></span>
+                </div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-progress)"></span>
+                  <span class="body">
+                    <span class="t">zdd-zetta2 ingestion parity 조사</span>
+                    <span class="m">
+                      <span class="mono">p3mQ8tz0</span>
+                      <span class="st-badge" style="--sc:var(--status-progress)">in progress</span>
+                      <span class="dir-mark" style="--dc:var(--dir-3)">zdd-zetta2</span>
+                      <span>5시간 전</span>
+                    </span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-codex">codex</span></span>
+                </div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-done)"></span>
+                  <span class="body">
+                    <span class="t">Works 완료 시 위키 배치 중복 문서 수정</span>
+                    <span class="m">
+                      <span class="mono">v1Ld7qr4</span>
+                      <span class="st-badge" style="--sc:var(--status-done)">done</span>
+                      <span class="dir-mark" style="--dc:var(--dir-6)">agent-kanban</span>
+                      <span>어제</span>
+                    </span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-claude">claude</span></span>
+                </div>
+
+                <div class="mention-group">🗂 Recent Works</div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-work)">🗂</span>
+                  <span class="dot" style="background:var(--status-progress)"></span>
+                  <span class="body">
+                    <span class="t">Telegram 연동 안정화</span>
+                    <span class="m">
+                      <span class="mono">wTg4hN2</span>
+                      <span class="st-badge" style="--sc:var(--status-progress)">active</span>
+                      <span>세션 4개 · 카드 11개</span>
+                      <span>3시간 전</span>
+                    </span>
+                  </span>
+                  <span class="right"></span>
+                </div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-work)">🗂</span>
+                  <span class="dot" style="background:var(--status-done)"></span>
+                  <span class="body">
+                    <span class="t">Works &amp; Timeline 탭 구현</span>
+                    <span class="m">
+                      <span class="mono">wQ8kLp1</span>
+                      <span class="st-badge" style="--sc:var(--status-done)">done</span>
+                      <span>세션 7개 · 카드 23개</span>
+                      <span>9월 2일</span>
+                    </span>
+                  </span>
+                  <span class="right"></span>
+                </div>
+
+                <div class="mention-group">📄 Recent Docs (Wiki)</div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-doc)">📄</span>
+                  <span class="dot" style="background:var(--ref-doc)"></span>
+                  <span class="body">
+                    <span class="t">Telegram 폴러 중복 카드 — 원인과 dedup 키 설계</span>
+                    <span class="m">
+                      <span class="mono">troubleshooting/telegram-poller-dup.md</span>
+                      <span>2시간 전</span>
+                    </span>
+                  </span>
+                  <span class="right"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn--outline cancel">Cancel</button>
+          <button class="btn">Create</button>
+          <button class="btn btn--primary">Create &amp; Start</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--ref-session)"></i>🧵 Session</span>
+      <span><i style="background:var(--ref-work)"></i>🗂 Work</span>
+      <span><i style="background:var(--ref-doc)"></i>📄 Doc (Wiki)</span>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ② 검색어 입력 + Sessions 탭
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-filter">
+    <p class="screen-caption"><b><code>@</code> 뒤에 계속 타이핑하면 그 문자열이 검색어가 된다 (<code>@텔레그램</code>).</b>
+      매칭 구간은 하이라이트되고, <b>Tab</b>으로 탭을 이동하면 그 종류로만 좁혀진다.
+      <b>검색은 제목만으로는 작동하지 않는다</b> — 실측상 보드 카드 제목에 검색어가 걸리는 경우가 거의 없어서
+      <code>description</code>·<code>result</code>까지 훑고, <b>매칭된 위치의 문맥(스니펫)</b>을 행 아래에 보여준다.
+      제목이 <code>test</code>인 카드가 왜 걸렸는지 보여야 선택할 수 있기 때문이다.
+      범위는 <b>현재 보드(<code>active.json</code>)만</b> — 아카이브는 읽지 않고, 지나간 작업은 Docs 탭(Wiki)이 담당한다.
+      디바운스 150ms, 서버 필터(<code>GET /api/mentions?q=</code>).</p>
+
+    <div class="dialog-stage">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h2 class="dialog-title">New Task</h2>
+          <button class="dialog-close">×</button>
+        </div>
+        <div class="dialog-content">
+          <div class="form-group">
+            <label class="label">Title *</label>
+            <input class="input" value="텔레그램 폴러 중복 카드 재발 방지">
+          </div>
+          <div class="form-group mention-host">
+            <label class="label">Prompt *</label>
+            <div class="textarea focused">예전에 고쳤던 중복 카드 이슈랑 같은 증상이 다시 보입니다.
+그때 작업이랑 같은 원인인지 확인해주세요. 참고: @텔레그램<span class="caret"></span></div>
+
+            <div class="mention-pop mention-pop--below">
+              <div class="mention-tabs">
+                <div class="mention-tab">All<span class="cnt">7</span></div>
+                <div class="mention-tab active">Sessions<span class="cnt">3</span></div>
+                <div class="mention-tab">Works<span class="cnt">1</span></div>
+                <div class="mention-tab">Docs<span class="cnt">3</span></div>
+              </div>
+              <div class="mention-query">
+                <span>검색어 <span class="q">텔레그램</span> · 세션 3건</span>
+                <span class="kbd"><span>↑↓</span><span>Tab 탭이동</span><span>⏎ 선택</span><span>Esc</span></span>
+              </div>
+              <div class="mention-list">
+                <div class="mention-row sel">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-done)"></span>
+                  <span class="body">
+                    <span class="t">폴러 중복 카드 수정</span>
+                    <span class="m">
+                      <span class="mono">kx9f2a1b</span>
+                      <span class="st-badge" style="--sc:var(--status-done)">done</span>
+                      <span class="dir-mark" style="--dc:var(--dir-6)">agent-kanban</span>
+                      <span>2시간 전</span>
+                    </span>
+                    <span class="snip"><span class="fld">result</span>…dedup 키를 messageId 기준으로 바꿔 <mark>텔레그램</mark> 폴러가 같은 메시지로 카드를 두 번…</span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-claude">claude</span><span class="enter">⏎</span></span>
+                </div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-done)"></span>
+                  <span class="body">
+                    <span class="t">UI 수정#2</span>
+                    <span class="m">
+                      <span class="mono">t7Yb3ke9</span>
+                      <span class="st-badge" style="--sc:var(--status-done)">done</span>
+                      <span class="dir-mark" style="--dc:var(--dir-6)">agent-kanban</span>
+                      <span>어제</span>
+                    </span>
+                    <span class="snip"><span class="fld">description</span>…<mark>텔레그램</mark>으로 오는 리마인드 문구도 같이 손봐줘. 지금 ⏳ 이모지가…</span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-claude">claude</span></span>
+                </div>
+                <div class="mention-row">
+                  <span class="kind" style="color:var(--ref-session)">🧵</span>
+                  <span class="dot" style="background:var(--status-todo)"></span>
+                  <span class="body">
+                    <span class="t">알림 템플릿 정리 <span style="color:var(--text-muted);font-weight:400">(다른 프로젝트)</span></span>
+                    <span class="m">
+                      <span class="mono">b2Nc5wt7</span>
+                      <span class="st-badge" style="--sc:var(--status-todo)">todo</span>
+                      <span class="dir-mark" style="--dc:var(--dir-1)">zepetoful-api</span>
+                      <span>3일 전</span>
+                    </span>
+                    <span class="snip"><span class="fld">title</span><mark>텔레그램</mark> 알림 템플릿 정리</span>
+                  </span>
+                  <span class="right"><span class="rt-badge rt-opencode">opencode</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn--outline cancel">Cancel</button>
+          <button class="btn">Create</button>
+          <button class="btn btn--primary">Create &amp; Start</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="note ok"><b>라벨은 폴백 체인으로 만든다.</b> 실측상 <code>active.json</code>의 카드는 <code>sessionTitle</code> 보유가 <b>0건</b>이고
+      제목은 <code>test</code>·<code>UI 수정</code>·<code>&lt;task-notification&gt;…</code> 수준이다.
+      <code>sessionTitle → 제목(Feedback 접두 제거) → description 첫 줄 → 세션 ID</code> 순으로 내려간다.
+      두 번째 행이 그 예 — 제목은 <code>UI 수정#2</code>지만 스니펫이 왜 걸렸는지 설명한다.</div>
+    <div class="note"><b>크로스 프로젝트 참조:</b> 세 번째 행처럼 <code>projectDir</code>가 현재 카드와 달라도 목록에 나오고 선택할 수 있다.
+      디렉토리 칩 색(<code>--kv2-dir-*</code>)이 Works 탭과 동일해 한눈에 "다른 프로젝트"임이 보인다.
+      현재 프로젝트가 먼저, 다른 프로젝트가 뒤에 정렬된다.</div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ③ 참조 확정 — 토큰 + 칩 스트립
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-chips">
+    <p class="screen-caption"><b>선택하면 <code>@</code>~검색어 구간이 토큰 <code>@session:kx9f2a1b</code>로 치환되고, textarea 아래 <b>References</b> 스트립에 칩이 생긴다.</b>
+      <b>본문 텍스트가 단일 진실</b>이다 — 칩은 본문에서 파싱한 토큰의 렌더일 뿐이라, 사용자가 본문에서 토큰을 지우면 칩도 사라지고 desync가 원천적으로 없다.
+      칩의 <b>×</b>는 본문의 토큰을 지운다.</p>
+
+    <div class="dialog-stage">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h2 class="dialog-title">New Task</h2>
+          <button class="dialog-close">×</button>
+        </div>
+        <div class="dialog-content">
+          <div class="form-group">
+            <label class="label">Title *</label>
+            <input class="input" value="텔레그램 폴러 중복 카드 재발 방지">
+          </div>
+          <div class="form-group mention-host">
+            <label class="label">Prompt *</label>
+            <div class="textarea focused">예전에 고쳤던 중복 카드 이슈랑 같은 증상이 다시 보입니다.
+그때 작업이랑 같은 원인인지 확인해주세요.
+
+참고: @session:kx9f2a1b @work:wTg4hN2
+문서도 같이 보세요 → @doc:troubleshooting/telegram-poller-dup.md<span class="caret"></span></div>
+
+            <div class="ref-strip">
+              <div class="ref-strip-head">
+                <span>References</span>
+                <span class="count">3</span>
+                <span class="spacer"></span>
+                <span class="toggle">전송 프롬프트 미리보기 ▸</span>
+              </div>
+              <div class="ref-chips">
+                <span class="ref-chip" style="--rc:var(--ref-session)">
+                  <span class="ico">🧵</span>
+                  <span class="tok">session:kx9f2a1b</span>
+                  <span class="lbl">텔레그램 폴러 중복 카드 수정</span>
+                  <button class="x">×</button>
+                </span>
+                <span class="ref-chip" style="--rc:var(--ref-work)">
+                  <span class="ico">🗂</span>
+                  <span class="tok">work:wTg4hN2</span>
+                  <span class="lbl">Telegram 연동 안정화 · 세션 4</span>
+                  <button class="x">×</button>
+                </span>
+                <span class="ref-chip" style="--rc:var(--ref-doc)">
+                  <span class="ico">📄</span>
+                  <span class="tok">doc:…poller-dup.md</span>
+                  <span class="lbl">Telegram 폴러 중복 카드 — 원인과 dedup 키 설계</span>
+                  <button class="x">×</button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn--outline cancel">Cancel</button>
+          <button class="btn">Create</button>
+          <button class="btn btn--primary">Create &amp; Start</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-heading">해석 불가 상태 <span class="hint">토큰은 남았지만 대상이 사라졌거나 transcript 파일이 없을 때</span><span class="rule"></span></div>
+    <div class="two-col">
+      <div>
+        <div class="ref-strip">
+          <div class="ref-strip-head"><span>References</span><span class="count">2</span></div>
+          <div class="ref-chips">
+            <span class="ref-chip" style="--rc:var(--ref-session)">
+              <span class="ico">🧵</span><span class="tok">session:kx9f2a1b</span>
+              <span class="lbl">텔레그램 폴러 중복 카드 수정</span><button class="x">×</button>
+            </span>
+            <span class="ref-chip warn">
+              <span class="warnmark">⚠</span><span class="tok">session:z0Qd9m2x</span>
+              <span class="lbl">transcript 없음 — 메타데이터만 전달</span><button class="x">×</button>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="note"><b>transcript가 없는 경우</b>는 흔하다 —
+          <code>agentRuntime</code>이 <code>codex</code>/<code>opencode</code>이거나, 오래된 Claude 세션 파일이 정리됐거나, <code>projectDir</code>가 비어 경로를 만들 수 없을 때.
+          이때도 참조 자체는 살아 있고 <b>카드 메타데이터(제목·상태·result 발췌·프로젝트)</b>만 전달된다.
+          칩은 앰버로 바뀌어 "덜 준다"는 걸 미리 알린다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ④ Feedback 패널
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-feedback">
+    <p class="screen-caption"><b>동일한 컴포넌트가 Feedback 패널에도 붙는다.</b>
+      Card Detail 사이드바 / Session 대화 모달 어디서든 같은 <code>MentionTextarea</code>를 쓰므로 동작·단축키·칩이 완전히 동일하다.
+      <b>팝오버는 화면 ①·②와 똑같이 떠 있는 오버레이다</b> — 패널에 끼워 넣는 인라인 탭바가 아니라, 아래 References 스트립과 버튼 위를 덮는다.
+      패널이 좁으므로 <code>boundarySelector: '.kv2-dialog'</code>로 다이얼로그 경계를 넘지 않게 가둔다.</p>
+
+    <div class="two-col">
+      <div>
+        <div class="fb-panel fb-stage-pad">
+          <div class="fb-head">Feedback</div>
+          <div class="mention-host">
+          <div class="textarea focused" style="min-height:96px">아직 같은 증상입니다. @session:kx9f2a1b 에서 썼던 dedup 키 방식이랑
+지금 코드가 왜 다른지 비교해주세요. @<span class="caret"></span></div>
+
+          <div class="mention-pop mention-pop--below" style="left:0;">
+            <div class="mention-tabs">
+              <div class="mention-tab active">All</div>
+              <div class="mention-tab">Sessions</div>
+              <div class="mention-tab">Works</div>
+              <div class="mention-tab">Docs</div>
+            </div>
+            <div class="mention-query">
+              <span>검색어 없음 — 최근 항목</span>
+              <span class="kbd"><span>↑↓</span><span>⏎</span><span>Esc</span></span>
+            </div>
+            <div class="mention-list" style="max-height:180px">
+              <div class="mention-group">🧵 Recent Sessions</div>
+              <div class="mention-row sel">
+                <span class="kind" style="color:var(--ref-session)">🧵</span>
+                <span class="dot" style="background:var(--status-progress)"></span>
+                <span class="body">
+                  <span class="t">이 카드의 현재 세션 (자기 자신)</span>
+                  <span class="m"><span class="mono">n4Rp8sw1</span><span style="color:var(--warn-text)">⚠ 자기 참조 — 선택 불가</span></span>
+                </span>
+                <span class="right"></span>
+              </div>
+              <div class="mention-row">
+                <span class="kind" style="color:var(--ref-session)">🧵</span>
+                <span class="dot" style="background:var(--status-done)"></span>
+                <span class="body">
+                  <span class="t">Works 완료 시 위키 배치 중복 문서 수정</span>
+                  <span class="m"><span class="mono">v1Ld7qr4</span><span class="st-badge" style="--sc:var(--status-done)">done</span><span>어제</span></span>
+                </span>
+                <span class="right"><span class="rt-badge rt-claude">claude</span></span>
+              </div>
+            </div>
+          </div>
+          </div><!-- /.mention-host -->
+
+          <div class="fb-ghost">
+            <span class="fb-ghost-label">↓ 팝오버에 가려진 영역 — References 스트립과 액션 버튼</span>
+          </div>
+        </div>
+
+        <div class="section-heading">팝오버를 닫은 뒤<span class="rule"></span></div>
+        <div class="fb-panel">
+          <div class="fb-head">Feedback</div>
+          <div class="textarea">아직 같은 증상입니다. @session:kx9f2a1b 에서 썼던 dedup 키 방식이랑
+지금 코드가 왜 다른지 비교해주세요.
+@work:wTg4hN2 도 같이 보세요.</div>
+
+          <div class="ref-strip">
+            <div class="ref-strip-head"><span>References</span><span class="count">2</span></div>
+            <div class="ref-chips">
+              <span class="ref-chip" style="--rc:var(--ref-session)">
+                <span class="ico">🧵</span><span class="tok">session:kx9f2a1b</span>
+                <span class="lbl">텔레그램 폴러 중복 카드 수정</span><button class="x">×</button>
+              </span>
+              <span class="ref-chip" style="--rc:var(--ref-work)">
+                <span class="ico">🗂</span><span class="tok">work:wTg4hN2</span>
+                <span class="lbl">Telegram 연동 안정화</span><button class="x">×</button>
+              </span>
+            </div>
+          </div>
+
+          <div class="fb-actions">
+            <button class="btn btn--outline btn--small">CREATE FEEDBACK</button>
+            <button class="btn btn--primary btn--small">CREATE &amp; START</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="note ok"><b>피드백 경로에서 dispatch는 건드리지 않는다.</b>
+          <code>App.tsx</code>의 <code>handleCreateFeedback</code>이 이미 피드백 본문을
+          <code>[Feedback for: …] / [Original Card ID: …] / --- / &lt;본문&gt;</code> 형태로 조립한다.
+          참조 블록은 그 <b>&lt;본문&gt; 뒤에 붙은 문자열</b>일 뿐이라,
+          <code>dispatch-prompt.ts</code>·훅·런타임 어댑터는 한 줄도 바뀌지 않는다.</div>
+        <div class="note"><b>자기 참조 금지.</b> 현재 카드의 세션과, 피드백 대상 카드 자신은 후보에서 제외하거나
+          선택 불가로 표시한다. 자기 transcript를 자기 프롬프트에 참조시키는 건 항상 무의미하고,
+          재귀적으로 커지는 경로다.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════
+       ⑤ 전송되는 프롬프트
+       ════════════════════════════════════════════════════════ -->
+  <section class="screen" id="screen-preview">
+    <p class="screen-caption"><b>제출 시 본문의 토큰이 그대로 남고, 맨 끝에 참조 블록이 <b>한 번</b> 덧붙는다 (A안 = 링크만).</b>
+      transcript도 Wiki 문서도 본문을 인라인하지 않는다 — <b>세 종류 모두 경로만</b> 준다. 참조 3개 기준 약 900자.
+      이 문자열이 <code>card.description</code>(또는 피드백 본문)에 그대로 저장되므로
+      <b>dispatch 경로·훅·런타임 어댑터는 무변경</b>이다.</p>
+
+    <div class="preview">
+      <div class="preview-head">📤 POST /api/cards → description <span class="tagline">(사용자 본문 + 참조 블록)</span></div>
+<pre class="code">예전에 고쳤던 중복 카드 이슈랑 같은 증상이 다시 보입니다.
+그때 작업이랑 같은 원인인지 확인해주세요.
+
+참고: @session:kx9f2a1b @work:wTg4hN2
+문서도 같이 보세요 → @doc:troubleshooting/telegram-poller-dup.md
+
+<span class="c">&lt;!-- agent-kanban:references v1 — 자동 생성. 수정하지 마세요 --&gt;</span>
+<span class="hl">## Referenced context</span>
+<span class="c">사용자가 @ 멘션으로 첨부한 참조입니다. 본문은 포함돼 있지 않으니</span>
+<span class="c">필요한 것만 아래 경로를 직접 읽으세요. 경로는 절대경로이며 현재</span>
+<span class="c">작업 디렉토리 밖일 수 있습니다(다른 프로젝트 참조 허용).</span>
+
+<span class="k">### @session:kx9f2a1b — 텔레그램 폴러 중복 카드 수정</span>
+- kind: session · status: done · runtime: claude · model: claude-opus-5
+- sessionId: `kx9f2a1b-7c3e-4d21-9a08-11b4f6e0c552`
+- projectDir: `/Users/user/workspace/agent-kanban`
+- transcript: `/Users/user/.claude/projects/-Users-user-workspace-agent-kanban/kx9f2a1b-7c3e-4d21-9a08-11b4f6e0c552.jsonl`
+  <span class="c">JSONL. 줄마다 `.message.role`(user|assistant) 과 `.message.content`.</span>
+  <span class="c">전체가 크면 먼저: jq -r 'select(.message.role=="user") | ...' 로 사용자 턴만 훑기.</span>
+- card: `k5mR0pBn` "텔레그램 폴러 중복 카드 수정" (2026-09-12 14:20 ~ 15:58)
+
+<span class="w">### @work:wTg4hN2 — Telegram 연동 안정화</span>
+- kind: work · status: active · 세션 4개 · 카드 11개
+- summary:
+  - 폴러가 같은 메시지로 카드를 두 번 만드는 문제를 messageId 기준 dedup으로 정리
+  - /work 명령과 답장 상태(TelegramReplyStatus) 추적을 추가
+  - 남은 이슈: 그룹 채팅에서의 sender 식별
+- sessions:
+  - `kx9f2a1b` (claude) → `/Users/user/.claude/projects/-Users-user-workspace-agent-kanban/kx9f2a1b-….jsonl`
+  - `t7Yb3ke9` (claude) → `/Users/user/.claude/projects/-Users-user-workspace-agent-kanban/t7Yb3ke9-….jsonl`
+  - `q5Wm1er8` (codex)  → <span class="u">transcript 없음 (codex 런타임)</span>
+  - `b2Nc5wt7` (opencode) → <span class="u">transcript 없음 (opencode 런타임)</span>
+
+<span class="d">### @doc:troubleshooting/telegram-poller-dup.md</span>
+- kind: doc · title: "Telegram 폴러 중복 카드 — 원인과 dedup 키 설계"
+- path: `/Users/user/workspace/obsidian/obsidian/Wiki/troubleshooting/telegram-poller-dup.md`
+<span class="c">&lt;!-- /agent-kanban:references --&gt;</span></pre>
+    </div>
+
+    <div class="section-heading">A안이 성립하는 이유<span class="rule"></span></div>
+    <div class="two-col">
+      <div class="note ok"><b>에이전트는 이미 파일을 읽을 수 있다.</b>
+        Claude/Codex/opencode 모두 Read·Bash를 갖고 있고, 경로가 절대경로라
+        <code>projectDir</code>가 달라도 그대로 열린다. 새 MCP 툴도, dispatch 개조도 필요 없다.</div>
+      <div class="note"><b>단, 샌드박스는 확인이 필요하다.</b>
+        Codex의 <code>sandboxMode: 'read-only' | 'workspace-write'</code>는 워크스페이스 밖 읽기를 막을 수 있다.
+        그래서 블록에 <b>제목·상태·result 발췌 같은 메타데이터를 항상 함께</b> 넣는다 —
+        파일을 못 읽어도 최소 맥락은 남는다.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const buttons = document.querySelectorAll('.mock-toolbar button[data-screen]');
+  const screens = document.querySelectorAll('.screen');
+  buttons.forEach(btn => btn.addEventListener('click', () => {
+    buttons.forEach(b => b.classList.toggle('active', b === btn));
+    screens.forEach(s => s.classList.toggle('visible', s.id === 'screen-' + btn.dataset.screen));
+  }));
+  const themeBtn = document.getElementById('theme-toggle');
+  themeBtn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const dark = root.getAttribute('data-theme') !== 'dark';
+    root.setAttribute('data-theme', dark ? 'dark' : 'light');
+    themeBtn.textContent = dark ? '☀️ 라이트' : '🌙 다크';
+  });
+</script>
+</body>
+</html>

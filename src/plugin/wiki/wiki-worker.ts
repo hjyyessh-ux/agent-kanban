@@ -30,7 +30,7 @@ import {
 } from './wiki-prompts';
 import { createWikiLlm, type WikiLlmRunner } from './wiki-llm';
 import { WikiVaultWriter } from './wiki-writer';
-import { loadClaudeTranscript } from './wiki-transcript';
+import { loadSessionTranscript } from './wiki-transcript';
 
 /** How often to look for pending wiki cards (ms). */
 const CHECK_INTERVAL = 60_000;
@@ -43,22 +43,39 @@ function groupLabel(group: WikiSourceGroup): string {
 }
 
 /**
- * Best-effort transcript enrichment (claude runtime only). A session group uses
- * its first claude card; a Work group concatenates one transcript per
- * contributing session so the single document covers the whole Work.
+ * Best-effort transcript enrichment, whichever runtime wrote the file. A session
+ * group uses its first card that has one; a Work group concatenates one
+ * transcript per contributing session so the single document covers the whole
+ * Work.
+ *
+ * The runtime is deliberately not a filter any more — `loadSessionTranscript`
+ * decides by file existence (claude transcript, else codex rollout). Filtering
+ * on `agentRuntime === 'claude'` meant a codex session's document was written
+ * from card fields alone, and a mixed Work quietly documented only half of
+ * itself.
  */
 function loadGroupTranscript(group: WikiSourceGroup): string | undefined {
   if (!group.workId) {
-    const source = group.cards.find(c => c.agentRuntime === 'claude');
-    return source ? loadClaudeTranscript(source) : undefined;
+    // Every card in a session group names the same session, so the lookups
+    // differ only by `projectDir` — de-duplicated because a miss costs a
+    // filesystem scan and a 30-card group would otherwise pay for it 30 times.
+    const tried = new Set<string>();
+    for (const card of group.cards) {
+      const key = JSON.stringify([card.sessionId ?? '', card.projectDir ?? '']);
+      if (tried.has(key)) continue;
+      tried.add(key);
+      const transcript = loadSessionTranscript(card);
+      if (transcript) return transcript;
+    }
+    return undefined;
   }
 
   const seen = new Set<string>();
   const sections: string[] = [];
   for (const card of group.cards) {
-    if (card.agentRuntime !== 'claude' || !card.sessionId || seen.has(card.sessionId)) continue;
+    if (!card.sessionId || seen.has(card.sessionId)) continue;
     seen.add(card.sessionId);
-    const transcript = loadClaudeTranscript(card);
+    const transcript = loadSessionTranscript(card);
     if (transcript) {
       sections.push(`#### 세션: ${card.sessionTitle?.trim() || card.title}\n${transcript}`);
     }

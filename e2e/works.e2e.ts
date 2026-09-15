@@ -235,7 +235,8 @@ test('Inbox session becomes a new Work and drops the tab badge', async ({ page, 
   // Addressed by label, not by a fixed DOM id: the panel renders in three
   // places (Inbox row, batch panel, move dialog) and its ids are `useId`-based.
   await page.getByLabel('새 Work 제목').fill(workTitle);
-  await page.getByLabel('이 세션 역할').selectOption('review');
+  // The role picker lives in the panel's top action bar now, beside the commit.
+  await page.locator('.works-assign-inline').getByLabel('역할', { exact: true }).selectOption('review');
   await page.getByRole('button', { name: `"${workTitle}" 만들기` }).click();
 
   // Active Works picks it up with the session (and its role) attached…
@@ -304,7 +305,12 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   await expect(page.locator('.works-inbox-check:checked')).toHaveCount(2);
   await expect(page.getByText('선택 2개')).toBeVisible();
 
-  await page.getByRole('button', { name: '배정하기 (2)' }).click();
+  // The header's 모두 배정하기 is dimmed for the whole of selection mode: it
+  // assigns the entire Inbox, not the selection, and two live primaries with
+  // opposite scopes is exactly the ambiguity this bar exists to resolve.
+  await expect(page.getByRole('button', { name: '⚡ 모두 배정하기' })).toBeDisabled();
+
+  await page.getByRole('button', { name: '선택한 2개 배정하기' }).click();
   const newWorkOption = page.locator('.works-assign-option').filter({ hasText: '새 Work 만들기' });
   await newWorkOption.click();
 
@@ -692,6 +698,56 @@ test('배정 패널은 같은 디렉토리를 같은 색으로, 이어진 세션
   expect(sessionSlot).not.toBeNull();
   expect(await dirSlot(items.nth(1))).toBe(sessionSlot!);
   expect(await dirSlot(items.nth(0))).not.toBe(sessionSlot!);
+});
+
+test('Inbox 행의 추천을 누르면 패널 없이 바로 배정된다', async ({
+  page, seedCard, seedWork, trackWork,
+}) => {
+  const runId = `works-suggest-${Date.now()}`;
+  const OTHER_DIR = `${PROJECT_DIR}-other`;
+
+  // Same checkout, nothing else in common — the weaker signal.
+  const sameDirWork = await seedWork({ title: `배포 파이프라인 ${runId}`, projectDir: PROJECT_DIR });
+  trackWork(sameDirWork.id);
+  // A different checkout, but it owns the word the session is about. A word only
+  // one Work uses names that Work; a directory half the board shares does not.
+  const keywordWork = await seedWork({ title: `keyset 인덱싱 ${runId}`, projectDir: OTHER_DIR });
+  trackWork(keywordWork.id);
+
+  const target = await seedCard({
+    title: `[E2E ${runId}] keyset 실측 데이터 수집`,
+    description: 'suggestion fixture',
+    projectDir: PROJECT_DIR,
+    sessionId: `claude-${runId}`,
+  });
+
+  await openWorksTab(page);
+  const row = inboxRow(page, target.title);
+  const suggestions = row.locator('.works-inbox-suggest-row');
+
+  // The distinctive word outranks the bare directory match, and every row states
+  // its own directory so "different project" and "same project, other Work"
+  // cannot look alike.
+  await expect(suggestions).toHaveCount(2);
+  await expect(suggestions.nth(0)).toContainText(keywordWork.title);
+  await expect(suggestions.nth(0)).toContainText('keyset');
+  await expect(suggestions.nth(1)).toContainText(sameDirWork.title);
+  await expect(suggestions.nth(1)).toContainText('같은 디렉토리');
+  // Runner-up is dimmed, not ruled off: these are ranked, not equal options.
+  await expect(suggestions.nth(1)).toHaveClass(/is-second/);
+  await expect(suggestions.nth(0)).not.toHaveClass(/is-second/);
+  // The escape hatch comes last — on the label line it read as the top pick.
+  await expect(row.locator('.works-inbox-suggest-new')).toContainText('＋ 새 Work');
+
+  // One click assigns. No panel, no confirm — the undo toast is the safety net.
+  await suggestions.nth(0).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByText('되돌리기', { exact: true })).toBeVisible();
+
+  const works = await apiGetWorks();
+  const linked = works.find((work) => work.id === keywordWork.id);
+  expect(linked?.sessionLinks.map((link) => link.sessionId)).toEqual([target.sessionId]);
+  expect(linked?.sessionLinks[0]?.role).toBe('dev');
 });
 
 test('Work 목록 카드 전체를 눌러 상세를 연다', async ({ page, seedWork }) => {

@@ -33,7 +33,11 @@ import type { QuestionRequest } from '../plugin/question-monitor';
 import type { WikiWorker } from '../plugin/wiki/wiki-worker';
 import type { RuntimeRunStore } from '../plugin/runtimes/runtime-run-store';
 import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/run-progress';
-import { resolveClaudeTranscriptPath, loadClaudeTranscript } from '../plugin/wiki/wiki-transcript';
+import {
+  locateSessionTranscript,
+  loadSessionTranscript,
+  type TranscriptFormat,
+} from '../plugin/wiki/wiki-transcript';
 import { createWikiLlm } from '../plugin/wiki/wiki-llm';
 import { loadWorksConfig, loadWorksConfigDto, saveWorksConfig } from '../plugin/works/works-config';
 import { buildWorkCardContext, generateWorkSummary, type WorkTranscriptSource } from '../plugin/works/works-summary';
@@ -50,6 +54,25 @@ import {
 } from '../plugin/works/work-lifecycle';
 import { findWorkOwningSession, reconcileWorkSessionLinks } from '../plugin/works/work-links';
 import { selectWorks, isWorkListSort } from '../core/work-list';
+import {
+  MAX_REFERENCES,
+  parseMentionTokens,
+  type MentionKind,
+  type MentionResolveResponse,
+  type MentionToken,
+  type ResolvedReference,
+  type ResolvedReferenceWorkSession,
+  type TranscriptMissingReason,
+} from '../core/mention-reference';
+import {
+  DEFAULT_MENTION_LIMIT,
+  buildSessionCandidateSources,
+  selectMentionCandidates,
+  type DocEntry,
+  type MentionSearchPool,
+  type MentionSearchResponse,
+  type SessionCandidateSource,
+} from '../core/mention-search';
 import {
   WorkAlreadyActiveError,
   WorkCardsRunningError,
@@ -146,8 +169,8 @@ import {
   getColdMcpEntry,
   readColdSkillContent,
 } from '../core/cold-storage-store';
-import { existsSync, mkdirSync, cpSync, statSync, readFileSync, rmSync } from 'node:fs';
-import { extname, join, basename } from 'node:path';
+import { existsSync, mkdirSync, cpSync, statSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
 import { detectPlaintextSecret } from '../core/secret-detect';
@@ -956,6 +979,266 @@ function hasAuthorizedBearerToken(req: Request, expectedToken: string | undefine
   return timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
+
+// ─── `@` 멘션 (읽기 전용) ──────────────────────────────────────────────────
+//
+// 두 라우트가 공유하는 풀 빌더와 토큰 해석기. **아카이브를 읽지 않는다**:
+// 세션·카드는 `store.getCards()`(보드 한 파일, 실측 6~11ms), Work은
+// `works.json`, Doc은 wiki vault 직접 스캔뿐이다. 요청당 약 15ms라 TTL 캐시나
+// 역인덱스 같은 계층을 두지 않는다.
+
+const MAX_MENTION_LIMIT = 50;
+const MENTION_KIND_VALUES = new Set<string>(['session', 'work', 'doc']);
+
+function isMentionKind(value: string): value is MentionKind {
+  return MENTION_KIND_VALUES.has(value);
+}
+
+/** 설정된 vault 디렉토리. 미설정·부재는 오류가 아니라 "Docs 탭 없음"이다. */
+async function readWikiVaultDir(wikiWorker?: WikiWorker): Promise<string | undefined> {
+  if (!wikiWorker) return undefined;
+  try {
+    const { vaultDir } = await wikiWorker.getConfig();
+    const trimmed = vaultDir?.trim();
+    return trimmed && existsSync(trimmed) ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * vault 아래 `**\/*.md` 를 그대로 스캔한다.
+ *
+ * 초안은 아카이브 카드의 `wiki.docPath`에서 문서 후보를 뽑았지만 board-only
+ * 에서는 그게 0건이다 — 그 필드는 아카이브 시점에 찍힌다. 직접 스캔이 더 싸고
+ * (실측 glob 5ms) 오히려 완전하다 (아카이브 카드 기준 1,568개 vs 스캔 1,572개).
+ */
+function scanWikiVaultDocs(vaultDir: string): DocEntry[] {
+  let entries: string[];
+  try {
+    entries = readdirSync(vaultDir, { recursive: true, encoding: 'utf-8' });
+  } catch {
+    return [];
+  }
+
+  const docs: DocEntry[] = [];
+  for (const entry of entries) {
+    if (!entry.endsWith('.md')) continue;
+    const relPath = entry.split(sep).join('/');
+    let updatedAt: string | undefined;
+    try {
+      updatedAt = statSync(join(vaultDir, entry)).mtime.toISOString();
+    } catch {
+      // 스캔과 stat 사이에 사라진 파일. 시각 없이 후보로만 남긴다.
+    }
+    docs.push({ path: relPath, updatedAt });
+  }
+  return docs;
+}
+
+/**
+ * 멘션 전용 board-only 풀.
+ *
+ * `computeSessionAggregates`를 재사용하지 **않는다**: 그 함수는 내부에서
+ * `store.getCards({ includeArchived: true })` → `loadArchives()` 전체 스캔
+ * (71MB·9,483장)을 하고, Works Inbox가 쓰는 고위험 경로다. 옵션을 뚫는 대신
+ * 여기에 따로 둔다. `src/__tests__/mention-no-archive.test.ts`가 이걸 지킨다.
+ */
+export async function buildMentionPool(
+  store: KanbanStore,
+  workStore?: WorkStore,
+  wikiWorker?: WikiWorker,
+): Promise<MentionSearchPool> {
+  const cards = await store.getCards({});
+  const vaultDir = await readWikiVaultDir(wikiWorker);
+  return {
+    sessions: buildSessionCandidateSources(cards),
+    works: workStore ? await workStore.getWorks() : [],
+    docs: vaultDir ? scanWikiVaultDocs(vaultDir) : [],
+  };
+}
+
+/**
+ * transcript 경로·크기·형식, 없으면 그 이유.
+ *
+ * 판정은 **파일 존재**로 한다 — `agentRuntime === 'claude'` 체크보다 정확하고
+ * (codex 세션이 claude 경로에 남아 있는 경우가 있다) 카드 조회도 필요 없다.
+ * `locateSessionTranscript`가 claude 경로와 codex rollout을 차례로 보므로
+ * 런타임은 파일이 *없을 때* 이유를 설명하는 데에만 쓴다.
+ *
+ * `no_project_dir`는 **claude 계열에만** 해당한다. codex rollout은 세션 id만으로
+ * 찾으므로 projectDir이 없어도 실패 이유가 되지 않는다 — 그 구분을 안 하면
+ * projectDir 없는 codex 세션이 "projectDir 없음"이라는 거짓 이유를 달고 나간다.
+ */
+function resolveTranscriptInfo(
+  projectDir: string | undefined,
+  sessionId: string,
+  agentRuntime?: AgentRuntime,
+): {
+  transcriptPath?: string;
+  transcriptSize?: number;
+  transcriptFormat?: TranscriptFormat;
+  transcriptMissing?: TranscriptMissingReason;
+} {
+  const located = locateSessionTranscript(sessionId, projectDir);
+  if (located) {
+    try {
+      return {
+        transcriptPath: located.path,
+        transcriptSize: statSync(located.path).size,
+        transcriptFormat: located.format,
+      };
+    } catch {
+      // 경로를 찾은 직후 사라진 파일. 크기 없이 경로만 싣는다.
+      return { transcriptPath: located.path, transcriptFormat: located.format };
+    }
+  }
+  // opencode는 로컬 transcript 자체를 남기지 않는다 — 파일이 없는 게 아니라
+  // 애초에 없는 런타임이라는 사실을 그대로 전한다.
+  if (agentRuntime === 'opencode') return { transcriptMissing: 'runtime_unsupported' };
+  if (!projectDir && agentRuntime !== 'codex') return { transcriptMissing: 'no_project_dir' };
+  return { transcriptMissing: 'file_missing' };
+}
+
+function latestCardFirst(cards: KanbanCard[]): KanbanCard[] {
+  return [...cards].sort((a, b) => {
+    const diff = Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
+    return Number.isNaN(diff) || diff === 0 ? a.id.localeCompare(b.id) : diff;
+  });
+}
+
+/** 칩과 블록이 같은 제목을 쓰도록 후보 라벨 체인을 그대로 재사용한다. */
+function mentionLabelFor(source: SessionCandidateSource): string {
+  const [candidate] = selectMentionCandidates(
+    { sessions: [source], works: [], docs: [] },
+    { limit: 1 },
+  ).sessions;
+  return candidate?.label ?? `세션 ${source.sessionId.slice(0, 8)}`;
+}
+
+function resolveSessionReference(token: MentionToken, cards: KanbanCard[]): ResolvedReference {
+  const base: ResolvedReference = { kind: 'session', id: token.id, raw: token.raw, title: '' };
+  const prefix = token.id.toLowerCase();
+  const matched = cards.filter((card) => card.sessionId?.toLowerCase().startsWith(prefix));
+
+  const sessionIds = [...new Set(matched.map((card) => card.sessionId ?? ''))];
+  if (sessionIds.length === 0) return { ...base, unresolved: 'not_found' };
+  // 접두사가 두 세션에 걸리면 어느 쪽인지 서버가 고를 수 없다 — 칩이 더 긴
+  // 접두사를 요구한다(§4).
+  if (sessionIds.length > 1) return { ...base, unresolved: 'ambiguous' };
+
+  const sessionId = sessionIds[0];
+  const sessionCards = matched.filter((card) => card.sessionId === sessionId);
+  const ordered = latestCardFirst(sessionCards);
+  const latest = ordered[0];
+  const withResult = ordered.find((card) => card.result?.trim());
+  const projectDir = ordered.find((card) => card.projectDir)?.projectDir;
+
+  return {
+    ...base,
+    title: mentionLabelFor({ sessionId, cards: sessionCards }),
+    sessionId,
+    cardId: latest.id,
+    cardStatus: latest.status,
+    agentRuntime: latest.agentRuntime,
+    model: latest.model,
+    projectDir,
+    startedAt: latest.startedAt,
+    completedAt: latest.completedAt,
+    resultExcerpt: withResult?.result,
+    ...resolveTranscriptInfo(projectDir, sessionId, latest.agentRuntime),
+  };
+}
+
+function resolveWorkReference(token: MentionToken, work: Work, cards: KanbanCard[]): ResolvedReference {
+  const linked = work.sessionLinks ?? [];
+  const linkedIds = new Set(linked.map((link) => link.sessionId));
+  const boardCards = cards.filter((card) => card.sessionId && linkedIds.has(card.sessionId));
+
+  const workSessions: ResolvedReferenceWorkSession[] = linked.map((link) => {
+    // 링크가 가리키는 카드는 이미 아카이브됐을 수 있다. 그 카드를 찾으러
+    // 아카이브를 열지 않고, 링크에 들어 있는 projectDir로 경로를 만든다.
+    const card = boardCards.find((candidate) => candidate.sessionId === link.sessionId);
+    const projectDir = link.projectDir ?? card?.projectDir;
+    const info = resolveTranscriptInfo(projectDir, link.sessionId, card?.agentRuntime);
+    return {
+      sessionId: link.sessionId,
+      agentRuntime: card?.agentRuntime,
+      transcriptPath: info.transcriptPath,
+      transcriptSize: info.transcriptSize,
+      transcriptFormat: info.transcriptFormat,
+      transcriptMissing: info.transcriptMissing,
+    };
+  });
+
+  return {
+    kind: 'work',
+    id: token.id,
+    raw: token.raw,
+    title: work.title,
+    workStatus: work.status,
+    sessionCount: linked.length,
+    // 보드에 남아 있는 카드만 센다 — 완료된 Work은 카드가 전부 아카이브로
+    // 내려가 0이 되므로, 0이면 아예 말하지 않는다(틀린 수를 주지 않는다).
+    ...(boardCards.length > 0 ? { cardCount: boardCards.length } : {}),
+    summaryLines: work.summary?.lines,
+    workSessions,
+  };
+}
+
+function resolveDocReference(token: MentionToken, vaultDir: string | undefined): ResolvedReference {
+  const docPath = token.id;
+  const name = docPath.slice(docPath.lastIndexOf('/') + 1);
+  const base: ResolvedReference = {
+    kind: 'doc',
+    id: token.id,
+    raw: token.raw,
+    title: name.endsWith('.md') ? name.slice(0, -3) : name,
+    docPath,
+  };
+  if (!vaultDir) return base;
+
+  // 경로 탈출 가드(`WikiVaultWriter.readDocument`와 같은 규칙): vault 밖을
+  // 가리키는 토큰에 절대경로를 돌려주지 않는다.
+  const root = resolve(vaultDir);
+  const abs = resolve(root, docPath);
+  if (abs !== root && !abs.startsWith(root + sep)) return { ...base, unresolved: 'not_found' };
+  if (!existsSync(abs)) return { ...base, unresolved: 'not_found' };
+  return { ...base, docAbsPath: abs };
+}
+
+/**
+ * 토큰 → 참조. 실패해도 던지지 않고 `unresolved`로 표시한다 — 참조 하나가
+ * 사라졌다고 나머지 참조까지 잃으면 안 된다.
+ */
+export async function resolveMentionReferences(
+  tokens: MentionToken[],
+  deps: { store: KanbanStore; workStore?: WorkStore; wikiWorker?: WikiWorker },
+): Promise<ResolvedReference[]> {
+  const needsCards = tokens.some((token) => token.kind === 'session' || token.kind === 'work');
+  const cards = needsCards ? await deps.store.getCards({}) : [];
+  const vaultDir = tokens.some((token) => token.kind === 'doc')
+    ? await readWikiVaultDir(deps.wikiWorker)
+    : undefined;
+
+  const references: ResolvedReference[] = [];
+  for (const token of tokens) {
+    if (token.kind === 'session') {
+      references.push(resolveSessionReference(token, cards));
+      continue;
+    }
+    if (token.kind === 'work') {
+      const work = deps.workStore ? await deps.workStore.getWork(token.id) : null;
+      references.push(work
+        ? resolveWorkReference(token, work, cards)
+        : { kind: 'work', id: token.id, raw: token.raw, title: '', unresolved: 'not_found' });
+      continue;
+    }
+    references.push(resolveDocReference(token, vaultDir));
+  }
+  return references;
+}
+
 export function createRouteHandler(
   store: KanbanStore,
   dispatchFn?: DispatchFn,
@@ -1126,6 +1409,78 @@ export function createRouteHandler(
         return json(sessions);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to fetch sessions';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: GET /api/mentions — `@` 멘션 후보 (All / Sessions / Works / Docs).
+    // 현재 보드 + works.json + wiki vault 스캔만 본다. 월별 아카이브는 어느
+    // 경로로도 열지 않는다 — 지나간 작업의 참조는 `@doc:`이 담당한다.
+    if (method === 'GET' && path === '/api/mentions') {
+      const kindParam = url.searchParams.get('kind') ?? 'all';
+      if (kindParam !== 'all' && !isMentionKind(kindParam)) {
+        return errorResponse('kind must be one of: all, session, work, doc', 400);
+      }
+      const limitParam = Number(url.searchParams.get('limit'));
+      const limit = Number.isFinite(limitParam) && limitParam > 0
+        ? Math.min(Math.floor(limitParam), MAX_MENTION_LIMIT)
+        : DEFAULT_MENTION_LIMIT;
+      const q = url.searchParams.get('q') ?? '';
+
+      try {
+        const pool = await buildMentionPool(store, workStore, wikiWorker);
+        // 자르기 전 전체를 받아 totals를 세고, 노출은 kind별 limit까지만 한다.
+        const ranked = selectMentionCandidates(pool, {
+          q,
+          kind: kindParam === 'all' ? 'all' : kindParam,
+          limit: Number.MAX_SAFE_INTEGER,
+          currentProjectDir: url.searchParams.get('projectDir') ?? undefined,
+          excludeSessionIds: url.searchParams.getAll('excludeSession'),
+        });
+        const response: MentionSearchResponse = {
+          q,
+          groups: {
+            sessions: ranked.sessions.slice(0, limit),
+            works: ranked.works.slice(0, limit),
+            docs: ranked.docs.slice(0, limit),
+          },
+          totals: {
+            sessions: ranked.sessions.length,
+            works: ranked.works.length,
+            docs: ranked.docs.length,
+          },
+        };
+        return json(response);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to search mentions';
+        return errorResponse(message, 500);
+      }
+    }
+
+    // Route: GET /api/mentions/resolve?token=@session:xxx&token=@work:yyy —
+    // 본문에 박힌 토큰을 참조 블록 입력으로 바꾼다. 해석 실패는 오류가 아니라
+    // `unresolved` 표시다: 참조 하나가 사라졌다고 나머지까지 잃으면 안 된다.
+    if (method === 'GET' && path === '/api/mentions/resolve') {
+      // 초과분은 무시한다 — 블록 자체가 MAX_REFERENCES개에서 잘린다.
+      const requested = url.searchParams.getAll('token').slice(0, MAX_REFERENCES);
+      const tokens: MentionToken[] = [];
+      const seen = new Set<string>();
+      for (const value of requested) {
+        // 토큰 문법에 맞지 않는 값은 조용히 버린다(클라이언트는 파싱된 것만 보낸다).
+        const [token] = parseMentionTokens(value.trim());
+        if (!token) continue;
+        const key = `${token.kind}:${token.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        tokens.push(token);
+      }
+
+      try {
+        const references = await resolveMentionReferences(tokens, { store, workStore, wikiWorker });
+        const response: MentionResolveResponse = { references };
+        return json(response);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Failed to resolve mentions';
         return errorResponse(message, 500);
       }
     }
@@ -1509,13 +1864,14 @@ export function createRouteHandler(
         const sources: WorkTranscriptSource[] = work.sessionLinks.map((link) => {
           const card = cards.find(c => c.sessionId === link.sessionId);
           const projectDir = link.projectDir ?? card?.projectDir ?? work.projectDir;
-          const transcript = projectDir
-            ? loadClaudeTranscript({
-                agentRuntime: card?.agentRuntime ?? 'claude',
-                sessionId: link.sessionId,
-                projectDir,
-              })
-            : undefined;
+          // No `projectDir` gate and no runtime argument: a codex rollout is
+          // located by session id alone, so a Work whose sessions ran on codex
+          // used to summarise from card fields only while claude sessions in the
+          // same Work contributed their whole conversation.
+          const transcript = loadSessionTranscript({
+            sessionId: link.sessionId,
+            projectDir,
+          });
           return { link, transcript, cardContext: buildWorkCardContext(cards.filter(c => c.sessionId === link.sessionId)), title: card?.title };
         });
 
@@ -2667,13 +3023,15 @@ export function createRouteHandler(
             }
           }
         }
-        // Fallback: cards owned by an interactive Claude Code session (hook-minted)
-        // have no RuntimeRun — read the session transcript instead.
-        if (card.agentRuntime === 'claude' && card.sessionId && card.projectDir) {
-          const transcriptPath = resolveClaudeTranscriptPath(card.projectDir, card.sessionId);
-          if (existsSync(transcriptPath)) {
-            const text = await Bun.file(transcriptPath).text();
-            return json(buildTranscriptProgress(card, text.split('\n')));
+        // Fallback: cards owned by an interactive CLI session (hook-minted by
+        // `.claude/hooks/on-prompt.sh` or `.codex/hooks/on-prompt.sh`) have no
+        // RuntimeRun — read the session transcript instead. Located by file
+        // existence, so a codex card resolves its rollout without a projectDir.
+        if (card.sessionId) {
+          const located = locateSessionTranscript(card.sessionId, card.projectDir);
+          if (located) {
+            const text = await Bun.file(located.path).text();
+            return json(buildTranscriptProgress(card, text.split('\n'), located.format));
           }
         }
         return errorResponse('No run progress available for card', 404);

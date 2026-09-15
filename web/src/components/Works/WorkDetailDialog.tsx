@@ -10,6 +10,7 @@ import type {
   WorkSummaryResponse,
 } from '../../../../src/core/types';
 import { WORK_NOTES_MAX_LENGTH } from '../../../../src/core/types';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { DirectoryPicker } from '../Card/DirectoryPicker';
 import { MoveSessionDialog } from './MoveSessionDialog';
@@ -256,6 +257,12 @@ export function WorkDetailDialog({
         const startedAt = summary?.firstCardAt ?? boardFirstCardAt;
         return {
           link,
+          // Server first: its scan reaches the archive months this Work can
+          // touch, so a completed Work's rows still carry a runtime. The board
+          // lookup is the fallback for a row the detail read has not caught up
+          // with — the same precedence `cardCount`/`archived` use above.
+          agentRuntime: summary?.agentRuntime
+            ?? workCards.find((c) => c.sessionId === link.sessionId)?.agentRuntime,
           title: summary
             ? summary.title || shortSessionId(link.sessionId)
             : sessionTitleOf(link.sessionId, cards),
@@ -922,7 +929,7 @@ export function WorkDetailDialog({
             <p className="works-empty">연결된 세션이 없습니다.</p>
           ) : (
             <div className="work-session-list">
-              {sessionRows.map(({ link, title, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt }) => (
+              {sessionRows.map(({ link, title, agentRuntime, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt }) => (
                 <div
                   className={[
                     'work-session-item',
@@ -942,6 +949,11 @@ export function WorkDetailDialog({
                   <div className="work-session-body">
                     <div className="work-session-title">{title}</div>
                     <div className="work-session-meta">
+                      {/* The board's own chip, not a Works-local one: a session
+                          row and a card row have to read as the same runtime at
+                          a glance. Leading, before the date, because it is the
+                          only non-textual key in the line. */}
+                      {agentRuntime && <RuntimeBadge runtime={agentRuntime} />}
                       <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
                         {formatShortDate(startedAt ?? link.linkedAt)}
                         {startedAt ? '' : ' 연결'}
