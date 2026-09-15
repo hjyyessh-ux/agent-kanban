@@ -49,16 +49,22 @@ const SURFACE_TOKENS = [
  */
 const CHIP_TINT_PERCENT = 0.14;
 
+/**
+ * `.kv2-ref-chip` (`kv2/mention.css`) tints its own background from the kind
+ * accent the same way, at its own percentage. Must match that rule.
+ */
+const REF_CHIP_TINT_PERCENT = 0.11;
+
 const SLOTS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 /** Every background a directory/lineage label can land on, for one theme. */
-function backgrounds(tokens: TokenMap, accent: Rgb): { name: string; rgb: Rgb }[] {
+function backgrounds(tokens: TokenMap, accent: Rgb, tintPercent: number): { name: string; rgb: Rgb }[] {
   const surfaces = SURFACE_TOKENS.map((name) => ({ name, rgb: resolveTokenColor(name, tokens) }));
   return [
     ...surfaces,
     ...surfaces.map(({ name, rgb }) => ({
-      name: `${name} + ${CHIP_TINT_PERCENT * 100}% tint`,
-      rgb: mixSrgb(accent, CHIP_TINT_PERCENT, rgb),
+      name: `${name} + ${tintPercent * 100}% tint`,
+      rgb: mixSrgb(accent, tintPercent, rgb),
     })),
   ];
 }
@@ -67,11 +73,12 @@ function worstContrast(
   textToken: string,
   accentToken: string,
   tokens: TokenMap,
+  tintPercent: number = CHIP_TINT_PERCENT,
 ): { ratio: number; against: string } {
   const text = resolveTokenColor(textToken, tokens);
   const accent = resolveTokenColor(accentToken, tokens);
   let worst = { ratio: Infinity, against: '' };
-  for (const bg of backgrounds(tokens, accent)) {
+  for (const bg of backgrounds(tokens, accent, tintPercent)) {
     const ratio = contrastRatio(text, bg.rgb);
     if (ratio < worst.ratio) worst = { ratio, against: bg.name };
   }
@@ -149,6 +156,76 @@ describe('Works affinity palette luminance axis', () => {
         / (Math.min(a.luminance, b.luminance) + 0.05);
       expect(ratio, `slots ${a.slot} and ${b.slot} are hue-adjacent and equally bright`)
         .toBeGreaterThan(1.3);
+    }
+  });
+});
+
+/**
+ * The same guard for the `@` mention reference kinds. They are a second
+ * categorical layer ① series (`--kv2-ref-session|work|doc`), and the popover
+ * row's kind glyph plus the chip's token span are painted in the `-text` twin
+ * — so the twin, not the swatch, is what has to clear AA. The mix percentages
+ * differ per kind for the same reason the directory slots' do: how far a hue
+ * has to travel toward the ink to land on 4.5:1 depends on the hue.
+ */
+const REF_KINDS = ['session', 'work', 'doc'] as const;
+
+describe('mention reference kind text tokens meet WCAG AA', () => {
+  for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {
+    for (const kind of REF_KINDS) {
+      test(`--kv2-ref-${kind}-text clears 4.5:1 in ${theme.label}`, () => {
+        const worst = worstContrast(
+          `--kv2-ref-${kind}-text`,
+          `--kv2-ref-${kind}`,
+          theme.tokens,
+          REF_CHIP_TINT_PERCENT,
+        );
+        expect(
+          worst.ratio,
+          `--kv2-ref-${kind}-text is ${worst.ratio.toFixed(2)}:1 on ${worst.against}`,
+        ).toBeGreaterThanOrEqual(AA);
+      });
+    }
+  }
+
+  test('the reference accents are declared once — layer ① is not re-stated in dark', () => {
+    const { dark: overlaid } = parseThemeTokens(CSS);
+    for (const kind of REF_KINDS) {
+      expect(resolveTokenColor(`--kv2-ref-${kind}`, overlaid))
+        .toEqual(resolveTokenColor(`--kv2-ref-${kind}`, light));
+    }
+  });
+
+  test('each -text token keeps its kind hue instead of collapsing to ink', () => {
+    // Mixing all the way to --kv2-text-primary would satisfy AA and make all
+    // three kinds the same near-black, which is the one thing the series is for.
+    for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {
+      for (const kind of REF_KINDS) {
+        const accentHue = hueOf(resolveTokenColor(`--kv2-ref-${kind}`, theme.tokens));
+        const textHue = hueOf(resolveTokenColor(`--kv2-ref-${kind}-text`, theme.tokens));
+        expect(
+          hueDistance(accentHue, textHue),
+          `--kv2-ref-${kind}-text drifted off its hue in ${theme.label} `
+            + `(${accentHue.toFixed(0)}° → ${textHue.toFixed(0)}°)`,
+        ).toBeLessThan(30);
+      }
+    }
+  });
+
+  test('the three kinds stay apart in hue, so a chip is identifiable by colour', () => {
+    // 'work' shares the lineage violet with --kv2-affinity-chain by design; the
+    // three *kinds* still have to be mutually distinguishable.
+    const hues = REF_KINDS.map((kind) => ({
+      kind,
+      hue: hueOf(resolveTokenColor(`--kv2-ref-${kind}`, light)),
+    }));
+    for (let i = 0; i < hues.length; i += 1) {
+      for (let j = i + 1; j < hues.length; j += 1) {
+        expect(
+          hueDistance(hues[i].hue, hues[j].hue),
+          `--kv2-ref-${hues[i].kind} and --kv2-ref-${hues[j].kind} are the same hue`,
+        ).toBeGreaterThan(30);
+      }
     }
   });
 });

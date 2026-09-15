@@ -159,3 +159,89 @@ describe('buildRunProgress — codex stream', () => {
     expect(progress.summary.mcpServers).toEqual(['github']);
   });
 });
+
+describe('buildTranscriptProgress — codex rollout', () => {
+  /**
+   * The rollout envelope, not `codex exec --json`. Two different wire formats
+   * for the same facts: the board dispatch path writes exec events into the
+   * run's events.jsonl, while the interactive CLI leaves this behind under
+   * `~/.codex/sessions/`. Item types are PascalCase here, snake_case there.
+   */
+  function rolloutItem(item: Record<string, unknown>): string {
+    return JSON.stringify({
+      timestamp: '2026-09-15T00:00:00.000Z',
+      type: 'event_msg',
+      payload: { type: 'item_completed', item },
+    });
+  }
+
+  const card = {
+    sessionId: '01a0a24a-8199-7c20-b854-daac29961c07',
+    status: 'complete' as const,
+    startedAt: '2026-09-15T00:00:00.000Z',
+    createdAt: '2026-09-15T00:00:00.000Z',
+  };
+
+  test('maps rollout items to ordered steps and reports the codex runtime', () => {
+    const lines = [
+      JSON.stringify({ type: 'session_meta', payload: { session_id: card.sessionId } }),
+      rolloutItem({ type: 'UserMessage', content: [{ type: 'text', text: 'PR 리뷰해줘' }] }),
+      rolloutItem({ type: 'CommandExecution', command: ['/bin/zsh', '-lc', 'bun test src/foo.test.ts'] }),
+      rolloutItem({ type: 'FileChange', changes: { '/repo/a.kt': { type: 'add' } } }),
+      rolloutItem({ type: 'McpToolCall', server: 'cua_repl', tool: 'js' }),
+      rolloutItem({ type: 'SubAgentActivity', kind: 'started', agent_path: '/root/context_design' }),
+      rolloutItem({ type: 'SubAgentActivity', kind: 'completed', agent_path: '/root/context_design' }),
+      rolloutItem({ type: 'Extension', kind: 'web.search', query: 'codex rollout format' }),
+      // Reasoning carries no user-visible action — it must not become a step.
+      rolloutItem({ type: 'Reasoning', summary_text: [], raw_content: [] }),
+      'not json at all',
+      '',
+    ];
+
+    const progress = buildTranscriptProgress(card, lines, 'codex');
+
+    expect(progress.runtime).toBe('codex');
+    expect(progress.source).toBe('transcript');
+    expect(progress.runStatus).toBe('completed');
+    expect(progress.steps.map((s) => [s.kind, s.label])).toEqual([
+      ['command', 'Shell'],
+      ['tool', 'Edit'],
+      ['mcp', 'cua_repl · js'],
+      ['agent', 'root/context_design'],
+      ['tool', 'web.search'],
+    ]);
+    expect(progress.totalSteps).toBe(5);
+    expect(progress.steps[0].body).toBe('bun test src/foo.test.ts');
+    expect(progress.summary.mcpServers).toEqual(['cua_repl']);
+    expect(progress.summary.agents).toEqual(['root/context_design']);
+  });
+
+  test('a subagent that started twice is not counted twice per start/stop pair', () => {
+    const lines = [
+      rolloutItem({ type: 'SubAgentActivity', kind: 'started', agent_path: '/root/a' }),
+      rolloutItem({ type: 'SubAgentActivity', kind: 'failed', agent_path: '/root/a' }),
+      rolloutItem({ type: 'SubAgentActivity', kind: 'completed', agent_path: '/root/a' }),
+    ];
+
+    expect(buildTranscriptProgress(card, lines, 'codex').steps).toHaveLength(1);
+  });
+
+  // The regression that makes the two parsers worth keeping apart: exec-format
+  // lines through the rollout parser (and vice versa) yield zero steps rather
+  // than an error, so a wrong `format` argument fails silently.
+  test('exec-format lines yield nothing through the rollout parser', () => {
+    const execLine = JSON.stringify({
+      type: 'item.completed',
+      item: { type: 'command_execution', command: 'ls' },
+    });
+
+    expect(buildTranscriptProgress(card, [execLine], 'codex').steps).toHaveLength(0);
+    expect(buildTranscriptProgress(card, [rolloutItem({ type: 'CommandExecution', command: ['ls'] })]).steps)
+      .toHaveLength(0);
+  });
+
+  test('defaults to the claude parser when no format is given', () => {
+    const progress = buildTranscriptProgress(card, []);
+    expect(progress.runtime).toBe('claude');
+  });
+});

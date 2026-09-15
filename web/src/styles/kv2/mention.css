@@ -1,0 +1,481 @@
+/* `@` mention reference UI: anchored popover (tabs / list / rows / snippets)
+   and the References chip strip under the textarea.
+   Ported from docs/mockups/mention-reference-mockup.html — every colour there
+   is replayed through a --kv2-* token here. See docs/design-system.md and
+   §8 of the design note for the token contract. */
+
+/* =============================================================
+   Reference kind carriers (.kv2-ref-kind-*)
+   ============================================================= */
+/*
+ * The same split the Works affinity palette uses: a *swatch* for marks, bars
+ * and tints, and an AA-safe *text twin* for anything with letters in it. A row,
+ * a chip, or a token span picks up one carrier class and then reads only these
+ * two variables — never `--kv2-ref-doc` and never a literal — so the kind's
+ * colour is decided in one place and the text side stays legible on both
+ * themes (`web/src/styles/token-contrast.test.ts`).
+ */
+.kv2-ref-kind-session {
+  --kv2-ref-accent: var(--kv2-ref-session);
+  --kv2-ref-ink: var(--kv2-ref-session-text);
+}
+
+.kv2-ref-kind-work {
+  --kv2-ref-accent: var(--kv2-ref-work);
+  --kv2-ref-ink: var(--kv2-ref-work-text);
+}
+
+.kv2-ref-kind-doc {
+  --kv2-ref-accent: var(--kv2-ref-doc);
+  --kv2-ref-ink: var(--kv2-ref-doc-text);
+}
+
+/* Unresolved: the token survived but its target did not (deleted card, missing
+   transcript). Amber replaces the kind hue so "this one carries less" is read
+   before the label is. */
+.kv2-ref-kind-unresolved {
+  --kv2-ref-accent: var(--kv2-warn-accent);
+  --kv2-ref-ink: var(--kv2-warn-text);
+}
+
+/* =============================================================
+   Popover shell (.kv2-mention-host / .kv2-mention-pop)
+   ============================================================= */
+.kv2-mention-host {
+  position: relative;
+}
+
+/*
+ * `position: fixed` because the popover is a body portal positioned by
+ * `useAnchoredPopover` (components/Card/MetaDropdown.tsx) — the same escape
+ * hatch `.kv2-meta-dropdown-popover` needs, since `position: absolute` is
+ * clipped by the detail dialog's own `overflow`. Top/left arrive inline.
+ * Not a modal: no overlay, no backdrop, no DialogSkeleton.
+ */
+.kv2-mention-pop {
+  position: fixed;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  width: 520px;
+  max-width: calc(100vw - 2 * var(--kv2-sp-4));
+  overflow: hidden;
+  background: var(--kv2-surface);
+  border: 3px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  box-shadow: 6px 6px 0 var(--kv2-dialog-shadow-color);
+}
+
+/* =============================================================
+   Tabs (All / Sessions / Works / Docs)
+   ============================================================= */
+.kv2-mention-tabs {
+  display: flex;
+  gap: var(--kv2-sp-1);
+  padding: var(--kv2-sp-2) var(--kv2-sp-2) 0;
+  background: var(--kv2-surface-sunken);
+  border-bottom: 2px solid var(--kv2-border-subtle);
+}
+
+.kv2-mention-tab {
+  padding: 6px var(--kv2-sp-3);
+  font-family: inherit;
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+  background: transparent;
+  border: 2px solid transparent;
+  border-bottom: none;
+  border-radius: var(--kv2-radius-sm) var(--kv2-radius-sm) 0 0;
+  cursor: pointer;
+}
+
+.kv2-mention-tab:hover:not(.is-active) {
+  color: var(--kv2-text-primary);
+  background: var(--kv2-surface-hover);
+}
+
+/* The active tab grows into the list below it — the -2px bite covers the tab
+   row's own bottom border so the sheet and the tab read as one surface. */
+.kv2-mention-tab.is-active {
+  margin-bottom: -2px;
+  padding-bottom: var(--kv2-sp-2);
+  color: var(--kv2-text-primary);
+  background: var(--kv2-surface);
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-mention-tab-count {
+  margin-left: var(--kv2-sp-1);
+  font-size: var(--kv2-text-2xs);
+  opacity: 0.65;
+}
+
+/* =============================================================
+   Query line (search term + key hints)
+   ============================================================= */
+.kv2-mention-query {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface-sunken);
+  border-bottom: 2px solid var(--kv2-border-subtle);
+}
+
+.kv2-mention-query-term {
+  font-family: var(--kv2-font-mono);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.kv2-mention-keys {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.kv2-mention-key {
+  padding: 2px 6px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface-hover);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+}
+
+/* =============================================================
+   List / group heading / row
+   ============================================================= */
+.kv2-mention-list {
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+.kv2-mention-group {
+  padding: var(--kv2-sp-2) var(--kv2-sp-3) var(--kv2-sp-1);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-mention-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  font-family: inherit;
+  text-align: left;
+  color: var(--kv2-text-primary);
+  background: transparent;
+  border: none;
+  border-left: 4px solid transparent;
+  cursor: pointer;
+}
+
+.kv2-mention-row:hover:not(.is-disabled) {
+  background: var(--kv2-surface-hover);
+}
+
+/* Keyboard selection is the authoritative one (↑/↓ drive it), so it gets the
+   left edge as well as the fill. The edge is the row's own kind accent — the
+   list is already colour-coded by kind and a separate highlight hue would be a
+   fifth colour saying nothing. */
+.kv2-mention-row.is-selected {
+  background: var(--kv2-surface-hover);
+  border-left-color: var(--kv2-ref-accent, var(--kv2-btn-primary-bg));
+}
+
+/* Self-reference: the current card's own session. Listed, not hidden — seeing
+   it greyed explains why it cannot be picked. */
+.kv2-mention-row.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kv2-mention-row-kind {
+  flex: none;
+  width: 22px;
+  font-size: var(--kv2-text-xs);
+  text-align: center;
+  color: var(--kv2-ref-ink, var(--kv2-text-secondary));
+}
+
+/* Status dot. Board colours, so a row means the same thing here as it does on
+   the board — the `-display` layer, like every other large-format status mark.
+   A doc has no status and falls back to its kind accent. */
+.kv2-mention-row-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-mention-dot-color, var(--kv2-ref-accent, var(--kv2-neutral-400)));
+}
+
+.kv2-mention-row-dot--todo { --kv2-mention-dot-color: var(--kv2-status-todo-display); }
+.kv2-mention-row-dot--in_progress { --kv2-mention-dot-color: var(--kv2-status-progress-display); }
+.kv2-mention-row-dot--complete { --kv2-mention-dot-color: var(--kv2-status-complete-display); }
+.kv2-mention-row-dot--done { --kv2-mention-dot-color: var(--kv2-status-done-display); }
+.kv2-mention-row-dot--unknown { --kv2-mention-dot-color: var(--kv2-neutral-400); }
+
+.kv2-mention-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.kv2-mention-row-title {
+  display: block;
+  overflow: hidden;
+  font-size: var(--kv2-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kv2-mention-row-title mark,
+.kv2-mention-row-snippet mark {
+  padding: 0 1px;
+  color: inherit;
+  background: color-mix(in srgb, var(--kv2-status-progress-display) 55%, transparent);
+}
+
+.kv2-mention-row-aside {
+  font-weight: 400;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-mention-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-mention-row-id {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+}
+
+/* Why this row matched. Title search alone finds almost nothing on a real
+   board, so rows are matched on description/result too — and then the row has
+   to show the hit, or a card titled `test` is unpickable. */
+.kv2-mention-row-snippet {
+  display: block;
+  margin-top: 3px;
+  padding-left: 7px;
+  overflow: hidden;
+  font-size: var(--kv2-text-caption);
+  line-height: 1.45;
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-left: 3px solid var(--kv2-border);
+}
+
+.kv2-mention-row-snippet-field {
+  margin-right: 5px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-3xs);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-mention-row-right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+}
+
+.kv2-mention-row-enter {
+  padding: 2px 6px;
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
+  background: var(--kv2-surface);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+}
+
+.kv2-mention-empty {
+  padding: 26px var(--kv2-sp-3);
+  font-size: var(--kv2-text-xs);
+  text-align: center;
+  color: var(--kv2-text-muted);
+}
+
+/* =============================================================
+   References strip (.kv2-ref-strip / .kv2-ref-chip)
+   ============================================================= */
+/* Dashed, sunken, and outside the textarea: the strip is a *render of the body
+   text*, not a second store of references. Deleting a token in the prompt makes
+   its chip disappear, which the dashed edge is meant to suggest. */
+.kv2-ref-strip {
+  margin-top: 10px;
+  padding: 10px var(--kv2-sp-3);
+  background: var(--kv2-surface-sunken);
+  border: 2px dashed var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+}
+
+.kv2-ref-strip-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-bottom: var(--kv2-sp-2);
+  font-size: var(--kv2-text-caption);
+  font-weight: 800;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-ref-strip-count {
+  padding: 1px 6px;
+  font-size: var(--kv2-text-2xs);
+  letter-spacing: 0;
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface-hover);
+  border-radius: var(--kv2-radius-pill);
+}
+
+/* Over the 8-reference cap the extras are dropped from the block, so the count
+   has to say so rather than quietly disagree with the prompt. */
+.kv2-ref-strip-count.is-over-limit {
+  color: var(--kv2-warn-text);
+  background: var(--kv2-warn-surface);
+}
+
+.kv2-ref-strip-spacer {
+  flex: 1;
+}
+
+.kv2-ref-strip-toggle {
+  font-family: inherit;
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--kv2-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.kv2-ref-strip-toggle:hover {
+  color: var(--kv2-text-primary);
+}
+
+.kv2-ref-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.kv2-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  max-width: 320px;
+  padding: var(--kv2-sp-1) 6px var(--kv2-sp-1) var(--kv2-sp-2);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-primary);
+  /* 11% — matched by REF_CHIP_TINT_PERCENT in styles/token-contrast.test.ts,
+     which asserts the kind's text twin still clears AA against this tint. */
+  background: color-mix(in srgb, var(--kv2-ref-accent, transparent) 11%, var(--kv2-surface));
+  border: 2px solid color-mix(in srgb, var(--kv2-ref-accent, var(--kv2-border)) 45%, transparent);
+  border-radius: var(--kv2-radius-sm);
+}
+
+.kv2-ref-chip-icon {
+  flex: none;
+  font-size: var(--kv2-text-ui-sm);
+}
+
+.kv2-ref-chip-token {
+  flex: none;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  white-space: nowrap;
+  color: var(--kv2-ref-ink, var(--kv2-text-secondary));
+}
+
+.kv2-ref-chip-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Removes the *token from the body text* — there is no chip state to clear. */
+.kv2-ref-chip-remove {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  font-family: inherit;
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1;
+  color: var(--kv2-text-secondary);
+  background: color-mix(in srgb, var(--kv2-ref-accent, var(--kv2-border)) 20%, transparent);
+  border: none;
+  border-radius: var(--kv2-radius-sm);
+  cursor: pointer;
+}
+
+.kv2-ref-chip-remove:hover {
+  color: var(--kv2-text-primary);
+  background: color-mix(in srgb, var(--kv2-ref-accent, var(--kv2-border)) 38%, transparent);
+}
+
+.kv2-ref-strip-note {
+  margin: var(--kv2-sp-2) 0 0;
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-warn-text);
+}
+
+/* The block exactly as it will be appended to the body. Rendered by the same
+   core function the server and the agent read, so the preview cannot disagree
+   with what is sent. */
+.kv2-ref-preview {
+  max-height: 240px;
+  margin: var(--kv2-sp-2) 0 0;
+  padding: 10px var(--kv2-sp-3);
+  overflow: auto;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--kv2-text-secondary);
+  background: var(--kv2-surface);
+  border: 2px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+}
+
+/* =============================================================
+   Responsive
+   ============================================================= */
+/* The popover is width-fixed so the two-line rows do not reflow while typing;
+   below the breakpoint it gives that up rather than overhang the viewport. */
+@media (max-width: 560px) {
+  .kv2-mention-pop {
+    width: calc(100vw - 2 * var(--kv2-sp-3));
+  }
+
+  .kv2-mention-keys {
+    display: none;
+  }
+
+  .kv2-ref-chip {
+    max-width: 100%;
+  }
+}

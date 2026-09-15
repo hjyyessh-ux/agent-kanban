@@ -1,5 +1,7 @@
 import type { AgentRuntime, KanbanCard, CreateCardInput, UpdateCardInput, Screenshot, DispatchResult } from '../../../src/core/types';
 import type { RuntimeCatalogEntry } from '../../../src/core/runtime-config';
+import type { MentionResolveResponse, ResolvedReference } from '../../../src/core/mention-reference';
+import type { MentionSearchResponse } from '../../../src/core/mention-search';
 import type { QuestionOption, QuestionInfo, QuestionRequest } from '../../../src/plugin/question-monitor';
 
 const BASE_URL = '/api';
@@ -246,4 +248,52 @@ export async function rejectQuestion(id: string): Promise<{ ok: boolean }> {
     headers: { 'Content-Type': 'application/json' },
   });
   return handleResponse<{ ok: boolean }>(res);
+}
+
+/**
+ * `@` 멘션 후보. 팝오버가 열려 있는 동안 키 입력마다(150ms 디바운스) 불린다.
+ *
+ * `kind`를 서버에 넘기지 않는 이유: `selectMentionCandidates`는 `kind`를 받으면
+ * 나머지 그룹을 비워서 돌려주는데, 팝오버는 **탭 4개의 건수를 동시에** 표시해야
+ * 한다. 한 번에 전부 받아 탭은 클라이언트에서 고르는 편이 요청도 하나고 카운트도
+ * 맞는다. 라우트의 `kind` 파라미터는 계약으로 남아 있다.
+ */
+export async function fetchMentions(
+  params: {
+    q?: string;
+    limit?: number;
+    projectDir?: string;
+    excludeSessionIds?: string[];
+  },
+  signal?: AbortSignal,
+): Promise<MentionSearchResponse> {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.projectDir) query.set('projectDir', params.projectDir);
+  for (const sessionId of params.excludeSessionIds ?? []) {
+    query.append('excludeSession', sessionId);
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+  const res = await fetch(`${BASE_URL}/mentions${suffix}`, { signal });
+  return handleResponse<MentionSearchResponse>(res);
+}
+
+/**
+ * 본문에 박힌 토큰을 참조 블록 입력으로 바꾼다.
+ *
+ * 해석 실패는 오류가 아니라 `unresolved` 표시로 돌아온다 — 참조 하나가
+ * 사라졌다고 나머지 칩까지 잃으면 안 된다. 서버가 `MAX_REFERENCES`개에서
+ * 자르므로 초과분을 보내도 무해하다.
+ */
+export async function resolveMentions(
+  tokens: string[],
+  signal?: AbortSignal,
+): Promise<ResolvedReference[]> {
+  if (tokens.length === 0) return [];
+  const query = new URLSearchParams();
+  for (const token of tokens) query.append('token', token);
+  const res = await fetch(`${BASE_URL}/mentions/resolve?${query.toString()}`, { signal });
+  const body = await handleResponse<MentionResolveResponse>(res);
+  return body.references;
 }

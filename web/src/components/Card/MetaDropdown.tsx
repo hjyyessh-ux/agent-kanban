@@ -33,17 +33,22 @@ interface AnchoredPopoverOptions {
 }
 
 /**
- * Anchors a body-portal popover to a trigger button using fixed positioning.
+ * Anchors a body-portal popover to a trigger element using fixed positioning.
  * This escapes the dialog's `overflow` clipping that breaks `position: absolute`
  * popovers rendered inside the scrollable detail dialog.
+ *
+ * The trigger element type is a parameter, defaulting to the button every
+ * dropdown here uses. The `@` mention popover anchors to a `<textarea>` instead
+ * (its bottom-left corner) — nothing in the positioning maths is button-specific,
+ * only the ref's type was.
  */
-export function useAnchoredPopover(
+export function useAnchoredPopover<T extends HTMLElement = HTMLButtonElement>(
   minPopoverWidth = 200,
   { boundarySelector }: AnchoredPopoverOptions = {},
 ) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<AnchorCoords | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<T>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const updatePosition = useCallback(() => {
@@ -124,7 +129,10 @@ export function useAnchoredPopover(
       }
     : HIDDEN_POPOVER_STYLE;
 
-  return { open, setOpen, triggerRef, popoverRef, popoverStyle };
+  // `updatePosition` is exposed because a popover whose *content* changes height
+  // while it is open (the mention list re-filtering as you type) has to
+  // re-measure: the open/scroll/resize triggers above never fire for that.
+  return { open, setOpen, triggerRef, popoverRef, popoverStyle, updatePosition };
 }
 
 /**

@@ -1804,6 +1804,16 @@ export interface WorkSessionSummary {
   projectDir?: string;
   /** Oldest card's title (the session's first prompt), else `sessionTitle`, else ''. */
   title: string;
+  /**
+   * Runtime the session's cards ran on — the Work detail row's chip.
+   *
+   * Resolved server-side rather than in the dialog because this read reaches
+   * into the archive months the Work can touch: a completed Work has every card
+   * off the board, so a client-side lookup against the board list would leave
+   * exactly the rows that need the label unlabelled. Absent when the session has
+   * no card in the scanned window.
+   */
+  agentRuntime?: AgentRuntime;
   cardCount: number;
   /** Cards whose status is `done` or `complete`. */
   doneCount: number;

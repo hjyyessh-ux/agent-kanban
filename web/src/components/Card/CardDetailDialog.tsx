@@ -902,6 +902,8 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 setIsSubmittingFeedback={setIsSubmittingFeedback}
                 onCreateFeedback={onCreateFeedback}
                 onClose={onClose}
+                projectDir={card.projectDir}
+                excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
               />
             )}
           </div>

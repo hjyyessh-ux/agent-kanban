@@ -119,6 +119,20 @@
   --kv2-dir-7: #107a93;  /* h 192  lum 0.16  teal       */
   --kv2-dir-8: #712593;  /* h 282  lum 0.07  grape      */
   --kv2-affinity-chain: #8b5cf0; /* h 259 lum 0.19 violet — lineage, not a directory */
+
+  /* ── `@` mention reference kinds ──────────────────────────── */
+  /* A categorical series like the affinity palette above, not a theme surface:
+     a session reads as the same blue in the popover row, in the References
+     chip, and in the token it drops into the prompt. Layer ①, so there is no
+     dark override — dark mode is served by the `-text` twins in layer ②,
+     exactly the contract the directory slots use.
+     `--kv2-ref-work` is deliberately the same violet as `--kv2-affinity-chain`:
+     both mean "a thread of linked sessions", and two near-equal violets on one
+     screen would announce a distinction that does not exist.
+     Guarded by `web/src/styles/token-contrast.test.ts` (AA on both themes). */
+  --kv2-ref-session: #1668e8;  /* h 216  thread — one session */
+  --kv2-ref-work: #8b5cf0;     /* h 259  Work — same violet as the lineage mark */
+  --kv2-ref-doc: #0d9488;      /* h 175  Wiki document */
 }
 
 /* =============================================================
@@ -542,6 +556,18 @@
   --kv2-dir-7-text: color-mix(in srgb, var(--kv2-dir-7) 40%, var(--kv2-text-primary));
   --kv2-dir-8-text: color-mix(in srgb, var(--kv2-dir-8) 34%, var(--kv2-text-primary));
   --kv2-affinity-chain-text: color-mix(in srgb, var(--kv2-affinity-chain) 42%, var(--kv2-text-primary));
+
+  /* ── `@` mention reference kinds: readable *text* per kind ── */
+  /* Same contract as the slot twins above — the layer ① accents are swatches,
+     and a chip's token/label is text. Per-kind percentages again, because the
+     mix needed to land on 4.5:1 is hue-dependent. Contrast is asserted for both
+     themes in `web/src/styles/token-contrast.test.ts`, against every panel
+     surface *and* against the 11% accent tint `.kv2-ref-chip` paints behind its
+     own label. Components read `--kv2-ref-accent` / `--kv2-ref-ink` (set by the
+     `.kv2-ref-kind-*` carriers in `kv2/mention.css`) — never these directly. */
+  --kv2-ref-session-text: color-mix(in srgb, var(--kv2-ref-session) 42%, var(--kv2-text-primary));
+  --kv2-ref-work-text: color-mix(in srgb, var(--kv2-ref-work) 38%, var(--kv2-text-primary));
+  --kv2-ref-doc-text: color-mix(in srgb, var(--kv2-ref-doc) 40%, var(--kv2-text-primary));
 }
 
 /* =============================================================
