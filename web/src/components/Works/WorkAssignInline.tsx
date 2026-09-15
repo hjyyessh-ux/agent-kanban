@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import type { Work, WorkInboxSession, WorkSessionRole } from '../../../../src/core/types';
 import {
+  DEFAULT_SESSION_ROLE,
   ROLE_LABELS,
   ROLE_OPTIONS,
   recommendWorksForSession,
@@ -49,14 +50,13 @@ interface WorkAssignInlineProps {
   onCreateWork: (title: string, role?: WorkSessionRole) => Promise<void>;
   onLinkToWork: (workId: string, role?: WorkSessionRole) => Promise<void>;
   /**
-   * Left footer action — Inbox: "이 세션 무시", move: "⤺ Inbox로 되돌리기".
+   * The escape hatch — Inbox: "이 세션 무시", move: "⤺ Inbox로 되돌리기".
    *
-   * `tone` decides the variant, not the position: both live in the footer's
-   * left `kv2-actions-danger` zone (the same place the assign-all modal keeps
-   * 폐기), but only the Inbox one is destructive. Putting 무시 on the right next
-   * to the primary 연결 — which is where it used to sit — made the two Inbox
-   * surfaces disagree about where the irreversible action is, and the row's own
-   * 폐기 button disagreed with both.
+   * `tone` decides the variant, not the position: it sits in the top action
+   * bar's button group, leftmost of the three (escape · 취소 · commit), and
+   * only the Inbox one is destructive. The whole group lives at the top of the
+   * panel because the recommendation list below it is as tall as the number of
+   * active Works — anything under the list opens below the fold.
    */
   secondary: { label: string; run: () => Promise<void>; tone?: 'danger' | 'neutral' };
   /** Present only in the move dialog; absent means plain Inbox assignment. */
@@ -79,13 +79,6 @@ interface WorkAssignInlineProps {
   preferSameDir?: boolean;
   /** Pre-selected role — the link's existing role when moving. */
   initialRole?: WorkSessionRole;
-  /**
-   * Target the panel opens on, set when the row's suggestion chip was what
-   * opened it. `{ kind: 'work' }` lands on that Work already selected — the
-   * chip already showed the reason, so the panel's job is to confirm, not to
-   * make the user find the same row again in the list.
-   */
-  initialTarget?: { kind: 'work'; workId: string } | { kind: 'new' };
 }
 
 type AssignMode = 'new' | 'existing';
@@ -138,7 +131,6 @@ export function WorkAssignInline({
   chained,
   preferSameDir = true,
   initialRole,
-  initialTarget,
 }: WorkAssignInlineProps) {
   const recommendations = useMemo(
     () => recommendWorksForSession(session, works, move?.currentWork.id, chained, {
@@ -147,15 +139,6 @@ export function WorkAssignInline({
     [session, works, move?.currentWork.id, chained, preferSameDir],
   );
   const suggestedTitle = useMemo(() => suggestWorkTitle(session), [session]);
-
-  // A preselected Work only counts if it is still a legal target: the Inbox
-  // polls, so the Work behind a suggestion can be completed between the render
-  // that drew it and the click that opens this panel.
-  const presetWorkId =
-    initialTarget?.kind === 'work'
-    && recommendations.some((r) => r.work.id === initialTarget.workId)
-      ? initialTarget.workId
-      : null;
 
   // What the *row* would have suggested, so plain 배정 lands on the same Work
   // the row was offering. The list below stays grouped by lineage/directory
@@ -171,16 +154,14 @@ export function WorkAssignInline({
     [session, works, move?.currentWork.id, chained, preferSameDir],
   );
 
-  const [mode, setMode] = useState<AssignMode>(() => {
-    if (initialTarget?.kind === 'new') return 'new';
-    if (presetWorkId) return 'existing';
-    return recommendations.length > 0 ? 'existing' : 'new';
-  });
+  const [mode, setMode] = useState<AssignMode>(
+    recommendations.length > 0 ? 'existing' : 'new',
+  );
   const [title, setTitle] = useState(suggestedTitle);
   const [selectedWorkId, setSelectedWorkId] = useState<string>(
-    presetWorkId ?? topSuggestion?.work.id ?? recommendations[0]?.work.id ?? '',
+    topSuggestion?.work.id ?? recommendations[0]?.work.id ?? '',
   );
-  const [role, setRole] = useState<WorkSessionRole>(initialRole ?? 'dev');
+  const [role, setRole] = useState<WorkSessionRole>(initialRole ?? DEFAULT_SESSION_ROLE);
   const [busy, setBusy] = useState(false);
   // Generated, not hardcoded: this panel renders in three places at once —
   // under an Inbox row, as the bulk panel, and inside MoveSessionDialog — and
@@ -243,24 +224,46 @@ export function WorkAssignInline({
         </div>
       )}
 
-      {/* The commit lives at the *top* of the panel, above the option list it
-          applies to. It used to sit in the footer, under a recommendation list
-          that is as tall as the number of active Works: on the Inbox the panel
-          opens inline under a row, so pressing 배정 scrolled the button that
-          finishes the job off the bottom of the screen. Reading order loses
-          nothing — the label always names the exact target ("X에 연결"), so the
-          top bar is a statement of what will happen and the list below is how
-          to change it. */}
+      {/* Everything that decides or ends the assignment lives in this one bar at
+          the *top* of the panel: the role, the escape hatch, 취소 and the
+          commit. All of it used to sit under a recommendation list as tall as
+          the number of active Works, so on the Inbox — where the panel opens
+          inline under a row — pressing 배정 pushed the role picker and the
+          button that finishes the job off the bottom of the screen. Reading
+          order loses nothing: the commit always names its exact target
+          ("X에 연결"), so the bar states what will happen and the list below is
+          how to change it. */}
       <div className="works-assign-actionbar">
-        <div className="works-assign-lead">
-          {move
-            ? '이 세션을 어디로 옮길까요?'
-            : bulk
-              ? `선택한 세션 ${bulk.count}개를 어디에 연결할까요?`
-              : '이 세션을 어디에 연결할까요?'}
-          {!move && <DirChip projectDir={session.projectDir} />}
+        {/* A sibling <label htmlFor>, not a wrapping one: Chrome folds a
+            wrapped <select>'s selected option into the accessible name, so the
+            control answered to "역할 개발" instead of "역할". */}
+        <div className="works-assign-role-inline">
+          <label className="kv2-label" htmlFor={roleId}>
+            {bulk ? `세션 ${bulk.count}개 역할` : '역할'}
+          </label>
+          <select
+            id={roleId}
+            className="kv2-select"
+            value={role}
+            onChange={(event) => setRole(event.target.value as WorkSessionRole)}
+          >
+            {ROLE_OPTIONS.map((option) => (
+              <option key={option} value={option}>{ROLE_LABELS[option]}</option>
+            ))}
+          </select>
         </div>
+        {!move && <DirChip projectDir={session.projectDir} />}
         <div className="works-assign-actionbar-actions">
+          <button
+            type="button"
+            className={`kv2-btn kv2-btn--small ${
+              secondary.tone === 'neutral' ? 'kv2-btn--outline' : 'kv2-btn--subtle-danger'
+            }`}
+            disabled={busy}
+            onClick={() => void runAction(secondary.run)}
+          >
+            {secondary.label}
+          </button>
           <button
             type="button"
             className="kv2-btn kv2-btn--small kv2-btn--ghost"
@@ -313,21 +316,6 @@ export function WorkAssignInline({
             onChange={(event) => setTitle(event.target.value)}
             placeholder="Work 제목"
           />
-          <div className="works-assign-role">
-            <label className="kv2-label" htmlFor={roleId}>
-              {bulk ? `세션 ${bulk.count}개 역할` : '이 세션 역할'}
-            </label>
-            <select
-              id={roleId}
-              className="kv2-select"
-              value={role}
-              onChange={(event) => setRole(event.target.value as WorkSessionRole)}
-            >
-              {ROLE_OPTIONS.map((option) => (
-                <option key={option} value={option}>{ROLE_LABELS[option]}</option>
-              ))}
-            </select>
-          </div>
         </div>
       ) : (
         <>
@@ -363,47 +351,10 @@ export function WorkAssignInline({
               );
             })}
           </div>
-          {selectedWork && (
-            <div className="works-assign-role">
-              <label className="kv2-label" htmlFor={roleId}>
-                {bulk ? `세션 ${bulk.count}개 역할` : '이 세션 역할'}
-              </label>
-              <select
-                id={roleId}
-                className="kv2-select"
-                value={role}
-                onChange={(event) => setRole(event.target.value as WorkSessionRole)}
-              >
-                {ROLE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{ROLE_LABELS[option]}</option>
-                ))}
-              </select>
-            </div>
-          )}
         </>
       )}
 
       {preview}
-
-      {/* What is left in the footer is only the escape hatch: 무시 / Inbox로
-          되돌리기, in the `kv2-actions-danger` zone, exactly where the
-          assign-all modal keeps `X 폐기`. The forward actions (취소 + the
-          commit) moved to the top action bar, so this footer holds one group
-          and its `margin-right: auto` pins it to the left edge. */}
-      <div className="works-assign-footer kv2-actions-split">
-        <div className="kv2-actions-danger">
-          <button
-            type="button"
-            className={`kv2-btn kv2-btn--small ${
-              secondary.tone === 'neutral' ? 'kv2-btn--outline' : 'kv2-btn--subtle-danger'
-            }`}
-            disabled={busy}
-            onClick={() => void runAction(secondary.run)}
-          >
-            {secondary.label}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

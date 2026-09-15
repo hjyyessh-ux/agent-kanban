@@ -29,6 +29,13 @@ export const ROLE_LABELS: Record<WorkSessionRole, string> = {
 export const ROLE_OPTIONS: WorkSessionRole[] = ['dev', 'review', 'debug'];
 
 /**
+ * Role a link gets when nobody picked one — the assign panel's initial value and
+ * what a one-click suggestion writes. Shared so the two paths cannot drift:
+ * a row that assigns silently must produce the same link the panel would.
+ */
+export const DEFAULT_SESSION_ROLE: WorkSessionRole = 'dev';
+
+/**
  * A Work's status, in the language the rest of the screen is written in.
  *
  * `active` used to render as the literal `ACTIVE` while its two siblings were

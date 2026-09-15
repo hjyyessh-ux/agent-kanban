@@ -62,6 +62,11 @@ export function WorkAffinityMarks({
     <>
       {chained && <span className="works-chain-mark">🔗 이어진 세션</span>}
       <span className={`works-dir-mark ${dirAccentClass(projectDir)}`} title={projectDir}>
+        {/* Same 📁 the session's own `DirChip` carries. Without it the mark was
+            a coloured word with no stated kind, and next to `같은 디렉토리` and
+            `✎ …` it read as one more reason rather than as the directory the
+            other two are talking about. */}
+        <span aria-hidden="true">📁</span>
         {projectDir ? projectDirLabel(projectDir) : '디렉토리 없음'}
       </span>
       {sameDirectory && <span className="works-dir-same">같은 디렉토리</span>}

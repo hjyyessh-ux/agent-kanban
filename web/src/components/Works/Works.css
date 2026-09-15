@@ -375,57 +375,34 @@
 }
 
 /* ── Row-level assign suggestions ───────────────────────────────
-   A header line plus one full row per suggestion. Chips on a single line forced
-   every Work title to ~22 characters and dropped the directory off all but the
-   first — see the note in InboxSuggestions.tsx. */
+   `✨ 추천` in a narrow first column, the options stacked in the second. The
+   label used to own a line of its own with `＋ 새 Work` beside it, which put
+   "make a new Work" where the top recommendation belongs. */
 .works-inbox-suggest {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kv2-sp-1);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--kv2-sp-2);
   margin-top: var(--kv2-sp-2);
   font-size: var(--kv2-text-xs);
 }
 
-.works-inbox-suggest-head {
-  display: flex;
-  align-items: center;
-  gap: var(--kv2-sp-2);
-}
-
 .works-inbox-suggest-label {
+  padding-top: 3px;
   font-weight: 800;
   color: var(--kv2-text-muted);
-}
-
-/* The escape hatch rides the header line rather than taking a row of its own:
-   "none of these" must cost the same one click as accepting one, but it does
-   not need a Work title's worth of width. */
-.works-inbox-suggest-new {
-  padding: 1px var(--kv2-sp-2);
-  border: 2px dashed var(--kv2-border);
-  border-radius: var(--kv2-radius-sm);
-  background: transparent;
-  color: var(--kv2-text-secondary);
-  font: inherit;
-  font-size: var(--kv2-text-xs);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.works-inbox-suggest-new:hover {
-  border-style: solid;
-  border-color: var(--kv2-border-strong);
-  background: var(--kv2-info-surface);
+  white-space: nowrap;
 }
 
 .works-inbox-suggest-rows {
   display: flex;
   flex-direction: column;
   gap: var(--kv2-sp-1);
+  min-width: 0;
 }
 
 /* Same vocabulary as `.works-assign-work-item` in the panel — a suggestion and
-   the panel row it opens must not look like two different objects. */
+   the panel row that names the same Work must not look like two objects. */
 .works-inbox-suggest-row {
   display: flex;
   align-items: center;
@@ -433,9 +410,9 @@
   width: 100%;
   min-width: 0;
   padding: 2px var(--kv2-sp-2);
-  border: 2px solid color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 55%, transparent);
+  border: 2px solid color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 70%, transparent);
   border-radius: var(--kv2-radius-sm);
-  background: color-mix(in srgb, var(--works-dir-accent, transparent) 10%, var(--kv2-surface));
+  background: color-mix(in srgb, var(--works-dir-accent, transparent) 16%, var(--kv2-surface));
   color: var(--kv2-text-primary);
   font: inherit;
   font-size: var(--kv2-text-xs);
@@ -444,7 +421,22 @@
   text-align: left;
 }
 
-.works-inbox-suggest-row:hover {
+/*
+ * The runner-up, dimmed. Two rows from the same directory carried the same tint
+ * and read as one block; a rule between them would have separated them as
+ * *equals*, which they are not — these are ranked first and second, and the
+ * weaker tint says so in both themes (a "whiter" second row would mean
+ * de-emphasis in light and emphasis in dark).
+ */
+.works-inbox-suggest-row.is-second {
+  border-color: color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 32%, transparent);
+  background: color-mix(in srgb, var(--works-dir-accent, transparent) 5%, var(--kv2-surface));
+  color: var(--kv2-text-secondary);
+  font-weight: 600;
+}
+
+.works-inbox-suggest-row:hover:not(:disabled),
+.works-inbox-suggest-new:hover:not(:disabled) {
   border-color: var(--kv2-border-strong);
   background: var(--kv2-info-surface);
 }
@@ -453,6 +445,12 @@
 .works-inbox-suggest-new:focus-visible {
   outline: 3px solid var(--kv2-focus-ring);
   outline-offset: 1px;
+}
+
+.works-inbox-suggest-row:disabled,
+.works-inbox-suggest-new:disabled {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 .works-inbox-suggest-bar {
@@ -482,6 +480,27 @@
   overflow: hidden;
   font-weight: 600;
   color: var(--kv2-text-muted);
+}
+
+/* Last, and dashed: it is the option you take when neither ranked row is right,
+   so it must not sit where the first recommendation goes. Sized to its text
+   rather than the full row width — it is an escape hatch, not a third guess. */
+.works-inbox-suggest-new {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px var(--kv2-sp-2);
+  border: 2px dashed var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: transparent;
+  color: var(--kv2-text-secondary);
+  font: inherit;
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
 }
 
 .works-inbox-actions {
@@ -523,8 +542,22 @@
   border-bottom: 2px solid var(--kv2-border);
 }
 
-.works-assign-actionbar > .works-assign-lead {
-  flex: 1 1 200px;
+/* Label above a compact control, inline in the bar. The role used to be a
+   full-width field under the recommendation list — the last thing on screen,
+   below the button that used it. */
+.works-assign-role-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex: none;
+}
+
+.works-assign-role-inline .kv2-select {
+  width: auto;
+  min-width: 110px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: var(--kv2-text-xs);
 }
 
 .works-assign-actionbar-actions {
@@ -597,14 +630,6 @@
   margin-top: var(--kv2-sp-3);
 }
 
-.works-assign-role {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kv2-sp-1);
-  margin-top: var(--kv2-sp-3);
-  max-width: 220px;
-}
-
 .works-assign-work-list {
   display: flex;
   flex-direction: column;
@@ -667,15 +692,6 @@
   font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-muted);
   white-space: nowrap;
-}
-
-/* Layout only — the left/right split comes from `kv2-actions-split`, which this
-   class is combined with. Nothing here may set `justify-content` or per-button
-   margins or it would fight the primitive's `auto` margins. */
-.works-assign-footer {
-  margin-top: var(--kv2-sp-3);
-  flex-wrap: wrap;
-  gap: var(--kv2-sp-2);
 }
 
 /* ── Work cards ─────────────────────────────────────────────── */
@@ -1516,6 +1532,11 @@
   /* Wrapping the meta into a tight column beats wrapping it mid-phrase. */
   .works-inbox-meta {
     gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  }
+
+  /* The label column would eat a third of a 390px row. */
+  .works-inbox-suggest {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Title and reason stack instead of competing for one line: at 390px the

@@ -39,6 +39,7 @@ import {
   rowIndexAtPointer,
   sessionIdsBetween,
   shortSessionId,
+  DEFAULT_SESSION_ROLE,
   suggestWorkAssignments,
   suggestWorkTitle,
   summarizeRoles,
@@ -103,19 +104,11 @@ export interface WorksViewProps {
  */
 const DRAG_SELECT_THRESHOLD_PX = 4;
 
-/**
- * Which choice the assign panel opens on. `null` (no target) is the plain 배정
- * button: the panel picks its own top recommendation. A suggestion chip passes
- * the Work it named, so the panel confirms that one instead of re-ranking.
- */
-type AssignTarget = { kind: 'work'; workId: string } | { kind: 'new' };
-
 /** One Inbox row + its inline assignment panel when expanded. */
 function InboxRow({
   session,
   works,
   expanded,
-  expandedTarget,
   onToggle,
   selectionMode,
   selected,
@@ -132,10 +125,7 @@ function InboxRow({
   session: WorkInboxSession;
   works: WorkListEntry[];
   expanded: boolean;
-  /** Target the panel opens on when a suggestion chip is what opened it. */
-  expandedTarget: AssignTarget | null;
-  /** `target` set = open the panel on that choice; omitted = plain toggle. */
-  onToggle: (target?: AssignTarget) => void;
+  onToggle: () => void;
   /** Checkboxes are only rendered once a selection exists (or was requested). */
   selectionMode: boolean;
   selected: boolean;
@@ -269,8 +259,12 @@ function InboxRow({
             <InboxSuggestions
               suggestions={suggestions}
               newWorkTitle={newWorkTitle}
-              onPickWork={(workId) => onToggle({ kind: 'work', workId })}
-              onPickNew={() => onToggle({ kind: 'new' })}
+              onAssignWork={async (workId) => {
+                await onLinkSessionToWork(workId, session, DEFAULT_SESSION_ROLE);
+              }}
+              onCreateWork={async () => {
+                await onCreateWorkFromSession(session, newWorkTitle, DEFAULT_SESSION_ROLE);
+              }}
             />
           )}
         </div>
@@ -284,7 +278,7 @@ function InboxRow({
               type="button"
               className={`kv2-btn kv2-btn--small${expanded ? '' : ' kv2-btn--primary'}`}
               aria-expanded={expanded}
-              onClick={() => onToggle()}
+              onClick={onToggle}
             >
               {expanded ? '접기 ▲' : '배정'}
             </button>
@@ -305,16 +299,11 @@ function InboxRow({
       </div>
       {expanded && !selectionMode && (
         <WorkAssignInline
-          // Re-seeded when a different chip opens the panel: mode and the
-          // selected Work are initial state, so without a key a second chip on
-          // an already-open panel would change nothing.
-          key={expandedTarget?.kind === 'work' ? expandedTarget.workId : expandedTarget?.kind ?? 'default'}
           session={session}
           works={works}
           chained={chained}
           preferSameDir={preferSameDir}
-          initialTarget={expandedTarget ?? undefined}
-          onCancel={() => onToggle()}
+          onCancel={onToggle}
           onCreateWork={async (title, role) => {
             await onCreateWorkFromSession(session, title, role);
           }}
@@ -542,9 +531,6 @@ export function WorksView({
   onSaveConfig,
 }: WorksViewProps) {
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
-  // Which suggestion opened the panel, if one did. Held next to the expanded id
-  // rather than inside the row so the row stays a pure render of Inbox state.
-  const [expandedTarget, setExpandedTarget] = useState<AssignTarget | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [section, setSection] = useState<'active' | 'resolved'>('active');
@@ -617,9 +603,7 @@ export function WorksView({
   // hidden while selecting, so an open panel would be the one piece of the row
   // UI left pointing at a single session mid-batch.
   useEffect(() => {
-    if (!selectionMode) return;
-    setExpandedSessionId(null);
-    setExpandedTarget(null);
+    if (selectionMode) setExpandedSessionId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionMode]);
 
@@ -1002,19 +986,11 @@ export function WorksView({
                       session={session}
                       works={works}
                       expanded={expandedSessionId === session.sessionId}
-                      expandedTarget={
-                        expandedSessionId === session.sessionId ? expandedTarget : null
-                      }
-                      onToggle={(target) => {
+                      onToggle={() => {
                         setBulkPanelOpen(false);
-                        setExpandedSessionId((current) => {
-                          // A chip on a row whose panel is already open re-aims
-                          // it rather than closing it — only the bare 배정 /
-                          // 접기 button toggles.
-                          if (current !== session.sessionId) return session.sessionId;
-                          return target ? session.sessionId : null;
-                        });
-                        setExpandedTarget(target ?? null);
+                        setExpandedSessionId((current) =>
+                          current === session.sessionId ? null : session.sessionId,
+                        );
                       }}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(session.sessionId)}
@@ -1069,7 +1045,6 @@ export function WorksView({
                       onClick={() => {
                         setBulkPanelOpen((open) => !open);
                         setExpandedSessionId(null);
-                        setExpandedTarget(null);
                       }}
                     >
                       {showBulkPanel
