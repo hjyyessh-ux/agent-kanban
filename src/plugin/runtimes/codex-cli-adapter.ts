@@ -18,7 +18,7 @@ import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle 
 import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
-import { joinResultSegments } from './result-segments';
+import { joinResultSegments, lastResultSegment } from './result-segments';
 import { captureGitEndAndUsage } from './git-capture';
 import { withSpawnLock } from './spawn-lock';
 import { notifyTelegramCompletion } from '../telegram-completion';
@@ -400,7 +400,8 @@ async function handleCodexCompletion(input: {
     };
   }
 
-  const finalResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
+  const joinedResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
+  const finalSegment = lastResultSegment(input.state.resultSegments);
 
   if (exitCode === 0 && input.state.threadId) {
     await input.deps.runStore.finishRun(input.run.runId, {
@@ -411,7 +412,8 @@ async function handleCodexCompletion(input: {
       status: 'complete',
       resolution: 'completed',
       sessionId: input.state.threadId,
-      result: finalResult || '(no output)',
+      result: joinedResult || '(no output)',
+      finalResult: finalSegment || undefined,
       responseAt: new Date().toISOString(),
       progressSummary: undefined,
       staleStatus: null,
@@ -425,7 +427,7 @@ async function handleCodexCompletion(input: {
       store: input.deps.store,
       settingsStore: input.deps.settingsStore,
       cardId: input.input.card.id,
-      result: finalResult || '(no output)',
+      result: joinedResult || '(no output)',
     });
     await dispatchNextQueuedTodoCard(input.deps.store, input.input.card.id, input.deps.dispatchFn);
     // Best-effort git/usage capture — never throws, runs after completion/queue
@@ -439,7 +441,7 @@ async function handleCodexCompletion(input: {
     );
     return {
       outcome: 'completed',
-      result: finalResult,
+      result: joinedResult,
       durationMs,
     };
   }
@@ -455,14 +457,15 @@ async function handleCodexCompletion(input: {
   await input.deps.store.updateCard(input.input.card.id, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
-    result: finalResult || message,
+    result: joinedResult || message,
+    finalResult: finalSegment || undefined,
     staleStatus: null,
     staleDetectedAt: null,
   });
 
   return {
     outcome: aborted ? 'aborted' : 'failed',
-    result: finalResult,
+    result: joinedResult,
     error: message,
     durationMs,
   };

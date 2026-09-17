@@ -26,12 +26,21 @@ function renderDialog(card: KanbanCard): string {
 }
 
 describe("CardDetailDialog", () => {
-  test("expands prompt by default in every status", () => {
-    for (const status of ["todo", "in_progress", "complete", "done"] as const) {
+  test("expands prompt by default while the card is still open", () => {
+    for (const status of ["todo", "in_progress"] as const) {
       const html = renderDialog(makeCard(status));
 
       expect(html).toContain("kv2-phase-content--expanded");
       expect(html).toContain("hide ▴");
+    }
+  });
+
+  test("clamps prompt by default once the card is finished", () => {
+    for (const status of ["complete", "done"] as const) {
+      const html = renderDialog(makeCard(status));
+
+      expect(html).toContain("kv2-phase-content--collapsed");
+      expect(html).toContain("show ▾");
     }
   });
 

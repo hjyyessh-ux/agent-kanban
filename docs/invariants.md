@@ -90,6 +90,7 @@
 - runtime 실패로 `todo`에 복귀한 card는 `command`/`arguments`, `resumeSessionId`, queue 설정, `projectDir`, `model`, `agentRuntime`, runtime options, `screenshots`를 dispatch 전과 동일하게 유지해야 한다.
 - Codex `thread_id` timeout과 Claude `session_id` timeout은 runtime run을 failed로 만들고 card를 `todo`로 되돌린다.
 - 카드 `result`는 그 run에서 스트리밍된 **모든 assistant text 블록을 순서대로 이어붙인 값**이다(`result-segments.ts`). Claude `result` 이벤트의 `result` 필드와 Codex `-o` last-message 파일은 마지막 메시지 하나만 담으므로, 누적 버퍼를 이 값으로 덮어쓰거나 이 파일을 우선하면 안 된다 — 스트리밍 텍스트가 전혀 없을 때의 fallback으로만 쓴다. (한 턴에서 `text → tool_use → text`가 이어질 때 1차 답변이 통째로 사라졌던 결함.)
+- 카드 `finalResult`는 같은 run의 **마지막 assistant text 블록**이다(`lastResultSegment()`). `result`(전체 누적)와 항상 같은 `updateCard` 호출에서 함께 쓰며, 한쪽만 갱신하면 안 된다 — 두 필드가 서로 다른 run을 가리키게 된다. 읽는 쪽은 `result`가 `finalResult`로 끝날 때만 앞부분을 중간 산출물로 분리한다(`web/src/components/Card/card-result.ts`).
 - opencode dispatch 순서 `store.updateCard -> trackDispatch -> promptAsync`는 `OpencodeAdapter` 안에서 보존한다.
 - `StaleCardChecker`의 opencode native session list 검사는 legacy/opencode card에만 적용한다.
 - Codex/Claude stale run은 `RuntimeRunStore.reconcileStale(store)`가 처리한다.

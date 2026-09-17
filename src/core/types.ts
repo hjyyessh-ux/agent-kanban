@@ -411,7 +411,8 @@ export interface KanbanCard {
   updatedAt: string;       // ISO 8601
   deletedAt?: string;      // ISO 8601 — soft-deleted cards are hidden from active views
   progressSummary?: string; // in_progress: what's happening
-  result?: string;         // complete: what was delivered
+  result?: string;         // complete: what was delivered (every assistant text block of the run)
+  finalResult?: string;    // complete: the run's last assistant text block — the final deliverable inside `result`
   agentMessages?: AgentMessage[]; // inter-agent messages captured from the subagent transcript (SubagentStop)
   responseAt?: string;     // ISO 8601 — when an agent response was applied to the card
   startedAt?: string;      // ISO 8601 — when the card first entered in_progress
@@ -659,6 +660,7 @@ export interface UpdateCardInput {
   arguments?: string | null;
   progressSummary?: string;
   result?: string;
+  finalResult?: string;
   agentMessages?: AgentMessage[];
   responseAt?: string | null;
   startedAt?: string | null;

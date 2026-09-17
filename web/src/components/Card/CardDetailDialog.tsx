@@ -101,11 +101,14 @@ const DEFAULT_COLLAPSED_PHASES: Record<string, boolean> = {
 };
 
 function getDefaultCollapsedPhases(card: Pick<KanbanCard, "status" | "result">): Record<string, boolean> {
+  const isFinished = card.status === "complete" || card.status === "done";
   return {
     ...DEFAULT_COLLAPSED_PHASES,
-    // Prompt is always shown (expanded) by default in every status.
-    prompt: false,
-    result: !!card.result && (card.status === "complete" || card.status === "done") ? false : DEFAULT_COLLAPSED_PHASES.result,
+    // While the work is open the prompt is the subject, so it opens expanded. Once
+    // the card is finished it is read for its result, and a long prompt above that
+    // is just scrolling — it clamps to its first lines until the header unfolds it.
+    prompt: isFinished,
+    result: !!card.result && isFinished ? false : DEFAULT_COLLAPSED_PHASES.result,
   };
 }
 

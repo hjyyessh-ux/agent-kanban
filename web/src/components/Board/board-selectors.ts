@@ -1,5 +1,6 @@
 import type { AgentRuntime, CardOriginChannel, KanbanCard, KanbanStatus, QueueSessionMode, ScheduledDispatchStatus } from '../../../../src/core/types';
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
+import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { getAgentConfig } from '../../constants/agents';
 import { formatAgentTypeLabel } from '../../utils/agent-label';
 import { formatScheduledKstLabel } from '../shared/ScheduledDispatchUi';
@@ -88,7 +89,9 @@ function normalizeBoardText(value: string | undefined): string {
 }
 
 function getBoardSummary(card: KanbanCard): string {
-  const description = normalizeBoardText(card.description);
+  // A feedback card's description opens with the generated `[Feedback for: …]`
+  // block, which would fill the whole summary with provenance instead of the ask.
+  const description = normalizeBoardText(stripFeedbackHeader(card.description ?? ''));
   const progressSummary = normalizeBoardText(card.progressSummary);
   const result = normalizeBoardText(card.result);
 

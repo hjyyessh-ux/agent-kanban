@@ -12,7 +12,7 @@ import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { createClaudeBinaryResolver } from './claude-binary';
 import { parseClaudeStreamLine } from './claude-stream-parser';
-import { joinResultSegments } from './result-segments';
+import { joinResultSegments, lastResultSegment } from './result-segments';
 import type { ClaudeStreamEvent } from './claude-stream-parser';
 import { withSpawnLock } from './spawn-lock';
 import { notifyTelegramCompletion } from '../telegram-completion';
@@ -383,9 +383,10 @@ async function handleClaudeCompletion(input: {
     };
   }
 
-  const finalResult = joinResultSegments(input.state.resultSegments);
-  if (finalResult) {
-    await writeFile(input.run.lastMessagePath, finalResult);
+  const joinedResult = joinResultSegments(input.state.resultSegments);
+  const finalSegment = lastResultSegment(input.state.resultSegments);
+  if (joinedResult) {
+    await writeFile(input.run.lastMessagePath, joinedResult);
   }
 
   if (exitCode === 0 && input.state.sessionId) {
@@ -399,13 +400,14 @@ async function handleClaudeCompletion(input: {
       includeDeleted: true,
     });
     if (!parentStillPresent) {
-      return { outcome: 'completed', result: finalResult, durationMs };
+      return { outcome: 'completed', result: joinedResult, durationMs };
     }
     await input.deps.store.updateCard(input.input.card.id, {
       status: 'complete',
       resolution: 'completed',
       sessionId: input.state.sessionId,
-      result: finalResult || '(no output)',
+      result: joinedResult || '(no output)',
+      finalResult: finalSegment || undefined,
       responseAt: new Date().toISOString(),
       progressSummary: undefined,
       staleStatus: null,
@@ -419,14 +421,14 @@ async function handleClaudeCompletion(input: {
       store: input.deps.store,
       settingsStore: input.deps.settingsStore,
       cardId: input.input.card.id,
-      result: finalResult || '(no output)',
+      result: joinedResult || '(no output)',
     });
     await dispatchNextQueuedTodoCard(input.deps.store, input.input.card.id, input.deps.dispatchFn);
     // best-effort, never throws — runs after queue dispatch so it can't delay it
     await captureGitEndAndUsage(input.deps.store, input.input.card.id, input.input.cwd, input.run.eventsPath);
     return {
       outcome: 'completed',
-      result: finalResult,
+      result: joinedResult,
       durationMs,
     };
   }
@@ -442,7 +444,8 @@ async function handleClaudeCompletion(input: {
   await updateCardIfPresent(input.deps.store, input.input.card.id, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
-    result: finalResult || message,
+    result: joinedResult || message,
+    finalResult: finalSegment || undefined,
     staleStatus: null,
     staleDetectedAt: null,
   });
@@ -450,7 +453,7 @@ async function handleClaudeCompletion(input: {
 
   return {
     outcome: aborted ? 'aborted' : 'failed',
-    result: finalResult,
+    result: joinedResult,
     error: message,
     durationMs,
   };

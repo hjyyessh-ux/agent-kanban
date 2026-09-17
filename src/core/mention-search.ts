@@ -107,12 +107,12 @@ type SnippetField = NonNullable<MentionCandidate['snippet']>['field'];
  * 품을 수 있다. 그래서 "대괄호로 시작한 줄"이 아니라 "대괄호가 닫힐 때까지"를
  * 한 항목으로 소비한다 — 줄 단위로 지우면 발췌의 둘째 줄부터가 본문에 남는다.
  */
-export function stripFeedbackHeader(text: string): string {
+export function splitFeedbackHeader(text: string): { header: string; body: string } {
   const lines = text.split('\n');
   let i = 0;
   while (i < lines.length && !lines[i].trim()) i++;
   if (i >= lines.length || !/^\[(Feedback for|Original Card ID|Original Result):/.test(lines[i])) {
-    return text;
+    return { header: '', body: text };
   }
 
   while (i < lines.length && lines[i].startsWith('[')) {
@@ -120,7 +120,14 @@ export function stripFeedbackHeader(text: string): string {
     i++;
   }
   if (i < lines.length && lines[i].trim() === '---') i++;
-  return lines.slice(i).join('\n').replace(/^\s+/, '');
+  return {
+    header: lines.slice(0, i).join('\n').trim(),
+    body: lines.slice(i).join('\n').replace(/^\s+/, ''),
+  };
+}
+
+export function stripFeedbackHeader(text: string): string {
+  return splitFeedbackHeader(text).body;
 }
 
 /**
