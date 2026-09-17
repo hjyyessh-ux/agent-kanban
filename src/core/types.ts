@@ -431,6 +431,7 @@ export interface KanbanCard {
   feedbackForCardId?: string;  // ID of the card this feedback is for (traceability)
   queuePosition?: number;       // position in queue (1 = next)
   queueSessionMode?: QueueSessionMode;
+  todoOrder?: number;           // manual drag-and-drop order within the TODO column (lower = higher up)
   screenshots?: Screenshot[];  // attached screenshots
   staleStatus?: 'orphan' | 'stuck' | null;  // detected stale state (orphan=session gone, stuck=no progress)
   dispatchType?: 'instant' | 'manual';  // instant = auto-dispatch on creation (e.g., from Telegram)
@@ -675,6 +676,7 @@ export interface UpdateCardInput {
   queuedAfterCardId?: string | null;  // null = clear from queue
   queuePosition?: number | null;      // null = clear from queue
   queueSessionMode?: QueueSessionMode | null;
+  todoOrder?: number;                 // manual drag-and-drop order within the TODO column
   projectDir?: string;
   agentType?: string | null;
   staleStatus?: 'orphan' | 'stuck' | null;  // null = clear stale flag

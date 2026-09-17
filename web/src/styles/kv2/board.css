@@ -2813,7 +2813,9 @@
   outline: none;
 }
 
-/* ── Card drag handle ─────────────────────────────────────── */
+/* ── Card drag handle ─────────────────────────────────────────
+   Decorative only: the whole .kv2-card is the actual drag source
+   (see BoardCard.tsx), so this must not intercept pointer events. */
 .kv2-card-drag-handle {
   position: absolute;
   top: var(--kv2-sp-2);
@@ -2822,22 +2824,24 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: none;
-  border: none;
   padding: 0;
-  cursor: grab;
   font-size: var(--kv2-text-2xs);
   color: var(--kv2-text-muted);
   opacity: 0;
   transition: opacity var(--kv2-transition-fast);
   z-index: 2;
+  pointer-events: none;
 }
 
 .kv2-card:hover .kv2-card-drag-handle {
   opacity: 1;
 }
 
-.kv2-card-drag-handle:active {
+.kv2-card[draggable='true'] {
+  cursor: grab;
+}
+
+.kv2-card[draggable='true']:active {
   cursor: grabbing;
 }
 

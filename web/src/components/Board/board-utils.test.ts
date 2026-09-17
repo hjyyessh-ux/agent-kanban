@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { KanbanCard } from '../../../../src/core/types';
-import { groupCardsByParent } from './board-utils';
+import { groupCardsByParent, sortCardsForColumn } from './board-utils';
 
 function makeCard(id: string, overrides: Partial<KanbanCard> = {}): KanbanCard {
   return {
@@ -57,5 +57,28 @@ describe('groupCardsByParent — linkKind filtering', () => {
     const result = groupCardsByParent([parent, c1, c2]);
     expect(result).toHaveLength(1);
     expect(result[0].childCards?.map((c) => c.id)).toEqual(['c1', 'c2']);
+  });
+});
+
+describe('sortCardsForColumn — todo column manual ordering', () => {
+  test('with no todoOrder set, falls back to newest-first by createdAt', () => {
+    const a = makeCard('a', { createdAt: '2026-06-01T00:00:00.000Z' });
+    const b = makeCard('b', { createdAt: '2026-06-02T00:00:00.000Z' });
+    const result = sortCardsForColumn('todo', [a, b]);
+    expect(result.map((c) => c.id)).toEqual(['b', 'a']);
+  });
+
+  test('cards with todoOrder sort ascending by it, regardless of createdAt', () => {
+    const a = makeCard('a', { createdAt: '2026-06-02T00:00:00.000Z', todoOrder: 2 });
+    const b = makeCard('b', { createdAt: '2026-06-01T00:00:00.000Z', todoOrder: 1 });
+    const result = sortCardsForColumn('todo', [a, b]);
+    expect(result.map((c) => c.id)).toEqual(['b', 'a']);
+  });
+
+  test('a freshly created (unordered) card lands on top, above manually-ordered cards', () => {
+    const dragged = makeCard('dragged', { createdAt: '2026-06-01T00:00:00.000Z', todoOrder: 1 });
+    const freshlyCreated = makeCard('fresh', { createdAt: '2026-06-03T00:00:00.000Z' });
+    const result = sortCardsForColumn('todo', [dragged, freshlyCreated]);
+    expect(result.map((c) => c.id)).toEqual(['fresh', 'dragged']);
   });
 });

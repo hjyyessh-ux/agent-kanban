@@ -84,22 +84,17 @@ export const BoardCard: React.FC<BoardCardProps> = ({
       className={cls}
       data-id={vm.id}
       draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
     >
       <div
         className="kv2-card-accent"
         style={{ '--kv2-status-accent': STATUS_ACCENT[vm.status] } as React.CSSProperties}
       />
 
+      {/* Visual affordance only — the whole card (not just this icon) is the drag source. */}
       {draggable && (
-        <button
-          type="button"
-          className="kv2-card-drag-handle"
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-        >
-          ⋮⋮
-        </button>
+        <span className="kv2-card-drag-handle" aria-hidden="true">⋮⋮</span>
       )}
 
       <div className="kv2-card-surface">

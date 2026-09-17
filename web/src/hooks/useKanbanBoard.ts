@@ -262,17 +262,17 @@ export function useKanbanBoard(): {
 
   const reorderCards = useCallback(async (reorderedCardIds: string[]) => {
     try {
-      // Update each card's position
+      // Update each card's manual TODO-column order
       const updatePromises = reorderedCardIds.map(async (id, index) => {
-        const queuePosition = index + 1;
+        const todoOrder = index + 1;
         const card = state.cards.find(c => c.id === id);
-        
+
         // Skip if position hasn't changed
-        if (card && card.queuePosition === queuePosition) {
+        if (card && card.todoOrder === todoOrder) {
           return;
         }
 
-        const updatedCard = await apiUpdateCard(id, { queuePosition });
+        const updatedCard = await apiUpdateCard(id, { todoOrder });
         dispatch({ type: 'UPDATE', card: updatedCard });
       });
 
