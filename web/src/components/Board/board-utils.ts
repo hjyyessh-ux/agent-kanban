@@ -62,9 +62,22 @@ export function sortCardsForColumn<T extends SortableKanbanCard>(
   };
 
   if (status === 'todo') {
-    const allHaveTodoOrder = nextCards.every((card) => typeof card.todoOrder === 'number');
-    if (allHaveTodoOrder) {
-      return nextCards.sort((a, b) => (a.todoOrder ?? 0) - (b.todoOrder ?? 0));
+    const anyHaveTodoOrder = nextCards.some((card) => typeof card.todoOrder === 'number');
+    if (anyHaveTodoOrder) {
+      // Cards with a manual order sort by it. A card that has never been
+      // dragged (e.g. freshly created) floats above all manually-ordered
+      // cards, newest-first among themselves — matching the original
+      // "new card lands on top" default instead of getting stuck at the bottom.
+      return nextCards.sort((a, b) => {
+        const aOrder = a.todoOrder;
+        const bOrder = b.todoOrder;
+        if (typeof aOrder === 'number' && typeof bOrder === 'number') {
+          return aOrder - bOrder;
+        }
+        if (typeof aOrder === 'number') return 1;
+        if (typeof bOrder === 'number') return -1;
+        return compareByNewestTimestamp(a, b, 'createdAt');
+      });
     }
 
     const allQueued = nextCards.every((card) => typeof card.queuePosition === 'number');
