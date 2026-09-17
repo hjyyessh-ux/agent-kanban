@@ -15,3 +15,14 @@ export function joinResultSegments(segments: readonly string[]): string {
     .filter(segment => segment.length > 0)
     .join('\n\n');
 }
+
+// The last text block is what the run actually delivers; everything before it is
+// the reasoning/interim output that led there. `result` keeps both (joined), so
+// this is stored separately to let readers show the deliverable on its own.
+export function lastResultSegment(segments: readonly string[]): string {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const segment = segments[i].trim();
+    if (segment.length > 0) return segment;
+  }
+  return '';
+}

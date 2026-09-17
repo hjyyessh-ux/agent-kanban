@@ -164,7 +164,10 @@ describe('ClaudeAdapter', () => {
       // accumulated buffer, silently dropping "first answer".
       const expected = 'first answer\n\nfinal answer';
       expect(done.result).toBe(expected);
-      expect((await store.getCard(card.id))?.result).toBe(expected);
+      const completed = await store.getCard(card.id);
+      expect(completed?.result).toBe(expected);
+      // `result` stays lossless; `finalResult` names the deliverable inside it.
+      expect(completed?.finalResult).toBe('final answer');
       const run = await runStore.getRun(handle.runId);
       expect(await Bun.file(run!.lastMessagePath).text()).toBe(expected);
     });

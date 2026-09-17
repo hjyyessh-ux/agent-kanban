@@ -115,3 +115,33 @@ describe('selectColumns — nested child tree', () => {
     });
   });
 });
+
+describe('selectColumns — board summary', () => {
+  test('a feedback card is summarized by its instruction, not by the generated header', () => {
+    const card = makeCard('fb', {
+      description: [
+        '[Feedback for: 원본 카드]',
+        '[Original Card ID: abc12345]',
+        '[Original Result: 부모 카드의 결과 발췌]',
+        '---',
+        '이번엔 그룹 채팅도 봐줘',
+      ].join('\n'),
+    });
+
+    expect(getTodoCard([card], 'fb').boardSummary).toBe('이번엔 그룹 채팅도 봐줘');
+  });
+
+  test('an ordinary description is still summarized from its own first line', () => {
+    const card = makeCard('plain', { description: '첫 줄\n둘째 줄' });
+    expect(getTodoCard([card], 'plain').boardSummary).toBe('첫 줄 둘째 줄');
+  });
+
+  test('falls back to progressSummary when a feedback card has only the header', () => {
+    const card = makeCard('header-only', {
+      description: ['[Feedback for: 원본 카드]', '[Original Card ID: abc12345]', '---'].join('\n'),
+      progressSummary: '진행 중',
+    });
+
+    expect(getTodoCard([card], 'header-only').boardSummary).toBe('진행 중');
+  });
+});

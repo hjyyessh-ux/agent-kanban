@@ -812,6 +812,55 @@
   white-space: normal;
 }
 
+/* Secondary text a phase keeps but does not lead with (interim output before a
+   result, the generated header above a feedback prompt) — folded by default. */
+.kv2-phase-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--kv2-border);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-phase-aside-toggle {
+  align-self: flex-start;
+  border: 1px solid var(--kv2-border);
+  border-radius: 6px;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.kv2-phase-aside-toggle:hover {
+  border-color: var(--kv2-border-strong);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-phase-more {
+  display: block;
+  margin: -6px auto 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: 999px;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  cursor: pointer;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  padding: 4px 14px;
+}
+
+.kv2-phase-more:hover {
+  border-color: var(--kv2-border-strong);
+  color: var(--kv2-text-primary);
+}
+
 .kv2-markdown {
   display: flex;
   flex-direction: column;
@@ -930,8 +979,13 @@
 .kv2-phase-content--collapsed {
   max-height: 120px;
   overflow: hidden;
-  mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+}
+
+/* Set by PhaseBody only when the content really overflows the clamp, so the fade
+   reads as "there is more below" instead of decorating every collapsed phase. */
+.kv2-phase-content--clipped {
+  mask-image: linear-gradient(to bottom, black 78%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 78%, transparent 100%);
 }
 
 .kv2-phase-content--expanded {

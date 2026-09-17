@@ -53,6 +53,7 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 | `status` | `KanbanStatus` | 현재 상태. `todo`, `in_progress`, `complete`, `done` 중 하나다. |
 | `progressSummary` | `string` (선택) | 작업 진행 상황 요약. 세션 중간에 업데이트될 수 있다. |
 | `result` | `string` (선택) | 작업 최종 결과. 작업이 완료된 후 기록된다. 동일 세션 최신 카드에 대체된 카드에는 `Superseded` 안내와 최종 결과 카드 ID가 기록될 수 있다. |
+| `finalResult` | `string` (선택) | `result` 중 그 run의 **마지막 assistant text 블록**만. UI는 이 값을 최종 산출물로 보여주고, `result`의 앞부분은 "이전 산출물"로 접어둔다. |
 | `resolution` | `completed \| superseded` (선택) | `session.idle` 완료 분류 메타데이터. 최신 완료 카드는 `completed`, 대체된 카드는 `superseded`로 기록된다. |
 | `supersededByCardId` / `supersededAt` | 선택 | `resolution=superseded`일 때 어떤 카드로 대체됐는지와 시점을 기록한다. |
 

@@ -1,7 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { KanbanCard, CardRunProgress } from '../../../../src/core/types';
 import { EditingField } from './CardMetaPanel';
 import { CardMarkdown } from './CardMarkdown';
+import { splitCardResult } from './card-result';
+import { splitFeedbackHeader } from '../../../../src/core/mention-search';
 
 interface CardPhasesProps {
   card: KanbanCard;
@@ -191,6 +193,73 @@ const RunMetaGroup: React.FC<RunMetaGroupProps> = ({
   );
 };
 
+// A clamped phase body only signals "there is more" when something is actually
+// cut off. The fade used to ride on the collapsed class, so a short prompt faded
+// too and the fade stopped meaning anything.
+const PhaseBody: React.FC<{
+  collapsed: boolean;
+  onExpand: () => void;
+  children: React.ReactNode;
+}> = ({ collapsed, onExpand, children }) => {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [clipped, setClipped] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = bodyRef.current;
+    if (!element) return;
+    if (!collapsed) {
+      setClipped(false);
+      return;
+    }
+    const measure = () => setClipped(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [collapsed]);
+
+  const isClipped = collapsed && clipped;
+  return (
+    <>
+      <div
+        ref={bodyRef}
+        className={`kv2-phase-content kv2-phase-content--markdown ${
+          collapsed ? 'kv2-phase-content--collapsed' : 'kv2-phase-content--expanded'
+        }${isClipped ? ' kv2-phase-content--clipped' : ''}`}
+      >
+        {children}
+      </div>
+      {isClipped && (
+        <button type="button" className="kv2-phase-more" onClick={onExpand}>
+          Show more ▾
+        </button>
+      )}
+    </>
+  );
+};
+
+// Secondary text a phase keeps but does not lead with: the interim output before a
+// result, the generated header above a feedback prompt.
+const PhaseAside: React.FC<{
+  text: string;
+  showLabel: string;
+  hideLabel: string;
+  open: boolean;
+  onToggle: () => void;
+}> = ({ text, showLabel, hideLabel, open, onToggle }) => (
+  <div className="kv2-phase-aside">
+    <button
+      type="button"
+      className="kv2-phase-aside-toggle"
+      onClick={onToggle}
+      aria-expanded={open}
+    >
+      {open ? hideLabel : showLabel}
+    </button>
+    {open && <CardMarkdown text={text} />}
+  </div>
+);
+
 const PhaseCard: React.FC<PhaseCardProps> = ({
   name,
   tone,
@@ -266,12 +335,23 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
   togglePhase,
 }) => {
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showEarlierResult, setShowEarlierResult] = useState(false);
+  const [showFeedbackHeader, setShowFeedbackHeader] = useState(false);
+  const { earlier: earlierResult, final: finalResult } = splitCardResult(card);
+  // A feedback card's prompt starts with a generated header block; the body below
+  // it is the actual instruction, so that is what the phase leads with.
+  const { header: feedbackHeader, body: promptBody } = splitFeedbackHeader(card.description ?? '');
 
   useEffect(() => {
     if (editingField === 'description') {
       editTextareaRef.current?.focus();
     }
   }, [editingField]);
+
+  useEffect(() => {
+    setShowEarlierResult(false);
+    setShowFeedbackHeader(false);
+  }, [card.id]);
 
   return (
     <div className="kv2-phase-stack">
@@ -300,13 +380,21 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
               placeholder="Enter task description..."
             />
           ) : (
-            <div
-              className={`kv2-phase-content kv2-phase-content--markdown ${
-                collapsedPhases.prompt ? 'kv2-phase-content--collapsed' : 'kv2-phase-content--expanded'
-              }`}
+            <PhaseBody
+              collapsed={collapsedPhases.prompt}
+              onExpand={() => togglePhase('prompt')}
             >
-              {card.description ? <CardMarkdown text={card.description} /> : '(no description)'}
-            </div>
+              {feedbackHeader && (
+                <PhaseAside
+                  text={feedbackHeader}
+                  showLabel="Show feedback header ▾"
+                  hideLabel="Hide feedback header ▴"
+                  open={showFeedbackHeader}
+                  onToggle={() => setShowFeedbackHeader((next) => !next)}
+                />
+              )}
+              {card.description ? <CardMarkdown text={promptBody} /> : '(no description)'}
+            </PhaseBody>
           )}
         </PhaseCard>
       )}
@@ -340,13 +428,21 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
           collapsed={collapsedPhases.result}
           onToggle={() => togglePhase('result')}
         >
-          <div
-            className={`kv2-phase-content kv2-phase-content--markdown ${
-              collapsedPhases.result ? 'kv2-phase-content--collapsed' : 'kv2-phase-content--expanded'
-            }`}
+          <PhaseBody
+            collapsed={collapsedPhases.result}
+            onExpand={() => togglePhase('result')}
           >
-            <CardMarkdown text={card.result} />
-          </div>
+            {earlierResult && (
+              <PhaseAside
+                text={earlierResult}
+                showLabel="Show earlier output ▾"
+                hideLabel="Hide earlier output ▴"
+                open={showEarlierResult}
+                onToggle={() => setShowEarlierResult((next) => !next)}
+              />
+            )}
+            <CardMarkdown text={finalResult} />
+          </PhaseBody>
         </PhaseCard>
       )}
 

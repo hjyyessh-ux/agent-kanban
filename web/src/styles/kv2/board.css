@@ -1336,6 +1336,27 @@
   color: var(--kv2-frame);
 }
 
+.kv2-complete-session-more-inline {
+  align-self: center;
+  height: 24px;
+  padding: 0 12px;
+  border: 1.5px solid var(--kv2-border-strong);
+  border-radius: 2px;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--kv2-transition-fast), color var(--kv2-transition-fast), border-color var(--kv2-transition-fast);
+}
+
+.kv2-complete-session-more-inline:hover {
+  background: var(--kv2-surface-hover);
+  color: var(--kv2-frame);
+}
+
 .kv2-complete-session-title-row {
   display: flex;
   align-items: center;

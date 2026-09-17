@@ -2,7 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRuntime, CardExecutionKind, KanbanCard } from '../../../../src/core/types';
 import { ExecutionTypeBadge, FavoriteToggleButton } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
+import { stripFeedbackHeader } from '../../../../src/core/mention-search';
+import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
+
+// A long-running session runs to 20+ turns; only the newest few are usually wanted.
+const INITIAL_VISIBLE_TURNS = 5;
 
 type SessionViewStatus = 'complete' | 'done';
 
@@ -169,6 +174,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
   const appliedHideAllTokenRef = useRef(hideAllToken ?? 0);
   const [copiedSessionKey, setCopiedSessionKey] = useState<string | null>(null);
   const [oldestFirstGroups, setOldestFirstGroups] = useState<Record<string, boolean>>({});
+  const [expandedTurnGroups, setExpandedTurnGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!hideAllToken || hideAllToken === appliedHideAllTokenRef.current) return;
@@ -213,7 +219,30 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
           card,
           turnNumber: group.cards.length - index,
         }));
-        const displayTurns = oldestFirst ? [...orderedTurns].reverse() : orderedTurns;
+        const showAllTurns = expandedTurnGroups[group.key] ?? false;
+        const hiddenTurnCount = Math.max(0, orderedTurns.length - INITIAL_VISIBLE_TURNS);
+        // Sliced newest-first, before the sort toggle reverses it, so "the newest
+        // five" stays the newest five in either direction.
+        const visibleTurns = showAllTurns ? orderedTurns : orderedTurns.slice(0, INITIAL_VISIBLE_TURNS);
+        const displayTurns = oldestFirst ? [...visibleTurns].reverse() : visibleTurns;
+        const toggleShowAllTurns = () => {
+          setExpandedTurnGroups((previous) => ({
+            ...previous,
+            [group.key]: !(previous[group.key] ?? false),
+          }));
+        };
+        // The hidden turns are the older ones, so the button sits where they will
+        // appear: below the list when newest-first, above it when reversed.
+        const moreTurnsButton = hiddenTurnCount > 0 ? (
+          <button
+            type="button"
+            className="kv2-complete-session-more-inline"
+            aria-expanded={showAllTurns}
+            onClick={toggleShowAllTurns}
+          >
+            {showAllTurns ? 'Hide older turns' : `Show ${hiddenTurnCount} more`}
+          </button>
+        ) : null;
 
         return (
           <article
@@ -343,6 +372,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                     </button>
                   </div>
                 )}
+                {oldestFirst && moreTurnsButton}
                 {displayTurns.map(({ card, turnNumber }) => {
                   const isCurrent = turnNumber === group.cards.length;
                   return (
@@ -397,12 +427,12 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                         <div className="kv2-complete-session-text-stack">
                           <div className="kv2-complete-session-text-row kv2-complete-session-text-row--prompt">
                             <span className="kv2-complete-session-text-label">Prompt</span>
-                            <p>{getFirstLine(card.description, '(no prompt)')}</p>
+                            <p>{getFirstLine(stripFeedbackHeader(card.description ?? ''), '(no prompt)')}</p>
                           </div>
 
                           <div className="kv2-complete-session-text-row kv2-complete-session-text-row--result">
                             <span className="kv2-complete-session-text-label">Result</span>
-                            <p>{getFirstLine(card.result, '(no result)')}</p>
+                            <p>{getFirstLine(splitCardResult(card).final, '(no result)')}</p>
                           </div>
                         </div>
                       </div>
@@ -412,6 +442,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                     </article>
                   );
                 })}
+                {!oldestFirst && moreTurnsButton}
               </div>
             )}
           </article>

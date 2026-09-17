@@ -5,6 +5,7 @@ import {
   buildSessionCandidateSources,
   encodeDocIdForToken,
   selectMentionCandidates,
+  splitFeedbackHeader,
   stripFeedbackHeader,
   stripFeedbackTitlePrefix,
   type DocEntry,
@@ -71,6 +72,42 @@ describe('stripFeedbackHeader', () => {
   test('leaves an ordinary description that merely starts with a bracket alone', () => {
     const description = '[중요] 이건 사용자가 직접 쓴 본문이다';
     expect(stripFeedbackHeader(description)).toBe(description);
+  });
+});
+
+describe('splitFeedbackHeader', () => {
+  test('hands back the header and the body separately so the UI can fold one', () => {
+    const description = [
+      '[Feedback for: 텔레그램 폴러 중복 카드 수정]',
+      '[Original Card ID: k5mR0pBn]',
+      '---',
+      '이번엔 그룹 채팅도 봐줘',
+    ].join('\n');
+
+    expect(splitFeedbackHeader(description)).toEqual({
+      header: ['[Feedback for: 텔레그램 폴러 중복 카드 수정]', '[Original Card ID: k5mR0pBn]', '---'].join('\n'),
+      body: '이번엔 그룹 채팅도 봐줘',
+    });
+  });
+
+  test('a description without the generated header has no header to fold', () => {
+    expect(splitFeedbackHeader('사용자가 직접 쓴 프롬프트')).toEqual({
+      header: '',
+      body: '사용자가 직접 쓴 프롬프트',
+    });
+  });
+
+  test('the body is always a suffix of the original, so it can be sliced back off', () => {
+    const description = [
+      '[Feedback for: 무엇]',
+      '[Original Result: 첫 줄',
+      '둘째 줄도 발췌에 들어간다]',
+      '---',
+      '실제 피드백',
+    ].join('\n');
+
+    const { body } = splitFeedbackHeader(description);
+    expect(description.endsWith(body)).toBe(true);
   });
 });
 
