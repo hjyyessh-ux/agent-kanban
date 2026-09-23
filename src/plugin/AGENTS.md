@@ -89,6 +89,7 @@ plugin/
 - `/directory` callback data pins each button to a digest of its path. The recent-directory list is re-derived from cards at tap time, so a stale index must be rejected rather than silently switching to the wrong project.
 - Commands marked `hiddenFromMenu` stay routable when typed but are filtered out of `setMyCommands`. `buildTelegramHelpText()` must still mention every command that IS registered — `telegram-poller.test.ts` asserts this.
 - Model ids accept shorthand via `resolveModelId()`. Resolution prefers an exact normalized id, then a unique normalized suffix; remaining ambiguous partial matches may only select the runtime default. Inputs matching nothing stay rejected.
+- One-shot model shortcuts (`modelShortcut`, e.g. `/opus55`, `/gpt6sol`) must point at ids registered in `src/core/runtime-config.ts`; `telegram-poller.test.ts` asserts every shortcut resolves to a catalog id. Adding a catalog model does not require a shortcut — the `/claude_model` and `/codex_model` buttons pick it up automatically.
 - Idle completion must stay gated by observed session activity; do not reintroduce unconditional `session.idle` completion.
 - Parent/child waiting semantics must stay aligned with stale detection so top-level parents waiting on direct child work are not flagged as orphaned.
 - Telegram selected-session reuse, sticky default agent/model behavior, and idle-completion boundaries must stay aligned with `docs/invariants.md`.

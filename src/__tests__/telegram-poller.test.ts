@@ -9,7 +9,7 @@ import {
   resolveTelegramCallback,
   resolveTelegramCommand,
 } from '../plugin/telegram-commands';
-import { DEFAULT_CLAUDE_MODEL } from '../core/runtime-config';
+import { CLAUDE_MODELS, CODEX_MODELS, DEFAULT_CLAUDE_MODEL } from '../core/runtime-config';
 import { withTempDir } from './setup';
 
 // ---------------------------------------------------------------------------
@@ -458,6 +458,7 @@ describe('TelegramPoller', () => {
 
     expect(claudeResult?.type).toBe('reply');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-fable-5-1');
+    expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-5-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-fable-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
@@ -513,10 +514,13 @@ describe('TelegramPoller', () => {
 
   test('model commands resolve shorthand names to catalog ids', () => {
     expect(modelOf('/claude_model opus5')).toBe('claude-opus-5');
+    expect(modelOf('/claude_model opus5.5')).toBe('claude-opus-5-5');
     expect(modelOf('/claude_model opus4.8')).toBe('claude-opus-4-8');
     expect(modelOf('/claude_model fable5.1')).toBe('claude-fable-5-1');
     expect(modelOf('/claude_model fable5')).toBe('claude-fable-5');
-    expect(modelOf('/codex_model gpt6')).toBe('gpt-6-astra');
+    expect(modelOf('/codex_model astra')).toBe('gpt-6-astra');
+    expect(modelOf('/codex_model gpt6sol')).toBe('gpt-6-sol');
+    expect(modelOf('/codex_model gpt6luna')).toBe('gpt-6-luna');
     expect(modelOf('/codex_model gpt5.5')).toBe('gpt-5.5');
   });
 
@@ -526,10 +530,13 @@ describe('TelegramPoller', () => {
   });
 
   test('ambiguous shorthand without the default among matches is rejected', () => {
-    // opus matches five models and none of them is the Claude default.
+    // opus matches six models and none of them is the Claude default.
     const result = resolveTelegramCommand('/claude_model opus', { chatId: 12345, sessions: [] }, false);
     expect(result?.type).toBe('reply');
     expect(result && 'text' in result ? result.text : '').toContain('지원하지 않는 Claude 모델');
+    const codexResult = resolveTelegramCommand('/codex_model gpt6', { chatId: 12345, sessions: [] }, false);
+    expect(codexResult?.type).toBe('reply');
+    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('지원하지 않는 Codex 모델');
   });
 
   test('one-shot model shortcuts set runtime and model without a body', () => {
@@ -542,6 +549,19 @@ describe('TelegramPoller', () => {
     expect(gpt?.type).toBe('set-defaults');
     expect(gpt && 'model' in gpt ? gpt.model : undefined).toBe('gpt-5.6-sol');
     expect(gpt && 'agentRuntime' in gpt ? gpt.agentRuntime : undefined).toBe('codex');
+
+    const shortcuts: Array<[string, 'claude' | 'codex', string]> = [
+      ['/opus55', 'claude', 'claude-opus-5-5'],
+      ['/gpt6astra', 'codex', 'gpt-6-astra'],
+      ['/gpt6sol', 'codex', 'gpt-6-sol'],
+      ['/gpt6luna', 'codex', 'gpt-6-luna'],
+    ];
+    for (const [command, runtime, model] of shortcuts) {
+      const result = resolveTelegramCommand(command, { chatId: 12345, sessions: [] }, false);
+      expect(result?.type).toBe('set-defaults');
+      expect(result && 'model' in result ? result.model : undefined).toBe(model);
+      expect(result && 'agentRuntime' in result ? result.agentRuntime : undefined).toBe(runtime);
+    }
   });
 
   test('one-shot model shortcut with a body dispatches a new session', () => {
@@ -558,12 +578,26 @@ describe('TelegramPoller', () => {
     expect(result && 'projectDir' in result ? result.projectDir : undefined).toBe('/tmp/project');
   });
 
+  test('every one-shot model shortcut targets a catalog model id', () => {
+    const catalog = new Set<string>([...CLAUDE_MODELS, ...CODEX_MODELS].map(model => model.id));
+    for (const { command } of getTelegramRegisteredCommands()) {
+      const result = resolveTelegramCommand(`/${command}`, { chatId: 12345, sessions: [] }, false);
+      if (result?.type !== 'set-defaults' || !result.model) continue;
+      if (result.agentRuntime !== 'claude' && result.agentRuntime !== 'codex') continue;
+      expect(catalog.has(result.model)).toBe(true);
+    }
+  });
+
   test('shortcut commands are registered in the Telegram menu', () => {
     const commands = getTelegramRegisteredCommands().map(entry => entry.command);
     expect(commands).toContain('opus5');
     expect(commands).toContain('fable5');
     expect(commands).toContain('sonnet5');
     expect(commands).toContain('gpt56');
+    expect(commands).toContain('opus55');
+    expect(commands).toContain('gpt6astra');
+    expect(commands).toContain('gpt6sol');
+    expect(commands).toContain('gpt6luna');
   });
 
   // ── Menu-hidden agents ──────────────────────────────────────────────────
