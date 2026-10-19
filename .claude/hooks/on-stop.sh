@@ -53,19 +53,40 @@ TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // empty')
 # is a plain string, or a block array that has a `text` block and no `tool_result` block
 # (tool results also arrive as `user` entries, but they do not start a turn). Sidechain (subagent)
 # entries are skipped. Prints nothing on any parse problem so the caller falls back.
+#
+# Harness-injected `user` entries are NOT prompts and must not start a turn. The Claude Code
+# harness records teammate / background-agent traffic as ordinary user entries:
+#   "Another Claude session sent a message:\n<teammate-message …>"   (string content)
+#   "<task-notification>…", "<agent-message …>", "<teammate-message …>" (string or text block)
+# on-prompt.sh already refuses to mint a card for these; this filter is the SAME definition of
+# "real prompt" on the Stop side. Without it a parent that received N teammate reports would
+# collect only the text after the LAST report — the final synthesis would be cut down to its
+# closing fragment (the 306-byte-result bug).
 collect_turn_text() {
   local path="$1"
   [ -n "$path" ] && [ -f "$path" ] || return 0
   jq -n -r '
+    def is_injected_text:
+      type == "string"
+      and (
+        startswith("Another Claude session sent a message")
+        or startswith("<task-notification>")
+        or startswith("<agent-message")
+        or startswith("<teammate-message")
+      );
     def is_prompt:
       .type == "user"
       and ((.isSidechain // false) | not)
       and (
-        (.message.content | type) == "string"
+        (
+          (.message.content | type) == "string"
+          and ((.message.content | is_injected_text) | not)
+        )
         or (
           (.message.content | type) == "array"
           and any(.message.content[]; .type == "text")
           and (any(.message.content[]; .type == "tool_result") | not)
+          and (any(.message.content[]; .type == "text" and (.text | is_injected_text)) | not)
         )
       );
     [ inputs | select(.type == "user" or .type == "assistant") ] as $m
@@ -120,13 +141,13 @@ card_has_live_children() {
 }
 
 # card_spawned_subagents <card-id>: succeeds (0) when this card created at least one subagent
-# (on-subagent-start.sh drops a `<card-id>.has-subagents` marker at spawn). This complements
-# card_has_live_children for the NAMED TEAMMATE case: a teammate rests after every turn, which
-# flips its child card to `complete` with no hook to flip it back to in_progress on resume — so
-# card_has_live_children goes false even though the teammate is still alive (and still listed in
-# the session-global background_tasks). The marker, gated behind background_tasks>0 at the call
-# site, lets the parent keep deferring through those rest gaps. Childless cards never get a marker,
-# so plain prompts / scheduled wakeups are unaffected.
+# (on-subagent-start.sh drops a `<card-id>.has-subagents` marker at spawn). Used for the NAMED
+# TEAMMATE case: a teammate rests after every turn, which flips its child card to `complete` with
+# no hook to flip it back to in_progress on resume — so card_has_live_children goes false while
+# the teammate is still alive. The marker tells the completion step below to PRESERVE the tracking
+# file so later Stops re-complete the parent with the latest text (last-writer-wins). It is NOT a
+# defer signal (see the guard below). Childless cards never get a marker, so plain prompts /
+# scheduled wakeups are unaffected.
 card_spawned_subagents() {
   local cid="$1"
   [ -z "$cid" ] && return 1
@@ -137,6 +158,50 @@ card_spawned_subagents() {
 CURRENT_CARD_ID=""
 if [ -f "$TRACKING_FILE" ]; then
   CURRENT_CARD_ID=$(cat "$TRACKING_FILE" 2>/dev/null || true)
+fi
+
+# first_user_uuid <transcript.jsonl>: uuid of the first non-sidechain `user` entry, or nothing.
+first_user_uuid() {
+  local path="$1"
+  [ -n "$path" ] && [ -f "$path" ] || return 0
+  grep -m1 '"type":"user"' "$path" 2>/dev/null | jq -r 'select((.isSidechain // false) | not) | .uuid // empty' 2>/dev/null || true
+}
+
+# Fork lineage, resolved at the FIRST Stop of a forked session. Claude Code `/fork` (and
+# `--fork-session`) copies the transcript under a new session id, keeps every entry uuid, adds no
+# marker field, and sets CLAUDE_CODE_CHILD_SESSION=1 in the child. on-prompt.sh tries to resolve
+# the parent at prompt time, but the forked transcript does not exist on disk yet during the first
+# UserPromptSubmit — it is written with the first turn — so the Stop hook, which is handed
+# `transcript_path`, is the first moment the match is possible. Parent = the other transcript in
+# the same directory whose first user entry has the same uuid; oldest mtime wins (the original
+# predates every copy). The verdict is cached in `<session>.forked-from` (empty file = "not a
+# fork", so the directory is scanned at most once per session); on-prompt.sh reads it for every
+# later card of this session, and the current card is stamped here via PATCH.
+FORKED_FROM=""
+FORKED_FROM_FILE="${TRACKING_DIR}/${SESSION_ID}.forked-from"
+if [ -n "$SESSION_ID" ] && [ -f "$FORKED_FROM_FILE" ]; then
+  FORKED_FROM=$(tr -d '[:space:]' < "$FORKED_FROM_FILE" 2>/dev/null || true)
+elif [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] && [ -n "$SESSION_ID" ] && [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  OWN_UUID=$(first_user_uuid "$TRANSCRIPT_PATH")
+  if [ -n "$OWN_UUID" ]; then
+    OWN_REAL=$(cd "$(dirname "$TRANSCRIPT_PATH")" 2>/dev/null && pwd -P)/$(basename "$TRANSCRIPT_PATH")
+    for candidate in $(ls -tr "$(dirname "$TRANSCRIPT_PATH")"/*.jsonl 2>/dev/null); do
+      CAND_REAL=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P)/$(basename "$candidate")
+      [ "$CAND_REAL" = "$OWN_REAL" ] && continue
+      if [ "$(first_user_uuid "$candidate")" = "$OWN_UUID" ]; then
+        FORKED_FROM=$(basename "$candidate" .jsonl)
+        break
+      fi
+    done
+  fi
+  [ "$FORKED_FROM" = "$SESSION_ID" ] && FORKED_FROM=""
+  mkdir -p "$TRACKING_DIR" 2>/dev/null || true
+  printf '%s' "$FORKED_FROM" > "$FORKED_FROM_FILE" 2>/dev/null || true
+  if [ -n "$FORKED_FROM" ] && [ -n "$CURRENT_CARD_ID" ]; then
+    curl "${KANBAN_CURL_ARGS[@]}" -X PATCH "${KANBAN_API}/api/cards/${CURRENT_CARD_ID}" \
+      -H "Content-Type: application/json" \
+      -d "$(jq -n --arg f "$FORKED_FROM" '{ forkedFromSessionId: $f }')" >/dev/null 2>&1 || true
+  fi
 fi
 
 # Drain parents deferred by EARLIER background Stops for this session — and do it BEFORE
@@ -154,15 +219,26 @@ fi
 # The current turn's card is skipped here: it is only in the tracking file at this point,
 # not yet stashed, and the explicit skip also guards a repeated Stop for the same card
 # (which would otherwise complete it while its own background work is still live).
-for pf in "${TRACKING_DIR}/${SESSION_ID}.pending-"*; do
-  [ -f "$pf" ] || continue
-  PCID="${pf##*.pending-}"
-  if [ -n "$CURRENT_CARD_ID" ] && [ "$PCID" = "$CURRENT_CARD_ID" ]; then
-    continue
-  fi
-  PRESULT=$(cat "$pf" 2>/dev/null || true)
-  complete_card "$PCID" "$PRESULT"
-  rm -f "$pf"
+#
+# A FORKED session (Claude Code `/fork`: the transcript is copied under a new session id, see
+# the fork-lineage block above) also drains the pending stash of the session it was forked from. The pending files
+# are keyed by the ORIGINAL session id, so without this the fork's Stops could never close a parent
+# the original deferred — and the original may never produce another Stop of its own.
+DRAIN_SESSIONS=("$SESSION_ID")
+if [ -n "$FORKED_FROM" ] && [ "$FORKED_FROM" != "$SESSION_ID" ]; then
+  DRAIN_SESSIONS+=("$FORKED_FROM")
+fi
+for ds in "${DRAIN_SESSIONS[@]}"; do
+  for pf in "${TRACKING_DIR}/${ds}.pending-"*; do
+    [ -f "$pf" ] || continue
+    PCID="${pf##*.pending-}"
+    if [ -n "$CURRENT_CARD_ID" ] && [ "$PCID" = "$CURRENT_CARD_ID" ]; then
+      continue
+    fi
+    PRESULT=$(cat "$pf" 2>/dev/null || true)
+    complete_card "$PCID" "$PRESULT"
+    rm -f "$pf"
+  done
 done
 
 # Background-subagent guard for THIS turn's card: foreground Task calls are awaited, so by
@@ -187,16 +263,20 @@ done
 # completes it. (Tail case: if the session never produces another Stop after this one, the pending
 # file remains — acceptable, far better than a card stuck in_progress with no record of why.)
 #
-# Two live-work signals are OR'd (both gated behind background_tasks>0 so childless cards are
-# never affected): an in_progress direct child (anonymous async spawn still running) OR a
-# has-subagents marker (this card spawned a named teammate that may merely be resting between
-# turns — see card_spawned_subagents). Without the marker arm a parent whose teammates have all
-# rested at least once would see zero in_progress children and complete prematurely on whatever
-# intermediate message the turn happened to end on.
+# Defer ONLY on an in_progress direct child. The has-subagents marker is deliberately NOT a defer
+# signal on its own any more: a NAMED teammate stays in `background_tasks` as an idle process after
+# its final report, so "marker + background_tasks>0" held for the rest of the session and the parent
+# could only ever be closed by a later prompt replacing the tracking file — a parent whose teammates
+# had all reported stayed in_progress indefinitely (the stuck-card bug). The marker still matters:
+# it keeps the tracking file alive below, so when every teammate has rested at least once the parent
+# completes NOW with this turn's text and every later Stop re-completes it (last-writer-wins) —
+# an intermediate message is overwritten by the wrap-up instead of freezing the card. The trade-off
+# (card flips to complete a turn or two early while teammates still chat) is accepted over a card
+# that never completes at all.
 BACKGROUND_TASKS=$(echo "$HOOK_INPUT" | jq -r '.background_tasks // [] | length' 2>/dev/null || echo 0)
 if [ "${BACKGROUND_TASKS:-0}" -gt 0 ] 2>/dev/null \
    && [ -n "$CURRENT_CARD_ID" ] \
-   && { card_has_live_children "$CURRENT_CARD_ID" || card_spawned_subagents "$CURRENT_CARD_ID"; }; then
+   && card_has_live_children "$CURRENT_CARD_ID"; then
   printf '%s' "$RESULT" > "${TRACKING_DIR}/${SESSION_ID}.pending-${CURRENT_CARD_ID}" 2>/dev/null || true
   exit 0
 fi

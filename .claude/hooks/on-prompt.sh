@@ -64,14 +64,62 @@ case "$PROMPT" in
   '<task-notification>'*|'<agent-message'*|'<teammate-message'*) exit 0 ;;
 esac
 
+TRACKING_DIR="${KANBAN_DATA_DIR_RESOLVED}/.claude-hooks"
+SESSIONS_DIR=""
+if [ -n "$CWD" ]; then
+  ENCODED_CWD=$(echo "$CWD" | tr '/' '-')
+  SESSIONS_DIR="$HOME/.claude/projects/${ENCODED_CWD}"
+fi
+
+# first_user_uuid <transcript.jsonl>: uuid of the first non-sidechain `user` entry, or nothing.
+# The first line of a transcript is a `queue-operation` record, not a message, so the match has
+# to be on the first real user entry.
+first_user_uuid() {
+  local path="$1"
+  [ -f "$path" ] || return 0
+  grep -m1 '"type":"user"' "$path" 2>/dev/null | jq -r 'select((.isSidechain // false) | not) | .uuid // empty' 2>/dev/null || true
+}
+
+# Fork lineage. Claude Code `/fork` copies the whole transcript into a NEW session id (entry uuids
+# are kept, no fork marker field, parent id not exposed) and sets CLAUDE_CODE_CHILD_SESSION=1 in
+# the child's environment. The authoritative resolution lives in on-stop.sh (the forked transcript
+# is usually NOT on disk yet during the first UserPromptSubmit — it is written with the first
+# turn), which caches its verdict in `<session>.forked-from`; every later prompt of the session
+# reads that cache here so each card carries `forkedFromSessionId`. The scan below is only a fast
+# path for the case where the copied transcript already exists at prompt time (same rule: other
+# transcript in this project whose first user entry has the same uuid, oldest mtime wins).
+# A missing own transcript leaves the verdict to on-stop.sh — no negative cache is written here.
+FORKED_FROM=""
+FORKED_FROM_FILE="${TRACKING_DIR}/${SESSION_ID}.forked-from"
+if [ -n "$SESSION_ID" ] && [ -f "$FORKED_FROM_FILE" ]; then
+  FORKED_FROM=$(tr -d '[:space:]' < "$FORKED_FROM_FILE" 2>/dev/null) || true
+elif [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] && [ -n "$SESSION_ID" ] && [ -n "$SESSIONS_DIR" ] \
+     && [ ! -f "${TRACKING_DIR}/${SESSION_ID}.card-id" ]; then
+  OWN_JSONL="${SESSIONS_DIR}/${SESSION_ID}.jsonl"
+  OWN_UUID=$(first_user_uuid "$OWN_JSONL")
+  if [ -n "$OWN_UUID" ]; then
+    for candidate in $(ls -tr "$SESSIONS_DIR"/*.jsonl 2>/dev/null); do
+      [ "$candidate" = "$OWN_JSONL" ] && continue
+      if [ "$(first_user_uuid "$candidate")" = "$OWN_UUID" ]; then
+        FORKED_FROM=$(basename "$candidate" .jsonl)
+        break
+      fi
+    done
+  fi
+  if [ -n "$FORKED_FROM" ] && [ "$FORKED_FROM" != "$SESSION_ID" ]; then
+    mkdir -p "$TRACKING_DIR"
+    echo "$FORKED_FROM" > "$FORKED_FROM_FILE"
+  else
+    FORKED_FROM=""
+  fi
+fi
+
 # Model: global settings → project settings → current session JSONL → recent session JSONL
 MODEL=$(jq -r '.model // empty' "$HOME/.claude/settings.json" 2>/dev/null) || true
 if [ -z "$MODEL" ] && [ -n "$CWD" ]; then
   MODEL=$(jq -r '.model // empty' "${CWD}/.claude/settings.json" 2>/dev/null) || true
 fi
-if [ -z "$MODEL" ] && [ -n "$SESSION_ID" ] && [ -n "$CWD" ]; then
-  ENCODED_CWD=$(echo "$CWD" | tr '/' '-')
-  SESSIONS_DIR="$HOME/.claude/projects/${ENCODED_CWD}"
+if [ -z "$MODEL" ] && [ -n "$SESSION_ID" ] && [ -n "$SESSIONS_DIR" ]; then
   # Try current session first (works from 2nd prompt onward)
   SESSION_JSONL="${SESSIONS_DIR}/${SESSION_ID}.jsonl"
   if [ -f "$SESSION_JSONL" ]; then
@@ -101,6 +149,7 @@ RESPONSE=$(curl -sf "${KANBAN_AUTH[@]}" -X POST "${KANBAN_API}/api/cards" \
     --arg projectDir "$CWD" \
     --arg sourceContext "claude-code" \
     --arg model "$MODEL" \
+    --arg forkedFrom "$FORKED_FROM" \
     '{
       title: $title,
       description: $description,
@@ -109,13 +158,12 @@ RESPONSE=$(curl -sf "${KANBAN_AUTH[@]}" -X POST "${KANBAN_API}/api/cards" \
       sourceContext: $sourceContext,
       agentRuntime: "claude",
       model: (if $model != "" then $model else null end)
-    }'
+    } + (if $forkedFrom != "" then { forkedFromSessionId: $forkedFrom } else {} end)'
   )" 2>/dev/null) || exit 0
 
 # Save card ID for the Stop hook to pick up
 CARD_ID=$(echo "$RESPONSE" | jq -r '.id // empty' 2>/dev/null) || true
 if [ -n "$CARD_ID" ] && [ -n "$SESSION_ID" ]; then
-  TRACKING_DIR="${KANBAN_DATA_DIR_RESOLVED}/.claude-hooks"
   mkdir -p "$TRACKING_DIR"
   echo "$CARD_ID" > "${TRACKING_DIR}/${SESSION_ID}.card-id"
 fi
