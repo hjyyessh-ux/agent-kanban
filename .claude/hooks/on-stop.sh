@@ -160,6 +160,50 @@ if [ -f "$TRACKING_FILE" ]; then
   CURRENT_CARD_ID=$(cat "$TRACKING_FILE" 2>/dev/null || true)
 fi
 
+# first_user_uuid <transcript.jsonl>: uuid of the first non-sidechain `user` entry, or nothing.
+first_user_uuid() {
+  local path="$1"
+  [ -n "$path" ] && [ -f "$path" ] || return 0
+  grep -m1 '"type":"user"' "$path" 2>/dev/null | jq -r 'select((.isSidechain // false) | not) | .uuid // empty' 2>/dev/null || true
+}
+
+# Fork lineage, resolved at the FIRST Stop of a forked session. Claude Code `/fork` (and
+# `--fork-session`) copies the transcript under a new session id, keeps every entry uuid, adds no
+# marker field, and sets CLAUDE_CODE_CHILD_SESSION=1 in the child. on-prompt.sh tries to resolve
+# the parent at prompt time, but the forked transcript does not exist on disk yet during the first
+# UserPromptSubmit — it is written with the first turn — so the Stop hook, which is handed
+# `transcript_path`, is the first moment the match is possible. Parent = the other transcript in
+# the same directory whose first user entry has the same uuid; oldest mtime wins (the original
+# predates every copy). The verdict is cached in `<session>.forked-from` (empty file = "not a
+# fork", so the directory is scanned at most once per session); on-prompt.sh reads it for every
+# later card of this session, and the current card is stamped here via PATCH.
+FORKED_FROM=""
+FORKED_FROM_FILE="${TRACKING_DIR}/${SESSION_ID}.forked-from"
+if [ -n "$SESSION_ID" ] && [ -f "$FORKED_FROM_FILE" ]; then
+  FORKED_FROM=$(tr -d '[:space:]' < "$FORKED_FROM_FILE" 2>/dev/null || true)
+elif [ "${CLAUDE_CODE_CHILD_SESSION:-}" = "1" ] && [ -n "$SESSION_ID" ] && [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
+  OWN_UUID=$(first_user_uuid "$TRANSCRIPT_PATH")
+  if [ -n "$OWN_UUID" ]; then
+    OWN_REAL=$(cd "$(dirname "$TRANSCRIPT_PATH")" 2>/dev/null && pwd -P)/$(basename "$TRANSCRIPT_PATH")
+    for candidate in $(ls -tr "$(dirname "$TRANSCRIPT_PATH")"/*.jsonl 2>/dev/null); do
+      CAND_REAL=$(cd "$(dirname "$candidate")" 2>/dev/null && pwd -P)/$(basename "$candidate")
+      [ "$CAND_REAL" = "$OWN_REAL" ] && continue
+      if [ "$(first_user_uuid "$candidate")" = "$OWN_UUID" ]; then
+        FORKED_FROM=$(basename "$candidate" .jsonl)
+        break
+      fi
+    done
+  fi
+  [ "$FORKED_FROM" = "$SESSION_ID" ] && FORKED_FROM=""
+  mkdir -p "$TRACKING_DIR" 2>/dev/null || true
+  printf '%s' "$FORKED_FROM" > "$FORKED_FROM_FILE" 2>/dev/null || true
+  if [ -n "$FORKED_FROM" ] && [ -n "$CURRENT_CARD_ID" ]; then
+    curl "${KANBAN_CURL_ARGS[@]}" -X PATCH "${KANBAN_API}/api/cards/${CURRENT_CARD_ID}" \
+      -H "Content-Type: application/json" \
+      -d "$(jq -n --arg f "$FORKED_FROM" '{ forkedFromSessionId: $f }')" >/dev/null 2>&1 || true
+  fi
+fi
+
 # Drain parents deferred by EARLIER background Stops for this session — and do it BEFORE
 # the current turn's background check. A pending file is only ever written for a turn that
 # has ALREADY ended (a later prompt has since overwritten the tracking file), so the
@@ -177,14 +221,12 @@ fi
 # (which would otherwise complete it while its own background work is still live).
 #
 # A FORKED session (Claude Code `/fork`: the transcript is copied under a new session id, see
-# on-prompt.sh) also drains the pending stash of the session it was forked from. The pending files
+# the fork-lineage block above) also drains the pending stash of the session it was forked from. The pending files
 # are keyed by the ORIGINAL session id, so without this the fork's Stops could never close a parent
 # the original deferred — and the original may never produce another Stop of its own.
 DRAIN_SESSIONS=("$SESSION_ID")
-FORKED_FROM_FILE="${TRACKING_DIR}/${SESSION_ID}.forked-from"
-if [ -f "$FORKED_FROM_FILE" ]; then
-  FORKED_FROM=$(tr -d '[:space:]' < "$FORKED_FROM_FILE" 2>/dev/null || true)
-  [ -n "$FORKED_FROM" ] && [ "$FORKED_FROM" != "$SESSION_ID" ] && DRAIN_SESSIONS+=("$FORKED_FROM")
+if [ -n "$FORKED_FROM" ] && [ "$FORKED_FROM" != "$SESSION_ID" ]; then
+  DRAIN_SESSIONS+=("$FORKED_FROM")
 fi
 for ds in "${DRAIN_SESSIONS[@]}"; do
   for pf in "${TRACKING_DIR}/${ds}.pending-"*; do

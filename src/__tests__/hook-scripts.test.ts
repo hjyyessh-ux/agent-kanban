@@ -132,7 +132,7 @@ function trackingFile(dataDir: string, runtime: RuntimeHook): string {
 // stricter runHook signature does not fit). Asserts a clean exit, mirroring runHook's contract.
 async function runClaudeStop(
   input: Record<string, unknown>,
-  opts: { apiUrl: string; dataDir: string },
+  opts: { apiUrl: string; dataDir: string; env?: Record<string, string> },
 ): Promise<void> {
   const proc = Bun.spawn(['bash', HOOKS.claude.stop], {
     stdin: 'pipe',
@@ -140,11 +140,13 @@ async function runClaudeStop(
     stderr: 'pipe',
     env: {
       ...process.env,
+      CLAUDE_CODE_CHILD_SESSION: '',
       HOME: opts.dataDir,
       KANBAN_API_URL: opts.apiUrl,
       KANBAN_DATA_DIR: opts.dataDir,
       AGENT_KANBAN_DISPATCH_CARD_ID: '',
       AGENT_KANBAN_DISPATCH_RUN_ID: '',
+      ...opts.env,
     },
   });
   proc.stdin.write(JSON.stringify(input));
@@ -593,6 +595,84 @@ describe('runtime hook scripts', () => {
         expect(patches).toContainEqual(['/api/cards/origin-parent', 'origin final synthesis']);
         expect(patches).toContainEqual(['/api/cards/card-from-hook', 'fork answer']);
         expect(existsSync(join(trackingDir, 'origin-session.pending-origin-parent'))).toBe(false);
+      });
+    });
+  });
+
+  test('claude on-stop resolves fork lineage when the forked transcript only appears after the first prompt', async () => {
+    await withTempDir(async (dir) => {
+      // Real Claude Code behaviour (observed 2026-10-19 with `--fork-session`): during the fork's
+      // first UserPromptSubmit its transcript is NOT on disk yet, so on-prompt.sh cannot match.
+      // The Stop hook gets `transcript_path`, resolves the parent, caches it, stamps the current
+      // card and drains the parent's pending stash in the same run.
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionsDir = join(dir, 'projects');
+        mkdirSync(sessionsDir, { recursive: true });
+        const trackingDir = join(dir, HOOKS.claude.trackingDir);
+        mkdirSync(trackingDir, { recursive: true });
+        const sharedUuid = '33333333-3333-4333-8333-333333333333';
+        const body = (sessionId: string) => [
+          JSON.stringify({ type: 'queue-operation', operation: 'enqueue', sessionId }),
+          JSON.stringify({ type: 'user', uuid: sharedUuid, sessionId, message: { role: 'user', content: 'first prompt' } }),
+          JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] } }),
+        ].join('\n') + '\n';
+        writeFileSync(join(sessionsDir, 'origin-session.jsonl'), body('origin-session'));
+        const old = new Date(Date.now() - 60_000);
+        utimesSync(join(sessionsDir, 'origin-session.jsonl'), old, old);
+        writeFileSync(join(trackingDir, 'origin-session.pending-origin-parent'), 'origin final synthesis');
+
+        const forkId = HOOKS.claude.promptInput.session_id;
+        // Prompt time: no transcript for the fork yet → card minted without lineage, no cache file.
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } });
+        expect((requests[0]?.body as Record<string, unknown>).forkedFromSessionId).toBeUndefined();
+        expect(existsSync(join(trackingDir, `${forkId}.forked-from`))).toBe(false);
+
+        // The first turn writes the forked transcript (same first user uuid as the origin).
+        const forkTranscript = join(sessionsDir, `${forkId}.jsonl`);
+        writeFileSync(forkTranscript, body(forkId) + JSON.stringify({ type: 'user', message: { role: 'user', content: 'fork prompt' } }) + '\n'
+          + JSON.stringify({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'fork answer' }] } }) + '\n');
+
+        await runClaudeStop(
+          { session_id: forkId, transcript_path: forkTranscript, last_assistant_message: 'fork answer', background_tasks: [] },
+          { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } },
+        );
+
+        expect(readFileSync(join(trackingDir, `${forkId}.forked-from`), 'utf8')).toBe('origin-session');
+        const patches = requests.filter((r) => r.method === 'PATCH').map((r) => [r.path, r.body]);
+        expect(patches).toContainEqual(['/api/cards/card-from-hook', { forkedFromSessionId: 'origin-session' }]);
+        expect(patches).toContainEqual(['/api/cards/origin-parent', { status: 'complete', result: 'origin final synthesis' }]);
+        expect(patches).toContainEqual(['/api/cards/card-from-hook', { status: 'complete', result: 'fork answer' }]);
+        expect(existsSync(join(trackingDir, 'origin-session.pending-origin-parent'))).toBe(false);
+
+        // A later prompt of the same session reads the cache and carries the lineage itself.
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } });
+        const lastPost = requests.filter((r) => r.method === 'POST').at(-1);
+        expect((lastPost?.body as Record<string, unknown>).forkedFromSessionId).toBe('origin-session');
+      });
+    });
+  });
+
+  test('claude on-stop caches a negative fork verdict so a plain child session is scanned once', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionsDir = join(dir, 'projects');
+        mkdirSync(sessionsDir, { recursive: true });
+        const sessionId = HOOKS.claude.promptInput.session_id;
+        const own = join(sessionsDir, `${sessionId}.jsonl`);
+        writeFileSync(own, JSON.stringify({ type: 'user', uuid: 'solo', message: { role: 'user', content: 'x' } }) + '\n');
+        writeFileSync(join(sessionsDir, 'other.jsonl'), JSON.stringify({ type: 'user', uuid: 'different', message: { role: 'user', content: 'y' } }) + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } });
+        await runClaudeStop(
+          { session_id: sessionId, transcript_path: own, last_assistant_message: 'done', background_tasks: [] },
+          { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } },
+        );
+
+        const cache = join(dir, HOOKS.claude.trackingDir, `${sessionId}.forked-from`);
+        expect(existsSync(cache)).toBe(true);
+        expect(readFileSync(cache, 'utf8')).toBe('');
+        // on-prompt's in_progress PATCH plus the completion — and no forkedFromSessionId stamp.
+        expect(requests.filter((r) => r.method === 'PATCH').map((r) => r.body)).toEqual([{ status: 'in_progress' }, { status: 'complete', result: 'done' }]);
       });
     });
   });

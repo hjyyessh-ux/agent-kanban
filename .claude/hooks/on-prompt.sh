@@ -82,11 +82,13 @@ first_user_uuid() {
 
 # Fork lineage. Claude Code `/fork` copies the whole transcript into a NEW session id (entry uuids
 # are kept, no fork marker field, parent id not exposed) and sets CLAUDE_CODE_CHILD_SESSION=1 in
-# the child's environment. Resolve the parent ONCE per forked session — on its first prompt, before
-# any card exists for it — by finding the other transcript in the same project whose first user
-# entry has the same uuid (oldest mtime wins: the original predates every copy). The result is
-# persisted in `<session>.forked-from` so every card of the fork carries `forkedFromSessionId`
-# (lineage for Works triage) and on-stop.sh can drain the parent's pending stash.
+# the child's environment. The authoritative resolution lives in on-stop.sh (the forked transcript
+# is usually NOT on disk yet during the first UserPromptSubmit — it is written with the first
+# turn), which caches its verdict in `<session>.forked-from`; every later prompt of the session
+# reads that cache here so each card carries `forkedFromSessionId`. The scan below is only a fast
+# path for the case where the copied transcript already exists at prompt time (same rule: other
+# transcript in this project whose first user entry has the same uuid, oldest mtime wins).
+# A missing own transcript leaves the verdict to on-stop.sh — no negative cache is written here.
 FORKED_FROM=""
 FORKED_FROM_FILE="${TRACKING_DIR}/${SESSION_ID}.forked-from"
 if [ -n "$SESSION_ID" ] && [ -f "$FORKED_FROM_FILE" ]; then
