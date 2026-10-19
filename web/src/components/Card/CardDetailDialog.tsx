@@ -1024,6 +1024,11 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                     ) : (
                       <span>🪪 {card.sessionId}</span>
                     )}
+                    {card.forkedFromSessionId && (
+                      <span title="이 세션은 Claude Code /fork 로 복제된 세션입니다 (원본 세션 ID)">
+                        🍴 fork from {card.forkedFromSessionId}
+                      </span>
+                    )}
                   </span>
                 )}
                 {card.sessionCreatedAt && (

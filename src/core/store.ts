@@ -169,6 +169,7 @@ function buildCard(input: CreateCardInput, now: string): KanbanCard {
       : undefined,
     queueSessionMode: input.queueSessionMode,
     resumeSessionId: input.resumeSessionId,
+    forkedFromSessionId: input.forkedFromSessionId,
     dispatchType: input.dispatchType,
     telegramChatId: input.telegramChatId,
     originChannel: input.originChannel,
@@ -526,6 +527,7 @@ export class KanbanStore {
         codexOptions,
         claudeOptions,
         resumeSessionId,
+        forkedFromSessionId,
         resolution,
         supersededByCardId,
         supersededAt,
@@ -687,6 +689,11 @@ export class KanbanStore {
         delete board.cards[index].resumeSessionId;
       } else if (resumeSessionId !== undefined) {
         board.cards[index].resumeSessionId = resumeSessionId;
+      }
+      if (forkedFromSessionId === null) {
+        delete board.cards[index].forkedFromSessionId;
+      } else if (forkedFromSessionId !== undefined) {
+        board.cards[index].forkedFromSessionId = forkedFromSessionId;
       }
       if (resolution === null) {
         delete board.cards[index].resolution;

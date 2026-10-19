@@ -175,7 +175,7 @@ function InboxRow({
       : lineageCount > 0
         ? {
           label: `🔗 이어진 세션 ${lineageCount}`,
-          title: '이 세션은 다른 세션에서 이어졌습니다 (subagent 부모 / 큐 체인 / 이어받은 세션)',
+          title: '이 세션은 다른 세션에서 이어졌습니다 (subagent 부모 / 큐 체인 / 이어받은 세션 / fork 원본)',
         }
         : null;
 

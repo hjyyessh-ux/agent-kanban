@@ -5,8 +5,8 @@ import type { KanbanCard } from './types';
  *
  * Works triage needs more than "same directory" to recommend a target: the
  * strongest evidence that two sessions belong to one Work is that one of them
- * was spawned from the other. Three card fields carry that lineage, and all
- * three are recorded here:
+ * was spawned from the other. Four card fields carry that lineage, and all
+ * four are recorded here:
  *
  * - `parentCardId` — a subagent card running under a parent card's session
  * - `queuedAfterCardId` — a queue chain (only a real cross-session link when the
@@ -14,6 +14,9 @@ import type { KanbanCard } from './types';
  *   both cards on one `sessionId`, which self-links and is dropped)
  * - `resumeSessionId` — the session a card was told to resume, when the card
  *   nonetheless ended up on a different one
+ * - `forkedFromSessionId` — the session a Claude Code `/fork` copied its
+ *   transcript from (stamped by `.claude/hooks/on-prompt.sh`). Kept apart from
+ *   `resumeSessionId` because a fork is lineage only: nothing ever dispatches it
  *
  * The map is **symmetric** — both endpoints list each other — because triage
  * asks the question from whichever side happens to be unassigned. Self-links
@@ -45,6 +48,7 @@ export function buildSessionChainMap(cards: KanbanCard[]): Map<string, string[]>
     if (card.parentCardId) link(card.sessionId, sessionOfCard.get(card.parentCardId));
     if (card.queuedAfterCardId) link(card.sessionId, sessionOfCard.get(card.queuedAfterCardId));
     if (card.resumeSessionId) link(card.sessionId, card.resumeSessionId);
+    if (card.forkedFromSessionId) link(card.sessionId, card.forkedFromSessionId);
   }
 
   return new Map(
@@ -57,8 +61,8 @@ export function buildSessionChainMap(cards: KanbanCard[]): Map<string, string[]>
  *
  * This is the subset of `buildSessionChainMap` that has a direction. A subagent
  * card carries `parentCardId`; if that parent card lives on a different session,
- * the subagent's session is a **child** of the parent's. Queue chains and
- * `resumeSessionId` are deliberately excluded — a queued follow-up is a sibling
+ * the subagent's session is a **child** of the parent's. Queue chains,
+ * `resumeSessionId` and `forkedFromSessionId` are deliberately excluded — a queued follow-up is a sibling
  * decision the user still gets to make, whereas a subagent session is not a
  * separate piece of work at all: it exists only because the parent spawned it.
  *

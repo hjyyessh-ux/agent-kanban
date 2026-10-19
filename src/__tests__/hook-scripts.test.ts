@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { withTempDir } from './setup';
@@ -94,6 +94,7 @@ async function runHook(
     apiUrl: string;
     dataDir: string;
     marker?: boolean;
+    env?: Record<string, string>;
   },
 ): Promise<void> {
   const proc = Bun.spawn(['bash', scriptPath], {
@@ -102,11 +103,13 @@ async function runHook(
     stderr: 'pipe',
     env: {
       ...process.env,
+      CLAUDE_CODE_CHILD_SESSION: '',
       HOME: options.dataDir,
       KANBAN_API_URL: options.apiUrl,
       KANBAN_DATA_DIR: options.dataDir,
       AGENT_KANBAN_DISPATCH_CARD_ID: options.marker ? 'original-card-id' : '',
       AGENT_KANBAN_DISPATCH_RUN_ID: options.marker ? 'runtime-run-id' : '',
+      ...options.env,
     },
   });
   proc.stdin.write(JSON.stringify(input));
@@ -443,13 +446,14 @@ describe('runtime hook scripts', () => {
     });
   });
 
-  test('claude on-stop defers a parent whose named teammate is resting (has-subagents marker, live background task, no in_progress child)', async () => {
+  test('claude on-stop completes a parent whose named teammates have all rested even while they idle in background_tasks', async () => {
     await withTempDir(async (dir) => {
-      // No `inProgressCards` → card_has_live_children sees zero direct children: the teammate has
-      // rested at least once, flipping its child card to `complete`. But it is still alive (listed
-      // in background_tasks) and the parent carries a has-subagents marker, so the parent must NOT
-      // complete on this turn's intermediate message — it defers. Regression test for the parent
-      // freezing on a mid-exchange message.
+      // No `inProgressCards` → every teammate child has rested at least once (child cards are
+      // `complete`). The teammates are still alive as idle processes (listed in background_tasks)
+      // and the parent carries a has-subagents marker. Previously that combination deferred forever
+      // (idle named teammates never leave background_tasks), stranding the parent in_progress until
+      // the next prompt. Now: complete with this turn's text, keep the tracking file so later Stops
+      // re-complete (last-writer-wins), and leave no pending stash behind.
       await withFakeApi(async (apiUrl, requests) => {
         const sessionId = 'claude-resting-teammate-session';
         const trackingDir = join(dir, HOOKS.claude.trackingDir);
@@ -462,17 +466,151 @@ describe('runtime hook scripts', () => {
         await runClaudeStop(
           {
             session_id: sessionId,
+            last_assistant_message: '종합 보고: 네 teammate 결과를 합친 최종 결론',
+            background_tasks: [{ id: 'idle-teammate-1' }, { id: 'idle-teammate-2' }],
+          },
+          { apiUrl, dataDir: dir },
+        );
+
+        const patches = requests.filter((r) => r.method === 'PATCH' && r.path === '/api/cards/parent-card');
+        expect(patches).toHaveLength(1);
+        expect(patches[0]?.body).toEqual({ status: 'complete', result: '종합 보고: 네 teammate 결과를 합친 최종 결론' });
+        expect(existsSync(join(trackingDir, `${sessionId}.pending-parent-card`))).toBe(false);
+        // Preserved: a later turn (teammate follow-up) re-completes with the newer text.
+        expect(existsSync(currentTracking)).toBe(true);
+      });
+    });
+  });
+
+  test('claude on-stop still defers while a direct child is in_progress and background tasks remain', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionId = 'claude-live-child-session';
+        const trackingDir = join(dir, HOOKS.claude.trackingDir);
+        mkdirSync(trackingDir, { recursive: true });
+        writeFileSync(join(trackingDir, `${sessionId}.card-id`), 'parent-card');
+        writeFileSync(join(trackingDir, 'parent-card.has-subagents'), '');
+
+        await runClaudeStop(
+          {
+            session_id: sessionId,
             last_assistant_message: 'intermediate: waiting on Bravo',
             background_tasks: [{ id: 'live-teammate' }],
           },
           { apiUrl, dataDir: dir },
         );
 
-        // Deferred: no completion PATCH for the parent...
         expect(requests.some((r) => r.path === '/api/cards/parent-card')).toBe(false);
-        // ...the intermediate message is stashed, and the tracking file is preserved for re-drain.
-        expect(existsSync(join(trackingDir, `${sessionId}.pending-parent-card`))).toBe(true);
-        expect(existsSync(currentTracking)).toBe(true);
+        expect(readFileSync(join(trackingDir, `${sessionId}.pending-parent-card`), 'utf8')).toBe('intermediate: waiting on Bravo');
+      }, {
+        inProgressCards: [{ id: 'child-1', parentCardId: 'parent-card', status: 'in_progress' }],
+      });
+    });
+  });
+
+  test('claude on-stop does not treat harness-injected teammate messages as turn boundaries', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionId = HOOKS.claude.promptInput.session_id;
+        // Real prompt → spawn → N teammate reports (recorded as `user` entries by the harness, string
+        // and text-block forms) → synthesis. The synthesis must include the text written BEFORE the
+        // last teammate report, not only the fragment after it. Mirrors on-prompt.sh's filter.
+        const lines = [
+          { type: 'user', message: { role: 'user', content: 'teammate 4개 띄워서 조사해줘' } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '4개 teammate 를 띄웁니다' }] } },
+          { type: 'user', message: { role: 'user', content: 'Another Claude session sent a message:\n<teammate-message teammate_id="alpha" summary="done">보고 A</teammate-message>' } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'A 보고 수신' }] } },
+          { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<task-notification>\n<agent-id>beta</agent-id>\n</task-notification>' }] } },
+          { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '<teammate-message teammate_id="gamma" type="idle_notification"/>' }] } },
+          { type: 'user', message: { role: 'user', content: '<agent-message from="delta">보고 D</agent-message>' } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '## 종합 보고\n\n전체 결론' }] } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '다음 단계' }] } },
+        ];
+        const transcriptPath = join(dir, `${sessionId}.jsonl`);
+        writeFileSync(transcriptPath, lines.map(line => JSON.stringify(line)).join('\n') + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir });
+        await runClaudeStop({
+          session_id: sessionId,
+          transcript_path: transcriptPath,
+          last_assistant_message: '다음 단계',
+        }, { apiUrl, dataDir: dir });
+
+        const completeRequest = requests.findLast(
+          request => request.method === 'PATCH' && request.path === '/api/cards/card-from-hook',
+        );
+        expect((completeRequest?.body as { result?: string }).result)
+          .toBe('4개 teammate 를 띄웁니다\n\nA 보고 수신\n\n## 종합 보고\n\n전체 결론\n\n다음 단계');
+      });
+    });
+  });
+
+  test('claude on-prompt stamps forkedFromSessionId on a forked session and on-stop drains the parent pending stash', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const cwd = HOOKS.claude.promptInput.cwd;
+        const sessionsDir = join(dir, '.claude', 'projects', cwd.replace(/\//g, '-'));
+        mkdirSync(sessionsDir, { recursive: true });
+        const trackingDir = join(dir, HOOKS.claude.trackingDir);
+        mkdirSync(trackingDir, { recursive: true });
+
+        const sharedUuid = '11111111-1111-4111-8111-111111111111';
+        const body = (sessionId: string, extra: string[] = []) => [
+          JSON.stringify({ type: 'queue-operation', operation: 'enqueue', sessionId }),
+          JSON.stringify({ type: 'user', uuid: sharedUuid, sessionId, isSidechain: false, message: { role: 'user', content: 'first prompt' } }),
+          JSON.stringify({ type: 'assistant', uuid: '22222222-2222-4222-8222-222222222222', message: { role: 'assistant', content: [{ type: 'text', text: 'answer' }] } }),
+          ...extra,
+        ].join('\n') + '\n';
+        // Unrelated session (different first uuid) must never be picked.
+        writeFileSync(join(sessionsDir, 'other-session.jsonl'), body('other-session').replace(sharedUuid, '99999999-9999-4999-8999-999999999999'));
+        // Original (older mtime) and its fork (same entries copied under a new session id).
+        writeFileSync(join(sessionsDir, 'origin-session.jsonl'), body('origin-session'));
+        const forkId = 'fork-session';
+        writeFileSync(join(sessionsDir, `${forkId}.jsonl`), body(forkId));
+        const old = new Date(Date.now() - 60_000);
+        utimesSync(join(sessionsDir, 'origin-session.jsonl'), old, old);
+        // The original deferred a parent card (teammate still live at its Stop) and never stopped again.
+        writeFileSync(join(trackingDir, 'origin-session.pending-origin-parent'), 'origin final synthesis');
+
+        await runHook(
+          HOOKS.claude.prompt,
+          { ...HOOKS.claude.promptInput, session_id: forkId, prompt: 'fork 에서 이어서' },
+          { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } },
+        );
+
+        const post = requests.find((r) => r.method === 'POST' && r.path === '/api/cards');
+        expect((post?.body as { forkedFromSessionId?: string; sessionId?: string })).toMatchObject({
+          sessionId: forkId,
+          forkedFromSessionId: 'origin-session',
+        });
+        expect(readFileSync(join(trackingDir, `${forkId}.forked-from`), 'utf8').trim()).toBe('origin-session');
+
+        await runClaudeStop(
+          { session_id: forkId, last_assistant_message: 'fork answer', background_tasks: [] },
+          { apiUrl, dataDir: dir },
+        );
+        const patches = requests.filter((r) => r.method === 'PATCH').map((r) => [r.path, (r.body as { result?: string }).result]);
+        expect(patches).toContainEqual(['/api/cards/origin-parent', 'origin final synthesis']);
+        expect(patches).toContainEqual(['/api/cards/card-from-hook', 'fork answer']);
+        expect(existsSync(join(trackingDir, 'origin-session.pending-origin-parent'))).toBe(false);
+      });
+    });
+  });
+
+  test('claude on-prompt ignores CLAUDE_CODE_CHILD_SESSION when no sibling transcript shares the first uuid', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const cwd = HOOKS.claude.promptInput.cwd;
+        const sessionsDir = join(dir, '.claude', 'projects', cwd.replace(/\//g, '-'));
+        mkdirSync(sessionsDir, { recursive: true });
+        writeFileSync(join(sessionsDir, `${HOOKS.claude.promptInput.session_id}.jsonl`),
+          JSON.stringify({ type: 'user', uuid: 'solo-uuid', message: { role: 'user', content: 'x' } }) + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir, env: { CLAUDE_CODE_CHILD_SESSION: '1' } });
+
+        const post = requests.find((r) => r.method === 'POST' && r.path === '/api/cards');
+        expect((post?.body as Record<string, unknown>).forkedFromSessionId).toBeUndefined();
+        expect(existsSync(join(dir, HOOKS.claude.trackingDir, `${HOOKS.claude.promptInput.session_id}.forked-from`))).toBe(false);
       });
     });
   });

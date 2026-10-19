@@ -55,6 +55,17 @@ describe('buildSessionChainMap', () => {
     expect(chains.get('ses-old')).toEqual(['ses-new']);
   });
 
+  test('links a forked session to the session its transcript was copied from', () => {
+    // `.claude/hooks/on-prompt.sh` stamps `forkedFromSessionId` on every card of a
+    // `/fork`ed session; the original usually has no card pointing back.
+    const chains = buildSessionChainMap([
+      card({ id: 'origin', sessionId: 'ses-origin' }),
+      card({ id: 'fork', sessionId: 'ses-fork', forkedFromSessionId: 'ses-origin' }),
+    ]);
+    expect(chains.get('ses-fork')).toEqual(['ses-origin']);
+    expect(chains.get('ses-origin')).toEqual(['ses-fork']);
+  });
+
   test('ignores cards with no session and unresolvable references', () => {
     const chains = buildSessionChainMap([
       card({ id: 'orphan', parentCardId: 'nope' }),
