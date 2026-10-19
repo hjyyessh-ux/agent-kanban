@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { TAB_COPY } from '../../constants/copy';
 
 /**
  * Timeline is deliberately absent: it is a *view* of the board (리스트 / 보드 /
@@ -28,19 +29,22 @@ export const PANEL_IDS = {
   settings: 'app-panel-settings',
 } as const;
 
-const TAB_LABELS: Record<MainTab, string> = {
-  board: 'Board',
-  works: 'Works',
-  wiki: 'Wiki',
-  capabilities: 'Capabilities',
-  scheduler: 'Scheduler',
-  settings: 'Settings',
+const TAB_LABELS: Record<MainTab, string> = TAB_COPY;
+
+/** What a tab's count badge counts — read out as `"<N> <noun>"`. */
+const BADGE_NOUNS: Partial<Record<MainTab, string>> = {
+  board: 'unread',
+  works: 'unassigned',
 };
 
 interface AppTabsProps {
   activeTab: MainTab;
   onActivate: (tab: MainTab) => void;
-  /** Optional count badges rendered next to a tab label (e.g. unassigned Works Inbox). */
+  /**
+   * Optional count badges rendered next to a tab label — Board: unread
+   * completions, Works: unassigned Inbox sessions. Each tab's noun lives in
+   * `BADGE_NOUNS`.
+   */
   badges?: Partial<Record<MainTab, number>>;
 }
 
@@ -118,8 +122,8 @@ export function AppTabs({ activeTab, onActivate, badges }: AppTabsProps) {
             {TAB_LABELS[tab]}
             {badgeCount > 0 && (
               <span
-                className="app-tab-badge"
-                aria-label={`${badgeCount} unassigned`}
+                className={`app-tab-badge app-tab-badge--${tab}`}
+                aria-label={BADGE_NOUNS[tab] ? `${badgeCount} ${BADGE_NOUNS[tab]}` : String(badgeCount)}
               >
                 {badgeCount}
               </span>

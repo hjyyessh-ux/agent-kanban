@@ -5,6 +5,7 @@ import {
   cardExecutionSpan,
   checkTimelineWindow,
   timelineArchiveMonths,
+  TIMELINE_ARCHIVE_TAIL_MONTHS,
   TIMELINE_MAX_WINDOW_DAYS,
 } from '../core/timeline-aggregate';
 
@@ -49,6 +50,29 @@ describe('timelineArchiveMonths', () => {
 
   test('reads nothing for an unparseable window', () => {
     expect(timelineArchiveMonths(available, 'not-a-date')).toEqual([]);
+    expect(timelineArchiveMonths(available, '2026-08-15T00:00:00.000Z', 'not-a-date')).toEqual([]);
+  });
+
+  test('`to` caps the scan at its month + TIMELINE_ARCHIVE_TAIL_MONTHS', () => {
+    // A year-old window used to read every month up to today on each poll.
+    const months = [
+      '2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01',
+      '2026-02', '2026-03', '2026-04', '2026-05',
+    ];
+    expect(TIMELINE_ARCHIVE_TAIL_MONTHS).toBe(3);
+    expect(timelineArchiveMonths(
+      months, '2025-09-29T15:00:00.000Z', '2025-10-26T14:59:59.999Z',
+    )).toEqual(['2025-08', '2025-09', '2025-10', '2025-11', '2025-12', '2026-01']);
+    // Without `to` (the Work readers) nothing changes.
+    expect(timelineArchiveMonths(months, '2025-09-29T15:00:00.000Z')).toEqual(months.slice(0));
+  });
+
+  test('the ceiling crosses a year boundary', () => {
+    expect(timelineArchiveMonths(
+      ['2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03'],
+      '2026-11-02T00:00:00.000Z',
+      '2026-11-20T00:00:00.000Z',
+    )).toEqual(['2026-10', '2026-11', '2026-12', '2027-01', '2027-02']);
   });
 });
 

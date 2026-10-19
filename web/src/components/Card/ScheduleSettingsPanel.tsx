@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { formatUtcIsoToKstInput } from '../../../../src/core/scheduling';
 import type { KanbanCard } from '../../../../src/core/types';
+import { CARD_DETAIL_COPY } from '../../constants/copy';
 import {
   buildDefaultScheduleInput,
   formatScheduledKstLabel,
@@ -115,7 +116,7 @@ export const ScheduleSettingsPanel: React.FC<ScheduleSettingsPanelProps> = ({
           )}
           {activeReservation && (
             <div className="kv2-session-helper" role="note">
-              Start Now는 이 예약을 소비하고 즉시 한 번만 실행합니다.
+              {CARD_DETAIL_COPY.startNowHint}
             </div>
           )}
           {canEdit && !editing && (

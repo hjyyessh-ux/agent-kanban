@@ -22,6 +22,7 @@ export type ClaudeModelId = typeof CLAUDE_MODELS[number]['id'];
 export const DEFAULT_CLAUDE_MODEL: ClaudeModelId = 'claude-sonnet-5';
 
 export const CODEX_MODELS = [
+  { id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', tier: 'frontier' },
   { id: 'gpt-6-astra', label: 'GPT-6 Astra', tier: 'frontier' },
   { id: 'gpt-6-sol', label: 'GPT-6 Sol', tier: 'frontier' },
   { id: 'gpt-6-luna', label: 'GPT-6 Luna', tier: 'frontier' },

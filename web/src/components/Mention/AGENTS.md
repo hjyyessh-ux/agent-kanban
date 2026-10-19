@@ -40,7 +40,7 @@ Hooks: `hooks/useMentionSearch.ts` (`GET /api/mentions`, 150ms debounce) and `ho
 ## Dependencies
 ### Internal
 - `src/core/mention-reference.ts` (token parsing, block render, `MAX_REFERENCES`) and `src/core/mention-search.ts` (candidate DTOs) — imported directly, as the rest of `web/` does for shared types.
-- `components/Card/MetaDropdown` (`useAnchoredPopover`, `MetaPopoverPortal`), `components/Board/BoardCardSections` (`RuntimeBadge`), `components/Works/worksAffinity` (`dirAccentClass` — same colour = same project as the Works tab).
+- `components/Card/MetaDropdown` (`useAnchoredPopover`, `MetaPopoverPortal`), `components/Board/BoardCardSections` (`RuntimeBadge`), `utils/project-color` (`dirAccentClass` — same colour = same project as the Works tab; the `.works-dir-mark` it pairs with is global in `styles/kv2/project-color.css`).
 
 ### External
 - None beyond React.

@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/kanban';
 import { apiGetCards } from './helpers/api';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 test.describe('Board Detail Actions', () => {
   test('todo board keeps queue and delete actions while modal can edit queue state', async ({ page, seedCardWithStatus }) => {
@@ -20,14 +21,14 @@ test.describe('Board Detail Actions', () => {
     });
     await expect(todoCard).toBeVisible();
     await expect(todoCard.locator('.kv2-card-action--start')).toBeVisible();
-    await expect(todoCard.locator('.kv2-card-action--queue')).toHaveText('Queue');
+    await expect(todoCard.locator('.kv2-card-action--queue')).toHaveText(CARD_ACTION_COPY.queue);
     await expect(todoCard.locator('.kv2-card-icon-action--danger')).toBeVisible();
 
     await todoCard.click();
     const detailDialog = page.locator('.kv2-dialog');
     await expect(detailDialog).toBeVisible();
-    const deleteButton = detailDialog.getByRole('button', { name: 'DELETE', exact: true });
-    const startButton = detailDialog.getByRole('button', { name: 'START TASK', exact: true });
+    const deleteButton = detailDialog.getByRole('button', { name: CARD_ACTION_COPY.delete, exact: true });
+    const startButton = detailDialog.getByRole('button', { name: CARD_ACTION_COPY.startTask, exact: true });
     await expect(deleteButton).toBeVisible();
     await expect(startButton).toBeVisible();
     const deleteBox = await deleteButton.boundingBox();
@@ -101,12 +102,12 @@ test.describe('Board Detail Actions', () => {
     });
     await expect(progressCard).toBeVisible();
     await expect(progressCard.locator('.kv2-card-action--finish')).toBeVisible();
-    await expect(progressCard.locator('.kv2-card-action--secondary')).toHaveText('Reopen');
+    await expect(progressCard.locator('.kv2-card-action--secondary')).toHaveText(CARD_ACTION_COPY.reopen);
 
     await progressCard.click();
     const dialog = page.locator('.kv2-dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /REOPEN/i })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).toBeVisible();
   });
 
   test('modal queue draft resets when navigating to another card', async ({ page, seedCardWithStatus }) => {

@@ -514,6 +514,20 @@ export interface WikiArchiveCardsQuery {
   q?: string;
 }
 
+/** Why `POST /api/cards/completion-seen` left an id alone. */
+export type CompletionSeenSkipReason = 'not_found' | 'not_complete';
+
+/**
+ * `POST /api/cards/completion-seen` — the batch twin of
+ * `POST /api/cards/:id/completion-seen`. Each id is independent, so an id that
+ * is gone or no longer `complete` is reported in `skipped` rather than failing
+ * the ids that did land (the board can poll a card out from under a click).
+ */
+export interface CompletionSeenBatchResponse {
+  cards: KanbanCard[];
+  skipped: { id: string; reason: CompletionSeenSkipReason }[];
+}
+
 export interface WikiArchiveCardsResponse {
   cards: KanbanCard[];
   nextCursor: string | null;

@@ -31,6 +31,8 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { formatAgentTypeLabel } from "../../utils/agent-label";
 import { formatDuration } from "../../utils/format-duration";
 import { getAgentConfig } from "../../constants/agents";
+import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from "../../constants/copy";
+import { primaryActionFor, secondaryActionFor } from "../../constants/card-actions";
 import { FavoriteToggleButton, formatRuntimeLabel, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
 import { formatScheduledKstLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
@@ -702,51 +704,34 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   })();
 
   const footerPrimaryAction = (() => {
-    if (card.status === "todo" && onDispatch) {
+    const action = primaryActionFor(card.status, { scheduled: activeScheduledReservation, surface: 'detail' });
+    const { target } = action;
+    if (target === 'dispatch') {
+      if (!onDispatch) return null;
       return (
         <button type="button" className="kv2-btn kv2-btn--primary kv2-btn--primary-strong" onClick={handleStartTask}>
-          {activeScheduledReservation ? 'START NOW' : 'START TASK'}
+          {action.label}
         </button>
       );
     }
 
-    if (card.status === "in_progress") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--success kv2-btn--primary-strong" onClick={() => handleStatusAction("complete")}>
-          DONE
-        </button>
-      );
-    }
-
-    if (card.status === "complete") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--success kv2-btn--primary-strong" onClick={() => handleStatusAction("done")}>
-          DONE
-        </button>
-      );
-    }
-
-    if (card.status === "done") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction("todo")}>
-          REOPEN
-        </button>
-      );
-    }
-
-    return null;
+    const tone = action.kind === 'reopen' ? 'kv2-btn--outline' : 'kv2-btn--success';
+    return (
+      <button type="button" className={`kv2-btn ${tone} kv2-btn--primary-strong`} onClick={() => handleStatusAction(target)}>
+        {action.label}
+      </button>
+    );
   })();
 
   const footerSecondaryActions = (() => {
-    if (card.status === "in_progress" || card.status === "complete") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction("todo")}>
-          REOPEN
-        </button>
-      );
-    }
-
-    return null;
+    const action = secondaryActionFor(card.status);
+    if (!action || action.target === 'dispatch') return null;
+    const { target } = action;
+    return (
+      <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction(target)}>
+        {action.label}
+      </button>
+    );
   })();
 
   const metaPanel = (
@@ -949,7 +934,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 queueModeSummary={queueModeSummary}
                 queueTargetId={queueTargetId}
                 queueSessionMode={queueSessionMode}
-                disabledReason={activeScheduledReservation ? '예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.' : undefined}
+                disabledReason={activeScheduledReservation ? CARD_DETAIL_COPY.queueDisabledScheduled : undefined}
                 onQueueTargetChange={setQueueTargetId}
                 onQueueSessionModeChange={setQueueSessionMode}
                 onQueue={onQueue}
@@ -960,7 +945,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
             {!card.parentCardId && (card.status === 'todo' || card.scheduledDispatch) && (
               <ScheduleSettingsPanel
                 card={card}
-                disabledReason={card.queuedAfterCardId ? 'Queued cards cannot be scheduled. Remove it from the queue first.' : undefined}
+                disabledReason={card.queuedAfterCardId ? CARD_DETAIL_COPY.scheduleDisabledQueued : undefined}
                 onSave={onScheduleSave}
                 onCancelSchedule={onCancelSchedule}
               />
@@ -985,7 +970,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
             <div className="kv2-dialog-actions-rail">
               <div className="kv2-dialog-danger-row">
                 <button type="button" className="kv2-btn kv2-btn--subtle-danger" onClick={handleDeleteCard}>
-                  DELETE
+                  {CARD_ACTION_COPY.delete}
                 </button>
               </div>
 
@@ -997,7 +982,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                     className="kv2-btn kv2-btn--success"
                     onClick={() => handleStatusAction("complete")}
                   >
-                    MARK COMPLETE
+                    {CARD_ACTION_COPY.markComplete}
                   </button>
                 )}
                 {footerPrimaryAction}

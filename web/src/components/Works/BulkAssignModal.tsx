@@ -324,7 +324,7 @@ export function BulkAssignModal({
         <div className="bulk-assign-session">
           <div className="bulk-assign-session-head">
             <span className="kv2-badge works-runtime-chip">{session.agentRuntime}</span>
-            <DirChip projectDir={session.projectDir} className="bulk-assign-dir" />
+            <DirChip projectDir={session.projectDir} />
             <span className="works-mono">{shortSessionId(session.sessionId)}</span>
             <span className="bulk-assign-session-meta">
               {formatTimeAgo(session.updatedAt)} · 카드 {session.relatedCardCount}

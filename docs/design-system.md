@@ -16,6 +16,8 @@
 | `web/src/styles/kv2/card-detail.css` | 디테일/생성 다이얼로그 레이아웃, 에이전트 셀렉터, 라디오, 배지 |
 | `web/src/styles/kv2/panels.css` | 디테일 사이드바 패널들(세션/메타/phase/진행/질문/피드백/스크린샷/큐) |
 | `web/src/styles/kv2/conversation.css` | 세션 대화 모달 |
+| `web/src/styles/kv2/mention.css` | `@` 멘션 팝오버 · References 칩 |
+| `web/src/styles/kv2/project-color.css` | 디렉토리 팔레트 칸 `.works-dir-c{n}`, `.works-dir-chip`/`.works-dir-mark` 기본 규칙, 1행용 `.kv2-project-chip` |
 
 kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에서 kv2 파일을
 다시 import하지 마세요. 화면 전용 CSS(`Wiki.css` 등)는 **레이아웃만** 담고,
@@ -34,6 +36,30 @@ kv2 CSS는 `main.tsx`에서 단 한 번 전역 import됩니다. 컴포넌트에�
 
 Text scale(`--kv2-text-3xs` ~ `--kv2-text-display`)는 전부 `--kv2-font-scale`
 배율이 적용됩니다(JS로 설정 — `useFontScale`).
+
+#### Font scale — `px`/`rem` font-size 금지
+
+글자 크기 설정은 `--kv2-text-*` 토큰을 거쳐야만 반영됩니다. `rem`도 안 됩니다 —
+`base.css`가 root를 16px로 고정하므로 `1rem`은 배율과 무관하게 항상 16px입니다.
+
+| 쓰는 값 | 결과 |
+|---------|------|
+| `font-size: var(--kv2-text-ui-sm);` | ✅ 12px × 배율 |
+| `font-size: 0.85em;` | ✅ 부모(토큰)를 따라 같이 커짐 |
+| `font-size: 12px;` / `font-size: 0.75rem;` | ❌ 배율 무시 → `no-fixed-font-size.test.ts` 실패 |
+
+`rem` 값을 옮길 때는 16px 기준으로 가장 가까운 단계를 고릅니다(예: `0.9rem`=14.4px → `--kv2-text-sm`).
+`styles/no-fixed-font-size.test.ts`의 allowlist는 `base.css`(배율 없는 root 타입 램프)와
+아직 남은 부채(`kv2/board.css`·`panels.css`·`card-detail.css`·`primitives.css`,
+`Capabilities.css`, `Settings.css`)를 **현재 개수 그대로 동결**합니다. 값을 토큰으로
+바꾸면 해당 항목을 지우고, 새 항목은 추가하지 않습니다.
+
+#### 텍스트 대비 — 잉크 3단계 모두 AA
+
+`--kv2-text-primary` > `--kv2-text-secondary` > `--kv2-text-muted` 세 단계 모두 패널 면
+(`--kv2-surface`/`-raised`/`-sunken`/`-hover`)과 `--kv2-app-bg` 위에서 **4.5:1 이상**입니다.
+`--kv2-text-muted`는 라이트 `#627089`(최저 4.55:1, hover 위), 다크 `#979ea6`(최저 4.62:1, hover 위)이며,
+`--kv2-text-secondary`보다는 항상 조용해야 합니다(위계 유지). 둘 다 `styles/token-contrast.test.ts`가 검증합니다.
 
 ### Works affinity 팔레트 (`--kv2-dir-1..8`, `--kv2-affinity-chain`)
 
@@ -62,7 +88,8 @@ h 192 #107a93 청록 │ h 237 #787fed 남  │ h 282 #712593 포도 │ h 327 #
 
 - 텍스트 쌍둥이는 **선언이 하나**지만 계층 ②입니다. `var(--kv2-text-primary)`는 *사용 지점*에서 치환되고 다크 블록이 같은 요소에서 그 값을 다시 정의하므로, 선언 하나가 두 테마에서 각각 옳게 풀립니다.
 - 컴포넌트는 `.works-dir-c{n}`이 실어주는 **`--works-dir-accent`(스와치)와 `--works-dir-text`(글자)** 만 읽습니다. 색 리터럴이나 `--kv2-dir-3` 직접 참조를 컴포넌트 CSS에 쓰지 마세요.
-- 칸을 늘리려면 **`--kv2-dir-{n}` + `--kv2-dir-{n}-text` + `.works-dir-c{n}` 규칙을 함께** 추가하고 `worksAffinity.ts`의 `DIR_COLOR_SLOTS`를 올려야 합니다. 세 개 중 하나라도 빠지면 위 두 테스트가 잡습니다.
+- `.works-dir-c{n}`과 `.works-dir-chip` / `.works-dir-mark` 기본 규칙은 **전역 kv2** `styles/kv2/project-color.css`에 있고, 슬롯 해시는 `web/src/utils/project-color.ts`(`projectDirColorSlot` / `dirAccentClass`)입니다. Works 전용 CSS가 아니므로 보드·멘션 등 어느 화면이든 그대로 쓰세요(같은 디렉토리 = 같은 칸). 한 줄에 다른 요소와 나란히 놓이는 칩은 `.kv2-project-chip` 수식 클래스를 더해 줄바꿈 대신 말줄임으로 줄어들게 합니다.
+- 칸을 늘리려면 **`--kv2-dir-{n}` + `--kv2-dir-{n}-text` + `.works-dir-c{n}` 규칙(`kv2/project-color.css`)을 함께** 추가하고 `utils/project-color.ts`의 `DIR_COLOR_SLOTS`를 올려야 합니다. 세 개 중 하나라도 빠지면 위 두 테스트가 잡습니다.
 
 #### 칩은 점이 아니라 **이름을 물들입니다**
 
@@ -141,7 +168,12 @@ Timeline(Board 탭의 `타임라인` 뷰)은 한 화면에 **디렉토리 · Wor
   더 조용한 display 계층을 사용한다.
   보드의 일괄 액션·세션 카운트·FEEDBACK 이동 배너·세션 대화 모달은 각각
   `--kv2-column-action-*`, `--kv2-session-*`, `--kv2-feedback-nav-*` 역할 토큰을
-  사용한다. Wiki의 큰 면적과 컨트롤은 `--kv2-wiki-*-display`를 사용하며
+  사용한다. unread 완료 신호(카드 점, 세션 pill, turn 면/`NEW` 태그, 컬럼 `● N`,
+  Board 탭 배지)는 `--kv2-unread-indicator`(그래픽, 모든 surface에서 3:1↑) ·
+  `--kv2-unread-fill-fg`(채운 pill 글자) · `--kv2-unread-text`(surface 위 글자) ·
+  `--kv2-unread-surface`(unread turn 면) 한 가족만 쓴다. 최신 turn 표시에는 이
+  가족도, 같은 빨강 계열 complete accent도 쓰지 않는다
+  (`styles/token-contrast.test.ts`가 대비를 검증). Wiki의 큰 면적과 컨트롤은 `--kv2-wiki-*-display`를 사용하며
   data-viz 원색을 큰 버튼/헤더 배경에 직접 쓰지 않는다.
 - **글자와 보더 역할 분리**: `--kv2-border-strong`을 제목/라벨 글자색으로 함께
   쓰면 보더를 낮출 때 글자 대비도 무너진다. 제목은
@@ -257,6 +289,27 @@ DialogSkeleton이 제공하는 계약:
   함께 쓸 때 그 클래스는 **간격만** 지정합니다 — `justify-content`나 버튼별 마진은 금지
   (프리미티브의 `auto` 마진과 충돌).
 
+## UI 문구 (`web/src/constants/copy.ts`)
+
+화면에 반복되는 문구는 `constants/copy.ts` 한 곳에 둔다 — 탭, Board 툴바, 카드 액션, 컬럼 라벨·`⋯` 메뉴, Works 상태, Settings/Scheduler의 공용 버튼·확인창.
+
+- **언어**: UI 문구는 한국어. 고유명사·런타임·섹션 이름(`Board`, `Works`, `Wiki`, `Claude`, `Codex`, `Skill`, `Telegram`)과 도메인 용어 `unread`는 영어 그대로.
+  - 예: `Session 모아보기` → `세션 묶기`, `✎ Edit` → `✎ 편집`, `Delete "x"? This cannot be undone.` → `"x" 스케줄을 삭제할까요? 되돌릴 수 없습니다.`
+- **대소문자는 CSS 한 곳에서**: 리터럴은 문장 대소문자로 쓰고, 대문자 표기가 필요하면 `text-transform: uppercase`가 담당한다. `'START TASK'`처럼 리터럴과 CSS가 대문자를 이중으로 관리하지 않는다. 한국어에는 영향이 없으므로 한국어 문구에 대문자 전용 class를 새로 만들지 않는다.
+  - 예: 탭 리터럴 `'Board'` + `.app-tab { text-transform: uppercase }` → 화면 `BOARD` / 리터럴을 `'BOARD'`로 쓰지 않는다.
+- **상태 이름**: `STATUS_LABELS` — `todo 대기 · in_progress 진행중 · complete 검토 대기 · done 완료`. Board 컬럼, Timeline 범례, Work 완료 미리보기가 같은 단어를 쓴다.
+- **카드 주 액션은 하나의 매핑**: `constants/card-actions.ts`의 `primaryActionFor(status, { scheduled, surface })` / `secondaryActionFor(status)`. BoardCard(`CardActions`), List 행(`BoardListRowAction`), Card detail footer가 모두 이 함수를 쓴다. 화면마다 status → 라벨 분기를 다시 쓰지 않는다.
+
+| status | 주 액션 | 이동 | 보조 |
+|---|---|---|---|
+| `todo` | `▶ 시작` / 예약 시 `▶ 지금 시작` (detail: `▶ 작업 시작`) | dispatch | — |
+| `in_progress` | `✓ 실행 종료` | → `complete` | `다시 열기` |
+| `complete` | `✓ 완료` | → `done` | `다시 열기` |
+| `done` | `다시 열기` | → `todo` | — |
+
+- **테스트**: unit·e2e는 문구를 리터럴로 복제하지 말고 `copy.ts` 상수를 import 해 셀렉터로 쓴다 (`getByRole('button', { name: CARD_ACTION_COPY.finish, exact: true })`).
+- 범위 밖: Wiki/Scheduler/Capabilities 내부 세부 문구는 아직 전수 교체되지 않았다. 손댈 때 이 규칙으로 옮긴다.
+
 ## 새 화면/기능 추가 체크리스트
 
 1. Board 카드와 Card Detail을 먼저 열어보고 같은 룩을 목표로 한다.
@@ -266,6 +319,7 @@ DialogSkeleton이 제공하는 계약:
 5. 화면 전용 CSS 파일은 레이아웃(grid/flex/gap)만 담는다. 프리미티브 재정의 금지.
 6. CSS import는 추가하지 않는다 — kv2는 이미 전역. 화면 CSS 하나만 컴포넌트 옆에.
 7. e2e 셀렉터는 role/텍스트 우선, 필요 시 `.kv2-*` 클래스.
+8. 새 문구는 `constants/copy.ts`에 넣고 위 "UI 문구" 규칙(한국어 · 문장 대소문자)을 따른다.
 
 ## 금지 패턴
 
@@ -275,3 +329,4 @@ DialogSkeleton이 제공하는 계약:
 - ❌ `kanban-v2.components.css` 배럴 밖에서 kv2 파일 직접 import
 - ❌ 토큰이 있는데 hex/px 하드코딩
 - ❌ CSS-in-JS, Tailwind, CSS Modules (프로젝트 전체 금지)
+- ❌ CSS가 이미 uppercase 하는 자리에 대문자 리터럴(`'START TASK'`, `'DONE'`) — 문장 대소문자로 쓰고 CSS에 맡긴다

@@ -1,9 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import type { V2ColumnViewModel } from './board-selectors';
 import { selectCardById } from './board-selectors';
 import { ExecutionTypeBadge, FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
 import { BoardListRowAction } from './BoardListRowAction';
+import type { CardRevealRequest } from './BoardCompleteSessionView';
 
 interface BoardListViewProps {
   columns: V2ColumnViewModel[];
@@ -14,6 +15,7 @@ interface BoardListViewProps {
   onDispatch?: (card: KanbanCard) => void | Promise<void>;
   onQueueOpen?: (card: KanbanCard) => void;
   onCreate?: () => void;
+  revealRequest?: CardRevealRequest | null;
 }
 
 const LIST_ORDER: KanbanStatus[] = [
@@ -52,6 +54,7 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
   onDispatch,
   onQueueOpen,
   onCreate,
+  revealRequest,
 }) => {
   const [collapsedByStatus, setCollapsedByStatus] = useState<
     Record<KanbanStatus, boolean>
@@ -61,6 +64,14 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
     in_progress: false,
     todo: false,
   });
+
+  // An unread jump into a collapsed section opens it first.
+  useEffect(() => {
+    if (!revealRequest) return;
+    setCollapsedByStatus((previous) => (
+      previous[revealRequest.status] ? { ...previous, [revealRequest.status]: false } : previous
+    ));
+  }, [revealRequest]);
 
   const orderedColumns = useMemo(() => {
     return orderColumnsForList(columns);
@@ -135,7 +146,7 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
                       if (!raw) return null;
 
                       return (
-                        <div key={vm.id} className="kv2-list-table-row">
+                        <div key={vm.id} data-card-id={vm.id} className="kv2-list-table-row">
                           <span className="kv2-list-col-favorite">
                             <FavoriteToggleButton
                               active={vm.favorite}

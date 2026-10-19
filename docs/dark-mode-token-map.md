@@ -115,7 +115,7 @@ Value-exact homes for the ad-hoc cool-grey scale. Dark mode remaps the ramp whol
 | `#f9fafb` | light surface → `--kv2-surface-sunken`; text on inverse → `--kv2-text-on-inverse` |
 
 Bespoke neutrals already tokenised: `#536074 → --kv2-text-secondary`,
-`#8190a8 → --kv2-text-muted`, `#D7DCE6 → --kv2-border`,
+`#8190a8 → --kv2-text-muted` (token since retuned to #627089 for AA — see the last section), `#D7DCE6 → --kv2-border`,
 `#46505e → --kv2-card-date-color` (alias `--kv2-card-id-color`),
 `#bcc6d7 → --kv2-divider-color`.
 
@@ -693,3 +693,19 @@ Guards: `web/src/styles/token-contrast.test.ts` evaluates the tokens straight
 out of `kanban-v2.tokens.css` (following `var()` and `color-mix`) and fails
 below 4.5:1 in either theme, against every panel surface *and* against the 14%
 chip tint the chip paints under its own label.
+
+## Post-migration additions (`--kv2-text-muted` AA)
+
+`--kv2-text-muted` was #8190a8 (light) / #737a82 (dark): 3.06:1 on the cream
+app frame and 2.88:1 on a hovered dark row — below AA on every surface it
+printed on. Retuned in place (no new token, no consumer change):
+
+| Theme | Before | After | Worst surface after |
+|-------|--------|-------|---------------------|
+| light | `#8190a8` | `#627089` | `--kv2-surface-hover` 4.55:1 |
+| dark  | `#737a82` | `#979ea6` | `--kv2-surface-hover` 4.62:1 |
+
+Both keep the slate hue and stay below `--kv2-text-secondary`, so the three-step
+ink hierarchy survives. Guard: the `--kv2-text-muted meets WCAG AA` block in
+`web/src/styles/token-contrast.test.ts` (every `SURFACE_TOKENS` entry, both
+themes, plus "quieter than secondary").

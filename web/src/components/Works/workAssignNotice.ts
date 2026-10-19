@@ -94,7 +94,7 @@ export function noticeForDiscardedSession(
 ): WorkSessionNoticeState {
   return {
     tone: 'warn',
-    message: `🗑 "${assignSessionLabel(session)}" 세션을 폐기했습니다 (무시한 세션 목록으로 이동).`,
+    message: `🗑 "${assignSessionLabel(session)}" 세션을 폐기했습니다 (폐기한 세션 목록으로 이동).`,
     undo: {
       label: '되돌리기',
       run: () => undo.restoreSession(session.sessionId),

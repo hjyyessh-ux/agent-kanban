@@ -27,6 +27,8 @@ import { NewSkillModal } from './NewSkillModal';
 import { ImportSkillModal } from './ImportSkillModal';
 import { RuntimeBadge } from '../Board/BoardCardSections';
 import { InventoryView } from './InventoryView';
+import { ErrorAlert } from '../shared/ErrorAlert';
+import { buildCapabilityAlerts, type CapabilityErrorKey } from './capability-errors';
 import { StorageDrawer } from './StorageDrawer';
 import {
   CAPABILITY_RUNTIME_FILTERS,
@@ -69,6 +71,13 @@ export interface CapabilitiesViewProps {
   skills: DiscoveredSkill[];
   skillsLoading: boolean;
   skillsSyncing: boolean;
+  /** Fetch/sync failures from `useSkills` / `useScripts` / `useSkillRoots`. */
+  skillsError?: string | null;
+  onClearSkillsError?: () => void;
+  scriptsError?: string | null;
+  onClearScriptsError?: () => void;
+  skillRootsError?: string | null;
+  onClearSkillRootsError?: () => void;
   onSyncSkills: () => Promise<SkillSyncResult | null>;
   onRefreshSkills: () => Promise<void>;
   scripts: ScriptEntry[];
@@ -118,6 +127,12 @@ export function CapabilitiesView({
   skills,
   skillsLoading,
   skillsSyncing,
+  skillsError = null,
+  onClearSkillsError,
+  scriptsError = null,
+  onClearScriptsError,
+  skillRootsError = null,
+  onClearSkillRootsError,
   onSyncSkills,
   onRefreshSkills,
   scripts,
@@ -254,6 +269,17 @@ export function CapabilitiesView({
     await onRefreshScripts();
   };
 
+  const alerts = buildCapabilityAlerts([
+    { key: 'skills', error: skillsError },
+    { key: 'scripts', error: scriptsError },
+    { key: 'skillRoots', error: skillRootsError },
+  ]);
+  const alertHandlers: Record<CapabilityErrorKey, { retry: () => Promise<void>; clear?: () => void }> = {
+    skills: { retry: onRefreshSkills, clear: onClearSkillsError },
+    scripts: { retry: onRefreshScripts, clear: onClearScriptsError },
+    skillRoots: { retry: onRefreshRoots, clear: onClearSkillRootsError },
+  };
+
   if (skillsLoading && scriptsLoading && allItems.length === 0) {
     return (
       <div className="scripts-loading">
@@ -321,6 +347,17 @@ export function CapabilitiesView({
           </button>
         </div>
       </div>
+
+      {alerts.map((alert) => (
+        <ErrorAlert
+          key={alert.key}
+          title={alert.title}
+          message={alert.message}
+          actionLabel="다시 시도"
+          onAction={() => void alertHandlers[alert.key].retry()}
+          onDismiss={alertHandlers[alert.key].clear}
+        />
+      ))}
 
       {/* ── Inventory view ──────────────────────────────────── */}
       {viewMode === 'inventory' && (

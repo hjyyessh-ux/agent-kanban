@@ -93,8 +93,8 @@
 
   /* ── Works affinity palette ───────────────────────────────── */
   /* Categorical series, not theme surface: a stable per-`projectDir` accent
-     (hashed in `worksAffinity.ts`) so the same project reads as the same colour
-     everywhere Works shows a session or a Work.
+     (hashed in `utils/project-color.ts`) so the same project reads as the same
+     colour everywhere a session, Work or card names it.
      Two axes carry the eight slots, because hue alone was not enough — the
      previous palette put three slots (#2f6fed, #2f9bd0, #4b5bd6) inside 34° of
      blue, so a machine with four checkouts saw four blue chips:
@@ -188,7 +188,7 @@
   /* ── Text ─────────────────────────────────────────────────── */
   --kv2-text-primary: #1A1A2E;
   --kv2-text-secondary: #536074;
-  --kv2-text-muted: #8190a8;
+  --kv2-text-muted: #627089;        /* ≥4.5:1 on every panel surface + app-bg (token-contrast.test.ts) */
   --kv2-text-danger: #ff4d6d;
   --kv2-text-inverse: #ffffff;      /* text on accent / dark fill */
   --kv2-text-link: #2563eb;         /* interactive link / hover text */
@@ -500,11 +500,18 @@
   --kv2-session-count-border: var(--kv2-frame);
   --kv2-session-count-fg: var(--kv2-frame);
   --kv2-session-count-shadow: var(--kv2-frame);
-  --kv2-session-unread-bg: var(--kv2-pink-surface-deep);
-  --kv2-session-unread-border: var(--kv2-pink-accent);
-  --kv2-session-unread-fg: var(--kv2-pink-text);
-  --kv2-session-unread-shadow: var(--kv2-pink-accent);
+  /* Unread completion — one hue for dot, node, strip, pill, NEW tag. The
+     filled pill/tag text is `-fill-fg` (AA on the indicator); the
+     `Show N more · k unread` count is `-text` (AA on the surface). Latest-turn
+     marking must never use this family (docs/kanban-board.md). */
   --kv2-unread-indicator: var(--kv2-danger-accent);
+  --kv2-unread-fill-fg: var(--kv2-text-inverse);
+  --kv2-unread-text: var(--kv2-danger-accent);
+  --kv2-unread-surface: color-mix(in srgb, var(--kv2-unread-indicator) 8%, var(--kv2-surface));
+  --kv2-session-unread-bg: var(--kv2-unread-indicator);
+  --kv2-session-unread-border: var(--kv2-frame);
+  --kv2-session-unread-fg: var(--kv2-unread-fill-fg);
+  --kv2-session-unread-shadow: var(--kv2-frame);
   --kv2-feedback-nav-bg: var(--kv2-status-in-progress-accent);
   --kv2-feedback-nav-border: var(--kv2-border-strong);
   --kv2-feedback-nav-fg: var(--kv2-border-strong);
@@ -708,7 +715,7 @@
   /* ── Text ─────────────────────────────────────────────────── */
   --kv2-text-primary: #d4d7db;
   --kv2-text-secondary: #a3a8ae;
-  --kv2-text-muted: #737a82;
+  --kv2-text-muted: #979ea6;        /* ≥4.5:1 incl. surface-hover; still dimmer than secondary */
   --kv2-text-danger: #ed7488;
   --kv2-text-link: #79a7dc;
   --kv2-text-meta: #929aa1;
@@ -901,11 +908,17 @@
   --kv2-session-count-border: #484e54;
   --kv2-session-count-fg: #c2c6ca;
   --kv2-session-count-shadow: #111315;
-  --kv2-session-unread-bg: #392d33;
-  --kv2-session-unread-border: #795563;
-  --kv2-session-unread-fg: #c79cab;
+  /* Was #a66b7b: 3.4:1 on the surface, so a 9px dot read as a smudge and the
+     colour could not carry text. Now clears 4.5:1 on every surface it lands
+     on; the filled pill flips to dark text because white on it is under AA. */
+  --kv2-unread-indicator: #f26b6b;
+  --kv2-unread-fill-fg: #16181b;
+  --kv2-unread-text: #f26b6b;
+  --kv2-unread-surface: color-mix(in srgb, var(--kv2-unread-indicator) 12%, var(--kv2-surface));
+  --kv2-session-unread-bg: var(--kv2-unread-indicator);
+  --kv2-session-unread-border: #111315;
+  --kv2-session-unread-fg: var(--kv2-unread-fill-fg);
   --kv2-session-unread-shadow: #111315;
-  --kv2-unread-indicator: #a66b7b;
   --kv2-feedback-nav-bg: #514a32;
   --kv2-feedback-nav-border: #766b48;
   --kv2-feedback-nav-fg: #d4d7db;

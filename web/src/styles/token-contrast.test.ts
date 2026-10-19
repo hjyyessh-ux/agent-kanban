@@ -45,7 +45,7 @@ const SURFACE_TOKENS = [
 /**
  * `.works-dir-chip` tints its own background from the accent, so the text has
  * to clear AA against the tint too — not just against the bare surface. Must
- * match the `color-mix` percentage in `Works.css`.
+ * match the `color-mix` percentage in `kv2/project-color.css`.
  */
 const CHIP_TINT_PERCENT = 0.14;
 
@@ -228,4 +228,84 @@ describe('mention reference kind text tokens meet WCAG AA', () => {
       }
     }
   });
+});
+
+/**
+ * Unread completion tokens. The dark indicator used to be #a66b7b — 3.4:1 on
+ * the surface, which is why unread read as "dimmer" than the red latest-turn
+ * border it was being confused with. The indicator now doubles as text
+ * (`Show N more · k unread`), and the filled pill / NEW tag print on it.
+ */
+const UNREAD_SURFACES = ['--kv2-surface', '--kv2-surface-tint-cool', '--kv2-unread-surface'];
+
+describe('unread completion tokens', () => {
+  for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {
+    test(`--kv2-unread-fill-fg clears 4.5:1 on the indicator in ${theme.label}`, () => {
+      const ratio = contrastRatio(
+        resolveTokenColor('--kv2-unread-fill-fg', theme.tokens),
+        resolveTokenColor('--kv2-unread-indicator', theme.tokens),
+      );
+      expect(ratio, `filled unread pill is ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    });
+
+    test(`--kv2-unread-indicator stands out from every surface in ${theme.label}`, () => {
+      const indicator = resolveTokenColor('--kv2-unread-indicator', theme.tokens);
+      for (const surface of UNREAD_SURFACES) {
+        const ratio = contrastRatio(indicator, resolveTokenColor(surface, theme.tokens));
+        // 3:1 is the WCAG non-text bar; the node, strip and border sit on these.
+        expect(ratio, `indicator is ${ratio.toFixed(2)}:1 on ${surface}`).toBeGreaterThanOrEqual(3);
+      }
+    });
+
+    test(`--kv2-unread-text clears 4.5:1 on the surface in ${theme.label}`, () => {
+      for (const surface of ['--kv2-surface', '--kv2-surface-tint-cool']) {
+        const ratio = contrastRatio(
+          resolveTokenColor('--kv2-unread-text', theme.tokens),
+          resolveTokenColor(surface, theme.tokens),
+        );
+        expect(ratio, `unread text is ${ratio.toFixed(2)}:1 on ${surface}`).toBeGreaterThanOrEqual(AA);
+      }
+    });
+
+    test(`body text stays readable on --kv2-unread-surface in ${theme.label}`, () => {
+      for (const text of ['--kv2-text-primary', '--kv2-text-secondary']) {
+        const ratio = contrastRatio(
+          resolveTokenColor(text, theme.tokens),
+          resolveTokenColor('--kv2-unread-surface', theme.tokens),
+        );
+        expect(ratio, `${text} is ${ratio.toFixed(2)}:1 on the unread turn`).toBeGreaterThanOrEqual(AA);
+      }
+    });
+  }
+});
+
+/**
+ * `--kv2-text-muted` prints captions, timestamps and placeholders on ~80
+ * selectors. It used to be #8190a8 (light) / #737a82 (dark) — about 3.1:1 on
+ * the app frame and under 2.9:1 on a hovered row, i.e. below AA everywhere it
+ * landed. It has to clear 4.5:1 on every panel surface and the app frame, and
+ * it still has to be the *quieter* step under `--kv2-text-secondary`, or the
+ * three-level ink hierarchy collapses to two.
+ */
+describe('--kv2-text-muted meets WCAG AA', () => {
+  for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {
+    const muted = resolveTokenColor('--kv2-text-muted', theme.tokens);
+
+    for (const surface of SURFACE_TOKENS) {
+      test(`--kv2-text-muted clears 4.5:1 on ${surface} in ${theme.label}`, () => {
+        const ratio = contrastRatio(muted, resolveTokenColor(surface, theme.tokens));
+        expect(ratio, `muted text is ${ratio.toFixed(2)}:1 on ${surface}`).toBeGreaterThanOrEqual(AA);
+      });
+    }
+
+    test(`--kv2-text-muted stays quieter than --kv2-text-secondary in ${theme.label}`, () => {
+      const surface = resolveTokenColor('--kv2-surface', theme.tokens);
+      const mutedRatio = contrastRatio(muted, surface);
+      const secondaryRatio = contrastRatio(
+        resolveTokenColor('--kv2-text-secondary', theme.tokens),
+        surface,
+      );
+      expect(mutedRatio, 'muted reads as loud as secondary').toBeLessThan(secondaryRatio);
+    });
+  }
 });

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { KanbanCard } from '../../../../src/core/types';
 import { usePersistedDialogSize } from '../../hooks/usePersistedDialogSize';
 import type { BoardFilters } from './board-filters';
+import { TOOLBAR_COPY } from '../../constants/copy';
 
 type DateInputWithPicker = HTMLInputElement & { showPicker?: () => void };
 
@@ -296,7 +297,7 @@ export const BoardFilterBar: React.FC<BoardFilterBarProps> = ({
         onClick={() => setOpen((previous) => !previous)}
       >
         <span className="kv2-filter-trigger-icon" aria-hidden="true">☰</span>
-        <span>Filter{activeCount > 0 ? ` (${activeCount})` : ''}</span>
+        <span>{TOOLBAR_COPY.filter}{activeCount > 0 ? ` (${activeCount})` : ''}</span>
         {activeCount > 0 && <span className="kv2-filter-trigger-badge" aria-hidden="true">ON</span>}
       </button>
 

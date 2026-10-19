@@ -132,6 +132,25 @@ function gridColumnBounds(locator: Locator): Promise<{ start: string; end: strin
   }));
 }
 
+/**
+ * Grid column (1-based; the label column is 1) of a calendar day on the
+ * Timeline. The grid is a scroll buffer that starts weeks before today, so a
+ * column number only means something relative to a date — read it off the day
+ * header (`data-tl-date`) instead of assuming this week's Monday is column 2.
+ */
+async function dayGridColumn(page: Page, day: Date): Promise<number> {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const key = `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+  const head = page.locator(`.tl-head[data-tl-date="${key}"]`);
+  await expect(head).toHaveCount(1);
+  return Number(await head.getAttribute('data-tl-col')) + 2;
+}
+
+/** `day` + `offset` days, at local midnight. */
+function dayAfter(day: Date, offset: number): Date {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate() + offset);
+}
+
 test.beforeEach(async () => {
   await apiResetWorksState();
 });
@@ -160,7 +179,10 @@ test('Inbox keeps the first title and opens the full conversation from the row',
   await expect(row.locator('.works-inbox-title')).toHaveText(first.title);
   await expect(row).toContainText('실행 중');
   await expect(row).toContainText('카드 3');
-  await expect(row.locator('.works-inbox-actions button')).toHaveText(['배정', '폐기']);
+  // One line: `[combobox][배정][⋯]`. 폐기 is inside ⋯, never beside the commit.
+  const assignBar = row.locator('.works-assign-bar');
+  await expect(assignBar.getByRole('combobox', { name: '배정할 Work' })).toBeVisible();
+  await expect(assignBar.getByRole('button')).toHaveText(['▾', '배정', '⋯']);
 
   await row.locator('.works-inbox-title').click();
   const conversation = page.locator('.session-conversation-dialog');
@@ -187,11 +209,15 @@ test('Inbox keeps the first title and opens the full conversation from the row',
   await expect(conversation).toBeVisible();
   await closeConversation();
 
-  // Assignment and selection must not also open the conversation.
-  await row.getByRole('button', { name: '배정', exact: true }).click();
-  await expect(row.locator('.works-assign-inline')).toBeVisible();
+  // Assignment and selection must not also open the conversation — the popup
+  // is portalled out of the row, but React still bubbles its clicks through it.
+  await row.getByRole('combobox', { name: '배정할 Work' }).click();
+  const popup = page.locator('.works-assign-popup');
+  await expect(popup).toBeVisible();
+  await popup.getByRole('option', { name: /새 Work 만들기/ }).click();
+  await expect(popup).toHaveCount(0);
   await expect(conversation).toHaveCount(0);
-  await page.getByRole('button', { name: '☑ 선택', exact: true }).click();
+  await page.getByRole('button', { name: '☑ 여러 개 선택', exact: true }).click();
   await row.locator('.works-inbox-title').click();
   await expect(row.getByRole('checkbox')).toBeChecked();
   await expect(conversation).toHaveCount(0);
@@ -220,24 +246,25 @@ test('Inbox session becomes a new Work and drops the tab badge', async ({ page, 
 
   // Both seeded sessions land in the Inbox, and the tab badge counts them.
   await expect(worksTabBadge(page)).toHaveText('2');
-  await expect(page.getByText('미배정 세션 2개')).toBeVisible();
+  await expect(page.getByText('📥 미배정 2', { exact: true })).toBeVisible();
 
   const row = inboxRow(page, first.title);
-  await row.getByRole('button', { name: '배정' }).click();
+  const combo = row.getByRole('combobox', { name: '배정할 Work' });
+  await combo.click();
 
-  // "새 Work 만들기" is only the default when nothing is recommendable, so pick
-  // it explicitly rather than relying on the reset having emptied the Work list.
-  const newWorkOption = page.locator('.works-assign-option').filter({ hasText: '새 Work 만들기' });
-  await newWorkOption.click();
-  await expect(newWorkOption).toHaveAttribute('aria-pressed', 'true');
-
+  // No mode switch: what is typed both filters the Works and titles a new one.
+  // Nothing matches it, so `＋ 새 Work 만들기` (the list's first item) is selected.
   const workTitle = `Work ${runId}`;
-  // Addressed by label, not by a fixed DOM id: the panel renders in three
-  // places (Inbox row, batch panel, move dialog) and its ids are `useId`-based.
-  await page.getByLabel('새 Work 제목').fill(workTitle);
-  // The role picker lives in the panel's top action bar now, beside the commit.
-  await page.locator('.works-assign-inline').getByLabel('역할', { exact: true }).selectOption('review');
-  await page.getByRole('button', { name: `"${workTitle}" 만들기` }).click();
+  await combo.fill(workTitle);
+  const popup = page.locator('.works-assign-popup');
+  const createOption = popup.getByRole('option', { name: /새 Work 만들기/ });
+  await expect(createOption).toHaveAttribute('aria-selected', 'true');
+  await expect(createOption).toContainText(`"${workTitle}"`);
+  // Addressed by label, not by a fixed DOM id: the combobox renders in three
+  // places (Inbox row, selection bar, move dialog) and its ids are `useId`-based.
+  // The one role select lives in the popup footer.
+  await popup.getByLabel('역할', { exact: true }).selectOption('review');
+  await row.getByRole('button', { name: '배정', exact: true }).click();
 
   // Active Works picks it up with the session (and its role) attached…
   await page.getByRole('button', { name: /^진행 중 \d/ }).click();
@@ -249,7 +276,7 @@ test('Inbox session becomes a new Work and drops the tab badge', async ({ page, 
 
   // …and the assigned session leaves the Inbox, decrementing the badge.
   await expect(inboxRow(page, first.title)).toHaveCount(0);
-  await expect(page.getByText('미배정 세션 1개')).toBeVisible();
+  await expect(page.getByText('📥 미배정 1', { exact: true })).toBeVisible();
   await expect(worksTabBadge(page)).toHaveText('1');
 
   const works = await apiGetWorks();
@@ -279,7 +306,7 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   }
 
   await openWorksTab(page);
-  await expect(page.getByText('미배정 세션 3개')).toBeVisible();
+  await expect(page.getByText('📥 미배정 3', { exact: true })).toBeVisible();
   // No selection yet → no checkboxes at all.
   await expect(page.locator('.works-inbox-check')).toHaveCount(0);
 
@@ -305,19 +332,20 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   await expect(page.locator('.works-inbox-check:checked')).toHaveCount(2);
   await expect(page.getByText('선택 2개')).toBeVisible();
 
-  // The header's 모두 배정하기 is dimmed for the whole of selection mode: it
-  // assigns the entire Inbox, not the selection, and two live primaries with
+  // The header's 순서대로 배정 is dimmed for the whole of selection mode: it
+  // walks the entire Inbox, not the selection, and two live primaries with
   // opposite scopes is exactly the ambiguity this bar exists to resolve.
-  await expect(page.getByRole('button', { name: '⚡ 모두 배정하기' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '⚡ 순서대로 배정' })).toBeDisabled();
 
-  await page.getByRole('button', { name: '선택한 2개 배정하기' }).click();
-  const newWorkOption = page.locator('.works-assign-option').filter({ hasText: '새 Work 만들기' });
-  await newWorkOption.click();
-
+  // The sticky selection bar carries the batch's own combobox — the same
+  // component as a row's, with the count on the commit.
+  const selectionBar = page.locator('.works-inbox-selection');
+  const combo = selectionBar.getByRole('combobox', { name: '세션 2개를 배정할 Work' });
+  await combo.click();
   const workTitle = `다중 배정 Work ${runId}`;
-  await page.getByLabel('새 Work 제목').fill(workTitle);
-  await page.getByLabel('세션 2개 역할').selectOption('debug');
-  await page.getByRole('button', { name: `"${workTitle}" 만들고 2개 연결` }).click();
+  await combo.fill(workTitle);
+  await page.locator('.works-assign-popup').getByLabel('세션 2개 역할').selectOption('debug');
+  await selectionBar.getByRole('button', { name: '2개 배정', exact: true }).click();
 
   // One Work, both selected sessions on it, with the one shared role.
   await page.getByRole('button', { name: /^진행 중 \d/ }).click();
@@ -327,7 +355,7 @@ test('Inbox drag-selects sessions, click toggles them, and one assign links the 
   await expect(created).toContainText('디버그 2');
 
   // Only the deselected session is left in the Inbox, and the selection is gone.
-  await expect(page.getByText('미배정 세션 1개')).toBeVisible();
+  await expect(page.getByText('📥 미배정 1', { exact: true })).toBeVisible();
   await expect(inboxRow(page, titles[2])).toHaveCount(1);
   await expect(page.locator('.works-inbox-check')).toHaveCount(0);
   await expect(worksTabBadge(page)).toHaveText('1');
@@ -422,7 +450,7 @@ test('Assign-all modal walks the Inbox with the N / 1 / S / X shortcuts', async 
 
   await openWorksTab(page);
   await expect(worksTabBadge(page)).toHaveText('4');
-  await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
+  await page.getByRole('button', { name: '⚡ 순서대로 배정' }).click();
 
   const dialog = page.getByRole('dialog', { name: '세션 배정' });
   await expect(dialog).toBeVisible();
@@ -505,7 +533,7 @@ test('모달에서 폐기 버튼에 포커스한 Enter는 폐기만 실행한다
   });
 
   await openWorksTab(page);
-  await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
+  await page.getByRole('button', { name: '⚡ 순서대로 배정' }).click();
   const dialog = page.getByRole('dialog', { name: '세션 배정' });
   await expect(dialog.locator('.bulk-assign-prompt')).toHaveText(card.title);
 
@@ -548,7 +576,7 @@ test('모달에서 역할 select에 포커스한 x는 아무 일도 하지 않�
   const [step1] = await apiGetWorkInbox();
 
   await openWorksTab(page);
-  await page.getByRole('button', { name: '⚡ 모두 배정하기' }).click();
+  await page.getByRole('button', { name: '⚡ 순서대로 배정' }).click();
   const dialog = page.getByRole('dialog', { name: '세션 배정' });
   await expect(dialog.getByText('1 / 2')).toBeVisible();
 
@@ -574,7 +602,7 @@ test('모달에서 역할 select에 포커스한 x는 아무 일도 하지 않�
  * read route and no UI, so one click (or one mistyped `x`) removed a session
  * from the Inbox, the tab badge and the Timeline permanently.
  */
-test('폐기한 세션은 무시한 세션 목록에서 복원해 Inbox로 되돌린다', async ({ page, seedCard }) => {
+test('폐기한 세션은 헤더 ⋯의 폐기한 세션 목록에서 복원해 Inbox로 되돌린다', async ({ page, seedCard }) => {
   const runId = `works-restore-${Date.now()}`;
   const card = await seedCard({
     title: `[E2E ${runId}] 복원할 세션`,
@@ -586,17 +614,22 @@ test('폐기한 세션은 무시한 세션 목록에서 복원해 Inbox로 되�
   await openWorksTab(page);
   await expect(worksTabBadge(page)).toHaveText('1');
 
-  await inboxRow(page, card.title).getByRole('button', { name: '폐기' }).click();
+  // 폐기 is in the row's ⋯ menu — a deliberate second click, not a red button
+  // beside 배정.
+  await inboxRow(page, card.title).getByRole('button', { name: '세션 메뉴' }).click();
+  await page.getByRole('menuitem', { name: '폐기', exact: true }).click();
   await expect(inboxRow(page, card.title)).toHaveCount(0);
 
-  // An undo is offered on the spot, too — 폐기 is one click from a row.
+  // An undo is offered on the spot, too — 폐기 is two clicks from a row.
   const notice = page.locator('.work-session-notice');
   await expect(notice).toContainText('폐기했습니다');
   await expect(notice.getByRole('button', { name: '되돌리기' })).toBeVisible();
   await notice.getByRole('button', { name: '알림 닫기' }).click();
 
   // …and the list is the durable path, long after the toast is gone.
-  await page.getByRole('button', { name: /무시한 세션 \d+개/ }).click();
+  // …and the list is behind the Inbox header's ⋯.
+  await page.getByRole('button', { name: '미배정 세션 메뉴' }).click();
+  await page.getByRole('menuitem', { name: /폐기한 세션 \d+개/ }).click();
   const ignoredRow = page.locator('.works-ignored-row').filter({ hasText: card.title });
   await expect(ignoredRow).toBeVisible();
   await ignoredRow.getByRole('button', { name: '복원' }).click();
@@ -625,20 +658,84 @@ test('추천에서 사라진 완료 Work로는 연결 버튼이 비활성된다'
   });
 
   await openWorksTab(page);
-  await inboxRow(page, card.title).getByRole('button', { name: '배정', exact: true }).click();
+  const row = inboxRow(page, card.title);
 
-  // Same directory → the seeded Work is the default target and 연결 is live.
-  const submit = page.getByRole('button', { name: `"${target.title}"에 연결` });
+  // Same directory → the seeded Work is the default target and 배정 is live.
+  // Closed, the combobox shows its selection as the placeholder.
+  await expect(row.getByRole('combobox', { name: '배정할 Work' }))
+    .toHaveAttribute('placeholder', target.title);
+  const submit = row.getByRole('button', { name: '배정', exact: true });
   await expect(submit).toBeEnabled();
 
   // Another client completes the selected recommendation while Inbox stays open.
   await apiUpdateWork(target.id, { status: 'done', confirmArchive: true });
 
-  // The panel is still open, still aimed at that Work — and now refuses.
-  await expect(page.locator('.works-assign-inline')).toBeVisible();
-  await expect(page.getByRole('button', { name: '연결', exact: true })).toBeDisabled({ timeout: 15000 });
+  // The row is still aimed at that Work — and now refuses.
+  await expect(submit).toBeDisabled({ timeout: 15000 });
   expect((await apiGetWork(target.id)).sessionLinks).toHaveLength(0);
   await expect(inboxRow(page, card.title)).toHaveCount(1);
+});
+
+test('배정 combobox는 입력으로 거르고 ↑↓·⏎·Esc·⌘⏎로 끝까지 배정한다', async ({ page, seedCard, seedWork, trackWork }) => {
+  const runId = `works-combo-${Date.now()}`;
+  const errorWork = await seedWork({ title: `zepetoful error inspect ${runId}`, projectDir: PROJECT_DIR });
+  trackWork(errorWork.id);
+  const resetWork = await seedWork({ title: `zepetoful reset 기능 ${runId}`, projectDir: PROJECT_DIR });
+  trackWork(resetWork.id);
+  const card = await seedCard({
+    title: `[E2E ${runId}] 키보드로 배정할 세션`,
+    description: 'combobox keyboard fixture',
+    projectDir: PROJECT_DIR,
+    sessionId: `claude-${runId}`,
+  });
+
+  await openWorksTab(page);
+  const row = inboxRow(page, card.title);
+  const combo = row.getByRole('combobox', { name: '배정할 Work' });
+  await combo.focus();
+  await expect(combo).toHaveAttribute('aria-expanded', 'false');
+
+  // ↓ opens; the listbox is the one the input controls.
+  await page.keyboard.press('ArrowDown');
+  await expect(combo).toHaveAttribute('aria-expanded', 'true');
+  const listbox = page.getByRole('listbox', { name: '배정할 Work' });
+  await expect(listbox).toBeVisible();
+  expect(await combo.getAttribute('aria-controls')).toBe(await listbox.getAttribute('id'));
+  // The create option is always the first item of the list.
+  await expect(listbox.getByRole('option').first()).toContainText('새 Work 만들기');
+
+  // Typing filters by title, and the first match becomes the active option.
+  await page.keyboard.type('reset');
+  const options = listbox.locator('.works-assign-work-item');
+  await expect(options).toHaveCount(1);
+  await expect(options.first()).toContainText(resetWork.title);
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  expect(await combo.getAttribute('aria-activedescendant')).toBe(await options.first().getAttribute('id'));
+
+  // ↑ walks up to the create option, ↓ comes back.
+  await page.keyboard.press('ArrowUp');
+  await expect(listbox.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('ArrowDown');
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+
+  // ⏎ settles on it and closes; the closed input reads as the selection.
+  await page.keyboard.press('Enter');
+  await expect(listbox).toHaveCount(0);
+  await expect(combo).toHaveAttribute('placeholder', resetWork.title);
+
+  // Esc is "never mind": a search typed after reopening is dropped, and the
+  // selection goes back to what it was when the popup opened.
+  await page.keyboard.type('error');
+  await expect(listbox.locator('.works-assign-work-item').first()).toContainText(errorWork.title);
+  await page.keyboard.press('Escape');
+  await expect(listbox).toHaveCount(0);
+  await expect(combo).toHaveAttribute('placeholder', resetWork.title);
+
+  // ⌘⏎ (Ctrl⏎ elsewhere) assigns straight from the input.
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(inboxRow(page, card.title)).toHaveCount(0);
+  expect((await apiGetWork(resetWork.id)).sessionLinks.map((l) => l.sessionId)).toEqual([`claude-${runId}`]);
+  expect((await apiGetWork(errorWork.id)).sessionLinks).toHaveLength(0);
 });
 
 /** The `works-dir-cN` palette slot on an element, or null. */
@@ -680,21 +777,25 @@ test('배정 패널은 같은 디렉토리를 같은 색으로, 이어진 세션
   });
 
   await openWorksTab(page);
-  await inboxRow(page, target.title).getByRole('button', { name: '배정', exact: true }).click();
-  const panel = page.locator('.works-assign-inline');
+  const row = inboxRow(page, target.title);
+  await row.getByRole('combobox', { name: '배정할 Work' }).click();
+  const popup = page.locator('.works-assign-popup');
 
   // Lineage first, shared directory second — a directory says "same project",
   // lineage says "same piece of work".
-  const items = panel.locator('.works-assign-work-item');
+  const items = popup.locator('.works-assign-work-item');
   await expect(items.nth(0)).toContainText(lineageWork.title);
   await expect(items.nth(0)).toContainText('🔗 이어진 세션');
   await expect(items.nth(1)).toContainText(sameDirWork.title);
   await expect(items.nth(1)).toContainText('같은 디렉토리');
   await expect(items.nth(1)).not.toContainText('🔗');
 
+  // The project chip is in the row's meta once; the combobox does not repeat it.
+  await expect(row.locator('.works-assign-inline .works-dir-chip')).toHaveCount(0);
+
   // Same directory ⇒ same palette slot as the session's own chip; a different
   // directory ⇒ a different slot.
-  const sessionSlot = await dirSlot(panel.locator('.works-dir-chip'));
+  const sessionSlot = await dirSlot(row.locator('.works-inbox-meta .works-dir-chip'));
   expect(sessionSlot).not.toBeNull();
   expect(await dirSlot(items.nth(1))).toBe(sessionSlot!);
   expect(await dirSlot(items.nth(0))).not.toBe(sessionSlot!);
@@ -965,13 +1066,13 @@ test('설정의 같은 폴더 우선을 끄면 배정 추천 순서가 바뀐다
     });
 
     await openWorksTab(page);
-    await inboxRow(page, target.title).getByRole('button', { name: '배정' }).click();
-    const items = page.locator('.works-assign-inline .works-assign-work-item');
+    const combo = inboxRow(page, target.title).getByRole('combobox', { name: '배정할 Work' });
+    await combo.click();
+    const popup = page.locator('.works-assign-popup');
+    const items = popup.locator('.works-assign-work-item');
     await expect(items.nth(0)).toContainText(sameDir.title);
-    // The panel has two option buttons; only the 기존 Work one describes the ranking.
-    const existingOption = page.locator('.works-assign-option')
-      .filter({ hasText: '기존 Work에 연결' });
-    await expect(existingOption).toContainText('같은 폴더에서 나온 Work를 먼저 보여줍니다');
+    // The popup says which ordering it is showing.
+    await expect(popup.locator('.works-assign-order')).toHaveText('같은 폴더에서 나온 Work를 먼저 보여줍니다');
 
     // Turn it off through the panel the user actually has.
     await page.getByRole('button', { name: 'Works 설정' }).click();
@@ -984,15 +1085,14 @@ test('설정의 같은 폴더 우선을 끄면 배정 추천 순서가 바뀐다
       { timeout: 10_000 },
     ).toBe(false);
 
-    // The panel is still open on the row behind the settings, and it reorders
-    // where it stands — no reopen needed, which is also the stronger claim: the
-    // setting takes effect on the panel the user is already looking at.
+    // The same mounted row re-ranks on the new setting — no reload, which is
+    // the stronger claim: it takes effect on the combobox already on screen.
     await page.getByRole('button', { name: 'Works 설정' }).click();
-    const reordered = page.locator('.works-assign-inline .works-assign-work-item');
+    await combo.click();
+    const reordered = popup.locator('.works-assign-work-item');
     await expect(reordered.nth(0)).toContainText(elsewhere.title);
     await expect(reordered.nth(1)).toContainText(sameDir.title);
-    await expect(page.locator('.works-assign-option').filter({ hasText: '기존 Work에 연결' }))
-      .toContainText('최근에 움직인 Work부터 보여줍니다');
+    await expect(popup.locator('.works-assign-order')).toHaveText('최근에 움직인 Work부터 보여줍니다');
     // The 같은 디렉토리 mark describes the Work, not the ranking, so it stays.
     await expect(reordered.nth(1)).toContainText('같은 디렉토리');
   } finally {
@@ -1209,30 +1309,39 @@ test('Timeline extends an unresolved bar to today and pins a done bar to its spa
   expect(Number.isNaN(todayColumn)).toBe(false);
 
   // Unresolved: bar runs from Monday to the today column and stays open.
+  const monday = await dayGridColumn(page, weekStart);
   const activeBar = page.locator('.tl-bar').filter({ hasText: activeTitle });
   await expect(activeBar).toHaveClass(/tl-bar--active/);
   await expect(activeBar).toHaveClass(/tl-bar--ongoing/);
   await expect(activeBar).toContainText('진행중');
   expect(await gridColumnBounds(barSlot(page, activeTitle)))
-    .toEqual({ start: '2', end: String(todayColumn + 1) });
+    .toEqual({ start: String(monday), end: String(todayColumn + 1) });
 
   // Done: Monday → Tuesday, unaffected by where today falls.
   const doneBar = page.locator('.tl-bar').filter({ hasText: doneTitle });
   await expect(doneBar).toHaveClass(/tl-bar--done/);
   await expect(doneBar).not.toHaveClass(/tl-bar--ongoing/);
-  expect(await gridColumnBounds(barSlot(page, doneTitle))).toEqual({ start: '2', end: '4' });
+  expect(await gridColumnBounds(barSlot(page, doneTitle)))
+    .toEqual({ start: String(monday), end: String(monday + 2) });
 
   // Unresolved Works sort above resolved ones (mockup footnote).
   await expect(page.locator('.tl-bar').first()).toContainText(activeTitle);
 
-  // Month mode keeps the same day grid, widened to whole weeks (28–35 columns).
-  await page.getByRole('button', { name: '월간' }).click();
+  // The legend names each Work bar fill on the grid.
+  await expect(page.locator('.tl-legend')).toContainText('Work 진행');
+  await expect(page.locator('.tl-legend')).toContainText('Work 완료');
+
+  // Zoom only narrows the columns: same buffer, same day columns, same bars.
+  const dayColumns = await page.locator('.tl-head[data-tl-col]').count();
+  await page.getByRole('button', { name: '월 단위 줌' }).click();
   await expect(page.locator('.timeline--month')).toBeVisible();
-  const monthColumns = await page.locator('.tl-head').count();
-  expect(monthColumns).toBeGreaterThanOrEqual(29); // 1 label column + >= 28 days
-  expect(monthColumns).toBeLessThanOrEqual(36);
-  await page.getByRole('button', { name: '주간' }).click();
-  await expect(page.locator('.tl-head')).toHaveCount(8);
+  await expect(page.locator('.tl-head[data-tl-col]')).toHaveCount(dayColumns);
+  const monthWidth = await page.locator('.tl-head--today').evaluate((el) => el.getBoundingClientRect().width);
+  expect(Math.round(monthWidth)).toBe(34);
+  expect(await gridColumnBounds(barSlot(page, doneTitle)))
+    .toEqual({ start: String(monday), end: String(monday + 2) });
+  await page.getByRole('button', { name: '주 단위 줌' }).click();
+  await expect(page.locator('.timeline--month')).toHaveCount(0);
 
   // A bar opens the shared Work detail dialog.
   await activeBar.click();
@@ -1257,10 +1366,13 @@ test('Timeline re-dates a Work by dragging a bar edge and via the detail dialog'
 
   const slot = barSlot(page, title);
   await expect(slot).toBeVisible();
-  expect(await gridColumnBounds(slot)).toEqual({ start: '4', end: '6' });
+  const monday = await dayGridColumn(page, weekStart);
+  expect(await gridColumnBounds(slot))
+    .toEqual({ start: String(monday + 2), end: String(monday + 4) });
 
-  // Drag the left handle two columns left, onto Monday.
-  const mondayHead = page.locator('[data-tl-col="0"]');
+  // Drag the left handle two columns left, onto Monday. Column indices are
+  // buffer-relative now, so Monday is addressed by date, not as column 0.
+  const mondayHead = page.locator(`[data-tl-col="${monday - 2}"]`);
   const target = await mondayHead.boundingBox();
   const handle = slot.locator('.tl-bar-handle--start');
   const from = await handle.boundingBox();
@@ -1276,7 +1388,7 @@ test('Timeline re-dates a Work by dragging a bar edge and via the detail dialog'
     .toBe(noonAfter(weekStart, 0));
   // The noon time-of-day survives a day-level drag.
   expect((await apiGetWork(work.id)).resolvedAt).toBe(noonAfter(weekStart, 3));
-  await expect.poll(async () => (await gridColumnBounds(slot)).start).toBe('2');
+  await expect.poll(async () => (await gridColumnBounds(slot)).start).toBe(String(monday));
 
   // Same edit from the detail dialog's date inputs: pull the end back a day.
   await page.locator('.tl-bar').filter({ hasText: title }).click();
@@ -1320,7 +1432,8 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   const todayColumn = Number.parseInt(
     (await gridColumnBounds(page.locator('.tl-head--today'))).start, 10,
   );
-  expect(await gridColumnBounds(slot)).toEqual({ start: '2', end: String(todayColumn + 1) });
+  const monday = await dayGridColumn(page, weekStart);
+  expect(await gridColumnBounds(slot)).toEqual({ start: String(monday), end: String(todayColumn + 1) });
   await expect(slot.locator('.tl-bar-ongoing')).toHaveText('▸ 진행중');
 
   // Set a planned end from the dialog: Sunday, the last column of the week.
@@ -1338,7 +1451,7 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   expect((await apiGetWork(work.id)).status).toBe('active');
 
   await dialog.getByRole('button', { name: 'Close dialog' }).click();
-  await expect.poll(async () => (await gridColumnBounds(slot)).end).toBe('9');
+  await expect.poll(async () => (await gridColumnBounds(slot)).end).toBe(String(monday + 7));
   await expect(slot.locator('.tl-bar-ongoing')).toContainText('예정');
 
   // Completing later keeps the planned date instead of stamping "now".
@@ -1346,16 +1459,107 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   expect((await apiGetWork(work.id)).resolvedAt).toBe(endOfDayAfter(weekStart, 6));
 });
 
+/**
+ * The grid is a native horizontal scroller over fixed-width day columns, not a
+ * week pager: it snaps per day, moves a day per arrow key (seven with Shift),
+ * pans on an empty-space drag, and grows into the past without moving the
+ * dates under the viewport.
+ */
+test('Timeline scrolls a day at a time and grows into the past without jumping', async ({ page }) => {
+  await page.goto('/');
+  await openTimeline(page);
+
+  const scroller = page.locator('.tl-view .tl-scroll');
+  const COL = 78;
+  const scrollLeft = () => scroller.evaluate((el) => el.scrollLeft);
+  /** The date of the first column right of the sticky label. */
+  const firstVisibleDate = () => scroller.evaluate((el, col) => {
+    const index = Math.round(el.scrollLeft / col);
+    return el.querySelector(`[data-tl-col="${index}"]`)?.getAttribute('data-tl-date') ?? null;
+  }, COL);
+
+  const style = await scroller.evaluate((el) => {
+    const css = getComputedStyle(el);
+    return { snap: css.scrollSnapType, overscroll: css.overscrollBehaviorX, overflow: css.overflowX };
+  });
+  expect(style.snap).toContain('x');
+  expect(style.snap).toContain('mandatory');
+  expect(style.overscroll).toBe('contain');
+  expect(style.overflow).toBe('auto');
+
+  // Initial view: snapped to a whole day, today near the right edge.
+  await expect.poll(async () => (await scrollLeft()) % COL).toBe(0);
+
+  // ← / Shift+→ only when the scroller itself has focus.
+  await scroller.focus();
+  const start = await scrollLeft();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(scrollLeft).toBe(start - COL);
+  await page.keyboard.press('Shift+ArrowRight');
+  await expect.poll(scrollLeft).toBe(start - COL + 7 * COL);
+
+  // 오늘: today's column lands second from the left.
+  await page.getByRole('button', { name: '오늘' }).click();
+  await expect.poll(async () => {
+    const [head, label] = await Promise.all([
+      page.locator('.tl-head--today').boundingBox(),
+      page.locator('.tl-view .tl-head--label').boundingBox(),
+    ]);
+    return head && label ? Math.round(head.x - (label.x + label.width)) : null;
+  }).toBe(COL);
+  await expect(page.getByRole('button', { name: '오늘' })).toBeDisabled();
+
+  // Empty-space drag pans (and settles on a day).
+  const before = await scrollLeft();
+  const box = await page.locator('.tl-view .tl-head--today').boundingBox();
+  if (!box) throw new Error('today header not measurable');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 3 * COL, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(scrollLeft).toBe(before - 3 * COL);
+
+  // Near the left end: 28 days are prepended and scrollLeft is corrected so
+  // the same date stays first.
+  const columns = await page.locator('.tl-view .tl-head[data-tl-col]').count();
+  await scroller.evaluate((el, col) => { el.scrollLeft = 10 * col; }, COL);
+  await expect.poll(firstVisibleDate).not.toBeNull();
+  const expectedDate = await scroller.evaluate((el) =>
+    el.querySelector('[data-tl-col="3"]')?.getAttribute('data-tl-date'));
+  await scroller.evaluate((el, col) => { el.scrollLeft = 3 * col; }, COL);
+  await expect(page.locator('.tl-view .tl-head[data-tl-col]')).toHaveCount(columns + 28);
+  await expect.poll(firstVisibleDate).toBe(expectedDate);
+  // …which is now column 31: the 28 new days sit before it, not under it.
+  expect(await scroller.evaluate((el, col) => Math.round(el.scrollLeft / col), COL)).toBe(31);
+
+  // The month band names the months on the grid.
+  await expect(page.locator('.tl-view .tl-month').first()).toContainText('월');
+});
+
 test('Timeline says nothing ran when the range is empty', async ({ page }) => {
   await page.goto('/');
   await openTimeline(page);
 
-  // Two weeks ahead: nothing can have *executed* there, and after
-  // apiResetWorksState there is no Work whose bar reaches that far either. The
-  // current week is never reliably empty — specs share one server, and every
-  // executed card from an earlier spec file is a session row here.
-  await page.getByRole('button', { name: '다음 주' }).click();
-  await page.getByRole('button', { name: '다음 주' }).click();
+  // Five weeks ahead: nothing can have *executed* there, and after
+  // apiResetWorksState there is no Work to draw. The current week is never
+  // reliably empty — specs share one server, and every executed card from an
+  // earlier spec file is a session row here. Five, not two: the API window is
+  // the viewport ± 7 days snapped to 14-day blocks, so it has to clear today.
+  const firstVisibleDate = () => page.locator('.tl-view .tl-scroll').evaluate((el) => {
+    const index = Math.round(el.scrollLeft / 78);
+    return el.querySelector(`[data-tl-col="${index}"]`)?.getAttribute('data-tl-date') ?? null;
+  });
+  await expect.poll(firstVisibleDate).not.toBeNull();
+  const initial = new Date(`${await firstVisibleDate()}T00:00:00`);
+  // Quick presses accumulate (each one extends the in-flight target), even
+  // across the buffer growing at the right end mid-animation.
+  for (let step = 0; step < 5; step += 1) {
+    await page.getByRole('button', { name: '7일 뒤로' }).click();
+  }
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const expected = dayAfter(initial, 35);
+  await expect.poll(firstVisibleDate, { timeout: 10_000 })
+    .toBe(`${expected.getFullYear()}-${pad(expected.getMonth() + 1)}-${pad(expected.getDate())}`);
 
   await expect(page.locator('.tl-empty')).toContainText('이 기간에 실행된 세션이 없습니다');
   await expect(page.locator('.tl-bar')).toHaveCount(0);
@@ -1436,11 +1640,12 @@ test('Timeline nests executed sessions under their Work and marks unassigned one
   await expect(sessionRow(page, `claude-${runId}-planned`)).toHaveCount(0);
   await expect(page.locator(`.tl-day[title*="${planned.title}"]`)).toHaveCount(0);
 
-  // A card that ran on Tuesday occupies exactly Tuesday's column (grid col 3).
+  // A card that ran on Tuesday occupies exactly Tuesday's column.
   const dayCell = assignedRow.locator('.tl-day-slot');
   await expect(dayCell).toHaveCount(1);
   await expect(dayCell.locator('.tl-day--complete')).toHaveCount(1);
-  expect((await gridColumnBounds(dayCell)).start).toBe('3');
+  expect((await gridColumnBounds(dayCell)).start)
+    .toBe(String(await dayGridColumn(page, dayAfter(weekStart, 1))));
 
   // Assigning the loose session moves its row under the (now expanded) Work.
   // Addressed by class, not getByRole: `.tl-row` is `display: contents` (its
@@ -1517,12 +1722,12 @@ function shortDate(iso: string): string {
 }
 
 /**
- * A Work whose bar is cut by the left edge of the current week: it started
- * eleven days ago and is still open, so it is drawn from column 0 while its real
- * start is off-screen.
+ * A Work whose bar starts left of the initial viewport: it started twenty days
+ * ago and is still open. The initial view shows the last ~two weeks, so the
+ * bar's start is scrolled out of sight while its title stays pinned.
  */
 async function seedClippedWork(title: string): Promise<{ id: string; startedAt: string }> {
-  const startedAt = noonDaysAgo(11);
+  const startedAt = noonDaysAgo(20);
   const work = await apiCreateWork({ title, projectDir: PROJECT_DIR, startedAt });
   return { id: work.id, startedAt };
 }
@@ -1548,10 +1753,11 @@ test('Timeline의 잘린 바를 →로 옮기면 실제 시작일 기준으로 �
 
   const slot = barSlot(page, title);
   await expect(slot).toBeVisible();
-  // Drawn from the first day column even though it began eleven days earlier.
-  await expect(slot.locator('.tl-bar')).toHaveClass(/tl-bar--clipped-left/);
-  expect((await gridColumnBounds(slot)).start).toBe('2');
-  await expect(slot.locator('.tl-bar-edge')).toContainText(shortDate(startedAt));
+  // Placed at its real start (the buffer reaches eight weeks back), and the
+  // sticky title says where it began because that start is off-screen.
+  expect((await gridColumnBounds(slot)).start)
+    .toBe(String(await dayGridColumn(page, new Date(startedAt))));
+  await expect(slot.locator('.tl-bar-edge')).toContainText(`${shortDate(startedAt)}부터`);
 
   const handle = slot.locator('.tl-bar-handle--start');
   // The slider announces the *real* start, not the column it is drawn at.
@@ -1564,7 +1770,7 @@ test('Timeline의 잘린 바를 →로 옮기면 실제 시작일 기준으로 �
   await handle.press('ArrowRight');
 
   await expect.poll(async () => (await apiGetWork(id)).startedAt, { timeout: 10_000 })
-    .toBe(noonDaysAgo(10));
+    .toBe(noonDaysAgo(19));
 
   // …and the edit is reversible, because nothing confirmed it.
   const notice = page.locator('.work-session-notice');
@@ -1579,7 +1785,7 @@ test('Timeline의 잘린 바를 →로 옮기면 실제 시작일 기준으로 �
  * `preventDefault()` (it must, to take pointer capture), which also suppresses
  * the implicit focus a `tabIndex` element would get — so the documented
  * "focus the handle and press ←/→" was reachable by Tab only, and pressing `→`
- * right after a click moved focus to the 월간 button instead.
+ * right after a click moved focus to the 월 zoom button instead.
  */
 test('Timeline 손잡이를 클릭하면 포커스가 그 손잡이로 간다', async ({ page, trackWork }) => {
   const runId = `tl-focus-${Date.now()}`;
@@ -1771,6 +1977,7 @@ test('⋯ 메뉴의 세션 이동은 양쪽 시작일을 다시 계산하고, �
   const destinations = moveDialog.locator('.works-assign-work-item');
   await expect(destinations).toHaveCount(1);
   await destinations.filter({ hasText: targetTitle }).click();
+  await expect(destinations.filter({ hasText: targetTitle })).toHaveAttribute('aria-selected', 'true');
 
   // 영향 미리보기: 양쪽 시작일이 모두 바뀐다 (원본은 뒤로, 대상은 앞으로).
   const preview = moveDialog.locator('.works-move-preview li');
@@ -1778,7 +1985,7 @@ test('⋯ 메뉴의 세션 이동은 양쪽 시작일을 다시 계산하고, �
   await expect(preview.nth(0)).toContainText(`"${sourceTitle}"의 시작일이`);
   await expect(preview.nth(1)).toContainText(`"${targetTitle}"의 시작일이`);
 
-  await moveDialog.getByRole('button', { name: `"${targetTitle}"(으)로 이동` }).click();
+  await moveDialog.getByRole('button', { name: '이동', exact: true }).click();
   await expect(moveDialog).toHaveCount(0);
 
   const notice = page.locator('.work-session-notice');
@@ -1804,7 +2011,7 @@ test('⋯ 메뉴의 세션 이동은 양쪽 시작일을 다시 계산하고, �
   await expect(moveDialog.locator('.works-move-preview'))
     .toContainText(`마지막 세션이므로 "${sourceTitle}" Work는 삭제됩니다.`);
   await moveDialog.locator('.works-assign-work-item').filter({ hasText: targetTitle }).click();
-  await moveDialog.getByRole('button', { name: `"${targetTitle}"(으)로 이동` }).click();
+  await moveDialog.getByRole('button', { name: '이동', exact: true }).click();
 
   // 원본이 삭제되면 상세 다이얼로그도 함께 닫히고, 알림만 남는다.
   await expect(detail).toHaveCount(0);
@@ -1878,7 +2085,7 @@ test('Work 삭제는 확인을 거쳐 세션만 Inbox로 되돌리고 카드는 
   // 성공하면 다이얼로그가 닫히고 Works 목록 + Inbox가 갱신된다.
   await expect(detail).toHaveCount(0);
   await expect(workCard(page, title)).toHaveCount(0);
-  await expect(page.getByText('미배정 세션 2개')).toBeVisible();
+  await expect(page.getByText('📥 미배정 2', { exact: true })).toBeVisible();
   await expect(worksTabBadge(page)).toHaveText('2');
 
   expect((await apiGetWorks()).map((entry) => entry.id)).not.toContain(work.id);

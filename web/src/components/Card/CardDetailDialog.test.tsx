@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { KanbanCard, KanbanStatus } from "../../../../src/core/types";
 import { CardDetailDialog } from "./CardDetailDialog";
+import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from "../../constants/copy";
 
 function makeCard(status: KanbanStatus): KanbanCard {
   return {
@@ -83,7 +84,7 @@ describe("CardDetailDialog", () => {
     }
   });
 
-  test("shows scheduled dispatch status and Start Now copy for scheduled todo cards", () => {
+  test("shows scheduled dispatch status and start-now copy for scheduled todo cards", () => {
     const html = renderToStaticMarkup(
       <CardDetailDialog
         card={{
@@ -103,10 +104,28 @@ describe("CardDetailDialog", () => {
       />,
     );
 
-    expect(html).toContain("START NOW");
+    expect(html).toContain(CARD_ACTION_COPY.startNow);
     expect(html).toContain("Scheduled Dispatch");
     expect(html).toContain("2026-07-18 09:30 KST");
-    expect(html).toContain("Start Now는 이 예약을 소비하고 즉시 한 번만 실행합니다.");
+    expect(html).toContain(CARD_DETAIL_COPY.startNowHint);
+  });
+
+  // The footer used to print DONE for both in_progress → complete and
+  // complete → done; both now come from `primaryActionFor`.
+  test("labels finish and done differently in the footer", () => {
+    const inProgress = renderDialog(makeCard("in_progress"));
+    expect(inProgress).toContain(CARD_ACTION_COPY.finish);
+    expect(inProgress).not.toContain(CARD_ACTION_COPY.done);
+    expect(inProgress).toContain(CARD_ACTION_COPY.reopen);
+
+    const complete = renderDialog(makeCard("complete"));
+    expect(complete).toContain(CARD_ACTION_COPY.done);
+    expect(complete).not.toContain(CARD_ACTION_COPY.finish);
+    expect(complete).toContain(CARD_ACTION_COPY.reopen);
+
+    const done = renderDialog(makeCard("done"));
+    expect(done).toContain(CARD_ACTION_COPY.reopen);
+    expect(done).not.toContain(CARD_ACTION_COPY.done);
   });
 
   test("shows Script execution metadata and Quick Action provenance", () => {

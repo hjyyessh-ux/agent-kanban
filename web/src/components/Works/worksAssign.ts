@@ -11,6 +11,7 @@ import type {
 } from '../../../../src/core/types';
 import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 import { selectWorks, workPlanOverrunDays } from '../../../../src/core/work-list';
+import { STATUS_LABELS, WORK_STATUS_LABELS as WORK_STATUS_COPY } from '../../constants/copy';
 import { resolveWorkStartedAt } from '../../../../src/plugin/works/work-lifecycle';
 
 // Fallback stale threshold. The live value comes from Works settings
@@ -41,13 +42,9 @@ export const DEFAULT_SESSION_ROLE: WorkSessionRole = 'dev';
  * `active` used to render as the literal `ACTIVE` while its two siblings were
  * `완료` and `폐기`, so one badge called the same field by two conventions and
  * leaked the wire enum to the reader. The wire value stays `active`; only the
- * label changes.
+ * label changes. The words live in `constants/copy.ts`.
  */
-export const WORK_STATUS_LABELS: Record<Work['status'], string> = {
-  active: '진행 중',
-  done: '완료',
-  discarded: '폐기',
-};
+export const WORK_STATUS_LABELS: Record<Work['status'], string> = WORK_STATUS_COPY;
 
 /**
  * The detail dialog's single status badge — status plus how long the Work has
@@ -537,6 +534,123 @@ export function describeAssignSuggestion(suggestion: WorkAssignSuggestion): stri
   return parts.join(' · ');
 }
 
+// ── Assign combobox (`WorkAssignInline`) ─────────────────────────────────────
+
+/**
+ * The combobox's `＋ 새 Work 만들기` option key. Every other option key is a
+ * Work id, so the selection is one string and ↑/↓ walk one flat list — the
+ * create option is an item of the list, not a mode the panel is switched into.
+ */
+export const NEW_WORK_OPTION = '__new__';
+
+export type AssignGroupKey = 'chained' | 'sameDirectory' | 'rest';
+
+export const ASSIGN_GROUP_LABELS: Record<AssignGroupKey, string> = {
+  chained: '🔗 이어진 세션',
+  sameDirectory: '📁 같은 디렉토리',
+  rest: '그 밖의 진행 중 Work',
+};
+
+export interface AssignOptionGroup {
+  key: AssignGroupKey;
+  label: string;
+  items: WorkRecommendation[];
+}
+
+/**
+ * Narrow the ranked list to what the combobox input says. Every
+ * whitespace-separated term must appear in the Work's title or its directory
+ * (full path or the last segment the chips show), case-insensitively. The
+ * ranking order is kept — filtering never re-sorts.
+ */
+export function filterAssignRecommendations(
+  recommendations: WorkRecommendation[],
+  query: string,
+): WorkRecommendation[] {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return recommendations;
+  return recommendations.filter(({ work }) => {
+    const haystack = [work.title, work.projectDir ?? '', projectDirLabel(work.projectDir)]
+      .join(' ')
+      .toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+}
+
+/**
+ * Which `recommendWorksForSession` group a Work landed in. With
+ * `preferSameDir` off there is no same-directory group — those Works ranked
+ * with the rest, so that is where they are labelled.
+ */
+export function assignGroupOf(
+  recommendation: WorkRecommendation,
+  preferSameDir = true,
+): AssignGroupKey {
+  if (recommendation.chained) return 'chained';
+  if (preferSameDir && recommendation.sameDirectory) return 'sameDirectory';
+  return 'rest';
+}
+
+/** Consecutive runs of the (already group-ordered) list, labelled. */
+export function groupAssignRecommendations(
+  recommendations: WorkRecommendation[],
+  preferSameDir = true,
+): AssignOptionGroup[] {
+  const groups: AssignOptionGroup[] = [];
+  for (const recommendation of recommendations) {
+    const key = assignGroupOf(recommendation, preferSameDir);
+    const last = groups.at(-1);
+    if (last && last.key === key) last.items.push(recommendation);
+    else groups.push({ key, label: ASSIGN_GROUP_LABELS[key], items: [recommendation] });
+  }
+  return groups;
+}
+
+/** Option keys in list order: the create option first, then the Works. */
+export function assignOptionKeys(recommendations: WorkRecommendation[]): string[] {
+  return [NEW_WORK_OPTION, ...recommendations.map(({ work }) => work.id)];
+}
+
+/**
+ * What the combobox has selected for a given input.
+ *
+ * - Empty input → the row's 1순위 추천 (`topSuggestionId`), else the first
+ *   ranked Work, else `새 Work`. This is the "plain 배정 lands on what the row
+ *   was offering" rule: the list is browse order, the default is the suggestion.
+ * - Typed input → the first Work that matches it, else `새 Work` (the input then
+ *   *is* the title). Typing never selects create while a Work still matches —
+ *   `zepe` + 배정 must link to `zepetoful …`, not make a Work called "zepe".
+ */
+export function assignTargetForQuery(
+  query: string,
+  recommendations: WorkRecommendation[],
+  topSuggestionId?: string,
+): string {
+  if (query.trim() === '') {
+    if (topSuggestionId && recommendations.some(({ work }) => work.id === topSuggestionId)) {
+      return topSuggestionId;
+    }
+    return recommendations[0]?.work.id ?? NEW_WORK_OPTION;
+  }
+  return filterAssignRecommendations(recommendations, query)[0]?.work.id ?? NEW_WORK_OPTION;
+}
+
+/** Title `＋ 새 Work 만들기` would use: what was typed, else the suggestion. */
+export function newWorkTitleFor(query: string, suggestedTitle: string): string {
+  return query.trim() || suggestedTitle;
+}
+
+/**
+ * ↑/↓ in the combobox, wrapping. A selection that is no longer listed (filtered
+ * out, or its Work dropped out on a poll) steps from the top.
+ */
+export function stepAssignTarget(keys: string[], current: string, delta: 1 | -1): string {
+  if (keys.length === 0) return current;
+  const index = keys.indexOf(current);
+  if (index < 0) return delta === 1 ? keys[0] : keys[keys.length - 1];
+  return keys[(index + delta + keys.length) % keys.length];
+}
+
 /**
  * Confirmation text for deleting a Work. `DELETE /api/works/:id` has no status
  * guard and drops only the Work: the cards stay where they are and every linked
@@ -576,16 +690,15 @@ export function requiresDoneConfirm(config: WorksConfigDto | null | undefined): 
   return config?.doneConfirm !== false;
 }
 
-/** Status labels for the completion preview's card breakdown, board order. */
-const PREVIEW_STATUS_LABELS: Array<[KanbanStatus, string]> = [
-  ['todo', '대기'],
-  ['in_progress', '진행중'],
-  // Same words as the Timeline legend (`TIMELINE_STATUS_LABELS`): `complete`
-  // is the agent waiting on the user, `done` is the finished column — the old
-  // `done 6` printed the wire enum in the one dialog that should read plainly.
-  ['complete', '검토 대기'],
-  ['done', '완료'],
-];
+/**
+ * Status labels for the completion preview's card breakdown, board order —
+ * the board columns' and Timeline legend's words (`STATUS_LABELS`): `complete`
+ * is the agent waiting on the user, `done` is the finished column. The old
+ * `done 6` printed the wire enum in the one dialog that should read plainly.
+ */
+const PREVIEW_STATUS_LABELS: Array<[KanbanStatus, string]> = (
+  ['todo', 'in_progress', 'complete', 'done'] as const
+).map((status) => [status, STATUS_LABELS[status]]);
 
 /** `대기 2 · 진행중 1` — the non-zero statuses of a completion preview, board order. */
 export function describeCompletionByStatus(preview: WorkCompletionPreview): string {

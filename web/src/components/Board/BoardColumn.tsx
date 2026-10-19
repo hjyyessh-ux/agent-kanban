@@ -5,7 +5,9 @@ import { selectCardById } from './board-selectors';
 import type { V2ColumnViewModel } from './board-selectors';
 import { BoardCard, STATUS_ACCENT } from './BoardCard';
 import { BoardCompleteSessionView } from './BoardCompleteSessionView';
-import type { CompleteSessionGroup } from './BoardCompleteSessionView';
+import type { CardRevealRequest, CompleteSessionGroup } from './BoardCompleteSessionView';
+import { isUnreadCompletion } from './board-selectors';
+import { COLUMN_MENU_COPY } from '../../constants/copy';
 
 /* ── DnD helpers ──────────────────────────────────────────── */
 
@@ -49,6 +51,11 @@ interface BoardColumnProps {
   onDelete?: (card: KanbanCard) => void;
   groupCompleteSessions?: boolean;
   onArchiveCards?: (cards: KanbanCard[]) => void;
+  /** Batch read stamp for the column's `Mark all read`. */
+  onMarkCardsRead?: (cardIds: string[]) => void;
+  /** The column `● N` pill: jump to this column's next unread card. */
+  onUnreadJump?: () => void;
+  revealRequest?: CardRevealRequest | null;
 }
 
 export const BoardColumn: React.FC<BoardColumnProps> = ({
@@ -68,6 +75,9 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
   onDelete,
   groupCompleteSessions = false,
   onArchiveCards,
+  onMarkCardsRead,
+  onUnreadJump,
+  revealRequest,
 }) => {
   const { status, cards } = column;
   const isDndEnabled = !!onReorder;
@@ -178,12 +188,26 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         status={status}
         label={column.label}
         count={column.count}
+        unreadCount={column.unreadCount}
         actionableCount={
           status === 'complete' || status === 'done'
             ? cards.filter((card) => !card.favorite).length
             : undefined
         }
         onCompleteAll={onCompleteAll}
+        onUnreadJump={status === 'complete' ? onUnreadJump : undefined}
+        onMarkAllRead={
+          status === 'complete' && onMarkCardsRead
+            ? () => {
+                // `allCards` is the filtered board, so this reads exactly what
+                // the column is showing — children included, done untouched.
+                const unreadIds = allCards
+                  .filter((card) => card.status === 'complete' && isUnreadCompletion(card))
+                  .map((card) => card.id);
+                if (unreadIds.length > 0) onMarkCardsRead(unreadIds);
+              }
+            : undefined
+        }
         onHideAllSessions={
           status === 'complete' && groupCompleteSessions && sessionViewCards.length > 0
             ? () => {
@@ -192,7 +216,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
               }
             : undefined
         }
-        hideAllSessionsLabel={completeSessionsCollapsed ? 'Collapse All' : 'Hide All'}
+        hideAllSessionsLabel={completeSessionsCollapsed ? COLUMN_MENU_COPY.collapseAll : COLUMN_MENU_COPY.hideAll}
         onArchive={onArchive}
       />
       {status === 'todo' && onCreate && (
@@ -219,6 +243,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
             status={status === 'done' ? 'done' : 'complete'}
             defaultCollapsed={status === 'done'}
             hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+            revealRequest={revealRequest}
             onCardClick={onCardClick}
             onSessionOpen={onSessionOpen}
             onFavoriteToggle={onFavoriteToggle}
@@ -233,6 +258,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
             return (
               <div
                 key={vm.id}
+                data-card-id={vm.id}
                 className="kv2-card-wrapper"
                 style={{ '--kv2-status-line': STATUS_ACCENT[vm.status] } as React.CSSProperties}
               >

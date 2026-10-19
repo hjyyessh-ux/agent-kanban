@@ -24,7 +24,7 @@ import { FileLock } from './filelock';
 import { resolveDir } from './data-dir';
 import { normalizeAgentType } from './agent-type';
 import { normalizeRuntimeCommandId } from './commands';
-import type { AgentRuntime } from './types';
+import type { AgentRuntime, CompletionSeenBatchResponse } from './types';
 import {
   claimScheduledDispatchState,
   createScheduledDispatchState,
@@ -947,6 +947,51 @@ export class KanbanStore {
     });
 
     return updatedCard!;
+  }
+
+  /**
+   * `markCompletionSeen` for many cards under **one** lock and one write — the
+   * column `Mark all read` and the session conversation modal would otherwise
+   * take N locks and N rewrites of `active.json`. Same stamp semantics as the
+   * single-card path (backfill `completedAt`, never touch `updatedAt`); an id
+   * that is missing or not `complete` is skipped, not thrown, so one stale id
+   * cannot cost the rest. Duplicates collapse; nothing matched → no write.
+   */
+  async markCompletionSeenMany(ids: readonly string[]): Promise<CompletionSeenBatchResponse> {
+    const now = new Date().toISOString();
+    const cards: KanbanCard[] = [];
+    const skipped: CompletionSeenBatchResponse['skipped'] = [];
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return { cards, skipped };
+
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const byId = new Map(board.cards.map((card) => [card.id, card]));
+
+      for (const id of uniqueIds) {
+        const card = byId.get(id);
+        if (!card) {
+          skipped.push({ id, reason: 'not_found' });
+          continue;
+        }
+        if (card.status !== 'complete') {
+          skipped.push({ id, reason: 'not_complete' });
+          continue;
+        }
+        if (!card.completedAt) {
+          card.completedAt = card.updatedAt;
+        }
+        card.completedSeenAt = now;
+        cards.push(card);
+      }
+
+      if (cards.length > 0) {
+        board.lastModified = now;
+        await this.save(board);
+      }
+    });
+
+    return { cards, skipped };
   }
 
   async deleteCard(id: string): Promise<void> {

@@ -5,9 +5,10 @@ import type {
   Work,
   WorkStatus,
 } from '../../../../src/core/types';
-import { buildRange } from './timelineModel';
+import { addDays, rangeFromBuffer, startOfWeek } from './timelineModel';
 import {
   DIR_NONE_KEY,
+  buildStripRows,
   buildTimelineRows,
   dayCells,
   filterTimelineRows,
@@ -26,7 +27,11 @@ import {
 
 // A Thursday, so the week range runs Mon 2026-08-31 … Sun 2026-09-06.
 const NOW = new Date('2026-09-03T10:00:00');
-const RANGE = buildRange('week', 0, NOW);
+/** A Monday–Sunday slice of the scroll buffer, `offset` weeks from NOW's week. */
+function weekRange(offset: number) {
+  return rangeFromBuffer({ start: addDays(startOfWeek(NOW), offset * 7), dayCount: 7 });
+}
+const RANGE = weekRange(0);
 
 function localIso(day: number, hour = 9): string {
   return new Date(2026, 8, day, hour, 0, 0).toISOString();
@@ -301,7 +306,7 @@ describe('buildTimelineRows', () => {
 describe('range helpers', () => {
   test('todayColumn is null when the range does not contain today', () => {
     expect(todayColumn(RANGE, NOW)).toBe(3);
-    expect(todayColumn(buildRange('week', -4, NOW), NOW)).toBeNull();
+    expect(todayColumn(weekRange(-4), NOW)).toBeNull();
   });
 
   test('rangeWindow covers the whole first and last day, local time', () => {
@@ -379,7 +384,28 @@ describe('timelineLegend', () => {
       range: RANGE,
       now: NOW,
     });
-    expect(legendKeys(rows)).toEqual(['work']);
+    expect(legendKeys(rows)).toEqual(['work-active']);
+  });
+
+  test('lists each Work bar fill that is drawn — active, overrun, done, discarded', () => {
+    const base = { createdAt: localIso(1), updatedAt: localIso(1), sessionLinks: [] };
+    const rows = buildTimelineRows({
+      sessions: [],
+      works: [
+        { ...base, id: 'w-a', title: 'A', status: 'active' as WorkStatus, startedAt: localIso(1) },
+        // Planned end (9/2) already behind NOW (9/3) → painted amber.
+        { ...base, id: 'w-o', title: 'O', status: 'active' as WorkStatus, startedAt: localIso(1), resolvedAt: localIso(2) },
+        { ...base, id: 'w-d', title: 'D', status: 'done' as WorkStatus, startedAt: localIso(1), resolvedAt: localIso(2) },
+        { ...base, id: 'w-x', title: 'X', status: 'discarded' as WorkStatus, startedAt: localIso(1), resolvedAt: localIso(2) },
+      ],
+      range: RANGE,
+      now: NOW,
+    });
+    const items = timelineLegend(rows, NOW.getTime());
+    expect(items.map((item) => item.key))
+      .toEqual(['work-active', 'work-overrun', 'work-done', 'work-discarded']);
+    expect(items.map((item) => item.label))
+      .toEqual(['Work 진행', 'Work 예정 초과', 'Work 완료', 'Work 폐기']);
   });
 
   test('every entry the legend can emit has a Korean label', () => {
@@ -503,5 +529,29 @@ describe('filterTimelineSessions / filterTimelineWorks (Board FILTER bar on the 
     const kept = filterTimelineSessions(sessions, { directory: '/w/zetta' });
     expect(kept).toEqual([]);
     expect(filterTimelineWorks(works, kept, { directory: '/w/zetta' }).map((w) => w.id)).toEqual(['w-empty']);
+  });
+});
+
+describe('buildStripRows', () => {
+  test('keeps only active Works whose bar lands in the range — no dir, session or 미배정 rows', () => {
+    const rows = buildStripRows(
+      [
+        work({ id: 'w-a', projectDir: '/w/a', sessionIds: ['s-1'] }),
+        work({ id: 'w-done', status: 'done', resolvedAt: localIso(2) }),
+        work({ id: 'w-discarded', status: 'discarded', resolvedAt: localIso(2) }),
+        // Started before the range and still open → clipped bar, drawn.
+        work({ id: 'w-long', startedAt: localIso(-10) }),
+        // Starts after the visible week → nothing to draw.
+        work({ id: 'w-future', startedAt: localIso(20) }),
+      ],
+      RANGE,
+      NOW,
+    );
+    expect(rows.every((row) => row.kind === 'work' && row.bar !== null)).toBe(true);
+    expect(rows.map((row) => row.work.id).sort()).toEqual(['w-a', 'w-long']);
+  });
+
+  test('is empty when nothing is active', () => {
+    expect(buildStripRows([work({ id: 'w-done', status: 'done', resolvedAt: localIso(2) })], RANGE, NOW)).toEqual([]);
   });
 });

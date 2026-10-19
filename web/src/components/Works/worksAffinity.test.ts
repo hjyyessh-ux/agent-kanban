@@ -9,12 +9,8 @@ import {
   parseThemeTokens,
   resolveTokenColor,
 } from '../../styles/tokenColor';
-import {
-  DIR_COLOR_SLOTS,
-  chainedWorkIds,
-  dirAccentClass,
-  projectDirColorSlot,
-} from './worksAffinity';
+import { DIR_COLOR_SLOTS, dirAccentClass, projectDirColorSlot } from '../../utils/project-color';
+import { chainedWorkIds } from './worksAffinity';
 
 function work(id: string, sessionIds: string[]): Work {
   const sessionLinks: WorkSessionLink[] = sessionIds.map((sessionId) => ({

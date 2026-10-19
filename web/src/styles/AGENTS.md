@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-07-01 | Updated: 2026-07-06 -->
+<!-- Generated: 2026-07-01 | Updated: 2026-10-19 -->
 
 # styles/
 
@@ -21,6 +21,7 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 | `kv2/panels.css` | Detail sidebar panels: session resume, meta, phases, run metadata/progress, question, feedback, screenshot, queue settings. |
 | `kv2/conversation.css` | Session conversation modal speaker blocks. |
 | `kv2/mention.css` | `@` mention reference UI: anchored popover (tabs/list/rows/snippets) and the References chip strip. Carries the `.kv2-ref-kind-*` classes that hand a kind's swatch/text pair to a row or chip as `--kv2-ref-accent` / `--kv2-ref-ink`. |
+| `kv2/project-color.css` | Directory palette slots `.works-dir-c{1..8}` (publish `--works-dir-accent` / `--works-dir-text`), the `.works-dir-chip` / `.works-dir-mark` base rule, and the `.kv2-project-chip` single-row modifier (shrink + ellipsis). Global so Works, Timeline, mentions and the board share one colour per `projectDir` (slot hashed in `utils/project-color.ts`). The 14% chip tint is mirrored by `CHIP_TINT_PERCENT` in `token-contrast.test.ts`. |
 | `tokenColor.ts` | **Test-only.** sRGB colour maths (luminance, contrast, `color-mix` as a lerp, hue) plus a reader that parses `kanban-v2.tokens.css` into light/dark token maps and evaluates a token's value through `var()` chains and `color-mix`. The one exception to this directory's "no TS" rule: the assertions it enables are about the tokens, so it belongs beside them. It restates **no** palette value — everything is read out of the stylesheet, so a token cannot drift away from its guard. |
 
 ## For AI Agents
@@ -34,11 +35,13 @@ All global and shared CSS for the SPA. Plain CSS only — no CSS-in-JS, CSS modu
 ### Testing Requirements
 - `no-hardcoded-colors.test.ts` greps every `*.css` under `web/src` (except `kanban-v2.tokens.css`) for hex/rgba literals and fails on anything outside the allowlist documented in `docs/dark-mode-token-map.md` — keeps new colors routed through `--kv2-*` tokens instead of leaking past dark-mode.
 - `token-contrast.test.ts` evaluates the Works affinity **text** tokens (`--kv2-dir-{1..8}-text`, `--kv2-affinity-chain-text`) out of the stylesheet and fails below WCAG AA (4.5:1) in either theme — against every panel surface *and* against the 14% accent tint `.works-dir-chip` paints under its own label. It also asserts the layer ① swatches are not restated in the dark block, that each `-text` token keeps its slot hue (mixing all the way to ink would pass a contrast check and destroy the palette), and that hue-adjacent slots differ in luminance. Retune a mix percentage or a swatch and this is what tells you whether it still reads. Layer ① swatches themselves are exempt: a 4px bar is not text. The same block guards the second categorical series, the `@` mention reference kinds (`--kv2-ref-{session,work,doc}-text`), against the 11% tint `.kv2-ref-chip` paints — plus that the three kinds stay apart in hue, since a chip is identified by its colour.
+- `token-contrast.test.ts` also holds `--kv2-text-muted` to 4.5:1 on every panel surface and `--kv2-app-bg` in both themes, and asserts it stays quieter than `--kv2-text-secondary`.
+- `no-fixed-font-size.test.ts` fails on any `px`/`rem` `font-size` in `web/src/**/*.css` (except `kanban-v2.tokens.css`) — those ignore `--kv2-font-scale`. `em`/`%` are allowed. Remaining debt is frozen in a per-file allowlist consumed one entry per occurrence: convert a value → delete its entry; never add one.
 - `e2e/v2-visual-audit.e2e.ts` asserts key kv2 metrics (board gap, card radius, dialog width) and captures screenshots (light + dark) — run it plus `board.e2e.ts` after touching shared tokens or `kv2/` files.
 
 ### Common Patterns
 - Tokens are plain CSS custom properties consumed via `var(--kv2-…)` — do not hardcode hex values if an equivalent token exists.
-- Text sizes use the `--kv2-text-*` scale (multiplied by `--kv2-font-scale`, set via JS) — do not hardcode font-size px in component CSS.
+- Text sizes use the `--kv2-text-*` scale (multiplied by `--kv2-font-scale`, set via JS) — do not hardcode `px`/`rem` font-size in any CSS; `no-fixed-font-size.test.ts` enforces it.
 
 ## Dependencies
 ### Internal

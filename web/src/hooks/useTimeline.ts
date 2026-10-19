@@ -22,6 +22,11 @@ export interface UseTimelineOptions {
   /** Window end, ISO 8601 (the grid's last day at 23:59:59.999 local). */
   to: string;
   includeSubagents: boolean;
+  /**
+   * `false` → no fetch and no poll. The Works tab's strip draws Work plan bars
+   * only, so the session read would be pure overhead there. Default `true`.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -29,14 +34,16 @@ export interface UseTimelineOptions {
  *
  * Its own endpoint rather than the Works poll: the grid needs cards that have
  * long since been archived off the board, and the window is what keeps that read
- * bounded. Changing week/month refetches; a stale response from the window the
- * user just left is discarded (`requestRef`), so paging quickly never lands the
- * wrong grid.
+ * bounded. The caller passes the visible columns ± 7 days snapped to 14-day
+ * blocks (`timelineFetchWindow`), so a one-day scroll keeps the same `from`/`to`
+ * strings and only crossing a block boundary refetches; a stale response from
+ * the window the user just left is discarded (`requestRef`), so scrolling
+ * quickly never lands the wrong grid.
  */
 export function useTimeline(options: UseTimelineOptions): UseTimelineResult {
-  const { from, to, includeSubagents } = options;
+  const { from, to, includeSubagents, enabled = true } = options;
   const [sessions, setSessions] = useState<TimelineSessionSpan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<UiAlert | null>(null);
   const requestRef = useRef(0);
   /** Which window the currently held `sessions` belong to. */
@@ -66,12 +73,12 @@ export function useTimeline(options: UseTimelineOptions): UseTimelineResult {
   }, [from, to, includeSubagents]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (enabled) void load();
+  }, [load, enabled]);
 
-  // No `enabled` gate: the Timeline view is only mounted while it is the
-  // Board tab's active view, so unmounting already stops the polling.
-  usePolling(load, POLL_INTERVAL_MS);
+  // Otherwise ungated: the Timeline view is only mounted while it is visible,
+  // so unmounting already stops the polling.
+  usePolling(load, POLL_INTERVAL_MS, enabled);
 
   const clearError = useCallback(() => setError(null), []);
 

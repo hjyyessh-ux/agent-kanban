@@ -1,21 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentRuntime, CardExecutionKind, KanbanCard } from '../../../../src/core/types';
+import type { AgentRuntime, CardExecutionKind, KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import { ExecutionTypeBadge, FavoriteToggleButton } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
+import { countUnread, isUnreadCompletion } from './board-selectors';
 import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
+import { CARD_ACTION_COPY } from '../../constants/copy';
 
 // A long-running session runs to 20+ turns; only the newest few are usually wanted.
 const INITIAL_VISIBLE_TURNS = 5;
 
 type SessionViewStatus = 'complete' | 'done';
 
+/**
+ * "Make this card visible": expand its group and, when it is one of the folded
+ * older turns, `Show N more`. A new `token` re-applies it even for the same
+ * card (the user collapsed the group again and jumped back).
+ */
+export interface CardRevealRequest {
+  cardId: string;
+  /** Column the card sits in — the list view un-collapses that section. */
+  status: KanbanStatus;
+  groupKey?: string;
+  token: number;
+}
+
 interface BoardCompleteSessionViewProps {
   cards: KanbanCard[];
   status: SessionViewStatus;
   defaultCollapsed?: boolean;
   hideAllToken?: number;
+  revealRequest?: CardRevealRequest | null;
   onCardClick: (card: KanbanCard) => void;
   onSessionOpen?: (group: CompleteSessionGroup) => void;
   onFavoriteToggle?: (card: KanbanCard) => void;
@@ -74,14 +90,6 @@ function compareOldestCardFirst(a: KanbanCard, b: KanbanCard): number {
   return a.id.localeCompare(b.id);
 }
 
-function isUnreadCompletion(card: KanbanCard): boolean {
-  if (card.status !== 'complete') return false;
-  const completionTime = getResponseSortTimestamp(card);
-  if (!completionTime) return false;
-
-  return !card.completedSeenAt || card.completedSeenAt < completionTime;
-}
-
 function getGroupKey(card: KanbanCard): string {
   return card.sessionId ? `session:${card.sessionId}` : `card:${card.id}`;
 }
@@ -133,7 +141,7 @@ export function groupCompleteCardsBySession(cards: KanbanCard[]): CompleteSessio
         startedAt: sortedCards[0]?.createdAt ?? '',
         lastUpdatedAt,
         cards: sortedCards,
-        unreadCount: sortedCards.filter(isUnreadCompletion).length,
+        unreadCount: countUnread(sortedCards),
       };
     })
     .sort(compareNewestGroupFirst);
@@ -147,6 +155,24 @@ function formatTimestamp(iso: string | undefined): string {
 
   const pad = (value: number) => value.toString().padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * The turn header's right-hand stamp: `hh:mm` for today, `MM-DD hh:mm` before
+ * that, so an old session's turns are not mistaken for this afternoon's.
+ */
+export function formatTurnStamp(iso: string | undefined, now: Date = new Date()): string {
+  if (!iso) return '';
+
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const sameDay = date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate();
+  return sameDay ? time : `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}`;
 }
 
 function getFirstLine(value: string | undefined, fallback: string): string {
@@ -163,6 +189,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
   status,
   defaultCollapsed = false,
   hideAllToken,
+  revealRequest,
   onCardClick,
   onSessionOpen,
   onFavoriteToggle,
@@ -182,6 +209,20 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
     appliedHideAllTokenRef.current = hideAllToken;
     setCollapsedGroups(Object.fromEntries(groups.map((group) => [group.key, true])));
   }, [groups, hideAllToken]);
+
+  const appliedRevealTokenRef = useRef(0);
+  useEffect(() => {
+    if (!revealRequest || revealRequest.token === appliedRevealTokenRef.current) return;
+    const group = groups.find((candidate) => candidate.key === revealRequest.groupKey);
+    if (!group) return;
+    appliedRevealTokenRef.current = revealRequest.token;
+
+    setCollapsedGroups((previous) => ({ ...previous, [group.key]: false }));
+    const turnIndex = group.cards.findIndex((card) => card.id === revealRequest.cardId);
+    if (turnIndex >= INITIAL_VISIBLE_TURNS) {
+      setExpandedTurnGroups((previous) => ({ ...previous, [group.key]: true }));
+    }
+  }, [groups, revealRequest]);
 
   if (groups.length === 0) {
     return <div className="kv2-empty">No cards</div>;
@@ -221,6 +262,9 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
         }));
         const showAllTurns = expandedTurnGroups[group.key] ?? false;
         const hiddenTurnCount = Math.max(0, orderedTurns.length - INITIAL_VISIBLE_TURNS);
+        const hiddenUnreadCount = countUnread(
+          orderedTurns.slice(INITIAL_VISIBLE_TURNS).map(({ card }) => card),
+        );
         // Sliced newest-first, before the sort toggle reverses it, so "the newest
         // five" stays the newest five in either direction.
         const visibleTurns = showAllTurns ? orderedTurns : orderedTurns.slice(0, INITIAL_VISIBLE_TURNS);
@@ -240,14 +284,24 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
             aria-expanded={showAllTurns}
             onClick={toggleShowAllTurns}
           >
-            {showAllTurns ? 'Hide older turns' : `Show ${hiddenTurnCount} more`}
+            {showAllTurns ? 'Hide older turns' : (
+              <>
+                {`Show ${hiddenTurnCount} more`}
+                {hiddenUnreadCount > 0 && (
+                  <>
+                    {' · '}
+                    <span className="kv2-complete-session-more-unread">{hiddenUnreadCount} unread</span>
+                  </>
+                )}
+              </>
+            )}
           </button>
         ) : null;
 
         return (
           <article
             key={group.key}
-            className={`kv2-complete-session-group kv2-complete-session-group--${status}`}
+            className={`kv2-complete-session-group kv2-complete-session-group--${status}${group.unreadCount > 0 ? ' kv2-complete-session-group--unread' : ''}`}
           >
             <header
               className="kv2-complete-session-header"
@@ -269,10 +323,10 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                     executionKind={group.executionKind}
                     scriptName={group.scriptName}
                   />
-                  <span className="kv2-complete-session-count">{group.cards.length} cards</span>
                   {group.unreadCount > 0 && (
                     <span className="kv2-complete-session-unread">{group.unreadCount} unread</span>
                   )}
+                  <span className="kv2-complete-session-count">{group.cards.length} cards</span>
                   {group.sessionId && (
                     <button
                       type="button"
@@ -321,7 +375,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                         group.cards.forEach((card) => onStatusChange(card, 'done'));
                       }}
                     >
-                      DONE
+                      {CARD_ACTION_COPY.done}
                     </button>
                   )}
                   {status === 'done' && onArchiveCards && (
@@ -336,7 +390,7 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                         onArchiveCards(group.cards);
                       }}
                     >
-                      ARCHIVE
+                      {CARD_ACTION_COPY.archive}
                     </button>
                   )}
                 </div>
@@ -374,11 +428,16 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                 )}
                 {oldestFirst && moreTurnsButton}
                 {displayTurns.map(({ card, turnNumber }) => {
+                  // Latest and unread are separate signals: latest is position
+                  // (node + LATEST text, never the unread red), unread is state.
                   const isCurrent = turnNumber === group.cards.length;
+                  const isUnread = isUnreadCompletion(card);
+                  const stamp = formatTurnStamp(getResponseSortTimestamp(card));
                   return (
                     <article
                       key={card.id}
-                      className={`kv2-complete-session-turn${isCurrent ? ' kv2-complete-session-turn--current' : ''}`}
+                      data-card-id={card.id}
+                      className={`kv2-complete-session-turn${isCurrent ? ' kv2-complete-session-turn--current' : ''}${isUnread ? ' kv2-complete-session-turn--unread' : ''}`}
                     >
                       <span className="kv2-complete-session-turn-node" aria-hidden="true" />
                       <div
@@ -406,15 +465,21 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                               onCardClick(card);
                             }}
                           >
-                            {isUnreadCompletion(card) && (
+                            {isUnread && (
                               <span
-                                className="kv2-list-unread-dot"
+                                className="kv2-complete-session-new-tag"
                                 title="Unread completion"
-                                aria-label="Unread completion"
-                              />
+                              >
+                                NEW
+                              </span>
                             )}
                             <span>{turnNumber}. {card.title}</span>
                           </button>
+                          {(isCurrent || stamp) && (
+                            <span className="kv2-complete-session-turn-stamp">
+                              {isCurrent ? (stamp ? `LATEST · ${stamp}` : 'LATEST') : stamp}
+                            </span>
+                          )}
                           {onFavoriteToggle && (
                             <FavoriteToggleButton
                               active={!!card.favorite}

@@ -269,6 +269,11 @@
   transition: background 0.15s ease;
 }
 
+.settings-toggle-switch:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
 .settings-toggle-switch--on {
   background: var(--kv2-status-todo-accent);
 }

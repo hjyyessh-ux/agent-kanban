@@ -3,8 +3,9 @@ import type { KanbanStatus } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
 import { CardActions, ExecutionTypeBadge, FavoriteToggleButton, NestedChildAccordion, OriginExecutionBadges, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
-import { formatDuration, formatRelativeTime } from '../../utils/format-duration';
-import { buildResumeCommand } from '../../utils/resume-command';
+import { formatDuration, formatElapsedKo, formatRelativeTime, resolveRunDurationMs } from '../../utils/format-duration';
+import { dirAccentClass } from '../../utils/project-color';
+import { useNowTick } from '../../hooks/useNowTick';
 
 export interface BoardCardProps {
   vm: V2CardViewModel;
@@ -45,6 +46,62 @@ function formatExactTimestamp(iso: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+type CardTimeFields = Pick<
+  V2CardViewModel,
+  'status' | 'createdAt' | 'updatedAt' | 'startedAt' | 'completedAt' | 'durationMs'
+>;
+
+/**
+ * The card's time line, beside the runtime badge:
+ * - todo → `27d ago`
+ * - in_progress → `● 12분 34초째 실행 중`, ticking from `startedAt` (falls back
+ *   to `Updated …` when the run has no start stamp)
+ * - complete / done → `⏱ {run length} · {time since it ended}`
+ *
+ * Its own component on purpose: `useNowTick` re-renders only this leaf once a
+ * second, and only while the card is running, so a live clock never repaints
+ * the column or the board.
+ */
+export const BoardCardTimeMeta: React.FC<{ vm: CardTimeFields }> = ({ vm }) => {
+  const live = vm.status === 'in_progress' && Boolean(vm.startedAt);
+  const now = useNowTick(live);
+  const exactTitle = `Created ${formatExactTimestamp(vm.createdAt)} · Updated ${formatExactTimestamp(vm.updatedAt)}`;
+
+  if (live && vm.startedAt) {
+    const startedMs = new Date(vm.startedAt).getTime();
+    return (
+      <span
+        className="kv2-card-time kv2-card-time--live"
+        title={`Started ${formatExactTimestamp(vm.startedAt)}`}
+      >
+        <span className="kv2-card-live-dot" aria-hidden="true" />
+        {formatElapsedKo(now - startedMs)}째 실행 중
+      </span>
+    );
+  }
+
+  if (vm.status === 'complete' || vm.status === 'done') {
+    const durationMs = resolveRunDurationMs(vm);
+    const endedAt = vm.completedAt ?? vm.updatedAt;
+    const parts = [
+      durationMs === null ? null : `⏱ ${formatDuration(durationMs)}`,
+      formatRelativeTime(endedAt),
+    ].filter(Boolean);
+    return (
+      <span className="kv2-card-time" title={`${exactTitle}${vm.completedAt ? ` · Completed ${formatExactTimestamp(vm.completedAt)}` : ''}`}>
+        {parts.join(' · ')}
+      </span>
+    );
+  }
+
+  const label = formatRelativeTime(vm.updatedAt);
+  return (
+    <span className="kv2-card-time" title={exactTitle}>
+      {vm.status === 'in_progress' ? `Updated ${label}` : label}
+    </span>
+  );
+};
+
 export const BoardCard: React.FC<BoardCardProps> = ({
   vm,
   onClick,
@@ -60,9 +117,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
 }) => {
   const cardId = `#${vm.id.slice(0, 6)}`;
   const projectName = getDirectoryProjectName(vm.projectDir);
-  const resumeCommand = vm.sessionId
-    ? buildResumeCommand(vm.agentRuntime, vm.sessionId, vm.projectDir)
-    : null;
   const cls = [
     'kv2-card',
     vm.hasQuestion ? 'kv2-card--has-question' : '',
@@ -70,14 +124,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
   ]
     .filter(Boolean)
     .join(' ');
-
-  const durationLabel = typeof vm.durationMs === 'number'
-    ? formatDuration(vm.durationMs)
-    : (vm.startedAt && vm.completedAt
-        ? formatDuration(new Date(vm.completedAt).getTime() - new Date(vm.startedAt).getTime())
-        : null);
-  const wasUpdated = vm.updatedAt !== vm.createdAt;
-  const activityAt = wasUpdated ? vm.updatedAt : vm.createdAt;
 
   return (
     <div
@@ -97,65 +143,67 @@ export const BoardCard: React.FC<BoardCardProps> = ({
         <span className="kv2-card-drag-handle" aria-hidden="true">⋮⋮</span>
       )}
 
-      <div className="kv2-card-surface">
-        <div className="kv2-card-header">
-          <div className="kv2-card-runtime-row">
-            <ExecutionTypeBadge
-              runtime={vm.agentRuntime}
-              executionKind={vm.executionKind}
-              scriptName={vm.scriptName}
+      {/* Row 1: project chip (shrinks, truncates) ··· right group (never shrinks).
+          Sits above the click layer so the chip's title and the right-group
+          controls stay hoverable; a click on the chip still opens the card. */}
+      <div className="kv2-card-top" onClick={onClick}>
+        {projectName ? (
+          <span
+            className={`works-dir-chip kv2-project-chip kv2-card-project ${dirAccentClass(vm.projectDir)}`.trim()}
+            title={vm.projectDir}
+          >
+            {projectName}
+          </span>
+        ) : (
+          <span className="kv2-card-project-spacer" aria-hidden="true" />
+        )}
+        <div className="kv2-card-header-meta">
+          {vm.hasUnreadCompletion && (
+            <span
+              className="kv2-card-unread-dot"
+              title="Unread completion"
+              aria-label="Unread completion"
             />
-          </div>
+          )}
+          {vm.originChannel === 'scheduler' && (
+            <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
+          )}
+          {vm.originChannel === 'telegram' && <TelegramBadge />}
+          <OriginExecutionBadges
+            originChannel={vm.originChannel}
+            quickActionId={vm.quickActionId}
+          />
+          {onFavoriteToggle && (
+            <FavoriteToggleButton
+              active={vm.favorite}
+              onToggle={onFavoriteToggle}
+              className="kv2-favorite-toggle--board"
+            />
+          )}
+          <button
+            type="button"
+            className="kv2-card-id kv2-card-id--copyable"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigator.clipboard.writeText(vm.id);
+            }}
+            title="Click to copy full ID"
+          >
+            {cardId}
+          </button>
         </div>
+      </div>
 
+      <div className="kv2-card-surface">
         <div className="kv2-card-title">{vm.title}</div>
-        <div className="kv2-card-section-label">Prompt</div>
-
-        <div className="kv2-card-prompt-shell">
-          <div className="kv2-card-prompt-accent" />
-          <div className="kv2-card-summary kv2-card-prompt">{vm.boardSummary}</div>
-        </div>
+        {/* Always shown, even when it repeats the title — hiding it made
+            "no prompt" and "same as title" look identical. */}
+        <div className="kv2-card-summary kv2-card-prompt">{vm.boardSummary}</div>
       </div>
 
       {vm.nestedChildren.length > 0 && (
         <NestedChildAccordion items={vm.nestedChildren} />
       )}
-
-      <div className="kv2-card-header-meta kv2-card-header-meta--floating">
-        {vm.hasUnreadCompletion && (
-          <span
-            className="kv2-card-unread-dot"
-            title="Unread completion"
-            aria-label="Unread completion"
-          />
-        )}
-        {vm.originChannel === 'scheduler' && (
-          <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
-        )}
-        {vm.originChannel === 'telegram' && <TelegramBadge />}
-        <OriginExecutionBadges
-          originChannel={vm.originChannel}
-          quickActionId={vm.quickActionId}
-        />
-        {onFavoriteToggle && (
-          <FavoriteToggleButton
-            active={vm.favorite}
-            onToggle={onFavoriteToggle}
-            className="kv2-favorite-toggle--board"
-          />
-        )}
-        <button
-          type="button"
-          className="kv2-card-id kv2-card-id--copyable"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(vm.id);
-          }}
-          title="Click to copy full ID"
-        >
-          {cardId}
-        </button>
-      </div>
 
       <button
         type="button"
@@ -166,27 +214,14 @@ export const BoardCard: React.FC<BoardCardProps> = ({
 
       <div className="kv2-card-divider" aria-hidden="true" />
 
-      {projectName && (
-        <div className="kv2-card-directory" title={vm.projectDir}>
-          <span className="kv2-card-directory-label">Proj:</span>
-          <span className="kv2-card-directory-name">{projectName}</span>
-        </div>
-      )}
-
-      {vm.sessionId && resumeCommand && (
-        <button
-          type="button"
-          className="kv2-card-session-command"
-          title={`Copy resume command: ${resumeCommand}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            void navigator.clipboard.writeText(resumeCommand);
-          }}
-        >
-          <span className="kv2-card-session-label">Session:</span>
-          <code>{vm.sessionId}</code>
-        </button>
-      )}
+      <div className="kv2-card-meta-row">
+        <ExecutionTypeBadge
+          runtime={vm.agentRuntime}
+          executionKind={vm.executionKind}
+          scriptName={vm.scriptName}
+        />
+        <BoardCardTimeMeta vm={vm} />
+      </div>
 
       {vm.hasScheduledBadge && (
         <div className="kv2-card-scheduled-row">
@@ -195,17 +230,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
       )}
 
       <div className="kv2-card-footer">
-        <div className="kv2-card-footer-meta">
-          <div title={`Created ${formatExactTimestamp(vm.createdAt)} · Updated ${formatExactTimestamp(vm.updatedAt)}`}>
-            <span className="kv2-card-timestamp">
-              {wasUpdated ? 'Updated' : 'Created'} {formatRelativeTime(activityAt)}
-            </span>
-            {durationLabel && (
-              <span className="kv2-card-timestamp kv2-card-timestamp--duration">⏱ {durationLabel}</span>
-            )}
-          </div>
-        </div>
-
         <div className="kv2-card-actions-wrapper">
           <CardActions
             vm={vm}

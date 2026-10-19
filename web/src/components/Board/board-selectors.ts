@@ -2,6 +2,7 @@ import type { AgentRuntime, CardOriginChannel, KanbanCard, KanbanStatus, QueueSe
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
 import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { getAgentConfig } from '../../constants/agents';
+import { STATUS_LABELS } from '../../constants/copy';
 import { formatAgentTypeLabel } from '../../utils/agent-label';
 import { formatScheduledKstLabel } from '../shared/ScheduledDispatchUi';
 import { groupCardsByParent, sortCardsForColumn } from './board-utils';
@@ -73,14 +74,9 @@ export interface V2ColumnViewModel {
   label: string;
   cards: V2CardViewModel[];
   count: number;
+  /** Top-level cards in this column with an unread completion (column header `● N`). */
+  unreadCount: number;
 }
-
-const STATUS_LABELS: Record<KanbanStatus, string> = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  complete: 'Complete',
-  done: 'Done',
-};
 
 const DEFAULT_AGENT_COLOR = 'var(--kv2-agent-default)';
 
@@ -98,11 +94,33 @@ function getBoardSummary(card: KanbanCard): string {
   return description || progressSummary || result || 'Open details';
 }
 
-function hasUnreadCompletion(card: KanbanCard): boolean {
+type UnreadCompletionFields = Pick<
+  KanbanCard,
+  'status' | 'responseAt' | 'completedAt' | 'updatedAt' | 'completedSeenAt'
+>;
+
+/**
+ * The one "has the user seen this completion yet" rule — the card badge, the
+ * session group's `N unread`, and the open-card stamp in `App.tsx` all read it,
+ * so a card can never be unread in one place and read in another.
+ *
+ * The completion moment is the latest agent response, falling back to when the
+ * card entered complete and then to its last update. A card with no usable
+ * moment at all is never unread: there is nothing to have missed.
+ */
+export function isUnreadCompletion(card: UnreadCompletionFields): boolean {
   if (card.status !== 'complete') return false;
   const completionTime = card.responseAt ?? card.completedAt ?? card.updatedAt;
   if (!completionTime) return false;
   return !card.completedSeenAt || card.completedSeenAt < completionTime;
+}
+
+export function countUnread(cards: readonly UnreadCompletionFields[]): number {
+  let count = 0;
+  for (const card of cards) {
+    if (isUnreadCompletion(card)) count += 1;
+  }
+  return count;
 }
 
 function toCardViewModel(
@@ -169,7 +187,7 @@ function toCardViewModel(
     telegramReplyMessageId: card.telegramReplyMessageId,
     telegramReplyError: card.telegramReplyError,
     favorite: !!card.favorite,
-    hasUnreadCompletion: hasUnreadCompletion(card),
+    hasUnreadCompletion: isUnreadCompletion(card),
     hasScheduledBadge: card.scheduledDispatch?.status === 'scheduled',
     scheduledStatus: card.scheduledDispatch?.status,
     scheduledAt: card.scheduledDispatch?.scheduledAt,
@@ -204,6 +222,7 @@ export function selectColumns(
       label: STATUS_LABELS[status],
       cards: columnCards,
       count: columnCards.length,
+      unreadCount: columnCards.filter((card) => card.hasUnreadCompletion).length,
     };
   });
 }

@@ -34,3 +34,30 @@ export function formatRelativeTime(iso: string, nowMs = Date.now()): string {
 
   return new Date(timestamp).toLocaleDateString();
 }
+
+// Live elapsed time for a running card ("12분 34초", "1시간 2분 5초"). Seconds
+// are always shown because it ticks every second — a value that only changes
+// once a minute reads as frozen.
+export function formatElapsedKo(ms: number): string {
+  if (!Number.isFinite(ms)) return '';
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}시간 ${minutes}분 ${seconds}초`;
+  if (minutes > 0) return `${minutes}분 ${seconds}초`;
+  return `${seconds}초`;
+}
+
+// Run length of a finished card: the recorded `durationMs` wins, else the
+// span between `startedAt` and `completedAt`; null when neither is known.
+export function resolveRunDurationMs(run: {
+  durationMs?: number;
+  startedAt?: string;
+  completedAt?: string;
+}): number | null {
+  if (typeof run.durationMs === 'number' && Number.isFinite(run.durationMs)) return run.durationMs;
+  if (!run.startedAt || !run.completedAt) return null;
+  const span = new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime();
+  return Number.isFinite(span) && span >= 0 ? span : null;
+}

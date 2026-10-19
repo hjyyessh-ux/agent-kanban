@@ -13,6 +13,7 @@ export interface UseSkillsResult {
   lastSyncedAt: string | null;
   refresh: () => Promise<void>;
   sync: () => Promise<SkillSyncResult | null>;
+  clearError: () => void;
 }
 
 /**
@@ -68,5 +69,7 @@ export function useSkills(): UseSkillsResult {
     void refresh();
   }, [refresh]);
 
-  return { skills, version, loading, syncing, error, lastSyncedAt, refresh, sync };
+  const clearError = useCallback(() => setError(null), []);
+
+  return { skills, version, loading, syncing, error, lastSyncedAt, refresh, sync, clearError };
 }

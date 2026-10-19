@@ -6,6 +6,7 @@ import type { KanbanCard } from '../../../../src/core/types';
 import { DEFAULT_BOARD_FILTERS } from './board-filters';
 import { sortCardsForColumn } from './board-utils';
 import { groupCompleteCardsBySession } from './BoardCompleteSessionView';
+import { CARD_ACTION_COPY, COLUMN_MENU_COPY, STATUS_LABELS } from '../../constants/copy';
 
 let cardSeq = 1;
 
@@ -46,10 +47,7 @@ describe('BoardScreen', () => {
     );
 
     expect(html).toContain('kv2-board');
-    expect(html).toContain('To Do');
-    expect(html).toContain('In Progress');
-    expect(html).toContain('Complete');
-    expect(html).toContain('Done');
+    for (const label of Object.values(STATUS_LABELS)) expect(html).toContain(label);
     expect(html).not.toContain('Board view mode');
   });
 
@@ -143,7 +141,7 @@ describe('BoardScreen', () => {
     expect((listHtml.match(/kv2-list-unread-dot/g) ?? [])).toHaveLength(1);
   });
 
-  test('renders card directory badge between prompt and footer metadata', () => {
+  test('renders the project chip on row 1 and the runtime/time line under the divider', () => {
     const html = renderToStaticMarkup(
       <BoardScreen
         {...baseProps}
@@ -157,12 +155,14 @@ describe('BoardScreen', () => {
       />,
     );
 
-    expect(html).toContain('kv2-card-directory');
-    expect(html).toContain('Proj:');
-    expect(html).toContain('agent-kanban');
+    expect(html).toContain('kv2-project-chip');
+    expect(html).toContain('title="/Users/user/workspace/agent-kanban"');
+    expect(html).not.toContain('kv2-card-directory');
+    expect(html).not.toContain('Proj:');
+    expect(html.indexOf('kv2-project-chip')).toBeLessThan(html.indexOf('Directory card'));
     expect(html.indexOf('Card description')).toBeLessThan(html.indexOf('kv2-card-divider'));
-    expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-card-directory'));
-    expect(html.indexOf('kv2-card-directory')).toBeLessThan(html.indexOf('Created 2026-04-15'));
+    expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-card-meta-row'));
+    expect(html.indexOf('kv2-card-meta-row')).toBeLessThan(html.indexOf('Created 2026-04-15'));
   });
 
   test('renders project switcher options with duplicate directory disambiguation', () => {
@@ -195,7 +195,8 @@ describe('BoardScreen', () => {
       />,
     );
 
-    expect(html).not.toContain('Done All');
+    expect(html).not.toContain(COLUMN_MENU_COPY.doneAll);
+    expect(html).not.toContain('Complete column actions');
   });
 
   test('hides Archive All when done cards are all favorite', () => {
@@ -209,7 +210,8 @@ describe('BoardScreen', () => {
       />,
     );
 
-    expect(html).not.toContain('Archive All');
+    expect(html).not.toContain(COLUMN_MENU_COPY.archiveAll);
+    expect(html).not.toContain('Done column actions');
   });
 
   test('sorts complete cards by newest updatedAt first', () => {
@@ -297,9 +299,10 @@ describe('BoardScreen', () => {
     expect(html.indexOf('2. Updated newer prompt')).toBeLessThan(html.indexOf('1. Created later prompt'));
     expect(html.indexOf('2 cards')).toBeLessThan(html.indexOf('Updated newer prompt'));
     expect(html.indexOf('2 unread')).toBeLessThan(html.indexOf('Updated newer prompt'));
-    expect(html).toContain('Hide All');
-    expect(html.indexOf('Hide All')).toBeLessThan(html.indexOf('Done All'));
-    expect(html).toContain('DONE');
+    // Bulk actions live behind the header's ⋯ menu (its title lists them in order).
+    expect(html).toContain(`aria-label="${STATUS_LABELS.complete} column actions"`);
+    expect(html).toContain(`title="${COLUMN_MENU_COPY.hideAll} · ${COLUMN_MENU_COPY.doneAll}"`);
+    expect(html).toContain(CARD_ACTION_COPY.done);
   });
 
   test('orders grouped session turns by responseAt even when updatedAt changes later', () => {
@@ -408,9 +411,9 @@ describe('BoardScreen', () => {
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('Done prompt one');
     expect(html).not.toContain('Done session');
-    expect(html).toContain('ARCHIVE');
+    expect(html).toContain(CARD_ACTION_COPY.archive);
     expect(html).not.toContain('Hidden prompt body');
-    expect(html).not.toContain('DONE');
+    expect(html).not.toContain(CARD_ACTION_COPY.done);
   });
 
   test('shows Script instead of the legacy runtime in grouped done cards', () => {
@@ -600,5 +603,131 @@ describe('BoardScreen', () => {
 
     expect(html).not.toContain('kv2-filter-trigger');
     expect(html).toContain('kv2-board');
+  });
+  test('separates the latest turn from unread turns in a session group', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        groupCompleteSessions
+        cards={[
+          makeCard({
+            id: 'latest-read',
+            title: 'Latest read turn',
+            status: 'complete',
+            sessionId: 'session-latest',
+            createdAt: '2026-04-17T12:00:00.000Z',
+            completedAt: '2026-04-17T12:30:00.000Z',
+            completedSeenAt: '2026-04-17T12:31:00.000Z',
+          }),
+          makeCard({
+            id: 'older-unread',
+            title: 'Older unread turn',
+            status: 'complete',
+            sessionId: 'session-latest',
+            createdAt: '2026-04-17T11:00:00.000Z',
+            completedAt: '2026-04-17T11:30:00.000Z',
+          }),
+        ]}
+      />,
+    );
+
+    const latestStart = html.indexOf('kv2-complete-session-turn kv2-complete-session-turn--current"');
+    const unreadStart = html.indexOf('kv2-complete-session-turn kv2-complete-session-turn--unread"');
+    expect(latestStart).toBeGreaterThan(-1);
+    expect(unreadStart).toBeGreaterThan(latestStart);
+    // Latest is marked by text only; the NEW tag belongs to the unread turn.
+    const latestTurn = html.slice(latestStart, unreadStart);
+    expect(latestTurn).toContain('LATEST · ');
+    expect(latestTurn).not.toContain('NEW');
+    expect(html.slice(unreadStart)).toContain('kv2-complete-session-new-tag');
+    expect(html).toContain('kv2-complete-session-group--unread');
+    expect(html).toContain('1 unread');
+  });
+
+  test('a fully read session group carries no unread strip, pill, or tag', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        groupCompleteSessions
+        cards={[
+          makeCard({
+            id: 'read-only',
+            status: 'complete',
+            sessionId: 'session-read',
+            completedAt: '2026-04-17T12:30:00.000Z',
+            completedSeenAt: '2026-04-17T12:31:00.000Z',
+          }),
+        ]}
+      />,
+    );
+
+    expect(html).toContain('kv2-complete-session-turn--current');
+    expect(html).not.toContain('kv2-complete-session-group--unread');
+    expect(html).not.toContain('kv2-complete-session-unread');
+    expect(html).not.toContain('kv2-complete-session-new-tag');
+    expect(html).not.toContain('kv2-column-unread');
+  });
+
+  test('counts unread turns hidden behind Show N more', () => {
+    const turns = Array.from({ length: 7 }, (_, index) => makeCard({
+      id: `hidden-turn-${index}`,
+      title: `Turn ${index}`,
+      status: 'complete',
+      sessionId: 'session-long',
+      createdAt: `2026-04-17T0${index}:00:00.000Z`,
+      completedAt: `2026-04-17T0${index}:30:00.000Z`,
+      // Only the oldest turn (folded away) is unread.
+      completedSeenAt: index === 0 ? undefined : `2026-04-17T0${index}:45:00.000Z`,
+    }));
+    const html = renderToStaticMarkup(
+      <BoardScreen {...baseProps} groupCompleteSessions cards={turns} />,
+    );
+
+    expect(html).toContain('Show 2 more · <span class="kv2-complete-session-more-unread">1 unread</span>');
+    expect(html).not.toContain('kv2-complete-session-new-tag');
+  });
+
+  test('shows the complete column unread count in its header', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        cards={[
+          makeCard({ id: 'u1', status: 'complete', completedAt: '2026-04-17T12:00:00.000Z' }),
+          makeCard({ id: 'u2', status: 'complete', completedAt: '2026-04-17T12:00:00.000Z' }),
+          makeCard({
+            id: 'r1',
+            status: 'complete',
+            completedAt: '2026-04-17T12:00:00.000Z',
+            completedSeenAt: '2026-04-17T12:05:00.000Z',
+          }),
+        ]}
+      />,
+    );
+
+    // The pill is the column's "next unread" jump button.
+    expect(html).toContain('class="kv2-column-unread kv2-column-unread--jump" aria-label="2 unread — jump to next"');
+  });
+
+  test('Unread only keeps unread completions and marks jump targets with data-card-id', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        unreadOnly
+        cards={[
+          makeCard({ id: 'todo-1', status: 'todo' }),
+          makeCard({ id: 'u1', status: 'complete', completedAt: '2026-04-17T12:00:00.000Z' }),
+          makeCard({
+            id: 'r1',
+            status: 'complete',
+            completedAt: '2026-04-17T12:00:00.000Z',
+            completedSeenAt: '2026-04-17T12:05:00.000Z',
+          }),
+        ]}
+      />,
+    );
+
+    expect(html).toContain('data-card-id="u1"');
+    expect(html).not.toContain('data-card-id="r1"');
+    expect(html).not.toContain('data-card-id="todo-1"');
   });
 });

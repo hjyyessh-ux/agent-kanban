@@ -51,7 +51,7 @@ const ERROR_TITLES: Record<string, string> = {
   reopen: 'Work를 다시 열지 못했습니다',
   unlink: '세션 연결을 해제하지 못했습니다',
   ignore: '세션 무시에 실패했습니다',
-  restore: '무시한 세션을 복원하지 못했습니다',
+  restore: '폐기한 세션을 복원하지 못했습니다',
 };
 
 /**

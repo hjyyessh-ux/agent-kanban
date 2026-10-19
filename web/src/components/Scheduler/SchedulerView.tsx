@@ -9,6 +9,7 @@ import { SchedulerHistoryPanel } from './SchedulerHistoryPanel';
 import { SchedulerJobModal, SchedulerTimezoneNotice } from './SchedulerJobModal';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
+import { SCHEDULER_COPY } from '../../constants/copy';
 import './Scheduler.css';
 
 interface SchedulerViewProps {
@@ -233,7 +234,7 @@ export const SchedulerView: React.FC<SchedulerViewProps> = ({
   const [historyEntry, setHistoryEntry] = useState<SchedulerEntry | null>(null);
 
   const handleDelete = (entry: SchedulerEntry) => {
-    if (window.confirm(`Delete "${entry.name}"? This cannot be undone.`)) {
+    if (window.confirm(SCHEDULER_COPY.deleteConfirm(entry.name))) {
       void onDeleteEntry(entry.id);
     }
   };

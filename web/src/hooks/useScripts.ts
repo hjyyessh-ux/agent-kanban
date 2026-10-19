@@ -20,6 +20,7 @@ export function useScripts(enabled: boolean): {
   runEntry: (id: string) => Promise<void>;
   refreshEntries: () => Promise<void>;
   syncEntries: () => Promise<ScriptSyncResult>;
+  clearError: () => void;
 } {
   const resource = useCrudResource<ScriptEntry, CreateScriptInput, UpdateScriptInput, string>({
     enabled,
@@ -69,5 +70,6 @@ export function useScripts(enabled: boolean): {
     runEntry,
     refreshEntries: resource.refreshEntries,
     syncEntries,
+    clearError: resource.clearError,
   };
 }

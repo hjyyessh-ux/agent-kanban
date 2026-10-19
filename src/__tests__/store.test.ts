@@ -167,6 +167,50 @@ describe('KanbanStore', () => {
     });
   });
 
+  test('markCompletionSeenMany stamps every complete card in one write and skips the rest', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const first = await store.createCard({ title: 'First', description: 'Desc' });
+      const second = await store.createCard({ title: 'Second', description: 'Desc' });
+      const todo = await store.createCard({ title: 'Still todo', description: 'Desc' });
+      const firstDone = await store.updateCard(first.id, { status: 'complete' });
+      await store.updateCard(second.id, { status: 'complete' });
+      const legacy = await store.updateCard(second.id, { completedAt: null });
+
+      const result = await store.markCompletionSeenMany([first.id, second.id, first.id, todo.id, 'missing']);
+
+      expect(result.cards.map((card) => card.id)).toEqual([first.id, second.id]);
+      expect(result.skipped).toEqual([
+        { id: todo.id, reason: 'not_complete' },
+        { id: 'missing', reason: 'not_found' },
+      ]);
+      const [seenFirst, seenSecond] = result.cards;
+      // Same semantics as the single-card stamp.
+      expect(seenFirst.updatedAt).toBe(firstDone.updatedAt);
+      expect(seenFirst.completedSeenAt).toBeTruthy();
+      expect(seenSecond.completedAt).toBe(legacy.updatedAt);
+      expect(seenFirst.completedSeenAt).toBe(seenSecond.completedSeenAt);
+
+      const persisted = await store.getCard(second.id);
+      expect(persisted?.completedSeenAt).toBe(seenSecond.completedSeenAt);
+    });
+  });
+
+  test('markCompletionSeenMany with nothing to stamp does not rewrite the board', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Todo', description: 'Desc' });
+      const before = (await store.load()).lastModified;
+
+      expect(await store.markCompletionSeenMany([])).toEqual({ cards: [], skipped: [] });
+      const result = await store.markCompletionSeenMany([card.id]);
+
+      expect(result.cards).toEqual([]);
+      expect(result.skipped).toEqual([{ id: card.id, reason: 'not_complete' }]);
+      expect((await store.load()).lastModified).toBe(before);
+    });
+  });
+
   test('soft-deletes a card and hides it from active reads', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);

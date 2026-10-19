@@ -1221,6 +1221,12 @@
   box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--kv2-status-done-display);
 }
 
+/* A group holding an unread turn swaps its left strip to the unread colour,
+   so the column can be scanned for it without opening anything. */
+.kv2-complete-session-group--unread .kv2-complete-session-header {
+  box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--kv2-unread-indicator);
+}
+
 .kv2-complete-session-toggle {
   position: absolute;
   bottom: 10px;
@@ -1357,6 +1363,11 @@
   color: var(--kv2-frame);
 }
 
+.kv2-complete-session-more-unread {
+  color: var(--kv2-unread-text);
+  font-weight: 800;
+}
+
 .kv2-complete-session-title-row {
   display: flex;
   align-items: center;
@@ -1393,10 +1404,19 @@
 }
 
 .kv2-complete-session-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border-color: var(--kv2-session-unread-border);
   background: var(--kv2-session-unread-bg);
   color: var(--kv2-session-unread-fg);
   box-shadow: 2px 2px 0 var(--kv2-session-unread-shadow);
+}
+
+/* Filled, with a dot, so it does not read as another `16 cards` chip. */
+.kv2-complete-session-unread::before {
+  content: '●';
+  font-size: 0.7em;
 }
 
 .kv2-complete-session-project {
@@ -1479,13 +1499,18 @@
   background: var(--session-accent);
 }
 
+/* Latest = position, not state: a filled ink node and the `LATEST` stamp.
+   No accent here — the complete accent is the same red family as unread, and
+   a red latest border was being read as "unread". */
 .kv2-complete-session-turn--current .kv2-complete-session-turn-node {
-  background: var(--session-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-status-complete-display) 16%, transparent);
+  border-color: var(--kv2-text-primary);
+  background: var(--kv2-text-primary);
 }
 
-.kv2-complete-session-group--done .kv2-complete-session-turn--current .kv2-complete-session-turn-node {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-status-done-display) 18%, transparent);
+.kv2-complete-session-turn--unread .kv2-complete-session-turn-node {
+  border-color: var(--kv2-unread-indicator);
+  background: var(--kv2-unread-indicator);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-unread-indicator) 25%, transparent);
 }
 
 .kv2-complete-session-turn-updated {
@@ -1519,8 +1544,9 @@
   border-color: var(--kv2-border-strong);
 }
 
-.kv2-complete-session-turn--current .kv2-complete-session-turn-body {
-  border-color: var(--session-accent);
+.kv2-complete-session-turn--unread .kv2-complete-session-turn-body {
+  border: 2px solid var(--kv2-unread-indicator);
+  background: var(--kv2-unread-surface);
 }
 
 .kv2-complete-session-turn-body:focus-visible {
@@ -1563,6 +1589,34 @@
 
 .kv2-complete-session-card-title:hover {
   text-decoration: underline;
+}
+
+.kv2-complete-session-new-tag {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.kv2-complete-session-turn-stamp {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.kv2-complete-session-turn--current .kv2-complete-session-turn-stamp {
+  color: var(--kv2-text-primary);
 }
 
 .kv2-complete-session-turn-header .kv2-favorite-toggle {
@@ -2260,20 +2314,37 @@
   outline-offset: 2px;
 }
 
-.kv2-card-header {
+/* Row 1 — `[project chip] ··· [unread · origin · ☆ · #ID]`.
+   The chip takes only its name's width and truncates (`.kv2-project-chip`);
+   the right group never shrinks, so a long project name can neither push
+   ☆/#ID off the card nor wrap the row. `pointer-events: none` lets clicks on
+   the gap fall through to the click layer; the chip and the right group opt
+   back in (chip for its `title`, group for its buttons). */
+.kv2-card-top {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--kv2-sp-2);
+  min-width: 0;
+  min-height: 24px;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
 }
 
-.kv2-card-runtime-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  flex-wrap: wrap;
+.kv2-card-top > .kv2-card-project {
+  pointer-events: auto;
+  display: block;
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.kv2-card-project-spacer {
+  flex: 1 1 auto;
+}
+
+.kv2-card-top > .kv2-card-header-meta {
+  margin-left: auto;
 }
 
 .kv2-card-header-meta {
@@ -2286,13 +2357,6 @@
   position: relative;
   z-index: 2;
   pointer-events: auto;
-}
-
-.kv2-card-header-meta--floating {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  z-index: 3;
 }
 
 .kv2-card-unread-dot {
@@ -2524,50 +2588,19 @@
   -webkit-box-orient: vertical;
 }
 
-.kv2-card-section-label {
-  margin-top: calc(var(--kv2-card-title-gap) + 2px);
-  margin-bottom: 2px;
-  font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-2xs);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  color: var(--kv2-prompt-label-color);
-  opacity: 0.78;
-  text-transform: capitalize;
-}
-
-.kv2-card-prompt-shell {
-  display: grid;
-  grid-template-columns: var(--kv2-prompt-accent-width) minmax(0, 1fr);
-  align-items: stretch;
-  column-gap: calc(var(--kv2-prompt-column-gap) + 2px);
-  margin-top: 2px;
-  min-height: var(--kv2-prompt-min-height);
-}
-
-.kv2-card-prompt-accent {
-  width: var(--kv2-prompt-accent-width);
-  min-height: var(--kv2-prompt-min-height);
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--kv2-prompt-accent-color) 28%, white);
-}
-
+/* Row 3 — the prompt, one line. No label and no accent bar: the title above
+   already says what this is, and the old shell spent a line and a gutter on it. */
 .kv2-card-summary,
 .kv2-card-prompt {
-  margin-top: 0;
-  min-height: var(--kv2-prompt-min-height);
-  padding: var(--kv2-prompt-padding-y) var(--kv2-prompt-padding-right) var(--kv2-prompt-padding-y) 0;
-  border-top: none;
+  margin-top: var(--kv2-sp-1);
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-xs);
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--kv2-neutral-ink-soft);
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .kv2-card-divider {
@@ -2584,6 +2617,8 @@
   );
 }
 
+/* `Proj:` line — now only the complete-session group header uses it
+   (`BoardCompleteSessionView`); board cards show the project as a row-1 chip. */
 .kv2-card-directory {
   display: inline-flex;
   align-items: center;
@@ -2614,44 +2649,6 @@
   font-weight: 800;
 }
 
-.kv2-card-session-command {
-  all: unset;
-  display: inline-flex;
-  position: relative;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  margin-top: 6px;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0;
-  color: var(--kv2-card-date-color);
-  opacity: 0.88;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.kv2-card-session-command:hover {
-  opacity: 1;
-}
-
-.kv2-card-session-label {
-  flex: 0 0 auto;
-  opacity: 0.68;
-}
-
-.kv2-card-session-command code {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--kv2-neutral-ink-strong);
-  font: inherit;
-  font-weight: 800;
-}
-
 .kv2-card-footer {
   display: flex;
   flex-direction: column;
@@ -2660,52 +2657,49 @@
   margin-top: 2px;
 }
 
-.kv2-card-footer-meta {
+/* Meta line under the divider — `[CLAUDE] 27d ago` / `● 12분 34초째 실행 중`
+   / `⏱ 18m 2s · 3h ago`. Rendered by `BoardCardTimeMeta`. */
+.kv2-card-meta-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: var(--kv2-sp-2);
   min-width: 0;
-  padding-top: 8px;
+  margin-top: var(--kv2-sp-2);
 }
 
-.kv2-card-directory + .kv2-card-footer .kv2-card-footer-meta,
-.kv2-card-session-command + .kv2-card-footer .kv2-card-footer-meta {
-  padding-top: var(--kv2-sp-3);
+.kv2-card-meta-row > :first-child {
+  flex-shrink: 0;
 }
 
-.kv2-card-footer-meta > div:first-child {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 8px;
+.kv2-card-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  flex: 1;
-}
-
-.kv2-card-timestamp {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-caption);
   font-weight: 500;
-  letter-spacing: 0;
   line-height: 1.35;
   color: var(--kv2-card-date-color);
-  opacity: 0.82;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }
 
-.kv2-card-timestamp--updated {
-  margin-left: auto;
-  text-align: right;
+/* Running: ink text (the status yellow is not a text colour on light) with
+   the status colour carried by the dot. */
+.kv2-card-time--live {
+  font-weight: 700;
+  color: var(--kv2-neutral-ink-strong);
 }
 
-.kv2-card-timestamp--duration {
-  flex: none;
-  opacity: 0.85;
-  color: var(--kv2-accent, var(--kv2-card-date-color));
+.kv2-card-live-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kv2-status-in-progress-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kv2-status-in-progress-accent) 30%, transparent);
 }
 
 /* ── Column header layout ─────────────────────────────────── */
@@ -2724,9 +2718,140 @@
 }
 
 .kv2-column-label {
+  /* Never the element that gives way: with the bulk actions folded into `⋯`
+     there is room for `COMPLETE` at the narrowest column. */
+  flex: 0 0 auto;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* `● 5` on the complete column header — filled like the group pill. */
+.kv2-column-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 2px solid var(--kv2-column-header-stroke-color);
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+}
+
+.kv2-column-unread::before {
+  content: '●';
+  font-size: 0.75em;
+}
+
+.kv2-column-unread--jump {
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  line-height: inherit;
+}
+
+.kv2-column-unread--jump:hover {
+  opacity: 0.9;
+}
+
+.kv2-column-unread--jump:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Toolbar unread navigation (`● N unread ↑ ↓` + `Unread only`) ──
+   One unread family only (`--kv2-unread-*`), per design-system.md. */
+.kv2-unread-jump {
+  display: inline-flex;
+  align-items: stretch;
+  height: 40px;
+  border: 2px solid var(--kv2-unread-indicator);
+  box-shadow: 2px 2px 0 var(--kv2-frame);
+  background: var(--kv2-surface);
+  flex-shrink: 0;
+}
+
+.kv2-unread-jump-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.kv2-unread-jump-btn {
+  min-width: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-left: 2px solid var(--kv2-unread-indicator);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-sm);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.kv2-unread-jump-btn:hover:not(:disabled) {
+  background: var(--kv2-unread-surface);
+}
+
+.kv2-unread-jump-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.kv2-unread-jump-btn:focus-visible,
+.kv2-unread-only-toggle:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.kv2-unread-only-toggle {
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 2px solid var(--kv2-frame);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  box-shadow: 4px 4px 0 var(--kv2-frame);
+  cursor: pointer;
+  font-family: var(--kv2-font-heading);
+  font-size: 0.9rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.kv2-unread-only-toggle.is-active {
+  border-color: var(--kv2-unread-indicator);
+  background: var(--kv2-unread-surface);
+  color: var(--kv2-unread-text);
+}
+
+/* Where an unread jump landed — a ring for UNREAD_FOCUS_RING_MS (1.2s). */
+.kv2-unread-focus {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: 3px;
+  transition: outline-color var(--kv2-transition-fast);
+}
+
+.kv2-column-menu-trigger {
+  min-width: 30px;
+  justify-content: center;
+  font-size: var(--kv2-text-md);
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.kv2-column-menu-popover {
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Column action buttons ────────────────────────────────── */
@@ -2797,7 +2922,7 @@
   width: 100%;
   background: none;
   border: none;
-  padding: 0 86px 0 0;
+  padding: 0;
   cursor: pointer;
   text-align: left;
   color: inherit;
@@ -3109,10 +3234,6 @@
   width: var(--kv2-btn-primary-width);
 }
 
-.kv2-card-action--no-upper {
-  text-transform: none;
-}
-
 .kv2-card-action--finish {
   background: var(--kv2-card-action-done-bg);
   border-color: var(--kv2-card-action-done-border);
@@ -3164,16 +3285,6 @@
 
 /* ── Container queries (card-width-based responsiveness) ── */
 @container (max-width: 260px) {
-  .kv2-card-footer-meta > div:first-child {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .kv2-card-timestamp--updated {
-    margin-left: 0;
-    text-align: left;
-  }
-
   .kv2-card-action {
     font-size: var(--kv2-text-ui-sm);
     padding: 0 8px;
@@ -3183,24 +3294,12 @@
 }
 
 @container (max-width: 200px) {
-  .kv2-card-footer-meta {
+  .kv2-card-time {
     display: none;
   }
 }
 
 @media (max-width: 420px) {
-  .kv2-card-footer-meta {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .kv2-card-timestamp,
-  .kv2-card-timestamp--updated {
-    white-space: normal;
-    margin-left: 0;
-    text-align: left;
-  }
-
   .kv2-card-actions {
     flex-wrap: wrap;
   }

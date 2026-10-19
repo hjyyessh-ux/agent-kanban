@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/kanban';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 test.describe('Card Detail Start', () => {
   test('start from modal dispatches without a preceding status patch', async ({ page, seedCardWithStatus }) => {
@@ -33,7 +34,7 @@ test.describe('Card Detail Start', () => {
 
     const dialog = page.locator('.kv2-dialog');
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'START TASK', exact: true }).click();
+    await dialog.getByRole('button', { name: CARD_ACTION_COPY.startTask, exact: true }).click();
 
     await expect.poll(() => events).toEqual(['dispatch']);
     await expect(dialog).not.toBeVisible();

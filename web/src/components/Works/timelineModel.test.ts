@@ -1,28 +1,56 @@
 import { describe, expect, test } from 'bun:test';
 import type { Work } from '../../../../src/core/types';
 import {
+  addDays,
+  bufferAroundToday,
+  bufferEdgeToExtend,
   buildBars,
-  buildRange,
   clampLabelWidth,
   columnAtPointer,
   columnOf,
   describeTimelineError,
   describeWorkDateEdit,
+  dragColumnLeft,
   endFromDateInputValue,
+  extendBuffer,
+  firstColumnForToday,
   endIsoForColumn,
   fromDateInputValue,
   isWeekend,
   isoForColumn,
+  monthSegments,
+  rangeFromBuffer,
   resizeBar,
+  scrollLeftForColumn,
+  startOfDay,
   startOfWeek,
+  timelineFetchWindow,
   toDateInputValue,
+  visibleColumns,
+  visibleRangeLabel,
+  BUFFER_EDGE_DAYS,
+  BUFFER_EXTEND_DAYS,
   DEFAULT_LABEL_WIDTH,
+  FETCH_ALIGN_DAYS,
+  FETCH_MARGIN_DAYS,
+  TIMELINE_BUFFER_MAX_DAYS,
+  TIMELINE_COLUMN_WIDTH,
   MAX_LABEL_WIDTH,
   MIN_LABEL_WIDTH,
 } from './timelineModel';
+import { TIMELINE_MAX_WINDOW_DAYS } from '../../../../src/core/timeline-aggregate';
 
 /** 2026-09-02 is a Wednesday — the mockup's "today". */
 const NOW = new Date(2026, 8, 2, 14, 30);
+
+/**
+ * A seven-column Monday–Sunday slice, `offset` weeks from NOW's week. The grid
+ * no longer pages by week, but the bar/edit geometry is buffer-relative either
+ * way, and a week is the easiest buffer to reason about in a test.
+ */
+function weekRange(offset: number) {
+  return rangeFromBuffer({ start: addDays(startOfWeek(NOW), offset * 7), dayCount: 7 });
+}
 
 function work(partial: Partial<Work> & Pick<Work, 'id' | 'title' | 'status' | 'startedAt'>): Work {
   return {
@@ -38,39 +66,162 @@ function localIso(year: number, month: number, day: number, hour = 9): string {
   return new Date(year, month - 1, day, hour).toISOString();
 }
 
-describe('buildRange', () => {
-  test('week view spans Monday–Sunday around today', () => {
-    const range = buildRange('week', 0, NOW);
+describe('week slice (test helper)', () => {
+  test('spans Monday–Sunday around today', () => {
+    const range = weekRange(0);
     expect(range.days).toHaveLength(7);
     expect(range.start.getDay()).toBe(1); // Monday
     expect(range.start.getDate()).toBe(31); // 8/31
     expect(range.days[6].getDate()).toBe(6); // 9/6
-    expect(range.label).toContain('2026');
-  });
-
-  test('week offset shifts by whole weeks', () => {
-    expect(buildRange('week', -1, NOW).start.getDate()).toBe(24); // 8/24
-    expect(buildRange('week', 1, NOW).start.getDate()).toBe(7); // 9/7
-  });
-
-  test('month view widens to whole Monday-aligned weeks', () => {
-    const range = buildRange('month', 0, NOW);
-    expect(range.days.length % 7).toBe(0);
-    expect(range.days.length).toBeGreaterThanOrEqual(28);
-    expect(range.days.length).toBeLessThanOrEqual(35);
-    expect(range.start).toEqual(startOfWeek(new Date(2026, 8, 1)));
-    // The whole month has to be covered by the padded weeks.
-    expect(columnOf(range, localIso(2026, 9, 30))).toBeLessThan(range.days.length);
   });
 
   test('weekend columns are Saturday and Sunday', () => {
-    const range = buildRange('week', 0, NOW);
+    const range = weekRange(0);
     expect(range.days.map(isWeekend)).toEqual([false, false, false, false, false, true, true]);
   });
 });
 
+describe('scroll buffer', () => {
+  test('zoom is a column width, not a range', () => {
+    expect(TIMELINE_COLUMN_WIDTH).toEqual({ week: 78, month: 34 });
+  });
+
+  test('a fresh buffer keeps eight weeks behind today and room ahead', () => {
+    const buffer = bufferAroundToday(NOW);
+    expect(buffer.start).toEqual(addDays(startOfDay(NOW), -56));
+    const todayIndex = Math.round((startOfDay(NOW).getTime() - buffer.start.getTime()) / 86_400_000);
+    expect(todayIndex).toBe(56);
+    // At least two weeks plus a growth step after today.
+    expect(buffer.dayCount - todayIndex - 1).toBeGreaterThanOrEqual(14 + 28 - 1);
+    // A wide viewport asks for more future so `오늘` does not land at the edge.
+    expect(bufferAroundToday(NOW, 40).dayCount).toBeGreaterThan(buffer.dayCount);
+  });
+
+  test('prepending 28 days shifts every existing column right by 28', () => {
+    const buffer = { start: new Date(2026, 8, 1), dayCount: 84 };
+    const { buffer: grown, shift } = extendBuffer(buffer, 'start');
+    expect(shift).toBe(BUFFER_EXTEND_DAYS);
+    expect(grown.start).toEqual(new Date(2026, 7, 4));
+    expect(grown.dayCount).toBe(84 + 28);
+    // The date that was column 10 is column 38 now — the scrollLeft correction
+    // is exactly shift × columnWidth.
+    const before = rangeFromBuffer(buffer).days[10];
+    expect(rangeFromBuffer(grown).days[10 + shift]).toEqual(before);
+    expect(scrollLeftForColumn(10 + shift, 78) - scrollLeftForColumn(10, 78)).toBe(shift * 78);
+  });
+
+  test('prepend correction survives a DST change inside the added days', () => {
+    // 2026-03-08 is the US DST switch; day arithmetic must stay on local dates.
+    const buffer = { start: new Date(2026, 2, 20), dayCount: 60 };
+    const { buffer: grown, shift } = extendBuffer(buffer, 'start');
+    expect(rangeFromBuffer(grown).days[shift]).toEqual(buffer.start);
+  });
+
+  test('appending past the cap trims the front and reports a negative shift', () => {
+    const buffer = { start: new Date(2026, 0, 1), dayCount: TIMELINE_BUFFER_MAX_DAYS - 10 };
+    const { buffer: grown, shift } = extendBuffer(buffer, 'end');
+    expect(grown.dayCount).toBe(TIMELINE_BUFFER_MAX_DAYS);
+    expect(shift).toBe(-18);
+    expect(grown.start).toEqual(addDays(buffer.start, 18));
+  });
+
+  test('prepending past the cap trims the far end, keeping the shift', () => {
+    const buffer = { start: new Date(2026, 0, 1), dayCount: TIMELINE_BUFFER_MAX_DAYS };
+    const { buffer: grown, shift } = extendBuffer(buffer, 'start');
+    expect(grown.dayCount).toBe(TIMELINE_BUFFER_MAX_DAYS);
+    expect(shift).toBe(28);
+    expect(grown.start).toEqual(addDays(buffer.start, -28));
+  });
+
+  test('visible columns ignore the sticky label width and round to the snapped day', () => {
+    // 240px label + 14 week columns of 78px.
+    const clientWidth = 240 + 14 * 78;
+    expect(visibleColumns(0, clientWidth, 240, 78, 100)).toEqual({ first: 0, last: 13 });
+    expect(visibleColumns(78 * 20, clientWidth, 240, 78, 100)).toEqual({ first: 20, last: 33 });
+    // Sub-pixel scrollLeft from a zoomed browser still reads as day 20.
+    expect(visibleColumns(78 * 20 - 0.4, clientWidth, 240, 78, 100).first).toBe(20);
+    // Clamped at the buffer end.
+    expect(visibleColumns(78 * 95, clientWidth, 240, 78, 100).last).toBe(99);
+  });
+
+  test('grows within BUFFER_EDGE_DAYS of either end, start first', () => {
+    expect(BUFFER_EDGE_DAYS).toBe(7);
+    expect(bufferEdgeToExtend({ first: 6, last: 20 }, 100)).toBe('start');
+    expect(bufferEdgeToExtend({ first: 7, last: 20 }, 100)).toBeNull();
+    expect(bufferEdgeToExtend({ first: 70, last: 92 }, 100)).toBeNull();
+    expect(bufferEdgeToExtend({ first: 70, last: 93 }, 100)).toBe('end');
+    expect(bufferEdgeToExtend({ first: 3, last: 98 }, 100)).toBe('start');
+  });
+
+  test('오늘 puts today second from the left; the initial view, second from the right', () => {
+    expect(firstColumnForToday(56, 14, 'left')).toBe(55);
+    expect(firstColumnForToday(56, 14, 'right')).toBe(44); // columns 44..57 → today is 13th of 14
+    expect(firstColumnForToday(0, 14, 'left')).toBe(0);
+  });
+});
+
+describe('timelineFetchWindow', () => {
+  const buffer = bufferAroundToday(NOW);
+  const range = rangeFromBuffer(buffer);
+  const days = (from: string, to: string) =>
+    Math.round((Date.parse(to) + 1 - Date.parse(from)) / 86_400_000);
+
+  test('covers the viewport plus margins, aligned to whole 14-day blocks', () => {
+    const { from, to } = timelineFetchWindow(range, { first: 40, last: 53 });
+    const fromDay = new Date(from);
+    expect(fromDay.getTime()).toBe(startOfDay(fromDay).getTime());
+    expect(days(from, to) % FETCH_ALIGN_DAYS).toBe(0);
+    expect(Date.parse(from)).toBeLessThanOrEqual(addDays(range.start, 40 - FETCH_MARGIN_DAYS).getTime());
+    expect(Date.parse(to)).toBeGreaterThanOrEqual(addDays(range.start, 54 + FETCH_MARGIN_DAYS).getTime() - 1);
+  });
+
+  test('scrolling one day at a time refetches once per 14 days', () => {
+    const keys = new Set<string>();
+    for (let first = 30; first < 44; first += 1) {
+      const { from, to } = timelineFetchWindow(range, { first, last: first + 13 });
+      keys.add(`${from}|${to}`);
+    }
+    // Fourteen one-day steps cross exactly one block boundary → one refetch.
+    expect(keys.size).toBe(2);
+  });
+
+  test('is independent of where the buffer happens to start', () => {
+    // The same dates on screen after a prepend → the same request.
+    const { buffer: grown, shift } = extendBuffer(buffer, 'start');
+    expect(timelineFetchWindow(rangeFromBuffer(grown), { first: 40 + shift, last: 53 + shift }))
+      .toEqual(timelineFetchWindow(range, { first: 40, last: 53 }));
+  });
+
+  test('never exceeds the server cap, even for a whole maxed-out buffer', () => {
+    const full = rangeFromBuffer({ start: new Date(2025, 0, 1), dayCount: TIMELINE_BUFFER_MAX_DAYS });
+    const { from, to } = timelineFetchWindow(full, { first: 0, last: TIMELINE_BUFFER_MAX_DAYS - 1 });
+    expect(days(from, to)).toBeLessThanOrEqual(TIMELINE_MAX_WINDOW_DAYS);
+    // Headroom as a relationship, not a coincidence of the current numbers.
+    expect(TIMELINE_BUFFER_MAX_DAYS + 2 * (FETCH_MARGIN_DAYS + FETCH_ALIGN_DAYS))
+      .toBeLessThanOrEqual(TIMELINE_MAX_WINDOW_DAYS);
+  });
+});
+
+describe('labels', () => {
+  test('the range label names the visible slice', () => {
+    const range = rangeFromBuffer({ start: new Date(2026, 9, 1), dayCount: 40 });
+    expect(visibleRangeLabel(range, { first: 2, last: 15 })).toBe('2026년 10월 3일 – 10월 16일');
+    const wrap = rangeFromBuffer({ start: new Date(2026, 11, 25), dayCount: 20 });
+    expect(visibleRangeLabel(wrap, { first: 0, last: 10 })).toBe('2026년 12월 25일 – 2027년 1월 4일');
+  });
+
+  test('month segments split the buffer on the 1st', () => {
+    const range = rangeFromBuffer({ start: new Date(2026, 8, 27), dayCount: 40 });
+    expect(monthSegments(range)).toEqual([
+      { startIndex: 0, endIndex: 3, label: '2026년 9월' },
+      { startIndex: 4, endIndex: 34, label: '2026년 10월' },
+      { startIndex: 35, endIndex: 39, label: '2026년 11월' },
+    ]);
+  });
+});
+
 describe('buildBars', () => {
-  const range = buildRange('week', 0, NOW);
+  const range = weekRange(0);
 
   test('an active Work extends to today with an open right edge', () => {
     const [bar] = buildBars(
@@ -183,7 +334,7 @@ describe('buildBars', () => {
   });
 
   test('an active Work bar runs past the right edge of an earlier week', () => {
-    const pastWeek = buildRange('week', -1, NOW);
+    const pastWeek = weekRange(-1);
     const [bar] = buildBars(
       [work({ id: 'w5', title: 'ArgoCD ACL', status: 'active', startedAt: localIso(2026, 8, 26) })],
       pastWeek,
@@ -261,6 +412,27 @@ describe('columnAtPointer', () => {
     expect(columnAtPointer(500, LEFT, 0, 7)).toBe(0);
     expect(columnAtPointer(500, LEFT, WIDTH, 0)).toBe(0);
   });
+
+  test('a scrolled buffer: column 0 is off-screen left and the index is buffer-relative', () => {
+    // 84-day buffer of 78px columns, scrolled so column 40 sits at the label
+    // edge (x = 240): column 0 is at 240 - 40 × 78.
+    const left = 240 - 40 * 78;
+    expect(columnAtPointer(240, left, 78, 84)).toBe(40);
+    expect(columnAtPointer(240 + 78 * 3 + 10, left, 78, 84)).toBe(43);
+    // …and that index re-dates against the same buffer it was measured on.
+    const range = rangeFromBuffer({ start: new Date(2026, 6, 1), dayCount: 84 });
+    expect(new Date(isoForColumn(range, 43)).getDate()).toBe(addDays(range.start, 43).getDate());
+  });
+
+  test('wheel-scrolling mid-drag shifts the measured left by the scroll delta', () => {
+    // Measured at scrollLeft 3120 with column 0 at x = -2880; the user then
+    // scrolls 156px (two week columns) further right.
+    const left = dragColumnLeft(-2880, 3120, 3276);
+    expect(left).toBe(-3036);
+    // The pointer has not moved, but the column under it is two days later.
+    expect(columnAtPointer(240, -2880, 78, 84)).toBe(40);
+    expect(columnAtPointer(240, left, 78, 84)).toBe(42);
+  });
 });
 
 describe('resizeBar', () => {
@@ -278,7 +450,7 @@ describe('resizeBar', () => {
 });
 
 describe('isoForColumn', () => {
-  const range = buildRange('week', 0, NOW); // 8/31 (Mon) – 9/6 (Sun)
+  const range = weekRange(0); // 8/31 (Mon) – 9/6 (Sun)
 
   test('a column resolves to that day, keeping the source time-of-day', () => {
     const moved = new Date(isoForColumn(range, 3, localIso(2026, 8, 31, 14)));
@@ -302,7 +474,7 @@ describe('isoForColumn', () => {
 });
 
 describe('end dates land at end-of-day', () => {
-  const range = buildRange('week', 0, NOW);
+  const range = weekRange(0);
 
   test('a dragged end covers the whole day it was dropped on', () => {
     const end = new Date(endIsoForColumn(range, 3));
@@ -379,7 +551,7 @@ describe('clampLabelWidth', () => {
  */
 describe('clipped bars keep their real edit columns', () => {
   // Grid = Mon 2026-08-31 … Sun 2026-09-06; the Work started 2026-08-20.
-  const range = buildRange('week', 0, NOW);
+  const range = weekRange(0);
   const startIso = localIso(2026, 8, 20, 14);
   const [bar] = buildBars(
     [work({ id: 'wclip', title: '오래 걸린 Work', status: 'active', startedAt: startIso })],
@@ -417,7 +589,7 @@ describe('clipped bars keep their real edit columns', () => {
   });
 
   test('a bar running past the range keeps its real end column', () => {
-    const earlier = buildRange('week', -1, NOW); // Mon 8/24 … Sun 8/30
+    const earlier = weekRange(-1); // Mon 8/24 … Sun 8/30
     const [past] = buildBars(
       [work({ id: 'wpast', title: '지난주부터', status: 'active', startedAt: localIso(2026, 8, 25) })],
       earlier,
@@ -430,7 +602,7 @@ describe('clipped bars keep their real edit columns', () => {
 });
 
 describe('a terminal Work never borrows updatedAt for its end', () => {
-  const range = buildRange('week', 0, NOW);
+  const range = weekRange(0);
 
   test('a done Work with no resolvedAt draws to today, not to updatedAt', () => {
     const [bar] = buildBars(

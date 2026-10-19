@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TimelineSessionSpan, Work } from '../../../../src/core/types';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
@@ -7,34 +7,49 @@ import { describeWorkPlanOverrun, formatShortDate, projectDirLabel } from './wor
 import { dirAccentClass } from './worksAffinity';
 import type { WorkSessionNoticeState } from './WorkSessionNotice';
 import {
-  buildRange,
+  bufferAroundToday,
+  bufferEdgeToExtend,
   clampLabelWidth,
   columnAtPointer,
   dayDiff,
   describeTimelineError,
   describeWorkDateEdit,
+  dragColumnLeft,
   endIsoForColumn,
+  extendBuffer,
+  firstColumnForToday,
   isWeekend,
   isoForColumn,
+  monthSegments,
+  rangeFromBuffer,
   resizeBar,
+  scrollLeftForColumn,
   startOfDay,
+  timelineFetchWindow,
+  toDateInputValue,
+  visibleColumns,
+  visibleRangeLabel,
   DEFAULT_LABEL_WIDTH,
   LABEL_WIDTH_STEP,
   MAX_LABEL_WIDTH,
   MIN_LABEL_WIDTH,
+  STRIP_COLUMN_WIDTH,
+  TIMELINE_COLUMN_WIDTH,
   type TimelineBar,
+  type TimelineBuffer,
   type TimelineEdge,
-  type TimelineMode,
   type TimelineRange,
   type TimelineSpan,
+  type TimelineZoom,
+  type VisibleColumns,
 } from './timelineModel';
 import {
+  buildStripRows,
   buildTimelineRows,
   filterTimelineRows,
   filterTimelineSessions,
   filterTimelineWorks,
   type TimelineSessionFilter,
-  rangeWindow,
   timelineDirOptions,
   timelineLegend,
   TIMELINE_STATUS_LABELS,
@@ -87,16 +102,37 @@ export interface TimelineViewProps {
    * (same bar the Works session actions use) rather than rendered here.
    */
   onNotify?: (notice: WorkSessionNoticeState) => void;
+  /**
+   * `strip` is the Works tab's compact strip: active Works' plan bars only (no
+   * 미배정 / session rows, no session fetch), no error banners of its own (the
+   * Works tab's shared alert already shows `error`), capped at 240px, and
+   * collapsible. Default `board` is the full Board-tab timeline.
+   */
+  variant?: 'board' | 'strip';
+  /** Strip only: the `전체 타임라인 ↗` button — switch to the Board tab's timeline. */
+  onOpenFullTimeline?: () => void;
 }
 
 const DOW_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
 
-const MODE_LABELS: Record<TimelineMode, string> = {
-  week: '주간',
-  month: '월간',
+/** Zoom = column width only (`TIMELINE_COLUMN_WIDTH`); the range is the scroll. */
+const ZOOM_LABELS: Record<TimelineZoom, string> = {
+  week: '주',
+  month: '월',
 };
 
-const MODES: TimelineMode[] = ['week', 'month'];
+const ZOOMS: TimelineZoom[] = ['week', 'month'];
+
+/** Arrow-key / ◀▶ step sizes, in days. */
+const KEY_STEP_DAYS = 1;
+const PAGE_STEP_DAYS = 7;
+
+/**
+ * Pointer-down targets that keep their own behaviour instead of starting a
+ * pan. Bar handles and the label grip already stop propagation; this covers
+ * every clickable thing that does not.
+ */
+const PAN_EXCLUDED_SELECTOR = 'button, a, input, label, [role="slider"], [role="separator"]';
 
 /** Persisted label-column width, so a widened label column survives a reload. */
 /**
@@ -123,6 +159,16 @@ const SUBAGENT_STORAGE_KEY = 'kanban-timeline-subagents';
  * it opens on the first visit and then lives behind the `?` button.
  */
 const HELP_SEEN_STORAGE_KEY = 'kanban-timeline-help-seen';
+/** Whether the Works tab's strip is folded away. */
+const STRIP_COLLAPSED_STORAGE_KEY = 'kanban-works-timeline-strip-collapsed';
+
+function readStripCollapsed(): boolean {
+  try {
+    return localStorage.getItem(STRIP_COLLAPSED_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 function readLabelWidth(): number {
   try {
@@ -175,9 +221,9 @@ function columnDateLabel(date: Date): string {
 }
 
 /**
- * Month view has ~34px columns, too narrow for `M/D`, so it falls back to the
- * bare day-of-month the way a calendar grid does — the range label above the
- * grid already names the month.
+ * Month zoom has ~34px columns, too narrow for `M/D`, so it falls back to the
+ * bare day-of-month the way a calendar grid does — the month band above the
+ * header names the month.
  */
 function compactDateLabel(date: Date): string {
   return String(date.getDate());
@@ -191,6 +237,15 @@ function dowLabel(date: Date): string {
 function statusClass(work: Work): string {
   return `tl-bar--${work.status}`;
 }
+
+/**
+ * A scroll the next layout pass has to apply, because it depends on DOM that
+ * the triggering state change has not rendered yet: today's column after a
+ * buffer rebuild, the same first date after a zoom change.
+ */
+type PendingScroll =
+  | { kind: 'today'; anchor: 'left' | 'right' }
+  | { kind: 'column'; column: number };
 
 /** In-flight edge drag. `origin` is the span the drag started from. */
 interface DragState {
@@ -285,6 +340,11 @@ interface TimelineRowBarProps {
   resizable: boolean;
   /** Month view: ~34px columns, so the edge hints shrink instead of vanishing. */
   compact: boolean;
+  /**
+   * The bar's real start is left of the viewport (scrolled past, or before the
+   * buffer). Its sticky title then says where it began — `◂ 9/27부터`.
+   */
+  startHidden: boolean;
   handlers: TimelineHandlers;
 }
 
@@ -306,6 +366,7 @@ const TimelineRowBar = memo(function TimelineRowBar({
   dragging,
   resizable,
   compact,
+  startHidden,
   handlers,
 }: TimelineRowBarProps) {
   const { work } = bar;
@@ -387,12 +448,18 @@ const TimelineRowBar = memo(function TimelineRowBar({
         onClick={() => handlers.openWork(work)}
         title={work.title}
       >
-        {bar.clippedLeft && (
-          <span className="tl-bar-edge">
-            {compact ? `◂${formatShortDate(work.startedAt)}` : `◂ ${formatShortDate(work.startedAt)}부터`}
-          </span>
-        )}
-        <span className="tl-bar-title">{work.title}</span>
+        {/* Sticky against the label column, so a bar that began off-screen
+            still reads its title (and where it began) at the viewport's edge.
+            Needs `.tl-bar { overflow: clip }` — `hidden` would make the bar the
+            sticky scroll container and pin the title to the bar instead. */}
+        <span className="tl-bar-lead">
+          {(bar.clippedLeft || startHidden) && (
+            <span className="tl-bar-edge">
+              {compact ? `◂${formatShortDate(work.startedAt)}` : `◂ ${formatShortDate(work.startedAt)}부터 ·`}
+            </span>
+          )}
+          <span className="tl-bar-title">{work.title}</span>
+        </span>
         {discardedNote && <span className="tl-bar-note">{discardedNote}</span>}
         {work.sessionLinks.length > 0 && (
           <span className="tl-bar-count">세션 {work.sessionLinks.length}</span>
@@ -568,7 +635,9 @@ const WorkRowView = memo(function WorkRowView({
   todayIndex,
   resizable,
   compact,
+  strip,
   dragPreview,
+  startHidden,
   handlers,
 }: {
   row: TimelineWorkRow;
@@ -577,8 +646,12 @@ const WorkRowView = memo(function WorkRowView({
   todayIndex: number;
   resizable: boolean;
   compact: boolean;
+  /** Strip rows have no sessions under them — no caret, no `세션 N` sub line. */
+  strip: boolean;
   /** Non-null only while *this* Work's bar is being dragged. */
   dragPreview: TimelineSpan | null;
+  /** See `TimelineRowBarProps.startHidden` — a boolean so scrolling only re-renders rows it flips. */
+  startHidden: boolean;
   handlers: TimelineHandlers;
 }) {
   const { bar } = row;
@@ -593,33 +666,43 @@ const WorkRowView = memo(function WorkRowView({
         style={{ gridRow, gridColumn: 1 }}
       >
         <span className="tl-label-line">
-          <button
-            type="button"
-            className="tl-group-toggle tl-group-toggle--caret"
-            aria-expanded={!row.collapsed}
-            aria-label={`${row.work.title} 세션 ${row.collapsed ? '펼치기' : '접기'}`}
-            onClick={() => handlers.toggleWork(row.work.id)}
-          >
-            <span
-              className={`tl-group-caret${row.collapsed ? ' tl-group-caret--collapsed' : ''}`}
-              aria-hidden="true"
+          {!strip && (
+            <button
+              type="button"
+              className="tl-group-toggle tl-group-toggle--caret"
+              aria-expanded={!row.collapsed}
+              aria-label={`${row.work.title} 세션 ${row.collapsed ? '펼치기' : '접기'}`}
+              onClick={() => handlers.toggleWork(row.work.id)}
             >
-              {row.collapsed ? '▸' : '▾'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="tl-label-link"
-            onClick={() => handlers.openWork(row.work)}
-            title={row.work.title}
-          >
-            {row.work.title}
-          </button>
+              <span
+                className={`tl-group-caret${row.collapsed ? ' tl-group-caret--collapsed' : ''}`}
+                aria-hidden="true"
+              >
+                {row.collapsed ? '▸' : '▾'}
+              </span>
+            </button>
+          )}
+          {/* The strip's bar is its one click target: a second button with the
+              Work's exact title would duplicate the Works list's own. */}
+          {strip ? (
+            <span className="tl-label-title" title={row.work.title}>{row.work.title}</span>
+          ) : (
+            <button
+              type="button"
+              className="tl-label-link"
+              onClick={() => handlers.openWork(row.work)}
+              title={row.work.title}
+            >
+              {row.work.title}
+            </button>
+          )}
         </span>
-        <span className="tl-label-sub">
-          세션 {row.sessionCount}
-          {row.collapsed && row.sessionCount > 0 ? ' · 펼치기' : ''}
-        </span>
+        {!strip && (
+          <span className="tl-label-sub">
+            세션 {row.sessionCount}
+            {row.collapsed && row.sessionCount > 0 ? ' · 펼치기' : ''}
+          </span>
+        )}
       </div>
       <RowCells range={range} gridRow={gridRow} todayIndex={todayIndex} kind="work" />
       {bar && span && (
@@ -631,6 +714,7 @@ const WorkRowView = memo(function WorkRowView({
           dragging={dragPreview !== null}
           resizable={resizable}
           compact={compact}
+          startHidden={startHidden}
           handlers={handlers}
         />
       )}
@@ -752,6 +836,19 @@ const SessionRowView = memo(function SessionRowView({
  * That is a performance contract, not a style: a drag re-renders the view once
  * per column crossed, and without the bail-out that repainted every one of the
  * month view's ~60 rows. Keep new callbacks inside the bundle.
+ *
+ * The grid scrolls instead of paging: a buffer of fixed-width day columns
+ * (`TimelineBuffer`, 78px / 34px per the 주/월 zoom) inside a native
+ * `overflow-x` scroller that snaps per day. Nearing either end grows the buffer
+ * by 28 days and the layout effect corrects `scrollLeft` before paint, so the
+ * past is endless and nothing jumps. The buffer never grows while a bar edge or
+ * the label grip is being dragged — their measured geometry is column-indexed.
+ * ←/→ (Shift: 7 days) act only when the scroller itself is focused, so a
+ * focused bar handle keeps those keys for its date nudge.
+ *
+ * `variant="strip"` reuses the same grid on the Works tab: active Works' plan
+ * bars only (`buildStripRows`, no session fetch), 56px columns, a 240px cap
+ * and a persisted 접기/펼치기. Everything else here is the Board variant's.
  */
 export function TimelineView({
   works,
@@ -766,9 +863,14 @@ export function TimelineView({
   onAssignSession,
   onNotify,
   sessionFilter,
+  variant = 'board',
+  onOpenFullTimeline,
 }: TimelineViewProps) {
-  const [mode, setMode] = useState<TimelineMode>('week');
-  const [offset, setOffset] = useState(0);
+  const strip = variant === 'strip';
+  const [stripCollapsed, setStripCollapsed] = useState(readStripCollapsed);
+  const [zoom, setZoom] = useState<TimelineZoom>('week');
+  const columnWidth = strip ? STRIP_COLUMN_WIDTH : TIMELINE_COLUMN_WIDTH[zoom];
+  const compact = !strip && zoom === 'month';
   const [showSubagents, setShowSubagents] = useState(readShowSubagents);
   const [collapsedDirs, setCollapsedDirs] = useState<ReadonlySet<string>>(() => new Set());
   // Works start *collapsed*: the Timeline is read at the Work level first, and
@@ -787,14 +889,32 @@ export function TimelineView({
   // the memos stable between renders while still rolling over at midnight (the
   // polls re-render us).
   const todayMs = startOfDay(new Date()).getTime();
-  const range = useMemo(() => buildRange(mode, offset, new Date(todayMs)), [mode, offset, todayMs]);
-  // Named apiWindow, not window — shadowing the global inside a component that
-  // also touches localStorage is a trap waiting to happen.
-  const apiWindow = useMemo(() => rangeWindow(range), [range]);
+  /**
+   * The rendered day columns — a scroll buffer, not the visible slice. It grows
+   * by 28 days when the viewport nears either end (`syncScroll`), so the past is
+   * effectively endless while the DOM stays capped.
+   */
+  const [buffer, setBuffer] = useState<TimelineBuffer>(() => bufferAroundToday(new Date(todayMs)));
+  const range = useMemo(() => rangeFromBuffer(buffer), [buffer]);
+  const todayIndex = dayDiff(range.start, new Date(todayMs));
+  /**
+   * What the viewport shows, in buffer columns — drives the range label, the
+   * API window and the bars' `◂ M/D부터`. Seeded with "the two weeks up to
+   * today" so the first fetch already asks for the right window.
+   */
+  const [visible, setVisible] = useState<VisibleColumns>(() => {
+    const today = dayDiff(buffer.start, new Date(todayMs));
+    return { first: Math.max(0, today - 13), last: today };
+  });
+  // Aligned to 14-day blocks (timelineFetchWindow): scrolling a day keeps the
+  // same from/to strings, so `useTimeline` does not refetch. Named apiWindow,
+  // not window — shadowing the global here is a trap waiting to happen.
+  const apiWindow = useMemo(() => timelineFetchWindow(range, visible), [range, visible]);
   const timeline = useTimeline({
     from: apiWindow.from,
     to: apiWindow.to,
     includeSubagents: showSubagents,
+    enabled: !strip,
   });
 
   const filteredSessions = useMemo(
@@ -817,16 +937,26 @@ export function TimelineView({
   // Options describe the whole grid; the filter narrows what is drawn. Derived
   // in that order so selecting one directory cannot erase the other options.
   const dirOptions = useMemo(() => timelineDirOptions(allRows), [allRows]);
-  const rows = useMemo(
+  const boardRows = useMemo(
     () => filterTimelineRows(allRows, dirFilter?.groupKey ?? null),
     [allRows, dirFilter],
   );
+  // The strip ignores the Board FILTER bar: it lives on the Works tab, where
+  // that bar is not shown.
+  const stripRows = useMemo(
+    () => (strip ? buildStripRows(works, range, new Date(todayMs)) : []),
+    [strip, works, range, todayMs],
+  );
+  const rows: TimelineRow[] = strip ? stripRows : boardRows;
   const legend = useMemo(() => timelineLegend(rows), [rows]);
+  const months = useMemo(() => monthSegments(range), [range]);
+  const rangeLabel = visibleRangeLabel(range, visible);
 
-  const todayIndex = dayDiff(range.start, new Date(todayMs));
   const columnCount = range.days.length;
+  // Fixed-width day tracks: the grid is wider than the viewport on purpose, and
+  // `.tl-scroll` scrolls it natively (snap per day, see Timeline.css).
   const gridStyle = {
-    gridTemplateColumns: `var(--tl-label-track) repeat(${columnCount}, minmax(var(--tl-col-min), 1fr))`,
+    gridTemplateColumns: `var(--tl-label-track) repeat(${columnCount}, var(--tl-col-width))`,
   };
 
   const gridRef = useRef<HTMLDivElement>(null);
@@ -839,12 +969,14 @@ export function TimelineView({
   const [dragView, setDragView] = useState<{ workId: string; preview: TimelineSpan } | null>(null);
   /**
    * Column geometry, measured **once** per drag. It used to be re-measured on
-   * every pointermove (two `querySelector`s and two forced layouts per event);
-   * the columns cannot move mid-drag, since a range change aborts the drag and
-   * horizontal scrolling is suppressed while the pointer is captured.
+   * every pointermove (two `querySelector`s and two forced layouts per event).
+   * The buffer cannot change mid-drag (`syncScroll` freezes it), but the
+   * scroller can still move under a wheel/trackpad, so the `scrollLeft` at
+   * measure time is kept and `dragColumnLeft` shifts `left` by the difference.
    */
-  const metricsRef = useRef<{ left: number; width: number } | null>(null);
+  const metricsRef = useRef<{ left: number; width: number; scrollLeft: number } | null>(null);
   const dragging = dragView !== null;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Label column width lives here (not in CSS) because it is user-resizable:
   // the grip writes it, `--tl-label-width` on `.timeline` consumes it, and the
@@ -868,6 +1000,13 @@ export function TimelineView({
   useEffect(() => {
     writeLabelWidth(labelWidth);
   }, [labelWidth]);
+
+  useEffect(() => {
+    if (!strip) return;
+    try {
+      localStorage.setItem(STRIP_COLLAPSED_STORAGE_KEY, stripCollapsed ? '1' : '0');
+    } catch { /* quota exceeded */ }
+  }, [strip, stripCollapsed]);
 
   useEffect(() => {
     try {
@@ -952,7 +1091,10 @@ export function TimelineView({
     if (handle instanceof HTMLElement) handle.focus();
     const origin: TimelineSpan = { startIndex: bar.startIndex, endIndex: bar.endIndex };
     dragRef.current = { workId: bar.work.id, edge, origin, preview: origin };
-    metricsRef.current = measureColumns(gridRef.current, latest.current.columnCount);
+    const measured = measureColumns(gridRef.current, latest.current.columnCount);
+    metricsRef.current = measured
+      ? { ...measured, scrollLeft: scrollRef.current?.scrollLeft ?? 0 }
+      : null;
     setDragView({ workId: bar.work.id, preview: origin });
   }, []);
 
@@ -960,9 +1102,10 @@ export function TimelineView({
     const drag = dragRef.current;
     const metrics = metricsRef.current;
     if (!drag || !metrics) return;
-    const column = columnAtPointer(
-      event.clientX, metrics.left, metrics.width, latest.current.columnCount,
+    const left = dragColumnLeft(
+      metrics.left, metrics.scrollLeft, scrollRef.current?.scrollLeft ?? metrics.scrollLeft,
     );
+    const column = columnAtPointer(event.clientX, left, metrics.width, latest.current.columnCount);
     const preview = resizeBar(drag.origin, drag.edge, column);
     if (preview.startIndex === drag.preview.startIndex
       && preview.endIndex === drag.preview.endIndex) {
@@ -1063,28 +1206,516 @@ export function TimelineView({
     setLabelWidth((prev) => clampLabelWidth(prev + delta));
   }, []);
 
-  // A range/mode change mid-drag would rewrite the columns under the pointer.
+  // A buffer change mid-drag would rewrite the columns under the pointer.
+  // `syncScroll` never grows the buffer during a drag, so this only fires for
+  // 오늘 (a rebuild) — and dropping the drag is the right answer there too.
   useEffect(() => {
     dragRef.current = null;
     metricsRef.current = null;
     setDragView(null);
   }, [range]);
 
-  const changeMode = (next: TimelineMode) => {
-    setMode(next);
-    // Week and month offsets are different units, so a mode switch returns to
-    // the current period rather than translating the offset.
-    setOffset(0);
+  /* ── Scrolling ─────────────────────────────────────────── */
+
+  /**
+   * Latest geometry for the scroll callbacks, which are stable and run outside
+   * render. `buffer` is also written by `syncScroll` itself, so a second scroll
+   * event before React re-renders cannot grow the buffer twice.
+   */
+  const viewRef = useRef({ buffer, columnWidth, frozen: false });
+  /**
+   * Absolute `scrollLeft` to land on once the grown buffer has rendered — the
+   * pre-growth position plus `shift × columnWidth`. Absolute on purpose:
+   * Chrome re-snaps to the same snap *element* after a layout change, which
+   * already performs the shift, and a relative `+=` on top of that applied it
+   * twice (28 days → 56).
+   */
+  const pendingScrollLeftRef = useRef<number | null>(null);
+  /**
+   * Column a `◀ 7일` / `7일 ▶` / arrow-key smooth scroll is heading for. A
+   * buffer change mid-animation (and the browser's re-snap) cancels the smooth
+   * scroll, so the layout effect re-issues it; repeated presses accumulate from
+   * here instead of from wherever the animation had got to. Cleared when
+   * reached, and by any direct user scroll input.
+   */
+  const scrollTargetRef = useRef<number | null>(null);
+  /** A buffer change interrupted the `scrollTargetRef` animation; resume it. */
+  const reissueRef = useRef(false);
+  /** `scrollLeft` as of the last `syncScroll` — see `keepScrollOnLabelFocus`. */
+  const settledScrollLeftRef = useRef(0);
+  const pendingScrollRef = useRef<PendingScroll | null>({ kind: 'today', anchor: 'right' });
+  const frameRef = useRef(0);
+  /** Empty-space drag pan: where it started, so a move is a pure delta. */
+  const panRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
+  const [panning, setPanning] = useState(false);
+
+  // Bar drags and the label grip both hold geometry measured at the start;
+  // growing the buffer under them shifts every column index they hold.
+  const frozen = dragging || resizingLabel;
+  useLayoutEffect(() => {
+    viewRef.current = { buffer, columnWidth, frozen };
+  }, [buffer, columnWidth, frozen]);
+
+  const labelTrackWidth = useCallback(
+    () => labelHeadRef.current?.offsetWidth ?? 0,
+    [],
+  );
+
+  /**
+   * Reads the viewport into `visible` and grows the buffer when it is within
+   * `BUFFER_EDGE_DAYS` of either end. Prepending shifts every column right, so
+   * `visible` moves with it in the same batch (a stale index against the new
+   * range would point the API window 28 days off for one render) and the pixel
+   * correction waits in `pendingScrollLeftRef` for the layout effect below.
+   */
+  const syncScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const view = viewRef.current;
+    settledScrollLeftRef.current = el.scrollLeft;
+    const next = visibleColumns(
+      el.scrollLeft, el.clientWidth, labelTrackWidth(), view.columnWidth, view.buffer.dayCount,
+    );
+    const target = scrollTargetRef.current;
+    if (target !== null && Math.abs(el.scrollLeft - target * view.columnWidth) < 1) {
+      scrollTargetRef.current = null;
+    }
+    // While a prepend's correction is pending, `scrollLeft` still describes
+    // the old buffer — measuring it against the new one would prepend again.
+    const edge = view.frozen || pendingScrollLeftRef.current !== null
+      ? null
+      : bufferEdgeToExtend(next, view.buffer.dayCount);
+    if (edge) {
+      const { buffer: grown, shift } = extendBuffer(view.buffer, edge);
+      // `viewRef` is what keeps a second scroll event before the re-render
+      // from growing again.
+      viewRef.current = { ...view, buffer: grown };
+      // A plain append moves nothing — and writing a stale `scrollLeft` would
+      // cut a running smooth scroll short.
+      if (shift !== 0) pendingScrollLeftRef.current = el.scrollLeft + shift * view.columnWidth;
+      if (scrollTargetRef.current !== null) {
+        scrollTargetRef.current += shift;
+        reissueRef.current = true;
+      }
+      setBuffer(grown);
+      setVisible({ first: next.first + shift, last: next.last + shift });
+      return;
+    }
+    setVisible((prev) => (prev.first === next.first && prev.last === next.last ? prev : next));
+  }, [labelTrackWidth]);
+
+  const onScroll = useCallback(() => {
+    if (frameRef.current) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      syncScroll();
+    });
+  }, [syncScroll]);
+
+  useEffect(() => () => cancelAnimationFrame(frameRef.current), []);
+
+  // Before paint: apply the prepend correction (or a pending jump) so the
+  // grown grid never flashes at the wrong dates. Re-runs for a zoom change and
+  // for the strip re-expanding (a fresh scroller at scrollLeft 0).
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const corrected = pendingScrollLeftRef.current;
+    if (corrected !== null) {
+      pendingScrollLeftRef.current = null;
+      // Read before writing: a browser that already re-snapped has moved too.
+      const moved = corrected - el.scrollLeft;
+      el.scrollLeft = corrected;
+      if (panRef.current) panRef.current.startScrollLeft += moved;
+    }
+    // The layout change (and the browser's re-snap after it) can cancel a
+    // button/key smooth scroll mid-flight. Re-issued a frame later, once that
+    // re-snap has happened, or it would be cancelled again.
+    if (reissueRef.current) {
+      reissueRef.current = false;
+      requestAnimationFrame(() => {
+        const target = scrollTargetRef.current;
+        const node = scrollRef.current;
+        if (target === null || !node) return;
+        node.scrollTo({
+          left: scrollLeftForColumn(target, viewRef.current.columnWidth),
+          behavior: 'smooth',
+        });
+      });
+    }
+    const pending = pendingScrollRef.current;
+    if (pending) {
+      pendingScrollRef.current = null;
+      const column = pending.kind === 'column'
+        ? pending.column
+        : firstColumnForToday(
+          todayIndex,
+          Math.floor((el.clientWidth - labelTrackWidth()) / columnWidth),
+          pending.anchor,
+        );
+      el.scrollLeft = scrollLeftForColumn(column, columnWidth);
+    }
+    // An append with nothing trimmed moves no pixels and fires no scroll
+    // event, so re-check here: a very wide viewport may need another step.
+    syncScroll();
+  }, [buffer, columnWidth, stripCollapsed, todayIndex, labelTrackWidth, syncScroll]);
+
+  // A drag/resize that ended near an edge never got its growth step.
+  useEffect(() => {
+    if (!frozen) syncScroll();
+  }, [frozen, syncScroll]);
+
+  useEffect(() => {
+    window.addEventListener('resize', onScroll);
+    return () => window.removeEventListener('resize', onScroll);
+  }, [onScroll]);
+
+  /**
+   * Scrolls by whole days from the current (snapped) first column — or from
+   * the column a still-running smooth scroll is heading for, so three quick
+   * `7일 ▶` presses really move 21 days.
+   */
+  const scrollByDays = useCallback((days: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const width = viewRef.current.columnWidth;
+    const base = scrollTargetRef.current ?? Math.round(el.scrollLeft / width);
+    const target = Math.max(0, base + days);
+    const left = scrollLeftForColumn(target, width);
+    // Already there (a pan that ended on a day): no animation, so no scroll
+    // event would ever clear the target — and a stale one would be re-issued
+    // after the next buffer growth, yanking the view back.
+    if (Math.abs(el.scrollLeft - left) < 1) {
+      scrollTargetRef.current = null;
+      return;
+    }
+    scrollTargetRef.current = target;
+    el.scrollTo({ left, behavior: 'smooth' });
+  }, []);
+
+  /** Direct scroll input wins over a button/key scroll still in flight. */
+  const cancelScrollTarget = useCallback(() => {
+    scrollTargetRef.current = null;
+  }, []);
+
+  /** `오늘`: today second from the left, on a buffer rebuilt around it. */
+  const goToday = () => {
+    scrollTargetRef.current = null;
+    pendingScrollRef.current = { kind: 'today', anchor: 'left' };
+    setBuffer(bufferAroundToday(new Date(todayMs), visible.last - visible.first + 1));
+  };
+  const atToday = visible.first === firstColumnForToday(todayIndex, 0, 'left');
+
+  /** Zoom only changes the column width; the first visible date stays put. */
+  const changeZoom = (next: TimelineZoom) => {
+    if (next === zoom) return;
+    scrollTargetRef.current = null;
+    pendingScrollRef.current = { kind: 'column', column: visible.first };
+    setZoom(next);
   };
 
-  const busy = loading || timeline.loading;
-  const failed = timeline.error !== null;
+  /**
+   * ←/→ one day, Shift seven — only when the scroller *itself* has focus. A
+   * focused bar handle uses the same keys to nudge a date, and that event
+   * bubbles through here; acting on it would scroll and re-date at once.
+   */
+  const onScrollKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    const step = event.shiftKey ? PAGE_STEP_DAYS : KEY_STEP_DAYS;
+    scrollByDays(event.key === 'ArrowLeft' ? -step : step);
+  };
+
+  /**
+   * Focusing anything in the sticky label column (Tab, or a dialog handing
+   * focus back to a row's 배정 button) makes the browser scroll the grid toward
+   * that element's *unstuck* position — weeks back, which also moves the API
+   * window off the rows being worked on. The scroll lands before the focus
+   * event, so the last settled position is put back here.
+   */
+  const keepScrollOnLabelFocus = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof Element)) return;
+    if (!event.target.closest('.tl-label, .tl-head--label')) return;
+    const el = event.currentTarget;
+    if (el.scrollLeft !== settledScrollLeftRef.current) el.scrollLeft = settledScrollLeftRef.current;
+  };
+
+  /**
+   * Mouse drag on empty grid pans it. Touch and pen already scroll natively;
+   * anything clickable keeps its click (`PAN_EXCLUDED_SELECTOR`), and the bar
+   * handles / label grip stop propagation before this sees them.
+   */
+  const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.pointerType !== 'mouse') return;
+    if (event.target instanceof Element && event.target.closest(PAN_EXCLUDED_SELECTOR)) return;
+    const el = event.currentTarget;
+    scrollTargetRef.current = null;
+    panRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: el.scrollLeft };
+    el.setPointerCapture(event.pointerId);
+    setPanning(true);
+  };
+
+  const movePan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    event.currentTarget.scrollLeft = pan.startScrollLeft - (event.clientX - pan.startX);
+  };
+
+  // Bar-handle and grip captures bubble their lostpointercapture through here
+  // too; the pointer id keeps those from ending a pan that never started.
+  const endPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    panRef.current = null;
+    setPanning(false);
+    // Snap is off while panning (it fights every programmatic scrollLeft), so
+    // settle on a day boundary by hand.
+    scrollByDays(0);
+  };
+
+  const busy = loading || (!strip && timeline.loading);
+  const failed = !strip && timeline.error !== null;
   // The selected directory keeps its chip even when this window holds none of
   // its rows — otherwise the filter looks unset while it is still filtering.
   const filterChips = useMemo(() => {
     if (!dirFilter || dirOptions.some((o) => o.groupKey === dirFilter.groupKey)) return dirOptions;
     return [...dirOptions, { ...dirFilter, workCount: 0, sessionCount: 0 }];
   }, [dirOptions, dirFilter]);
+
+  const grid = (
+    <div
+      className={`timeline${strip ? ' timeline--strip' : ''}${compact ? ' timeline--month' : ''}${dragging ? ' timeline--dragging' : ''}${resizingLabel ? ' timeline--label-resizing' : ''}${panning ? ' timeline--panning' : ''}${failed ? ' timeline--errored' : ''}`}
+      style={{
+        '--tl-label-width': `${labelWidth}px`,
+        '--tl-col-width': `${columnWidth}px`,
+      } as React.CSSProperties}
+    >
+      {/* The scroller: native overflow-x with per-day snap (Timeline.css). It
+          is focusable so ←/→ can move it, and empty space pans on drag. */}
+      <div
+        className="tl-scroll"
+        ref={scrollRef}
+        tabIndex={0}
+        role="region"
+        aria-label={`타임라인 ${rangeLabel} (←/→ 1일, Shift 7일)`}
+        onScroll={onScroll}
+        onWheel={cancelScrollTarget}
+        onTouchStart={cancelScrollTarget}
+        onKeyDown={onScrollKeyDown}
+        onFocus={keepScrollOnLabelFocus}
+        onPointerDown={beginPan}
+        onPointerMove={movePan}
+        onLostPointerCapture={endPan}
+      >
+        <div className="tl-grid" style={gridStyle} ref={gridRef}>
+          {/* Month band: the day header only says `28 29 30 1 2`. Each label is
+              sticky, so the month in view stays named while it scrolls. */}
+          {months.map((segment) => (
+            <div
+              key={segment.startIndex}
+              className="tl-month"
+              style={{ gridRow: 1, gridColumn: `${segment.startIndex + 2} / ${segment.endIndex + 3}` }}
+            >
+              <span className="tl-month-label">{segment.label}</span>
+            </div>
+          ))}
+          <div
+            className="tl-head tl-head--label"
+            style={{ gridRow: '1 / 3', gridColumn: 1 }}
+            ref={labelHeadRef}
+          >
+            {strip ? 'Work' : '프로젝트 · 세션'}
+            <span
+              role="separator"
+              aria-orientation="vertical"
+              tabIndex={0}
+              aria-label="라벨 열 너비 조정"
+              aria-valuemin={MIN_LABEL_WIDTH}
+              aria-valuemax={MAX_LABEL_WIDTH}
+              aria-valuenow={labelWidth}
+              aria-valuetext={`${labelWidth}px`}
+              className="tl-label-resizer"
+              onPointerDown={beginLabelResize}
+              onPointerMove={moveLabelResize}
+              // Same end-of-drag signal as the bar handles — see renderHandle.
+              onLostPointerCapture={() => setResizingLabel(false)}
+              onDoubleClick={() => setLabelWidth(DEFAULT_LABEL_WIDTH)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                  event.preventDefault();
+                  nudgeLabelWidth(event.key === 'ArrowLeft' ? -LABEL_WIDTH_STEP : LABEL_WIDTH_STEP);
+                  return;
+                }
+                if (event.key === 'Home') {
+                  event.preventDefault();
+                  setLabelWidth(DEFAULT_LABEL_WIDTH);
+                }
+              }}
+            />
+          </div>
+          {range.days.map((day, index) => {
+            const isToday = index === todayIndex;
+            const dateLabel = compact ? compactDateLabel(day) : columnDateLabel(day);
+            const classes = [
+              'tl-head',
+              isWeekend(day) ? 'tl-head--weekend' : '',
+              isToday ? 'tl-head--today' : '',
+              day.getDate() === 1 ? 'tl-head--month-start' : '',
+            ].filter(Boolean).join(' ');
+            return (
+              <div
+                key={day.getTime()}
+                className={classes}
+                // Drag geometry is measured off these cells (measureColumns),
+                // and they are the scroll-snap targets.
+                data-tl-col={index}
+                data-tl-date={toDateInputValue(day.toISOString())}
+                style={{ gridRow: 2, gridColumn: index + 2 }}
+              >
+                <span className="tl-dow">{dowLabel(day)}</span>
+                {isToday ? <span className="tl-date-pill">{dateLabel}</span> : dateLabel}
+              </div>
+            );
+          })}
+
+          {rows.map((row, rowIndex) => {
+            // Rows 1–2 are the month band and the day header.
+            const gridRow = rowIndex + 3;
+            if (row.kind === 'dir') {
+              return (
+                <DirRowView
+                  key={row.key}
+                  row={row}
+                  gridRow={gridRow}
+                  range={range}
+                  todayIndex={todayIndex}
+                  handlers={handlers}
+                />
+              );
+            }
+            if (row.kind === 'work') {
+              return (
+                <WorkRowView
+                  key={row.key}
+                  row={row}
+                  gridRow={gridRow}
+                  range={range}
+                  todayIndex={todayIndex}
+                  resizable={resizable}
+                  compact={compact}
+                  strip={strip}
+                  dragPreview={dragView?.workId === row.work.id ? dragView.preview : null}
+                  startHidden={row.bar !== null && row.bar.rawStartIndex < visible.first}
+                  handlers={handlers}
+                />
+              );
+            }
+            return (
+              <SessionRowView
+                key={row.key}
+                row={row}
+                gridRow={gridRow}
+                range={range}
+                todayIndex={todayIndex}
+                handlers={handlers}
+              />
+            );
+          })}
+
+          {rows.length === 0 && (
+            <div className="tl-empty" style={{ gridRow: 3 }}>
+              {busy && '불러오는 중…'}
+              {/* An unanswered read must never be reported as an empty week. */}
+              {!busy && strip && '이 기간에 진행 중인 Work가 없습니다. 좌우로 스크롤해 다른 날짜를 보거나 전체 타임라인을 여세요.'}
+              {!busy && failed && '타임라인을 불러오지 못해 비어 있습니다. 위 알림의 다시 시도를 눌러 주세요.'}
+              {!busy && !strip && !failed && dirFilter
+                && '이 디렉토리에는 이 기간에 실행된 세션이 없습니다. 필터를 전체로 돌리면 다른 프로젝트가 보입니다.'}
+              {!busy && !strip && !failed && !dirFilter
+                && '이 기간에 실행된 세션이 없습니다. 카드를 실행하면 실행한 날부터 여기에 나타납니다.'}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Shared by both toolbars. `◀ 7일`/`7일 ▶` are the scroll in buttons;
+  // `오늘` rebuilds the buffer around today, so it works from any distance.
+  const stepButtons = (
+    <>
+      <button
+        type="button"
+        className="kv2-btn kv2-btn--small"
+        aria-label="7일 전으로"
+        onClick={() => scrollByDays(-PAGE_STEP_DAYS)}
+      >
+        ◀ 7일
+      </button>
+      <b className="tl-range-label">{rangeLabel}</b>
+      <button
+        type="button"
+        className="kv2-btn kv2-btn--small"
+        aria-label="7일 뒤로"
+        onClick={() => scrollByDays(PAGE_STEP_DAYS)}
+      >
+        7일 ▶
+      </button>
+      <button
+        type="button"
+        className="kv2-btn kv2-btn--small kv2-btn--ghost"
+        disabled={atToday}
+        onClick={goToday}
+      >
+        오늘
+      </button>
+    </>
+  );
+
+  if (strip) {
+    const activeCount = works.filter((work) => work.status === 'active').length;
+    return (
+      <section
+        className={`tl-strip${stripCollapsed ? ' tl-strip--collapsed' : ''}`}
+        aria-label="진행 중 타임라인"
+      >
+        <div className="tl-strip-toolbar">
+          <b className="tl-strip-title"><span aria-hidden="true">🎯</span> 진행 중 타임라인</b>
+          <span className="kv2-badge tl-strip-count" title="진행 중인 Work 수">{activeCount}</span>
+          {!stripCollapsed && (
+            <>
+              {stepButtons}
+            </>
+          )}
+          <span className="tl-strip-actions">
+            {onOpenFullTimeline && (
+              <button
+                type="button"
+                className="kv2-btn kv2-btn--small"
+                onClick={onOpenFullTimeline}
+              >
+                전체 타임라인 ↗
+              </button>
+            )}
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--small kv2-btn--ghost"
+              aria-expanded={!stripCollapsed}
+              aria-controls="tl-strip-body"
+              onClick={() => {
+                // Re-expanding mounts a fresh scroller at scrollLeft 0.
+                if (stripCollapsed) pendingScrollRef.current = { kind: 'today', anchor: 'right' };
+                setStripCollapsed((value) => !value);
+              }}
+            >
+              {stripCollapsed ? '펼치기 ▼' : '접기 ▲'}
+            </button>
+          </span>
+        </div>
+        {!stripCollapsed && <div className="tl-strip-body" id="tl-strip-body">{grid}</div>}
+      </section>
+    );
+  }
 
   return (
     <div className="tl-view">
@@ -1118,42 +1749,20 @@ export function TimelineView({
       )}
 
       <div className="tl-controls">
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--small"
-          aria-label={mode === 'week' ? '이전 주' : '이전 달'}
-          onClick={() => setOffset((prev) => prev - 1)}
-        >
-          ◀
-        </button>
-        <b className="tl-range-label">{range.label}</b>
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--small"
-          aria-label={mode === 'week' ? '다음 주' : '다음 달'}
-          onClick={() => setOffset((prev) => prev + 1)}
-        >
-          ▶
-        </button>
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--small kv2-btn--ghost"
-          disabled={offset === 0}
-          onClick={() => setOffset(0)}
-        >
-          오늘
-        </button>
+        {stepButtons}
 
-        <span className="tl-seg" role="group" aria-label="타임라인 범위">
-          {MODES.map((option) => (
+        <span className="tl-seg" role="group" aria-label="줌">
+          <span className="tl-seg-caption" aria-hidden="true">줌</span>
+          {ZOOMS.map((option) => (
             <button
               key={option}
               type="button"
               className="tl-seg-option"
-              aria-pressed={mode === option}
-              onClick={() => changeMode(option)}
+              aria-pressed={zoom === option}
+              aria-label={`${ZOOM_LABELS[option]} 단위 줌`}
+              onClick={() => changeZoom(option)}
             >
-              {MODE_LABELS[option]}
+              {ZOOM_LABELS[option]}
             </button>
           ))}
         </span>
@@ -1177,6 +1786,8 @@ export function TimelineView({
         >
           ?
         </button>
+
+        <span className="tl-scroll-hint">← → 1일 · Shift 7일 · 빈 곳 드래그로 이동</span>
 
         {/* Only what is actually drawn: a fixed list advertised a 대기 swatch
             that a grid of executed work almost never contains. */}
@@ -1239,6 +1850,9 @@ export function TimelineView({
             · Work 바 양 끝의 손잡이를 잡아끌면 날짜가 바뀝니다(손잡이를 클릭한 뒤 ←/→ 키도 하루씩 이동).
             진행 중인 Work의 오른쪽 끝을 옮기면 <b>종료 예정일</b>이 되고, 비우면 다시 오늘까지 이어집니다.
             바꾼 뒤에는 <b>되돌리기</b> 알림이 잠시 남습니다.<br />
+            · 그리드는 좌우로 스크롤되고 하루 단위로 멈춥니다. 트랙패드·휠·빈 곳 드래그, 또는 그리드에
+            포커스를 두고 ←/→(Shift는 7일)로 움직이세요. 과거로 계속 가면 날짜가 자동으로 붙습니다.
+            주/월 줌은 열 폭만 바꿉니다.<br />
             · 라벨이 잘리면 헤더 오른쪽 경계를 잡아끌어 열 너비를 조절하세요(←/→ 키, 더블클릭하면 기본값).
             서브에이전트 카드는 기본으로 숨겨져 있습니다.
           </p>
@@ -1254,123 +1868,7 @@ export function TimelineView({
 
       <p className="tl-mobile-hint">· 그리드를 좌우로 밀어 다른 날짜를 볼 수 있습니다.</p>
 
-      <div
-        className={`timeline${mode === 'month' ? ' timeline--month' : ''}${dragging ? ' timeline--dragging' : ''}${resizingLabel ? ' timeline--label-resizing' : ''}${failed ? ' timeline--errored' : ''}`}
-        style={{ '--tl-label-width': `${labelWidth}px` } as React.CSSProperties}
-      >
-        <div className="tl-scroll">
-          <div className="tl-grid" style={gridStyle} ref={gridRef}>
-            <div
-              className="tl-head tl-head--label"
-              style={{ gridRow: 1, gridColumn: 1 }}
-              ref={labelHeadRef}
-            >
-              프로젝트 · 세션
-              <span
-                role="separator"
-                aria-orientation="vertical"
-                tabIndex={0}
-                aria-label="라벨 열 너비 조정"
-                aria-valuemin={MIN_LABEL_WIDTH}
-                aria-valuemax={MAX_LABEL_WIDTH}
-                aria-valuenow={labelWidth}
-                aria-valuetext={`${labelWidth}px`}
-                className="tl-label-resizer"
-                onPointerDown={beginLabelResize}
-                onPointerMove={moveLabelResize}
-                // Same end-of-drag signal as the bar handles — see renderHandle.
-                onLostPointerCapture={() => setResizingLabel(false)}
-                onDoubleClick={() => setLabelWidth(DEFAULT_LABEL_WIDTH)}
-                onKeyDown={(event) => {
-                  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                    event.preventDefault();
-                    nudgeLabelWidth(event.key === 'ArrowLeft' ? -LABEL_WIDTH_STEP : LABEL_WIDTH_STEP);
-                    return;
-                  }
-                  if (event.key === 'Home') {
-                    event.preventDefault();
-                    setLabelWidth(DEFAULT_LABEL_WIDTH);
-                  }
-                }}
-              />
-            </div>
-            {range.days.map((day, index) => {
-              const isToday = index === todayIndex;
-              const dateLabel = mode === 'month' ? compactDateLabel(day) : columnDateLabel(day);
-              const classes = [
-                'tl-head',
-                isWeekend(day) ? 'tl-head--weekend' : '',
-                isToday ? 'tl-head--today' : '',
-              ].filter(Boolean).join(' ');
-              return (
-                <div
-                  key={day.getTime()}
-                  className={classes}
-                  // Drag geometry is measured off these cells (measureColumns).
-                  data-tl-col={index}
-                  style={{ gridRow: 1, gridColumn: index + 2 }}
-                >
-                  <span className="tl-dow">{dowLabel(day)}</span>
-                  {isToday ? <span className="tl-date-pill">{dateLabel}</span> : dateLabel}
-                </div>
-              );
-            })}
-
-            {rows.map((row, rowIndex) => {
-              const gridRow = rowIndex + 2;
-              if (row.kind === 'dir') {
-                return (
-                  <DirRowView
-                    key={row.key}
-                    row={row}
-                    gridRow={gridRow}
-                    range={range}
-                    todayIndex={todayIndex}
-                    handlers={handlers}
-                  />
-                );
-              }
-              if (row.kind === 'work') {
-                return (
-                  <WorkRowView
-                    key={row.key}
-                    row={row}
-                    gridRow={gridRow}
-                    range={range}
-                    todayIndex={todayIndex}
-                    resizable={resizable}
-                    compact={mode === 'month'}
-                    dragPreview={dragView?.workId === row.work.id ? dragView.preview : null}
-                    handlers={handlers}
-                  />
-                );
-              }
-              return (
-                <SessionRowView
-                  key={row.key}
-                  row={row}
-                  gridRow={gridRow}
-                  range={range}
-                  todayIndex={todayIndex}
-                  handlers={handlers}
-                />
-              );
-            })}
-
-            {rows.length === 0 && (
-              <div className="tl-empty" style={{ gridRow: 2 }}>
-                {busy && '불러오는 중…'}
-                {/* An unanswered read must never be reported as an empty week. */}
-                {!busy && failed && '타임라인을 불러오지 못해 비어 있습니다. 위 알림의 다시 시도를 눌러 주세요.'}
-                {!busy && !failed && dirFilter
-                  && '이 디렉토리에는 이 기간에 실행된 세션이 없습니다. 필터를 전체로 돌리면 다른 프로젝트가 보입니다.'}
-                {!busy && !failed && !dirFilter
-                  && '이 기간에 실행된 세션이 없습니다. 카드를 실행하면 실행한 날부터 여기에 나타납니다.'}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      {grid}
     </div>
   );
 }

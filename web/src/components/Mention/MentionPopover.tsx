@@ -5,7 +5,7 @@ import type {
   MentionSearchResponse,
 } from '../../../../src/core/mention-search';
 import { RuntimeBadge } from '../Board/BoardCardSections';
-import { dirAccentClass } from '../Works/worksAffinity';
+import { dirAccentClass } from '../../utils/project-color';
 
 /**
  * `@` 멘션 팝오버 — 탭 4개 · 그룹 리스트 · 스니펫.

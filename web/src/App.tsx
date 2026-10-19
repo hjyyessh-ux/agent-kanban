@@ -1,10 +1,12 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { BoardFilterBar } from './components/Board/BoardFilterBar';
 import { BoardProjectSwitcher } from './components/Board/BoardProjectSwitcher';
-import { BoardScreen } from './components/Board/BoardScreen';
+import { BoardScreen, type UnreadJumpRequest } from './components/Board/BoardScreen';
 import { BoardWorkspace } from './components/Board/BoardWorkspace';
 import { groupCompleteCardsBySession } from './components/Board/BoardCompleteSessionView';
 import type { CompleteSessionGroup } from './components/Board/BoardCompleteSessionView';
+import { countUnread, isUnreadCompletion } from './components/Board/board-selectors';
+import { groupCardsByParent } from './components/Board/board-utils';
 import { SessionConversationModal } from './components/Board/SessionConversationModal';
 import { CardDetailDialog } from './components/Card/CardDetailDialog';
 import { CreateCardDialog } from './components/Card/CreateCardDialog';
@@ -33,6 +35,7 @@ import './components/Scheduler/Scheduler.css';
 import './components/Settings/Settings.css';
 import './App.css';
 import { QuestionBanner } from './components/Question/QuestionBanner';
+import { questionRuntimeLabel } from './components/Question/questionBannerModel';
 import { useQuestions } from './hooks/useQuestions';
 import { useFontScale } from './hooks/useFontScale';
 import { useTheme } from './hooks/useTheme';
@@ -40,9 +43,11 @@ import './components/Question/Question.css';
 import type { QueueSessionMode } from '../../src/core/types';
 import { createUiAlert } from './hooks/uiAlert';
 import type { BoardFilters } from './components/Board/board-filters';
-import { DEFAULT_BOARD_FILTERS } from './components/Board/board-filters';
+import { DEFAULT_BOARD_FILTERS, filterBoardCards } from './components/Board/board-filters';
+import { isTypingTarget, type UnreadNavDirection } from './components/Board/unread-navigation';
 import { fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
 import { useQuickActions } from './hooks/useQuickActions';
+import { CARD_DETAIL_COPY, TOOLBAR_COPY } from './constants/copy';
 import { QuickActionsDrawer } from './components/QuickActions/QuickActionsDrawer';
 
 const WikiView = React.lazy(async () => {
@@ -84,9 +89,9 @@ type BoardViewMode = 'board' | 'list' | 'timeline';
 
 /** Switch order + labels, matching the tab strip's own left-to-right reading. */
 const BOARD_VIEW_MODES: [BoardViewMode, string][] = [
-  ['list', '리스트'],
-  ['board', '보드'],
-  ['timeline', '타임라인'],
+  ['list', TOOLBAR_COPY.viewList],
+  ['board', TOOLBAR_COPY.viewBoard],
+  ['timeline', TOOLBAR_COPY.viewTimeline],
 ];
 
 function getStoredBoardViewMode(): BoardViewMode {
@@ -103,18 +108,57 @@ function getStoredCompleteSessionView(): boolean {
   return localStorage.getItem(COMPLETE_SESSION_VIEW_STORAGE_KEY) === 'true';
 }
 
+const APP_TITLE = 'Agent Kanban';
+
 export default function App() {
-  const { cards, loading, error, updateCard, deleteCard, refreshCards, archiveCards, completeAllCards, dispatchCard, createCard, queueCard, unqueueCard, scheduleCard, cancelCardSchedule, reorderCards, setResumeSession, clearResumeSession, markCompletionSeen, clearError, showError } = useKanbanBoard();
+  const { cards, loading, error, updateCard, deleteCard, refreshCards, archiveCards, completeAllCards, dispatchCard, createCard, queueCard, unqueueCard, scheduleCard, cancelCardSchedule, reorderCards, setResumeSession, clearResumeSession, markCompletionSeen, markCompletionSeenMany, clearError, showError } = useKanbanBoard();
   const [activeTab, setActiveTab] = useState<MainTab>('board');
   const [boardViewMode, setBoardViewMode] = useState<BoardViewMode>(getStoredBoardViewMode);
   const [groupCompleteSessions, setGroupCompleteSessions] = useState(getStoredCompleteSessionView);
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
   const [showBoardTools, setShowBoardTools] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [unreadJump, setUnreadJump] = useState<UnreadJumpRequest | null>(null);
+  // Counted over the same top-level cards the columns render, so the tab badge
+  // and title agree with the sum of the column `● N` pills (unfiltered).
+  const boardUnreadCount = useMemo(() => countUnread(groupCardsByParent(cards)), [cards]);
+
+  useEffect(() => {
+    document.title = boardUnreadCount > 0 ? `(${boardUnreadCount}) ${APP_TITLE}` : APP_TITLE;
+  }, [boardUnreadCount]);
+  // The toolbar `● N unread` counts what ↑/↓ can actually reach: the board
+  // under the current filters (the tab badge above stays the whole board).
+  const visibleUnreadCount = useMemo(
+    () => countUnread(groupCardsByParent(filterBoardCards(cards, boardFilters))),
+    [cards, boardFilters],
+  );
+  const requestUnreadJump = useCallback((direction: UnreadNavDirection) => {
+    setUnreadJump((previous) => ({ direction, token: (previous?.token ?? 0) + 1 }));
+  }, []);
   const scheduler = useScheduler(activeTab === 'scheduler');
   // The Timeline is a Board *view*, so it replaces the card layouts rather than
   // living in its own tab; everything below that reads `boardViewMode` only
   // ever sees the two card layouts.
   const timelineActive = activeTab === 'board' && boardViewMode === 'timeline';
+  const unreadJumpEnabled = activeTab === 'board' && !timelineActive;
+
+  // `u` → next unread, `Shift+U` → previous. Matched on `code` so a Korean
+  // layout (where the key types ㅕ) still works. Never while typing, never with
+  // a modifier, and never behind an open modal — the board is not what the
+  // user is looking at then.
+  useEffect(() => {
+    if (!unreadJumpEnabled) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'KeyU' || event.defaultPrevented || event.isComposing) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      if (isTypingTarget(event.target instanceof HTMLElement ? event.target : null)) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      requestUnreadJump(event.shiftKey ? 'prev' : 'next');
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [requestUnreadJump, unreadJumpEnabled]);
   const works = useWorks(activeTab === 'works' || timelineActive);
   const scripts = useScripts(activeTab === 'capabilities' || activeTab === 'board');
   const quickActions = useQuickActions(activeTab === 'board');
@@ -123,6 +167,10 @@ export default function App() {
   // Loaded eagerly (not tab-gated) so card pickers see discovered skills on open.
   const skills = useSkills();
   const { questions, reply: replyQuestion, reject: rejectQuestion, refreshQuestions } = useQuestions();
+  const questionRuntimeLabelFor = useCallback(
+    (sessionId: string) => questionRuntimeLabel(sessionId, cards),
+    [cards],
+  );
   useFontScale();
   useTheme();
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
@@ -268,15 +316,23 @@ export default function App() {
     setSelectedCard((prev) => prev?.id === card.id ? { ...prev, favorite: !card.favorite } : prev);
   };
 
-  const hasUnreadCompletion = (card: KanbanCard): boolean => {
-    if (card.status !== 'complete') return false;
-    const completionTime = card.responseAt ?? card.completedAt ?? card.updatedAt;
-    return !card.completedSeenAt || card.completedSeenAt < completionTime;
+  /**
+   * Reading a session's conversation reads its completions: stamp every unread
+   * board card in it with one batch call. Only live board cards are sent — an
+   * archived card has no badge to clear.
+   */
+  const markCardsSeen = (candidates: readonly KanbanCard[]) => {
+    const ids = candidates.filter(isUnreadCompletion).map((card) => card.id);
+    if (ids.length === 0) return;
+    void markCompletionSeenMany(ids).catch(() => {
+      // The board hook already surfaces the error banner.
+    });
   };
 
   const handleOpenSession = (group: CompleteSessionGroup) => {
     const status = group.cards[0]?.status === 'done' ? 'done' : 'complete';
     setSelectedSession({ key: group.key, status });
+    markCardsSeen(group.cards);
   };
 
   const handleOpenCard = (card: KanbanCard, options?: { archived?: boolean }) => {
@@ -286,7 +342,7 @@ export default function App() {
     // An archived card has no board row to stamp, and the completion badge it
     // would clear is long gone.
     if (options?.archived) return;
-    if (!hasUnreadCompletion(card)) return;
+    if (!isUnreadCompletion(card)) return;
 
     void markCompletionSeen(card.id)
       .then((updated) => {
@@ -355,6 +411,7 @@ export default function App() {
           return;
         }
         setArchivedSessionCards({ key, cards: fetched });
+        markCardsSeen(cards.filter((card) => card.sessionId === sessionId));
         setSelectedSession({
           key,
           status: fetched.some((card) => card.status === 'done') ? 'done' : 'complete',
@@ -417,7 +474,7 @@ export default function App() {
 
   const handleQueueOpen = (card: KanbanCard) => {
     if (card.scheduledDispatch?.status === 'scheduled' || card.scheduledDispatch?.status === 'dispatching') {
-      showError(createUiAlert('Queue unavailable', '예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.', 'Refresh board'));
+      showError(createUiAlert('Queue unavailable', CARD_DETAIL_COPY.queueDisabledScheduled, 'Refresh board'));
       return;
     }
     handleOpenCard(card);
@@ -443,8 +500,8 @@ export default function App() {
         aria-hidden={(activeTab === 'board' && quickActionsOpen) || undefined}
       >
         <div className="app-header-inner">
-          <h1 className="app-title">Agent Kanban</h1>
-          <AppTabs activeTab={activeTab} onActivate={setActiveTab} badges={{ works: works.inboxCount }} />
+          <h1 className="app-title">{APP_TITLE}</h1>
+          <AppTabs activeTab={activeTab} onActivate={setActiveTab} badges={{ board: boardUnreadCount, works: works.inboxCount }} />
           {activeTab === 'board' && (
             <button
               type="button"
@@ -466,6 +523,38 @@ export default function App() {
                   session-grouping toggle keeps its state visible here even
                   though only the list/board layouts render grouped columns —
                   a control that vanished on one view read as a broken toolbar. */}
+              <div className="kv2-unread-jump" role="group" aria-label="Unread navigation">
+                <span className="kv2-unread-jump-count" aria-live="polite">● {visibleUnreadCount} unread</span>
+                <button
+                  type="button"
+                  className="kv2-unread-jump-btn"
+                  aria-label="Previous unread (Shift+U)"
+                  title="이전 unread (Shift+U)"
+                  disabled={!unreadJumpEnabled || visibleUnreadCount === 0}
+                  onClick={() => requestUnreadJump('prev')}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="kv2-unread-jump-btn"
+                  aria-label="Next unread (U)"
+                  title="다음 unread (U)"
+                  disabled={!unreadJumpEnabled || visibleUnreadCount === 0}
+                  onClick={() => requestUnreadJump('next')}
+                >
+                  ↓
+                </button>
+              </div>
+              <button
+                type="button"
+                className={`kv2-unread-only-toggle${unreadOnly ? ' is-active' : ''}`}
+                aria-pressed={unreadOnly}
+                title={timelineActive ? TOOLBAR_COPY.unreadOnlyTimelineTitle : TOOLBAR_COPY.unreadOnlyTitle}
+                onClick={() => setUnreadOnly((previous) => !previous)}
+              >
+                {TOOLBAR_COPY.unreadOnly}
+              </button>
               <BoardFilterBar
                 cards={cards}
                 filters={boardFilters}
@@ -490,12 +579,10 @@ export default function App() {
                 type="button"
                 className={`app-board-session-toggle${groupCompleteSessions ? ' is-active' : ''}`}
                 aria-pressed={groupCompleteSessions}
-                title={timelineActive
-                  ? '리스트·보드 뷰에서 complete 카드를 세션별로 묶습니다 (타임라인은 항상 세션 단위)'
-                  : 'Group complete cards by session'}
+                title={timelineActive ? TOOLBAR_COPY.groupSessionsTimelineTitle : TOOLBAR_COPY.groupSessionsTitle}
                 onClick={() => setGroupCompleteSessions((previous) => !previous)}
               >
-                Session 모아보기
+                {TOOLBAR_COPY.groupSessions}
               </button>
             </div>
           )}
@@ -602,6 +689,13 @@ export default function App() {
                 viewMode={boardViewMode === 'list' ? 'list' : 'board'}
                 groupCompleteSessions={groupCompleteSessions}
                 filters={boardFilters}
+                unreadOnly={unreadOnly}
+                onMarkCardsRead={(cardIds) => {
+                  void markCompletionSeenMany(cardIds).catch(() => {
+                    // The board hook already surfaces the error banner.
+                  });
+                }}
+                unreadJumpRequest={unreadJump}
               />
             )}
           </BoardWorkspace>
@@ -627,6 +721,25 @@ export default function App() {
             onAssignAll={handleAssignAll}
             config={works.config}
             onSaveConfig={works.saveConfig}
+            timelineStrip={(
+              <TimelineView
+                variant="strip"
+                works={works.works}
+                loading={works.loading}
+                // The strip renders no banners of its own; WorksView's shared
+                // alert already shows `works.error`.
+                error={null}
+                onOpenWork={(work: Work) => setOpenWorkId(work.id)}
+                onUpdateWorkDates={works.updateWorkDates}
+                onRefresh={works.refreshWorks}
+                onClearError={works.clearError}
+                onNotify={setWorkSessionNotice}
+                onOpenFullTimeline={() => {
+                  setBoardViewMode('timeline');
+                  setActiveTab('board');
+                }}
+              />
+            )}
           />
         ) : activeTab === 'wiki' ? (
           <Suspense fallback={<div className="loading-spinner" role="status" aria-label="Loading wiki..." />}>
@@ -653,6 +766,12 @@ export default function App() {
             skills={skills.skills}
             skillsLoading={skills.loading}
             skillsSyncing={skills.syncing}
+            skillsError={skills.error}
+            onClearSkillsError={skills.clearError}
+            scriptsError={scripts.error}
+            onClearScriptsError={scripts.clearError}
+            skillRootsError={skillRoots.error}
+            onClearSkillRootsError={skillRoots.clearError}
             onSyncSkills={skills.sync}
             onRefreshSkills={skills.refresh}
             scripts={scripts.entries}
@@ -868,6 +987,7 @@ export default function App() {
         questions={questions}
         onReply={answerQuestionAndRefresh}
         onReject={rejectQuestionAndRefresh}
+        runtimeLabel={questionRuntimeLabelFor}
       />
     </div>
   );

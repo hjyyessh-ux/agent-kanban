@@ -42,22 +42,20 @@ test.describe('Graphite dark selection controls', () => {
 
     const boardCard = page.locator('.kv2-card', { hasText: '[E2E] Dark selection controls' });
     const metadata = await boardCard.evaluate((card) => {
-      const project = card.querySelector('.kv2-card-directory');
-      const timestamp = card.querySelector('.kv2-card-timestamp');
-      const timestamps = card.querySelector('.kv2-card-footer-meta');
+      const divider = card.querySelector('.kv2-card-divider');
+      const meta = card.querySelector('.kv2-card-meta-row');
       const actions = card.querySelector('.kv2-card-actions-wrapper');
-      if (!project || !timestamp || !timestamps || !actions) throw new Error('Missing card footer elements');
-      const projectBox = project.getBoundingClientRect();
-      const timestampBox = timestamp.getBoundingClientRect();
-      const timestampsBox = timestamps.getBoundingClientRect();
+      if (!divider || !meta || !actions) throw new Error('Missing card footer elements');
+      const dividerBox = divider.getBoundingClientRect();
+      const metaBox = meta.getBoundingClientRect();
       const actionBox = actions.getBoundingClientRect();
       return {
-        projectToTimestamps: timestampBox.top - projectBox.bottom,
-        timestampsToActions: actionBox.top - timestampsBox.bottom,
+        dividerToMeta: metaBox.top - dividerBox.bottom,
+        metaToActions: actionBox.top - metaBox.bottom,
       };
     });
-    expect(metadata.projectToTimestamps).toBeGreaterThanOrEqual(8);
-    expect(metadata.timestampsToActions).toBeGreaterThanOrEqual(8);
+    expect(metadata.dividerToMeta).toBeGreaterThanOrEqual(6);
+    expect(metadata.metaToActions).toBeGreaterThanOrEqual(6);
     await page.screenshot({ path: 'e2e/results/dark-board-footer-spacing.png', fullPage: true });
 
     await boardCard.click();

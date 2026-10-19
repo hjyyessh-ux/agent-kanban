@@ -106,7 +106,12 @@ export async function mergeCodexCliModelsIntoCatalog(
   options: { commandOverride?: string[] } = {},
 ): Promise<RuntimeCatalogEntry[]> {
   const codexModels = await getCodexCliModels({ commandOverride: options.commandOverride });
+  const seen = new Set(codexModels.map((model) => model.id));
+  const models = [
+    ...codexModels,
+    ...CODEX_MODELS.filter((model) => !seen.has(model.id)),
+  ];
   return catalog.map((entry) => entry.runtime === 'codex'
-    ? { ...entry, models: codexModels }
+    ? { ...entry, models }
     : { ...entry });
 }
