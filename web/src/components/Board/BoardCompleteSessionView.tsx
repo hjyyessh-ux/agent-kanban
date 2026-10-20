@@ -334,7 +334,15 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                   )}
                   <div className="kv2-complete-session-top-meta">
                     {group.unreadCount > 0 && (
-                      <span className="kv2-complete-session-unread">{group.unreadCount} unread</span>
+                      // Count only — the filled pill already says "unread", and the
+                      // project chip needs the room in row ①.
+                      <span
+                        className="kv2-complete-session-unread"
+                        title={`${group.unreadCount} unread`}
+                        aria-label={`${group.unreadCount} unread`}
+                      >
+                        {group.unreadCount}
+                      </span>
                     )}
                     {group.sessionId && <IdChip id={group.sessionId} kind="session" />}
                   </div>
@@ -349,11 +357,14 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                     executionKind={group.executionKind}
                     scriptName={group.scriptName}
                   />
-                  <span className="kv2-complete-session-count">
+                  {/* No timestamp here: a board column is too narrow for badge ·
+                      count · time · resume, and a clipped time read as a bug.
+                      The latest turn shows it as `LATEST · hh:mm`. */}
+                  <span
+                    className="kv2-complete-session-count"
+                    title={`마지막 응답 ${formatTurnStamp(group.lastUpdatedAt)}`}
+                  >
                     {group.cards.length === 1 ? '1 card' : `${group.cards.length} cards`}
-                  </span>
-                  <span className="kv2-complete-session-updated" title={group.lastUpdatedAt}>
-                    {formatTurnStamp(group.lastUpdatedAt)}
                   </span>
                   {resumeCommand && (
                     <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />

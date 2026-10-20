@@ -62,10 +62,10 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 검토 대기/완료의 **세션 그룹 헤더도 같은 해부도**를 따른다 — 런타임 배지와 ID가 보드 어디서나 같은 자리에 있게 하기 위해서다.
 
 ```text
-┃ [agent-kanban]              [● 1 unread] #24b90f31   ← ① 프로젝트 ··· unread · 세션 IdChip
+┃ [agent-kanban]                     [● 1] #24b90f31   ← ① 프로젝트 ··· unread · 세션 IdChip
 ┃ agent-kanban - UI 개선 #2                            ← ② 제목
 ┃ - - - - - - - - - - - - - - - - - - - - - - - -      ← ③ 구분선
-┃ [✳ CLAUDE]  2 cards  22:08              [⏎ resume]   ← ④ 런타임 · 카드 수 · 마지막 응답 ··· resume 명령 복사
+┃ [✳ CLAUDE]  2 cards                     [⏎ resume]   ← ④ 런타임 · 카드 수(title = 마지막 응답 시각) ··· resume 명령 복사
 ┃ [SHOW]                                    [✓ 완료]   ← 액션
 ```
 
@@ -80,14 +80,14 @@ unread 판정은 `board-selectors.ts`의 `isUnreadCompletion` 하나뿐이다(`c
 | 브라우저 탭 | `document.title = "(12) Agent Kanban"`, 0이면 `Agent Kanban` |
 | Board 탭 | 채운 배지 `12` (`aria-label="12 unread"`) |
 | complete 컬럼 헤더 | 채운 pill `● 5` — 클릭하면 그 컬럼의 다음 unread로 이동 |
-| 툴바 | `● 12 unread ↑ ↓` (현재 필터 기준 개수) + `Unread만` 토글 |
-| 세션 그룹 | 왼쪽 띠가 unread 색 + 채운 pill `● 2 unread` (`16 cards` chip과 구분) |
+| 툴바 | `● 12 unread` 버튼 하나 (현재 필터 기준 개수). 누르면 unread만 보기 필터가 켜지고 `✓ 12 unread`(눌린 모양)로 바뀜. 다시 누르면 해제 |
+| 세션 그룹 | 왼쪽 띠가 unread 색 + 1행 `#세션ID` 앞 채운 pill `● 2` (`title`/`aria-label`은 `2 unread`) |
 | turn | unread 면 + 테두리 + `NEW` 태그 + 강조 노드 |
 | 숨은 turn | `Show 13 more · 1 unread` |
 
 **latest ≠ unread.** 그룹의 최신 turn(`kv2-complete-session-turn--current`)은 채운 잉크색 노드와 `LATEST · hh:mm` 텍스트로만 표시한다. 테두리·면에 빨강 계열(complete accent 포함)을 쓰지 않는다 — 예전 빨간 최신 테두리가 unread로 오인됐다. 다른 turn의 오른쪽 시각은 오늘이면 `hh:mm`, 아니면 `MM-DD hh:mm`.
 
-탭/제목 카운트는 필터와 무관하게 전체 보드의 top-level 카드 기준이고, 컬럼 pill과 툴바 `● N unread`는 현재 필터가 적용된 보드 기준이다(↑/↓가 실제로 갈 수 있는 개수).
+탭/제목 카운트는 필터와 무관하게 전체 보드의 top-level 카드 기준이고, 컬럼 pill과 툴바 `● N unread`는 현재 필터가 적용된 보드 기준이다(unread만 보기와 `u`가 실제로 닿을 수 있는 개수).
 
 ### 읽음 처리
 
@@ -99,15 +99,15 @@ unread 판정은 `board-selectors.ts`의 `isUnreadCompletion` 하나뿐이다(`c
 
 ### unread 이동
 
-- 툴바 `↓` 또는 `u` → 다음 unread, `↑` 또는 `Shift+U` → 이전 unread. 보드 끝에서 처음으로 돌아간다.
+- `u` → 다음 unread, `Shift+U` → 이전 unread(툴바 화살표 버튼은 없다). 보드 끝에서 처음으로 돌아간다.
 - 순서는 화면 읽기 순서다(`unread-navigation.ts`의 `selectBoardNavOrder`): 컬럼 왼쪽→오른쪽, 세션 묶기 컬럼은 그룹 최신순 → turn 최신순(그룹별 정렬 토글과 무관하게 기본 순서). 리스트 뷰는 리스트 섹션 순서(`done → complete → in_progress → todo`).
 - 다음 대상은 순수 함수 `nextUnreadTarget(entries, cursor, direction, status?)`가 고른다. 커서는 마지막으로 이동한 카드이고, 그 카드가 그새 읽혀도 위치 기준으로 계속 이어간다.
 - 이동하면 접힌 세션 그룹을 펼치고, 대상이 `Show N more` 뒤에 있으면 그것도 펼친 뒤(리스트 뷰는 접힌 섹션을 펼친 뒤) `scrollIntoView({ block: 'center' })` → 1.2초 focus ring(`.kv2-unread-focus`, `UNREAD_FOCUS_RING_MS`).
 - 단축키는 `KeyboardEvent.code === 'KeyU'`로 판정해 한글 자판에서도 동작한다. 입력 필드(`input`/`textarea`/`select`/contenteditable)에 포커스가 있거나, Ctrl/⌘/Alt를 누르고 있거나, 모달(`aria-modal="true"`)이 열려 있으면 무시한다. 타임라인 뷰에서는 꺼진다.
 
-### Unread만
+### unread만 보기
 
-툴바 `Unread만` 토글은 `board-filters.ts`의 `filterUnreadOnly`를 `BoardFilters` 다음에 적용한다.
+툴바 `● N unread` 버튼이 곧 토글이다(`aria-pressed`). unread가 0이고 꺼져 있으면 비활성. 이 토글은 `board-filters.ts`의 `filterUnreadOnly`를 `BoardFilters` 다음에 적용한다.
 
 - 일반 컬럼: unread 완료 카드만 남는다. 남은 카드의 자식 카드는 함께 남는다.
 - `세션 묶기`(보드 뷰): unread turn이 하나라도 있는 세션의 complete 카드 전부를 남긴다 — unread 있는 그룹만 보이고, 그룹 안 맥락(읽은 turn)은 유지된다.

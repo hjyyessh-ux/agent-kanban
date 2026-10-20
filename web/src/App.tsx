@@ -126,8 +126,9 @@ export default function App() {
   useEffect(() => {
     document.title = boardUnreadCount > 0 ? `(${boardUnreadCount}) ${APP_TITLE}` : APP_TITLE;
   }, [boardUnreadCount]);
-  // The toolbar `● N unread` counts what ↑/↓ can actually reach: the board
-  // under the current filters (the tab badge above stays the whole board).
+  // The toolbar `● N unread` counts what the unread-only filter (and `u`) can
+  // actually reach: the board under the current filters (the tab badge above
+  // stays the whole board).
   const visibleUnreadCount = useMemo(
     () => countUnread(groupCardsByParent(filterBoardCards(cards, boardFilters))),
     [cards, boardFilters],
@@ -523,37 +524,21 @@ export default function App() {
                   session-grouping toggle keeps its state visible here even
                   though only the list/board layouts render grouped columns —
                   a control that vanished on one view read as a broken toolbar. */}
-              <div className="kv2-unread-jump" role="group" aria-label="Unread navigation">
-                <span className="kv2-unread-jump-count" aria-live="polite">● {visibleUnreadCount} unread</span>
-                <button
-                  type="button"
-                  className="kv2-unread-jump-btn"
-                  aria-label="Previous unread (Shift+U)"
-                  title="이전 unread (Shift+U)"
-                  disabled={!unreadJumpEnabled || visibleUnreadCount === 0}
-                  onClick={() => requestUnreadJump('prev')}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="kv2-unread-jump-btn"
-                  aria-label="Next unread (U)"
-                  title="다음 unread (U)"
-                  disabled={!unreadJumpEnabled || visibleUnreadCount === 0}
-                  onClick={() => requestUnreadJump('next')}
-                >
-                  ↓
-                </button>
-              </div>
+              {/* `● N unread` is the unread-only filter itself: press to show only
+                  unread completions, press again for the whole board. Jumping
+                  between unread cards stays on the `u` / `Shift+U` keys. */}
               <button
                 type="button"
-                className={`kv2-unread-only-toggle${unreadOnly ? ' is-active' : ''}`}
+                className={`kv2-unread-filter${unreadOnly ? ' is-active' : ''}`}
                 aria-pressed={unreadOnly}
-                title={timelineActive ? TOOLBAR_COPY.unreadOnlyTimelineTitle : TOOLBAR_COPY.unreadOnlyTitle}
+                aria-live="polite"
+                title={timelineActive
+                  ? TOOLBAR_COPY.unreadOnlyTimelineTitle
+                  : unreadOnly ? TOOLBAR_COPY.unreadOnlyActiveTitle : TOOLBAR_COPY.unreadOnlyTitle}
+                disabled={!unreadOnly && visibleUnreadCount === 0}
                 onClick={() => setUnreadOnly((previous) => !previous)}
               >
-                {TOOLBAR_COPY.unreadOnly}
+                {unreadOnly ? '✓' : '●'} {visibleUnreadCount} unread
               </button>
               <BoardFilterBar
                 cards={cards}

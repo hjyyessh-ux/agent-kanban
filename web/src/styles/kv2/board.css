@@ -1294,17 +1294,14 @@
   margin-top: 2px;
 }
 
-.kv2-complete-session-updated {
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-xs);
-  font-weight: 700;
-  color: var(--kv2-card-date-color);
-  white-space: nowrap;
-}
-
 /* Scoped so it outranks `.kv2-resume-copy { all: unset }` (primitives.css loads later). */
 .kv2-complete-session-meta-row .kv2-complete-session-resume {
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+.kv2-complete-session-meta-row > .kv2-runtime-badge {
+  flex-shrink: 0;
 }
 
 /* 타임라인 안의 인라인 정렬 컨트롤 (프롬프트 리스트 상단) */
@@ -2696,75 +2693,49 @@
 
 /* ── Toolbar unread navigation (`● N unread ↑ ↓` + `Unread only`) ──
    One unread family only (`--kv2-unread-*`), per design-system.md. */
-.kv2-unread-jump {
-  display: inline-flex;
-  align-items: stretch;
-  height: 40px;
-  border: 2px solid var(--kv2-unread-indicator);
-  box-shadow: 2px 2px 0 var(--kv2-frame);
-  background: var(--kv2-surface);
-  flex-shrink: 0;
-}
-
-.kv2-unread-jump-count {
+/* Toolbar `● N unread` — a single toggle for the unread-only filter.
+   Idle: filled unread pill. Pressed: inverted (unread surface + border) with
+   the shadow pushed in, so "filter on" reads at a glance. */
+.kv2-unread-filter {
   display: inline-flex;
   align-items: center;
-  padding: 0 10px;
+  gap: 6px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--kv2-unread-indicator);
   background: var(--kv2-unread-indicator);
   color: var(--kv2-unread-fill-fg);
+  box-shadow: 3px 3px 0 var(--kv2-frame);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-xs);
   font-weight: 800;
   white-space: nowrap;
-}
-
-.kv2-unread-jump-btn {
-  min-width: 32px;
-  padding: 0 9px;
-  border: 0;
-  border-left: 2px solid var(--kv2-unread-indicator);
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
   cursor: pointer;
+  transition: transform var(--kv2-transition-fast), box-shadow var(--kv2-transition-fast);
 }
 
-.kv2-unread-jump-btn:hover:not(:disabled) {
+.kv2-unread-filter:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--kv2-frame);
+}
+
+.kv2-unread-filter.is-active {
   background: var(--kv2-unread-surface);
+  color: var(--kv2-unread-text);
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--kv2-frame);
 }
 
-.kv2-unread-jump-btn:disabled {
-  cursor: not-allowed;
+.kv2-unread-filter:disabled {
+  cursor: default;
   opacity: 0.45;
 }
 
-.kv2-unread-jump-btn:focus-visible,
-.kv2-unread-only-toggle:focus-visible {
+.kv2-unread-filter:focus-visible {
   outline: 2px solid var(--kv2-focus-ring);
   outline-offset: 2px;
-}
-
-.kv2-unread-only-toggle {
-  height: 40px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 2px solid var(--kv2-frame);
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-  box-shadow: 4px 4px 0 var(--kv2-frame);
-  cursor: pointer;
-  font-family: var(--kv2-font-heading);
-  font-size: 0.9rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.kv2-unread-only-toggle.is-active {
-  border-color: var(--kv2-unread-indicator);
-  background: var(--kv2-unread-surface);
-  color: var(--kv2-unread-text);
 }
 
 /* Where an unread jump landed — a ring for UNREAD_FOCUS_RING_MS (1.2s). */

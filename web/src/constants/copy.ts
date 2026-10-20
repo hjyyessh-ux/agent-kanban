@@ -38,8 +38,8 @@ export const TAB_COPY = {
 
 /** Board toolbar (header row above the columns). */
 export const TOOLBAR_COPY = {
-  unreadOnly: 'Unread만',
-  unreadOnlyTitle: 'unread 완료 카드만 보기 (세션 묶기에서는 unread가 있는 세션 묶음만)',
+  unreadOnlyTitle: '눌러서 unread 완료 카드만 보기 (세션 묶기에서는 unread가 있는 세션 묶음만) · u / Shift+U로 이동',
+  unreadOnlyActiveTitle: 'unread만 보는 중 — 다시 누르면 전체 보기 · u / Shift+U로 이동',
   unreadOnlyTimelineTitle: '리스트·보드 뷰에서 unread 카드만 보여줍니다 (타임라인에는 적용되지 않음)',
   filter: '필터',
   viewList: '리스트',

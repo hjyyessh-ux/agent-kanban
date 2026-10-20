@@ -14,7 +14,7 @@ export const UNREAD_FOCUS_RING_MS = 1200;
 /** Frames to wait for a just-expanded group / `Show N more` to render the target. */
 const REVEAL_MAX_FRAMES = 10;
 
-/** A toolbar ↑/↓ press (or `u` / `Shift+U`). A new `token` is a new press. */
+/** A `u` / `Shift+U` press. A new `token` is a new press. */
 export interface UnreadJumpRequest {
   direction: UnreadNavDirection;
   token: number;
