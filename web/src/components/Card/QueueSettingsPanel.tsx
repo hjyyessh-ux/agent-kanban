@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { KanbanCard, QueueSessionMode } from '../../../../src/core/types';
 import { ExecutionTypeBadge } from '../Board/BoardCardSections';
+import { IdChip } from '../shared/IdChip';
+import { formatShortId } from '../../utils/short-id';
 
 const queueStatusLabel = (status: string): string =>
   status === 'in_progress' ? 'In Progress' : 'Todo';
@@ -65,7 +67,7 @@ export const QueueTargetList: React.FC<QueueTargetListProps> = ({
               <div className="kv2-session-item-text">
                 <span className="kv2-session-item-title">{candidate.title}</span>
                 <div className="kv2-session-item-meta">
-                  <span className="kv2-session-card-id">Card {candidate.id}</span>
+                  <IdChip id={candidate.id} kind="card" showKind />
                   <span className={`kv2-session-status-badge kv2-session-status-badge--${candidate.status}`}>
                     {queueStatusLabel(candidate.status)}
                   </span>
@@ -208,7 +210,7 @@ export const QueueSettingsPanel: React.FC<QueueSettingsPanelProps> = ({
         <div className="kv2-queue-summary-card">
           <div className="kv2-queue-summary-row">
             <span className="kv2-queue-target-label">Target:</span>
-            <strong>🔗 {queuedAfterTitle ?? card.queuedAfterCardId}</strong>
+            <strong>🔗 {queuedAfterTitle ?? formatShortId(card.queuedAfterCardId ?? '')}</strong>
           </div>
           <div className="kv2-queue-mode-summary">
             <span className="kv2-queue-mode-label">Session Mode:</span>

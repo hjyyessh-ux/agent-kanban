@@ -53,10 +53,6 @@
   font-weight: 700;
 }
 
-.works-runtime-chip {
-  text-transform: capitalize;
-}
-
 /* ── Inbox ──────────────────────────────────────────────────── */
 .works-inbox {
   border: 3px solid var(--kv2-ink-pure);

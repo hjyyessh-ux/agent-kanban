@@ -5,6 +5,7 @@ import { CardActions, ExecutionTypeBadge, FavoriteToggleButton, NestedChildAccor
 import { getDirectoryProjectName } from './directory-display';
 import { formatDuration, formatElapsedKo, formatRelativeTime, resolveRunDurationMs } from '../../utils/format-duration';
 import { dirAccentClass } from '../../utils/project-color';
+import { IdChip } from '../shared/IdChip';
 import { useNowTick } from '../../hooks/useNowTick';
 
 export interface BoardCardProps {
@@ -115,7 +116,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
   onDelete,
   onFavoriteToggle,
 }) => {
-  const cardId = `#${vm.id.slice(0, 6)}`;
   const projectName = getDirectoryProjectName(vm.projectDir);
   const cls = [
     'kv2-card',
@@ -180,17 +180,7 @@ export const BoardCard: React.FC<BoardCardProps> = ({
               className="kv2-favorite-toggle--board"
             />
           )}
-          <button
-            type="button"
-            className="kv2-card-id kv2-card-id--copyable"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigator.clipboard.writeText(vm.id);
-            }}
-            title="Click to copy full ID"
-          >
-            {cardId}
-          </button>
+          <IdChip id={vm.id} kind="card" />
         </div>
       </div>
 

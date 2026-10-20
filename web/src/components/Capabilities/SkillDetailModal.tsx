@@ -7,6 +7,7 @@ import { ScopeChip } from './ScopeChip';
 import { fetchSkillContent, saveSkillContent, duplicateSkill, createSkillCard } from '../../hooks/useSkillsApi';
 import { moveSkillApi, freezeSkillApi } from '../../hooks/useScopeInventory';
 import { stripFrontmatter } from './capability-format';
+import { IdChip } from '../shared/IdChip';
 
 interface SkillDetailModalProps {
   skill: DiscoveredSkill;
@@ -479,7 +480,7 @@ export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose,
           )}
           {improveCardId && (
             <p className="cap-detail-success">
-              Card created (id: {improveCardId.slice(0, 8)}…). Dispatch it from the board to start.
+              Card created (<IdChip id={improveCardId} kind="card" />). Dispatch it from the board to start.
             </p>
           )}
         </div>
@@ -514,7 +515,7 @@ export function SkillDetailModal({ skill, skillRoots, placementTargets, onClose,
             {portError && <p className="cap-detail-error">{portError}</p>}
             {portCardId && (
               <p className="cap-detail-success">
-                Port card created (id: {portCardId.slice(0, 8)}…). Dispatch it from the board to start.
+                Port card created (<IdChip id={portCardId} kind="card" />). Dispatch it from the board to start.
               </p>
             )}
           </div>

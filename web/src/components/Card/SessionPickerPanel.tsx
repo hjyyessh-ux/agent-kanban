@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { KanbanCard } from '../../../../src/core/types';
 import { fetchSessions, SessionInfo } from '../../hooks/useKanbanApi';
 import { RuntimeBadge } from '../Board/BoardCardSections';
+import { IdChip } from '../shared/IdChip';
 
 interface SessionPickerPanelBaseProps {
   onSelectSession: (cardId: string, sessionId: string) => Promise<void> | void;
@@ -118,7 +119,7 @@ export const SessionPickerPanel: React.FC<SessionPickerPanelProps> = (props) => 
             <div className="kv2-session-summary-main">
               <strong className="kv2-session-item-title">{selectedSession.cardTitle}</strong>
               <div className="kv2-session-item-meta">
-                <span className="kv2-session-card-id">Card {selectedSession.cardId || '-'}</span>
+                {selectedSession.cardId && <IdChip id={selectedSession.cardId} kind="card" showKind />}
                 <span className={`kv2-session-status-badge kv2-session-status-badge--${statusClass(selectedSession.cardStatus)}`}>
                   {statusLabel(selectedSession.cardStatus)}
                 </span>
@@ -128,7 +129,7 @@ export const SessionPickerPanel: React.FC<SessionPickerPanelProps> = (props) => 
                   {selectedSession.sessionTitle}
                 </span>
               )}
-              <span className="kv2-session-id">Session {selectedSession.sessionId}</span>
+              <IdChip id={selectedSession.sessionId} kind="session" showKind />
             </div>
           </div>
           {selectedSession.primaryPeerCwd && (
@@ -177,7 +178,7 @@ export const SessionPickerPanel: React.FC<SessionPickerPanelProps> = (props) => 
                         {session.cardTitle}
                       </span>
                       <div className="kv2-session-item-meta">
-                        <span className="kv2-session-card-id">Card {session.cardId || '-'}</span>
+                        {session.cardId && <IdChip id={session.cardId} kind="card" showKind />}
                         <span className={`kv2-session-status-badge kv2-session-status-badge--${statusClass(session.cardStatus)}`}>
                           {statusLabel(session.cardStatus)}
                         </span>
@@ -187,7 +188,7 @@ export const SessionPickerPanel: React.FC<SessionPickerPanelProps> = (props) => 
                           {session.sessionTitle}
                         </span>
                       )}
-                      <span className="kv2-session-id">Session {session.sessionId}</span>
+                      <IdChip id={session.sessionId} kind="session" showKind />
                     </div>
                   </div>
                   <div className="kv2-session-item-actions">

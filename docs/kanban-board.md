@@ -47,7 +47,7 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 |------|------|
 | 왼쪽 띠 | `status` 색 (`STATUS_ACCENT`) |
 | 1행 프로젝트 칩 | `projectDir` 마지막 세그먼트. 색은 공용 프로젝트 색(`dirAccentClass`, `styles/kv2/project-color.css`). 이름 길이만큼만 차지하고 넘치면 `…`, 전체 경로는 `title`. 이름이 길어도 1행 높이는 고정 |
-| 1행 우측 그룹 | unread 점 · Scheduler/Telegram/Quick Action 배지 · ☆ · `#카드ID`(클릭 시 전체 ID 복사). `flex-shrink: 0`이라 칩에 밀리지 않음 |
+| 1행 우측 그룹 | unread 점 · Scheduler/Telegram/Quick Action 배지 · ☆ · `IdChip`(`#` + 8자, 클릭 시 전체 ID 복사 → `✓ 복사됨`). `flex-shrink: 0`이라 칩에 밀리지 않음 |
 | 3행 프롬프트 | `boardSummary`. 라벨·accent 바 없음. **제목과 같아도 숨기지 않음** |
 | 메타 줄 | `OPENCODE`/`CODEX`/`CLAUDE`/`SCRIPT` 배지 + 시간 (아래 표) |
 
@@ -58,6 +58,16 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 | `complete` / `done` | `⏱ 18m 2s · 3h ago` — 실행 시간(`durationMs` 우선, 없으면 `completedAt − startedAt`) · 끝난 지 얼마(`completedAt ?? updatedAt`) |
 
 카드 앞면에는 `Session:`(resume 명령 복사), `Proj:`, 별도 `Created/Updated` 줄이 없다. resume 명령 복사는 카드 상세(`CardDetailDialog`)의 세션 패널에 있고, 정확한 생성/수정 시각은 메타 줄 시간의 `title`로 볼 수 있다.
+
+검토 대기/완료의 **세션 그룹 헤더도 같은 해부도**를 따른다 — 런타임 배지와 ID가 보드 어디서나 같은 자리에 있게 하기 위해서다.
+
+```text
+┃ [agent-kanban]              [● 1 unread] #24b90f31   ← ① 프로젝트 ··· unread · 세션 IdChip
+┃ agent-kanban - UI 개선 #2                            ← ② 제목
+┃ - - - - - - - - - - - - - - - - - - - - - - - -      ← ③ 구분선
+┃ [✳ CLAUDE]  2 cards  22:08              [⏎ resume]   ← ④ 런타임 · 카드 수 · 마지막 응답 ··· resume 명령 복사
+┃ [SHOW]                                    [✓ 완료]   ← 액션
+```
 
 ## 컬럼 헤더와 unread 신호
 

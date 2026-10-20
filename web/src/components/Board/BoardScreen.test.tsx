@@ -297,7 +297,8 @@ describe('BoardScreen', () => {
     expect(html).toContain('Session ID');
     expect(html).toContain('session-a');
     expect(html.indexOf('2. Updated newer prompt')).toBeLessThan(html.indexOf('1. Created later prompt'));
-    expect(html.indexOf('2 cards')).toBeLessThan(html.indexOf('Updated newer prompt'));
+    // Card anatomy: unread · #id in row ①, title, then runtime · count in the meta row.
+    expect(html.indexOf('Updated newer prompt')).toBeLessThan(html.indexOf('2 cards'));
     expect(html.indexOf('2 unread')).toBeLessThan(html.indexOf('Updated newer prompt'));
     // Bulk actions live behind the header's ⋯ menu (its title lists them in order).
     expect(html).toContain(`aria-label="${STATUS_LABELS.complete} column actions"`);
@@ -416,7 +417,7 @@ describe('BoardScreen', () => {
     expect(html).not.toContain(CARD_ACTION_COPY.done);
   });
 
-  test('session group header shows the project chip above the runtime badge', () => {
+  test('session group header follows the card anatomy: project ··· #id, title, divider, runtime · count · resume', () => {
     const html = renderToStaticMarkup(
       <BoardScreen
         {...baseProps}
@@ -435,9 +436,15 @@ describe('BoardScreen', () => {
     expect(html).toContain('kv2-complete-session-project');
     expect(html).toContain('title="/Users/user/workspace/mcp-server"');
     expect(html).not.toContain('Proj:');
-    expect(html.indexOf('kv2-complete-session-project')).toBeLessThan(
-      html.indexOf('kv2-complete-session-runtime-row'),
-    );
+    const top = html.slice(html.indexOf('kv2-complete-session-top'), html.indexOf('kv2-complete-session-title-row'));
+    expect(top).toContain('kv2-complete-session-project');
+    expect(top).toContain('>#done-pro</span>');
+    expect(top).not.toContain('kv2-runtime-badge');
+    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'));
+    expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-complete-session-meta-row'));
+    expect(meta).toContain('kv2-runtime-badge');
+    expect(meta).toContain('1 card<');
+    expect(meta).toContain('kv2-resume-copy');
   });
 
   test('shows Script instead of the legacy runtime in grouped done cards', () => {

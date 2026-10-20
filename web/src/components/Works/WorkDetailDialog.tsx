@@ -11,6 +11,7 @@ import type {
 } from '../../../../src/core/types';
 import { WORK_NOTES_MAX_LENGTH } from '../../../../src/core/types';
 import { RuntimeBadge } from '../Board/BoardCardSections';
+import { IdChip } from '../shared/IdChip';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { DirectoryPicker } from '../Card/DirectoryPicker';
 import { MoveSessionDialog } from './MoveSessionDialog';
@@ -664,7 +665,7 @@ export function WorkDetailDialog({
             {describeWorkPlanOverrun(work) && (
               <span className="kv2-badge work-overrun-chip">{describeWorkPlanOverrun(work)}</span>
             )}
-            <span className="kv2-card-id-meta work-detail-id" title={work.id}>🆔 {work.id.slice(0, 8)}</span>
+            <IdChip id={work.id} kind="work" showKind className="kv2-card-detail-id work-detail-id" />
             <button
               type="button"
               className="kv2-dialog-close"
@@ -962,7 +963,7 @@ export function WorkDetailDialog({
                       {` · 카드 ${sessionCardCount}`}
                       {archived ? ' · 보관됨' : ''}
                       {` · `}
-                      <span className="works-mono">{shortSessionId(link.sessionId)}</span>
+                      <IdChip id={link.sessionId} kind="session" />
                     </div>
                     {cardsMissingAt && (
                       <div className="work-session-missing">

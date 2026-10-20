@@ -1266,43 +1266,45 @@
   min-width: 0;
 }
 
-.kv2-complete-session-runtime-row {
+/* Row ① — project chip ··· unread · #session. Mirrors `.kv2-card-top`: the chip
+   shrinks/truncates, the right group never does. */
+.kv2-complete-session-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
   min-height: 24px;
 }
 
-/* Session ID — 보드 카드 #id와 동일한 plain 텍스트 형태(네모칸 없음). 클릭하면 resume 명령 복사 */
-.kv2-complete-session-id-chip {
-  margin-left: auto;
+.kv2-complete-session-top-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
-  border: none;
-  background: none;
-  padding: 0;
-  box-shadow: none;
+  margin-left: auto;
+}
+
+/* Row ④ — runtime badge · count · last update ··· resume. Mirrors `.kv2-card-meta-row`. */
+.kv2-complete-session-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  min-height: 24px;
+  margin-top: 2px;
+}
+
+.kv2-complete-session-updated {
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
   color: var(--kv2-card-date-color);
   white-space: nowrap;
-  cursor: pointer;
-  transition: opacity var(--kv2-transition-fast), color var(--kv2-transition-fast);
 }
 
-.kv2-complete-session-id-chip:hover {
-  opacity: 0.7;
-}
-
-.kv2-complete-session-id-chip:active {
-  opacity: 0.5;
-}
-
-.kv2-complete-session-id-chip.is-copied {
-  color: var(--kv2-success-text);
-  opacity: 1;
+/* Scoped so it outranks `.kv2-resume-copy { all: unset }` (primitives.css loads later). */
+.kv2-complete-session-meta-row .kv2-complete-session-resume {
+  margin-left: auto;
 }
 
 /* 타임라인 안의 인라인 정렬 컨트롤 (프롬프트 리스트 상단) */
@@ -1389,31 +1391,35 @@
   white-space: nowrap;
 }
 
-.kv2-complete-session-count,
-.kv2-complete-session-unread {
+/* Plain meta text next to the runtime badge, like the card's time line. */
+.kv2-complete-session-count {
   flex: 0 0 auto;
-  border: 2px solid var(--kv2-session-count-border);
-  background: var(--kv2-session-count-bg);
-  color: var(--kv2-session-count-fg);
   font-family: var(--kv2-font-mono);
-  font-size: 0.85rem;
+  font-size: var(--kv2-text-xs);
   font-weight: 800;
-  line-height: 1.1;
-  padding: 4px 9px;
-  box-shadow: 2px 2px 0 var(--kv2-session-count-shadow);
+  color: var(--kv2-session-count-fg);
+  white-space: nowrap;
 }
 
+/* Compact filled pill in row ① (next to the session id). */
 .kv2-complete-session-unread {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border-color: var(--kv2-session-unread-border);
+  flex: 0 0 auto;
+  border: 2px solid var(--kv2-session-unread-border);
   background: var(--kv2-session-unread-bg);
   color: var(--kv2-session-unread-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  line-height: 1.1;
+  padding: 1px 6px;
   box-shadow: 2px 2px 0 var(--kv2-session-unread-shadow);
+  white-space: nowrap;
 }
 
-/* Filled, with a dot, so it does not read as another `16 cards` chip. */
+/* Filled, with a dot, so it reads as a signal rather than plain meta. */
 .kv2-complete-session-unread::before {
   content: '●';
   font-size: 0.7em;
@@ -1423,8 +1429,6 @@
    row-1 chip (`.kv2-card-top > .kv2-card-project`). */
 .kv2-complete-session-project {
   display: block;
-  align-self: flex-start;
-  max-width: 100%;
   font-size: var(--kv2-text-ui-sm);
   line-height: 1.4;
 }
@@ -2143,16 +2147,6 @@
   text-overflow: ellipsis;
 }
 
-.kv2-session-id {
-  display: block;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-xs);
-  font-weight: 500;
-  line-height: 1.35;
-  color: var(--kv2-neutral-500);
-  word-break: break-all;
-}
-
 .kv2-session-item-path {
   font-size: var(--kv2-text-xs);
   color: var(--kv2-neutral-700);
@@ -2543,32 +2537,6 @@
   height: 11px;
   background: linear-gradient(var(--kv2-runtime-opencode-icon-a) 0 35%, var(--kv2-runtime-opencode-icon-b) 35% 100%);
   box-shadow: inset 0 0 0 1px var(--kv2-runtime-opencode-icon-a);
-}
-
-.kv2-card-id {
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--kv2-card-date-color);
-}
-
-.kv2-card-id--copyable {
-  all: unset;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--kv2-card-date-color);
-  cursor: pointer;
-}
-
-.kv2-card-id--copyable:hover {
-  opacity: 0.7;
-}
-
-.kv2-card-id--copyable:active {
-  opacity: 0.5;
 }
 
 .kv2-card-title {

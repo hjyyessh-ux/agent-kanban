@@ -6,6 +6,8 @@ import { CardMarkdown } from '../Card/CardMarkdown';
 import { ExecutionTypeBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
+import { dirAccentClass } from '../../utils/project-color';
+import { IdChip, ResumeCopyButton } from '../shared/IdChip';
 import type { CompleteSessionGroup } from './BoardCompleteSessionView';
 import { groupCardsByParent, type CardWithChildren } from './board-utils';
 
@@ -239,7 +241,6 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
   onCreateFeedback,
 }) => {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [activeTurn, setActiveTurn] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
@@ -306,14 +307,6 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     ? buildResumeCommand(group.agentRuntime, group.sessionId, group.projectDir)
     : '';
 
-  const handleCopyResume = () => {
-    if (!resumeCommand) return;
-    void navigator.clipboard.writeText(resumeCommand).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
-  };
-
   return (
     <DialogSkeleton
       onClose={onClose}
@@ -323,6 +316,14 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     >
       <header className="session-conversation-stickyHeader">
         <div className="session-conversation-stickyTopRow">
+          {group.projectDir && (
+            <span
+              className={`works-dir-chip kv2-project-chip session-conversation-stickyProject ${dirAccentClass(group.projectDir)}`.trim()}
+              title={group.projectDir}
+            >
+              {getDirectoryProjectName(group.projectDir)}
+            </span>
+          )}
           <ExecutionTypeBadge
             runtime={group.agentRuntime}
             executionKind={group.executionKind}
@@ -330,27 +331,14 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
           />
           <span className="session-conversation-turnCount">{orderedTurns.length} turns</span>
           {group.sessionId && (
-            <button
-              type="button"
-              className={`session-conversation-resumeChip${copied ? ' is-copied' : ''}`}
-              title={`클릭하여 resume 명령 복사: ${resumeCommand}`}
-              aria-label={`Session ID ${group.sessionId} · resume 명령 복사`}
-              onClick={handleCopyResume}
-            >
-              {copied ? '✓ 복사됨' : `#${group.sessionId.slice(0, 8)}`}
-            </button>
+            <span className="session-conversation-ids">
+              <IdChip id={group.sessionId} kind="session" showKind />
+              {resumeCommand && <ResumeCopyButton command={resumeCommand} />}
+            </span>
           )}
         </div>
         <h2 className="session-conversation-stickyTitle">{group.title}</h2>
         <div className="session-conversation-stickyMeta">
-          {group.projectDir && (
-            <span
-              className="session-conversation-stickyProject"
-              title={group.projectDir}
-            >
-              Proj: {getDirectoryProjectName(group.projectDir)}
-            </span>
-          )}
           <span className="session-conversation-stickyRange">
             {formatTimestamp(group.startedAt)} → {formatTimestamp(group.lastUpdatedAt)}
           </span>

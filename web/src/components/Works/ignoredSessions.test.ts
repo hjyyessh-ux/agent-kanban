@@ -21,7 +21,7 @@ describe('ignoredSessionTitle', () => {
   test('first prompt, then card title, then short id', () => {
     expect(ignoredSessionTitle(ignored('ses_1', { sessionTitle: ' Fix poller ', cardTitle: 'Card' }))).toBe('Fix poller');
     expect(ignoredSessionTitle(ignored('ses_1', { sessionTitle: '  ', cardTitle: 'Card' }))).toBe('Card');
-    expect(ignoredSessionTitle(ignored('ses_abcdefghijkl'))).toBe('ses_ab…kl');
+    expect(ignoredSessionTitle(ignored('ses_abcdefghijkl'))).toBe('#ses_abcd');
   });
 });
 

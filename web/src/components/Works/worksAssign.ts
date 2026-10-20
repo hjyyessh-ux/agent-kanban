@@ -10,6 +10,7 @@ import type {
   WorksConfigDto,
 } from '../../../../src/core/types';
 import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
+import { formatShortId } from '../../utils/short-id';
 import { selectWorks, workPlanOverrunDays } from '../../../../src/core/work-list';
 import { STATUS_LABELS, WORK_STATUS_LABELS as WORK_STATUS_COPY } from '../../constants/copy';
 import { resolveWorkStartedAt } from '../../../../src/plugin/works/work-lifecycle';
@@ -158,10 +159,9 @@ export function projectDirLabel(projectDir: string | undefined): string {
   return segment || trimmed;
 }
 
-/** `a3f8c2…e1`-style short id for an opaque sessionId. */
+/** Short id for an opaque sessionId — the app-wide `#` + 8 form (`IdChip`). */
 export function shortSessionId(sessionId: string): string {
-  if (sessionId.length <= 10) return sessionId;
-  return `${sessionId.slice(0, 6)}…${sessionId.slice(-2)}`;
+  return formatShortId(sessionId);
 }
 
 /**

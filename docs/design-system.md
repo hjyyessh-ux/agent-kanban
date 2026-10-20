@@ -249,6 +249,20 @@ CSS 값 그대로 넘겨받아 렌더링한다(문자열 자체가 CSS 값이므
 
 공용 컴포넌트: 에러 표시는 `shared/ErrorAlert`(`.error-banner`)를 사용합니다.
 
+### 식별자 = `IdChip`, 예외 없음
+
+카드·세션·Work ID는 어느 화면이든 `shared/IdChip`으로만 그립니다. 직접 `id.slice()` + `navigator.clipboard`를 쓰지 마세요.
+
+| 항목 | 규칙 |
+|------|------|
+| 모양 | `#` + 앞 8자(`utils/short-id.ts` `formatShortId`), mono · `--kv2-text-sm` · 800 · `--kv2-card-date-color`, 테두리 없음 |
+| 종류 라벨 | 보드 위에서는 생략(자리가 종류를 말함). 상세·모달·피커처럼 여러 종류가 같이 보이면 `showKind` → `CARD` / `SESSION` / `WORK` |
+| 클릭 | **항상 전체 raw ID 복사**. resume 명령은 옆의 `ResumeCopyButton`(`⏎ resume`)만 복사 |
+| 피드백 | `useCopyFeedback` — 1.5초 `✓ 복사됨`(success 색), 값 칸 `min-width: 9ch`라 행이 흔들리지 않음. hover 시 배경 틴트 + `⧉` |
+| 버튼 안의 ID | 행 자체가 버튼/option이면(멘션 후보 등) 버튼 중첩이 되므로 같은 모양의 `IdText`(비클릭)를 씁니다 |
+
+예: `🆔 QYd7Jm0O` → `CARD #QYd7Jm0O`, `24b90f…05` → `#24b90f31`, `Copied!` → `✓ 복사됨`.
+
 ### 컨테이너가 다르면 로컬 override가 아니라 variant
 
 기본 `kv2-meta-dropdown`은 사이드바 **필드** 치수(`width: 100%; flex: 1`)입니다.

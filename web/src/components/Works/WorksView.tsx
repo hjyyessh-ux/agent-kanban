@@ -11,6 +11,8 @@ import type {
 } from '../../../../src/core/types';
 import { selectWorks, workProjectDirs } from '../../../../src/core/work-list';
 import { ErrorAlert } from '../shared/ErrorAlert';
+import { IdChip } from '../shared/IdChip';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import type { UiAlert } from '../../hooks/uiAlert';
 import type { BulkAssignResult, UseWorksResult, WorkResolveOutcome } from '../../hooks/useWorks';
 import { WorkAssignInline } from './WorkAssignInline';
@@ -45,7 +47,6 @@ import {
   projectDirLabel,
   rowIndexAtPointer,
   sessionIdsBetween,
-  shortSessionId,
   DEFAULT_SESSION_ROLE,
   suggestWorkAssignments,
   suggestWorkTitle,
@@ -257,9 +258,9 @@ function InboxRow({
                 {chainMark.label}
               </span>
             )}
-            <span className="kv2-badge works-runtime-chip">{session.agentRuntime}</span>
+            <RuntimeBadge runtime={session.agentRuntime} />
             <DirChip projectDir={session.projectDir} />
-            <span className="works-mono">{shortSessionId(session.sessionId)}</span>
+            <IdChip id={session.sessionId} kind="session" />
             <span>
               카드 {session.relatedCardCount} · {formatTimeAgo(session.updatedAt)}
               {isOld && <b className="works-warn"> ⚠ 오래됨</b>}
@@ -398,11 +399,11 @@ function IgnoredSessionsPanel({
                       <div className="works-inbox-meta">
                         {summary && (
                           <>
-                            <span className="kv2-badge works-runtime-chip">{summary.agentRuntime}</span>
+                            <RuntimeBadge runtime={summary.agentRuntime} />
                             <DirChip projectDir={summary.projectDir} />
                           </>
                         )}
-                        <span className="works-mono">{shortSessionId(entry.sessionId)}</span>
+                        <IdChip id={entry.sessionId} kind="session" />
                         {summary && (
                           <span>
                             카드 {summary.relatedCardCount} · {formatTimeAgo(summary.updatedAt)}

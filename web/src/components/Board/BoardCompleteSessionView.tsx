@@ -7,6 +7,7 @@ import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
 import { dirAccentClass } from '../../utils/project-color';
+import { IdChip, ResumeCopyButton } from '../shared/IdChip';
 import { CARD_ACTION_COPY } from '../../constants/copy';
 
 // A long-running session runs to 20+ turns; only the newest few are usually wanted.
@@ -200,7 +201,6 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
   const groups = useMemo(() => groupCompleteCardsBySession(cards), [cards]);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const appliedHideAllTokenRef = useRef(hideAllToken ?? 0);
-  const [copiedSessionKey, setCopiedSessionKey] = useState<string | null>(null);
   const [oldestFirstGroups, setOldestFirstGroups] = useState<Record<string, boolean>>({});
   const [expandedTurnGroups, setExpandedTurnGroups] = useState<Record<string, boolean>>({});
 
@@ -318,54 +318,47 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
               }}
             >
               <div className="kv2-complete-session-heading">
-                {/* Project first, same chip as the board card's row 1. */}
-                {group.projectDir && (
-                  <span
-                    className={`works-dir-chip kv2-project-chip kv2-complete-session-project ${dirAccentClass(group.projectDir)}`.trim()}
-                    title={group.projectDir}
-                  >
-                    {getDirectoryProjectName(group.projectDir)}
-                  </span>
-                )}
-                <div className="kv2-complete-session-runtime-row">
-                  <ExecutionTypeBadge
-                    runtime={group.agentRuntime}
-                    executionKind={group.executionKind}
-                    scriptName={group.scriptName}
-                  />
-                  {group.unreadCount > 0 && (
-                    <span className="kv2-complete-session-unread">{group.unreadCount} unread</span>
-                  )}
-                  <span className="kv2-complete-session-count">{group.cards.length} cards</span>
-                  {group.sessionId && (
-                    <button
-                      type="button"
-                      className={`kv2-complete-session-id-chip${copiedSessionKey === group.key ? ' is-copied' : ''}`}
-                      title={`클릭하여 resume 명령 복사: ${resumeCommand}`}
-                      aria-label={`Session ID ${group.sessionId} · resume 명령 복사`}
-                      onKeyDown={(event) => {
-                        event.stopPropagation();
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void navigator.clipboard.writeText(resumeCommand).then(() => {
-                          setCopiedSessionKey(group.key);
-                          window.setTimeout(() => {
-                            setCopiedSessionKey((current) => current === group.key ? null : current);
-                          }, 1500);
-                        });
-                      }}
+                {/* Same anatomy as BoardCard: ① project ··· unread · #id, ② title,
+                    ③ divider, ④ runtime · counts — so the runtime badge and the
+                    id sit in the same place on every board item. */}
+                <div className="kv2-complete-session-top">
+                  {group.projectDir ? (
+                    <span
+                      className={`works-dir-chip kv2-project-chip kv2-complete-session-project ${dirAccentClass(group.projectDir)}`.trim()}
+                      title={group.projectDir}
                     >
-                      {copiedSessionKey === group.key
-                        ? '✓ 복사됨'
-                        : `#${group.sessionId.slice(0, 8)}`}
-                    </button>
+                      {getDirectoryProjectName(group.projectDir)}
+                    </span>
+                  ) : (
+                    <span className="kv2-card-project-spacer" aria-hidden="true" />
                   )}
+                  <div className="kv2-complete-session-top-meta">
+                    {group.unreadCount > 0 && (
+                      <span className="kv2-complete-session-unread">{group.unreadCount} unread</span>
+                    )}
+                    {group.sessionId && <IdChip id={group.sessionId} kind="session" />}
+                  </div>
                 </div>
                 <div className="kv2-complete-session-title-row">
                   <span className="kv2-complete-session-title">{group.title}</span>
                 </div>
                 <div className="kv2-card-divider kv2-complete-session-divider" aria-hidden="true" />
+                <div className="kv2-complete-session-meta-row">
+                  <ExecutionTypeBadge
+                    runtime={group.agentRuntime}
+                    executionKind={group.executionKind}
+                    scriptName={group.scriptName}
+                  />
+                  <span className="kv2-complete-session-count">
+                    {group.cards.length === 1 ? '1 card' : `${group.cards.length} cards`}
+                  </span>
+                  <span className="kv2-complete-session-updated" title={group.lastUpdatedAt}>
+                    {formatTurnStamp(group.lastUpdatedAt)}
+                  </span>
+                  {resumeCommand && (
+                    <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />
+                  )}
+                </div>
                 <div className="kv2-complete-session-group-actions">
                   {status === 'complete' && onStatusChange && (
                     <button

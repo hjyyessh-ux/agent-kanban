@@ -81,27 +81,13 @@
   gap: 8px;
 }
 
-.kv2-card-id-meta {
-  all: unset;
-  font-size: var(--kv2-text-base);
-  color: var(--kv2-text-meta);
-  cursor: pointer;
-  padding: 4px 8px;
-  font-family: var(--kv2-font-mono);
-  white-space: nowrap;
+/* Card IdChip in the detail status row — breathing room before the close button. */
+.kv2-card-detail-id {
+  margin: 0 6px;
 }
 
 .kv2-status-row-meta .kv2-favorite-toggle--detail {
   flex-shrink: 0;
-}
-
-.kv2-card-id-meta:hover {
-  color: var(--kv2-text-meta-hover);
-}
-
-.kv2-card-id-meta--copied {
-  color: var(--kv2-success-accent-vivid);
-  font-weight: 600;
 }
 
 .kv2-title-text {

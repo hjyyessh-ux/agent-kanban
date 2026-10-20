@@ -198,7 +198,9 @@ describe('BoardCard layout', () => {
     expect(top).toMatch(/works-dir-c[1-8]/);
     expect(top).toContain(`title="${projectDir}"`);
     expect(top).toContain('>ghe-migration-tools-v1.0.5-darwin-arm64</span>');
-    expect(top).toContain('>#NoLXQ2</button>');
+    expect(top).toContain('kv2-id-chip');
+    expect(top).toContain('>#NoLXQ2ab</span>');
+    expect(top).toContain('title="Card ID 복사: NoLXQ2abcdef"');
     expect(top).toContain('kv2-favorite-toggle--board');
     expect(html).not.toContain('kv2-card-header-meta--floating');
   });

@@ -61,6 +61,7 @@ import {
   type TimelineWorkRow,
 } from './timelineRows';
 import './Timeline.css';
+import { formatShortId } from '../../utils/short-id';
 
 /**
  * Partial date PATCH — never both ends at once. `resolvedAt: null` clears a
@@ -147,7 +148,7 @@ function sessionLabel(session: TimelineSessionSpan): string {
   if (explicit) return explicit;
   const oldest = [...session.cards].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
   const fromCard = oldest?.title?.trim();
-  return fromCard || session.sessionId;
+  return fromCard || formatShortId(session.sessionId);
 }
 
 const LABEL_WIDTH_STORAGE_KEY = 'kanban-timeline-label-width';
