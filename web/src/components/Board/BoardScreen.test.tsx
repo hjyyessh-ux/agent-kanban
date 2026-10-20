@@ -416,6 +416,30 @@ describe('BoardScreen', () => {
     expect(html).not.toContain(CARD_ACTION_COPY.done);
   });
 
+  test('session group header shows the project chip above the runtime badge', () => {
+    const html = renderToStaticMarkup(
+      <BoardScreen
+        {...baseProps}
+        cards={[
+          makeCard({
+            id: 'done-proj-1',
+            title: 'Done prompt',
+            status: 'done',
+            sessionId: 'done-proj-session',
+            projectDir: '/Users/user/workspace/mcp-server',
+          }),
+        ]}
+      />,
+    );
+
+    expect(html).toContain('kv2-complete-session-project');
+    expect(html).toContain('title="/Users/user/workspace/mcp-server"');
+    expect(html).not.toContain('Proj:');
+    expect(html.indexOf('kv2-complete-session-project')).toBeLessThan(
+      html.indexOf('kv2-complete-session-runtime-row'),
+    );
+  });
+
   test('shows Script instead of the legacy runtime in grouped done cards', () => {
     const html = renderToStaticMarkup(
       <BoardScreen

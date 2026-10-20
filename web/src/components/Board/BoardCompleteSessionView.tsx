@@ -6,6 +6,7 @@ import { countUnread, isUnreadCompletion } from './board-selectors';
 import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
+import { dirAccentClass } from '../../utils/project-color';
 import { CARD_ACTION_COPY } from '../../constants/copy';
 
 // A long-running session runs to 20+ turns; only the newest few are usually wanted.
@@ -317,6 +318,15 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
               }}
             >
               <div className="kv2-complete-session-heading">
+                {/* Project first, same chip as the board card's row 1. */}
+                {group.projectDir && (
+                  <span
+                    className={`works-dir-chip kv2-project-chip kv2-complete-session-project ${dirAccentClass(group.projectDir)}`.trim()}
+                    title={group.projectDir}
+                  >
+                    {getDirectoryProjectName(group.projectDir)}
+                  </span>
+                )}
                 <div className="kv2-complete-session-runtime-row">
                   <ExecutionTypeBadge
                     runtime={group.agentRuntime}
@@ -355,12 +365,6 @@ export const BoardCompleteSessionView: React.FC<BoardCompleteSessionViewProps> =
                 <div className="kv2-complete-session-title-row">
                   <span className="kv2-complete-session-title">{group.title}</span>
                 </div>
-                {group.projectDir && (
-                  <div className="kv2-card-directory kv2-complete-session-project" title={group.projectDir}>
-                    <span className="kv2-card-directory-label">Proj:</span>
-                    <span className="kv2-card-directory-name">{getDirectoryProjectName(group.projectDir)}</span>
-                  </div>
-                )}
                 <div className="kv2-card-divider kv2-complete-session-divider" aria-hidden="true" />
                 <div className="kv2-complete-session-group-actions">
                   {status === 'complete' && onStatusChange && (

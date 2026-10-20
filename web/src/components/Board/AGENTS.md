@@ -41,7 +41,7 @@ Renders the kanban board itself: grid (column) view and list view, drag-and-drop
 - Nested/subagent/worker child cards are modeled via `ChildItem`/`linkKind` and rendered through `NestedChildAccordion` in `BoardCardSections.tsx`.
 - kv2 tokens/components are loaded globally from `main.tsx`; `BoardScreen.tsx` imports no CSS itself.
 - The in-progress live clock (`BoardCardTimeMeta`) calls `useNowTick(live)` inside its own leaf component, so only that `<span>` re-renders each second and only while the card is `in_progress` with a `startedAt`. Never lift the tick into `BoardCard`/`BoardColumn`/`BoardScreen` — that repaints the whole board every second.
-- `.kv2-card-directory` (`Proj:` line) is no longer used by `BoardCard`; only the complete-session group header (`BoardCompleteSessionView`) still renders it.
+- The `Proj:` line (`.kv2-card-directory`) is retired. Both `BoardCard` (row 1) and the complete-session group header (`BoardCompleteSessionView`, first row above the runtime badge) show the project as the same `works-dir-chip kv2-project-chip` + `dirAccentClass` chip.
 
 ### Testing Requirements
 - Colocate `*.test.ts`/`*.test.tsx` next to the source file; prefer testing exported pure functions (`getRowActionConfig`, `groupCardsByParent`, `confirmBoardCardDelete`, `selectColumns`) over full DOM rendering.
