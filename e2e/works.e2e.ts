@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { TOOLBAR_COPY } from '../web/src/constants/copy';
 import { test, expect } from './fixtures/kanban';
 import {
   apiAddWorkSession,
@@ -50,7 +51,7 @@ async function openWorksTab(page: Page): Promise<void> {
  * inside the Board tab, which is the default tab on load.
  */
 async function openTimeline(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '타임라인' }).click();
+  await page.getByRole('button', { name: TOOLBAR_COPY.viewTimeline, exact: true }).click();
   await expect(page.locator('.timeline')).toBeVisible();
 }
 

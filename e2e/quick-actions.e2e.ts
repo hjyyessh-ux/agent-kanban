@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
+import { TOOLBAR_COPY } from '../web/src/constants/copy';
 import { RUNTIME_MODEL_PREFERENCE_KEY } from '../src/core/runtime-config';
 import { test, expect } from './fixtures/kanban';
 import {
@@ -404,7 +405,7 @@ test.describe('Quick Actions', () => {
     await expect(completedCard.getByText('SCRIPT', { exact: true })).toBeVisible();
     await expect(completedCard.getByText('OPENCODE', { exact: true })).toHaveCount(0);
 
-    await page.getByRole('button', { name: '리스트', exact: true }).click();
+    await page.getByRole('button', { name: TOOLBAR_COPY.viewList, exact: true }).click();
     const completedRow = page.locator('.kv2-list-table-row', { hasText: 'Deploy service' });
     await expect(completedRow).toBeVisible();
     await expect(completedRow.getByText('SCRIPT', { exact: true })).toBeVisible();
@@ -440,6 +441,9 @@ test.describe('Quick Actions', () => {
       await page.setViewportSize({ width, height: 1080 });
       await page.goto('/');
       await expect(page.locator('.kv2-board')).toBeVisible();
+      // Web fonts (Google Fonts) swap in late; the tab strip is ~27px taller in
+      // the fallback face, so measuring before they land compares two layouts.
+      await page.evaluate(() => document.fonts.ready);
       const before = await page.evaluate(() => {
         const content = document.querySelector('.kv2-board-workspace-content')?.getBoundingClientRect();
         const launcher = document.querySelector('.kv2-quick-actions-rail')?.getBoundingClientRect();
@@ -528,7 +532,7 @@ test.describe('Quick Actions', () => {
       await expect(page.getByRole('button', { name: 'Open Quick Actions', exact: true })).toBeFocused();
     }
 
-    await page.getByRole('button', { name: '리스트', exact: true }).click();
+    await page.getByRole('button', { name: TOOLBAR_COPY.viewList, exact: true }).click();
     await expect(page.locator('.kv2-board-list')).toBeVisible();
     const listBefore = await page.locator('.kv2-board-list').evaluate((element) => {
       const rect = element.getBoundingClientRect();

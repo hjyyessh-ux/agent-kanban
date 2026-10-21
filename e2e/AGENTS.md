@@ -37,6 +37,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `theme.e2e.ts` | Light/dark/system theme toggle, `data-theme` + localStorage persistence |
 | `v2-visual-audit.e2e.ts` | V2 design-system compliance checks (light + dark screenshot variants) |
 | `wiki-archive-cards.e2e.ts` | LLM wiki processing triggered by card archival, excluding child cards |
+| `board-works.e2e.ts` | Board `GROUP: WORKS`: drag a session onto a Work (link) / another Work (move) / same-column UNASSIGNED (unlink) with 되돌리기, cross-column drop is inert, bottom tray (in-progress card, `(현재)`, `＋ 새 Work` dialog), `⋯ → Work로 이동`, unread-only + WORK filter on Work containers. DnD is dispatched DragEvents with a shared DataTransfer (wait a frame after `dragstart`) |
 | `works.e2e.ts` | Works tab (Inbox → new Work, tab badge), assign-all modal N/1/S/X shortcuts, Work completion → card archive, Timeline bar geometry + detail dialog, re-dating a Work by bar-edge drag and by the detail dialog's date inputs, an open Work's planned end surviving completion |
 | `tsconfig.json` | TypeScript config scoped to the e2e test tree |
 

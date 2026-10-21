@@ -216,7 +216,9 @@ test.describe('v2 visual audit', () => {
     expect(darkPalette.headers.every(({ contrast }) => contrast >= 4.5)).toBe(true);
     expect(darkPalette.createButton.foreground).toEqual([212, 215, 219]);
     expect(darkPalette.createButton.contrast).toBeGreaterThanOrEqual(4.5);
-    expect(darkPalette.filterButton.background).toEqual([59, 130, 246]);
+    // Idle `≡ FILTER` wears the shared toolbar face (`--kv2-toolbar-bg`); it only
+    // turns blue while open or filtered.
+    expect(darkPalette.filterButton.background).toEqual([45, 49, 53]);
     expect(darkPalette.filterButton.contrast).toBeGreaterThanOrEqual(4.5);
     expect(darkPalette.selectedProject.background).toEqual([48, 58, 70]);
     expect(darkPalette.selectedProject.foreground).toEqual([212, 215, 219]);
@@ -435,7 +437,7 @@ test.describe('v2 visual audit', () => {
 
     await page.addInitScript(() => {
       localStorage.setItem('kanban-theme', 'dark');
-      localStorage.setItem('kanban-complete-session-view', 'true');
+      localStorage.setItem('kanban-complete-session-view', 'session');
     });
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto('/');

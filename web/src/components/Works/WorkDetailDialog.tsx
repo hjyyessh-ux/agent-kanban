@@ -124,7 +124,15 @@ interface WorkDetailDialogProps {
    * the removed session ids.
    */
   onPruneSessions?: (workId: string) => Promise<string[]>;
+  /**
+   * Open straight into one of the dialog's own flows — the board's Work `⋯`
+   * menu (`이름 변경` / `병합…` / `완료…`). Read once, on mount; omit for the
+   * plain detail view.
+   */
+  initialIntent?: WorkDetailIntent;
 }
+
+export type WorkDetailIntent = 'rename' | 'merge' | 'complete';
 
 /**
  * The `⋯` menu's mutations, passed straight through from `useWorks` (fetch stays
@@ -207,6 +215,7 @@ export function WorkDetailDialog({
   onPruneSessions,
   assignableSessions = [],
   onAddSession,
+  initialIntent,
 }: WorkDetailDialogProps) {
   const [busy, setBusy] = useState(false);
   const [summaryBusy, setSummaryBusy] = useState(false);
@@ -307,10 +316,11 @@ export function WorkDetailDialog({
    * previous render's draft. Escape cleared the draft, blurred, and the blur
    * then committed the very text Escape had just thrown away.
    */
-  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const initialTitleDraft = initialIntent === 'rename' && onUpdateMeta ? work.title : null;
+  const [titleDraft, setTitleDraft] = useState<string | null>(initialTitleDraft);
   const [dirDraft, setDirDraft] = useState<string | null>(null);
   const draftRef = useRef<{ title: string | null; projectDir: string | null }>({
-    title: null,
+    title: initialTitleDraft,
     projectDir: null,
   });
   const [metaBusy, setMetaBusy] = useState(false);
@@ -478,9 +488,11 @@ export function WorkDetailDialog({
   // Which transition is awaiting confirmation. 완료 and 폐기 are irreversible
   // and neither offers an undo; 다시 열기 is reversible but moves a pile of
   // cards between the board and the archive, so all three confirm first.
-  const [resolveMode, setResolveMode] = useState<WorkResolveMode | null>(null);
+  const [resolveMode, setResolveMode] = useState<WorkResolveMode | null>(
+    initialIntent === 'complete' && work.status === 'active' ? 'complete' : null,
+  );
   /** Whether the merge target picker is open. */
-  const [merging, setMerging] = useState(false);
+  const [merging, setMerging] = useState(initialIntent === 'merge' && !!onMerge && !!sessionActions);
 
   /**
    * Close on `'done'` only — and not even then for a reopen, whose whole point

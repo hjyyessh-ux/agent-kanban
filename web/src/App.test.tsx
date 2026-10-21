@@ -15,7 +15,8 @@ describe('App header board view toggle', () => {
     expect(html).toContain('Scheduler');
     expect(html).toContain('Settings');
     expect(html).toContain('Board view mode');
-    expect(html).toContain(TOOLBAR_COPY.groupSessions);
+    expect(html).toContain(TOOLBAR_COPY.groupLegend);
+    expect(html).toContain(TOOLBAR_COPY.groupWorks);
     expect(html).toContain(TOOLBAR_COPY.filter);
     expect(html).toContain('kv2-board-workspace');
     expect(html).toContain('kv2-quick-actions-drawer--collapsed');

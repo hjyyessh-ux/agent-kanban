@@ -116,17 +116,6 @@
   background: var(--kv2-surface);
 }
 
-.app-board-view-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 4px;
-  border: 2px solid var(--kv2-frame);
-  background: var(--kv2-surface);
-  box-shadow: 4px 4px 0 var(--kv2-frame);
-}
-
 /* Board sub-header (row 2): project chips live here while board controls stay on the main nav row. */
 .app-board-subheader {
   flex: 1 0 100%;
@@ -149,11 +138,6 @@
 
 .app-board-mobile-tools-toggle {
   display: none;
-}
-
-.app-board-view-controls .app-board-view-toggle {
-  flex: 0 0 auto;
-  margin-left: 0;
 }
 
 .app-project-controls {
@@ -339,51 +323,6 @@
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
   border: 0;
-}
-
-.app-board-view-toggle-btn {
-  height: 32px;
-  min-height: 32px;
-  padding: 0 12px;
-  border: 2px solid transparent;
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-  cursor: pointer;
-  font-family: var(--kv2-font-heading);
-  font-weight: 800;
-  font-size: var(--kv2-text-sm);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.app-board-view-toggle-btn.is-active {
-  border-color: var(--kv2-board-mode-active-border);
-  background: var(--kv2-board-mode-active-bg);
-  color: var(--kv2-control-selected-fg);
-  box-shadow: 2px 2px 0 var(--kv2-frame);
-}
-
-.app-board-session-toggle {
-  height: 40px;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 2px solid var(--kv2-frame);
-  background: var(--kv2-surface);
-  color: var(--kv2-text-primary);
-  box-shadow: 4px 4px 0 var(--kv2-frame);
-  cursor: pointer;
-  font-family: var(--kv2-font-heading);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.app-board-session-toggle.is-active {
-  background: var(--kv2-board-session-active-bg);
-  border-color: var(--kv2-board-session-active-border);
-  box-shadow: 5px 5px 0 var(--kv2-frame);
-  transform: translate(-1px, -1px);
 }
 
 @media (max-width: 900px) {

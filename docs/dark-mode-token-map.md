@@ -279,7 +279,7 @@ so cards 3–4 reuse rather than re-derive:
 | `#1e3a8a` (codex badge text) | `--kv2-info-text-strong` | `#1e3a8a` |
 | `#f0fdff` (session "result" row bg) | `--kv2-cyan-surface-soft` | `#f0fdff` |
 | `#14532d` (session "result" row text) | `--kv2-success-text-strong` | `#14532d` |
-| `#d9f99d` (board-session-toggle active bg) | `--kv2-success-surface-vivid` | `#d9f99d` |
+| `#d9f99d` (retired board-session-toggle active bg — now `--kv2-toolbar-*`) | `--kv2-success-surface-vivid` | `#d9f99d` |
 | `#fff8f0` (session "prompt" row bg) | `--kv2-warn-surface-soft` | `#fff8f0` |
 | `#f8f1d4` (filter-trigger open-state bg) | `--kv2-warn-surface-tint` | `#f8f1d4` |
 | `#3f2f00` (text on selected/yellow filter option) | `--kv2-warn-text-strong` | `#3f2f00` |

@@ -16,7 +16,7 @@ const FIXED_FONT_SIZE = /font-size:\s*([0-9.]+(?:px|rem))\b/g;
 const ALLOWLIST: Record<string, string[]> = {
   'styles/base.css': ['16px', '2.5rem', '2rem', '1.5rem', '1.25rem', '1.125rem', '1rem', '1rem'],
   'styles/kv2/board.css': [
-    '0.62rem', '0.68rem', '0.68rem', '0.72rem', '11px', '11px', '0.85rem',
+    '0.68rem', '0.68rem', '0.72rem', '11px', '11px', '0.85rem',
     '10px', '12px', '0.9rem', '10px', '11px',
   ],
   'styles/kv2/panels.css': ['1.45rem', '1.28rem', '1.12rem', '1rem', '10px', '10px'],

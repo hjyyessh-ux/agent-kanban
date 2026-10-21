@@ -11,6 +11,8 @@ interface BoardColumnMenuProps {
   /** Column label, used to name the trigger for assistive tech. */
   columnLabel: string;
   items: BoardColumnMenuItem[];
+  /** Full accessible name, overriding `"<columnLabel> column actions"` (the Work container's `⋯`). */
+  menuLabel?: string;
 }
 
 /**
@@ -22,7 +24,8 @@ interface BoardColumnMenuProps {
  * Home/End walk them, Escape closes and returns focus to the trigger.
  * `useAnchoredPopover` portals to the body and closes on an outside pointerdown.
  */
-export function BoardColumnMenu({ columnLabel, items }: BoardColumnMenuProps) {
+export function BoardColumnMenu({ columnLabel, items, menuLabel }: BoardColumnMenuProps) {
+  const label = menuLabel ?? `${columnLabel} column actions`;
   const { open, setOpen, triggerRef, popoverRef, popoverStyle } = useAnchoredPopover(160);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +72,7 @@ export function BoardColumnMenu({ columnLabel, items }: BoardColumnMenuProps) {
         className="kv2-column-action kv2-column-menu-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${columnLabel} column actions`}
+        aria-label={label}
         title={items.map((item) => item.label).join(' · ')}
         onClick={() => setOpen((current) => !current)}
       >
@@ -85,7 +88,7 @@ export function BoardColumnMenu({ columnLabel, items }: BoardColumnMenuProps) {
             }}
             className="kv2-meta-dropdown-popover kv2-column-menu-popover"
             role="menu"
-            aria-label={`${columnLabel} column actions`}
+            aria-label={label}
             style={popoverStyle}
             onKeyDown={handleMenuKeyDown}
           >

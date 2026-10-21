@@ -2,6 +2,7 @@ import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import { groupCompleteCardsBySession } from './BoardCompleteSessionView';
 import { isUnreadCompletion, selectCardById } from './board-selectors';
 import type { V2ColumnViewModel } from './board-selectors';
+import type { WorksColumnModel } from './board-works';
 
 /** One card in the order the board draws it, as far as unread jumps care. */
 export interface UnreadNavEntry {
@@ -16,6 +17,12 @@ export interface UnreadNavEntry {
 export interface BoardNavLayout {
   groupComplete: boolean;
   groupDone: boolean;
+  /**
+   * `GROUP: WORKS` grid: a session-grouped column draws its Work fragments
+   * (each fragment's groups, folded ones included) and then the UNASSIGNED
+   * groups, so that is the reading order too.
+   */
+  works?: Partial<Record<KanbanStatus, WorksColumnModel>>;
 }
 
 export type UnreadNavDirection = 'next' | 'prev';
@@ -46,10 +53,14 @@ export function selectBoardNavOrder(
       continue;
     }
 
+    const worksColumn = layout.works?.[column.status];
     const rawCards = column.cards
       .map((vm) => selectCardById(allCards, vm.id))
       .filter((card): card is KanbanCard => !!card);
-    for (const group of groupCompleteCardsBySession(rawCards)) {
+    const groups = worksColumn
+      ? [...worksColumn.fragments.flatMap((fragment) => fragment.groups), ...worksColumn.unassigned]
+      : groupCompleteCardsBySession(rawCards);
+    for (const group of groups) {
       for (const card of group.cards) {
         entries.push({ id: card.id, status: column.status, unread: isUnreadCompletion(card), groupKey: group.key });
       }

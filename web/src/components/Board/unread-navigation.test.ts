@@ -8,6 +8,7 @@ import {
   selectBoardNavOrder,
   type UnreadNavEntry,
 } from './unread-navigation';
+import { selectWorkFragments } from './board-works';
 
 const SEEN = '2026-10-18T23:00:00.000Z';
 
@@ -95,6 +96,23 @@ describe('selectBoardNavOrder', () => {
     const order = selectBoardNavOrder(selectColumns(cards), cards, { groupComplete: true, groupDone: true });
     expect(order.map((item) => item.id)).toEqual(['todo-1', 's1-new', 's1-old', 's2-only']);
     expect(order.find((item) => item.id === 's1-old')?.groupKey).toBe('session:s1');
+  });
+
+  test('works layout walks Work fragments first, then the unassigned groups', () => {
+    // s2 is older than s1, but its Work fragment is drawn above the UNASSIGNED zone.
+    const works = [{
+      id: 'W1',
+      title: 'Work one',
+      status: 'active' as const,
+      sessionLinks: [{ sessionId: 's2', linkedAt: SEEN }],
+      startedAt: SEEN,
+      createdAt: SEEN,
+      updatedAt: SEEN,
+    }];
+    const model = selectWorkFragments({ cards, works });
+    const order = selectBoardNavOrder(selectColumns(cards), cards, { groupComplete: true, groupDone: true, works: model });
+    expect(order.map((item) => item.id)).toEqual(['todo-1', 's2-only', 's1-new', 's1-old']);
+    expect(order.find((item) => item.id === 's2-only')?.groupKey).toBe('session:s2');
   });
 
   test('list order puts complete ahead of todo', () => {

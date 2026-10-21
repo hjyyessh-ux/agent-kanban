@@ -911,6 +911,88 @@ Works 폴링만으로는 부족합니다 — 그리드는 **이미 아카이브�
 - 나중에 **완료 처리하면 이 날짜가 그대로 종료일이 됩니다** — `updateWork`의 자동 stamp는 `resolvedAt`이 비어 있을 때만 `now`를 찍기 때문입니다. 사용자가 "날짜부터 정하고 나중에 완료" 순서로 일할 수 있는 근거가 이 규칙입니다.
 - 단, `status: 'active'`로 **되돌리면** `resolvedAt`은 지워집니다([재개](#재개-post-apiworksidreopen)도 같습니다). 재개된 Work의 예정일은 다시 찍어야 합니다.
 
+### ⑥ 메인 보드 Works 묶기 (`GROUP: WORKS`, 진행 중)
+
+Board 툴바의 `GROUP: CARD | SESSION | WORKS` 세그먼트(`BoardGroupMode`, `web/src/components/Board/board-group-mode.ts`)가 보드를 Work 단위로 묶어 보는 진입점입니다. 스펙은 `docs/mockups/works-on-board.html`의 **B안** — Work 컨테이너 안에 최신 세션 카드 2개, 드래그로 Work에 넣기/옮기기/빼기.
+
+- 진행 상황: 세그먼트·토큰(`--kv2-work-*`, `--kv2-session-tab-*` — `docs/design-system.md`)·세션 그룹 `SESSION` 탭(1/5), 뷰모델·데이터 연결·`WORK:` 필터(2/5), Work 컨테이너 렌더(3/5 — 아래 [렌더](#렌더-35)), 드래그 & 드롭·트레이·되돌리기·`⋯ → Work로 이동`(4/5 — 아래 [드래그 & 드롭](#드래그--드롭-45)), 목업 대조·전체 검증·보고서(5/5 — 아래 [목업 대조](#목업-대조-55)).
+
+#### 데이터 흐름
+
+```
+App ── useWorks(Works 탭 ∨ Timeline ∨ Board+GROUP:WORKS) ── works.filter(status==='active')
+ │                                                              │
+ ├─ BoardFilterBar  workFilter={ works, value, onChange }  ◀────┤  (WORKS 모드에서만)
+ └─ BoardScreen     works · workFilter                     ◀────┘
+       filterBoardCards → filterCardsByWork(WORKS 모드만) → filterUnreadOnly
+       → selectWorkFragments({ cards: 필터 후, boardCards: 필터 전, works })   (board-works.ts)
+```
+
+- **로드 게이트**: Work 목록 폴링(10s)은 Board 탭에서는 `GROUP: WORKS`일 때만 켭니다. `useWorks`는 Inbox 등도 함께 읽으므로 다른 모드에서 켜지 않습니다.
+- **활성 Work만**: 보드에 넘기는 것은 `status === 'active'`인 Work입니다. 완료/폐기된 Work에 연결된 세션(예: 즐겨찾기라 sweep에서 남은 카드)은 보드에서 **미배정**으로 보입니다.
+- **매핑**: `sessionLinks`로 `sessionId → Work`(1:N이라 세션당 Work 하나, 중복이면 먼저 나온 Work). `sessionId`가 없는 카드(카드 단위 그룹 `card:<id>`)는 연결할 수 없으므로 **항상 미배정**입니다.
+- **조각(fragment)**: Work는 세션이 있는 **컬럼마다** 한 번씩 그려집니다. 조각 = 그 컬럼의 세션 그룹(최신순) · 보이는 최신 2개(`WORK_VISIBLE_SESSIONS`) · 숨긴 수와 숨긴 unread · 조각 unread 합 · `x / y sessions`(이 컬럼 / 보이는 전체, 한 세션이 두 컬럼에 걸치면 y에서는 1개) · 다른 컬럼 분포(`진행중 1 ↗`, 보드 순서). 컬럼 안 조각 순서는 가장 최근 세션 기준입니다.
+- **`★ N`**: Work 전체의 **최상위 즐겨찾기 카드 수**를 필터와 무관하게(`boardCards`) 셉니다 — Work 완료 sweep이 보드에 남기는 카드 수와 같은 뜻입니다. 세션 헤더 `★ N` / `Show N more · ★ k`는 `summarizeGroupFavorites`.
+
+#### 필터 규칙
+
+- `WORK: All / Unassigned / <활성 Work…>`는 FILTER 팝오버의 한 섹션이지만 **`BoardFilters` 필드가 아닙니다** — `BoardFilters`는 Timeline의 `sessionFilter`도 구동하기 때문입니다. `App`의 별도 state(`BoardWorkFilter`)이고 `BoardScreen`에 prop으로 갑니다.
+- `GROUP: WORKS`에서만 노출·적용됩니다. 다른 모드로 바꾸면 무시될 뿐 지워지지 않고, 돌아오면 다시 적용됩니다. `Reset filters`는 함께 초기화합니다. 선택한 Work가 그사이 닫히면 `All`로 읽힙니다(`resolveWorkFilter`).
+- 적용 순서는 `filterBoardCards → filterCardsByWork → filterUnreadOnly`. 자식 카드는 자기 `sessionId`가 없으면 부모의 Work를 따릅니다. 툴바 `● N UNREAD` 숫자도 같은 WORK 필터를 거친 보드로 셉니다.
+- 필터·unread-only 후 보이는 세션이 하나도 없는 Work는 조각이 생기지 않아 사라집니다.
+- 활성 필터 수(`≡ FILTER (N)`)에 WORK 선택(`All` 제외)도 1개로 셉니다.
+- Work 색은 Timeline의 Work 바와 같은 `--kv2-timeline-work-bar`(= `--kv2-work-border`)입니다. 보드와 Timeline에서 같은 Work가 같은 색으로 보여야 합니다.
+- 저장: `localStorage['kanban-complete-session-view']`에 `card`/`session`/`works`. 옛 boolean 값은 `'true'` → `session`, `'false'` → `card`로 읽힙니다.
+
+#### 렌더 (3/5)
+
+```
+검토 대기 / 완료 컬럼                         대기 / 진행중 컬럼
+┌ 헤더 … [WORK n] [⋯]                         ┌ BoardCard
+│ BoardWorkContainer × 조각 수                 │   … 메타 줄
+│   WORK 탭 · ▾ 제목 · ⋯                       │   [W 제목]  또는  Work 미배정 · 드래그해서 넣기
+│   프로젝트 칩 · x / y sessions · ★ N ··· ● N · #id
+│   진행중 1 ↗ (다른 컬럼에 같은 Work가 있을 때만)
+│   BoardSessionGroupCard × 최신 2개 (헤더만)
+│   ＋ Show N more sessions · ● k unread  /  Show less ▴
+│ UNASSIGNED SESSIONS n ─ ─ ─
+└ BoardCompleteSessionView(groups = unassigned)
+```
+
+- **그리드 뷰 전용**이고, `works`가 로드된 뒤에만 그립니다(`App`은 `works.loading` 동안 `works`를 넘기지 않음) — 그 전과 List 뷰에서는 `session`과 같은 화면입니다.
+- 세션 그룹은 컬럼과 **같은 컴포넌트**(`BoardSessionGroupCard` + `useSessionGroupDisclosure`, `BoardCompleteSessionView.tsx`)입니다. Work 안에서는 기본이 헤더만(`defaultSessionsCollapsed`), 미배정 영역은 컬럼 기본값(검토 대기 펼침 · 완료 접힘)을 따릅니다.
+- **Work 접힘**(▸) = 헤더와 메타 줄만 남습니다(세션 그룹·`Show more` 없음). 접힘/펼침·`Show more`는 컨테이너 로컬 state이며 폴링에 유지됩니다(조각 key = Work id). 처음 목업의 "세션당 상태색 미니 막대"는 사용자 피드백으로 뺐습니다.
+- **`⋯ → 세션 접기` / `세션 펼치기`**(Work `⋯` 메뉴의 첫 항목, ▾/▸ chevron과 같은 동작): 접으면 헤더와 메타 줄만 남습니다. 다시 펼치면 **항상 최신 2개**(`WORK_VISIBLE_SESSIONS`)부터 보이고, 나머지는 `＋ Show N more sessions`를 한 번 더 눌러야 보입니다(접을 때 `Show more` 상태를 초기화). 상태는 Work 조각마다 로컬이며 새로고침하면 펼친 상태로 돌아옵니다. 처음에는 툴바 전역 토글(`Hide sessions`)로 넣었다가 사용자 피드백으로 Work별 메뉴로 옮겼습니다.
+- **헤더에는 제목만**: `● N`과 Work id 칩은 메타 줄 오른쪽 끝(`.kv2-work-meta-end`)에 있습니다. 제목 옆에 있으면 `Agent-kanban UI 개선 점검` 같은 평범한 제목도 `Agent-kanban…`으로 잘렸습니다. 메타 줄은 한 줄을 유지하고(4컬럼 1600px에서도), 좁으면 프로젝트 칩과 id 칩이 먼저 줄어듭니다. `진행중 1 ↗` 칩은 그 아래 별도 줄(`.kv2-work-jumps`)입니다.
+- **제목 클릭** = `WorkDetailDialog`. `⋯`의 `이름 변경` / `다른 Work와 병합…` / `Work 완료…`는 같은 다이얼로그를 `initialIntent`(`rename`/`merge`/`complete`)로 열어 기존 흐름(제목 편집 · 병합 대상 선택 · 완료 확인)을 그대로 씁니다 — 보드에 새 변경 경로는 없습니다.
+- **peer 강조 / 점프**: 조각(`section.kv2-work`)과 Work가 붙은 대기·진행중 카드 래퍼는 `data-work-id` + `data-work-status`를 갖습니다. 제목 hover/focus는 같은 Work 전부에 `.kv2-work-peer`, `진행중 1 ↗`는 그 컬럼의 첫 대상으로 스크롤 + `.kv2-work-flash`(1.2s).
+- **unread 점프**(`u` / `Shift+U`, 컬럼 pill): 순서는 화면과 같게 — 조각들의 세션(숨긴 것 포함) → 미배정 세션(`selectBoardNavOrder`의 `layout.works`). 대상이 접힌 Work나 숨긴 세션 안이면 컨테이너가 펼치고 `Show more`를 연 뒤, 그룹은 disclosure 훅이 엽니다.
+- 컬럼 `⋯ → 모두 숨기기`는 Work 안 세션 그룹에도 적용됩니다.
+
+#### 드래그 & 드롭 (4/5)
+
+| 끌어다 놓는 곳 | 소스가 미배정 | 소스가 Work A 소속 | 되돌리기 |
+|---|---|---|---|
+| 같은 컬럼의 Work B 조각 / 트레이의 Work B | `linkSessionToWork(B)` | `moveSession(→B)` | unlink / A로 다시 move |
+| 같은 컬럼 UNASSIGNED 영역 / 트레이 `⊘ Work에서 빼기` | — (거부) | `unlinkSession(A)` | A에 다시 link |
+| 트레이 `＋ 새 Work` (이름 다이얼로그) | `createWorkFromSession` | `moveSessionToNewWork` | deleteWork / A로 다시 move |
+| 자기 Work, **다른 컬럼**의 조각·UNASSIGNED | — (거부) | — (거부) | — |
+
+- **판단은 순수 함수 하나**: `resolveWorkDrop(source, target)`(`board-works.ts`). `null`이면 그 대상은 `preventDefault`를 하지 않아 브라우저가 드롭을 거부합니다 — 기존 보드 핸들러(대기 컬럼 정렬)는 의미가 그대로입니다. 보드에는 원래 **컬럼 간 상태 변경 DnD가 없으므로** 다른 컬럼에 놓아도 상태·Work 모두 그대로입니다.
+- **소스**: 세션 그룹 헤더(Work 안·미배정 모두)와 대기·진행중 카드. `dataTransfer`에는 기존 `text/plain`(cardId)을 유지하고 `application/x-kanban-session`(`WORK_SESSION_DRAG_MIME`)에 `{ sessionId, workId, status, … }`를 함께 씁니다. `dragover` 중에는 `dataTransfer`를 읽을 수 없으므로 실제 판단은 `BoardWorkDnDContext`(`board-work-dnd.tsx`)의 React state로 합니다.
+- **상태 전환은 한 프레임 뒤**(`requestAnimationFrame`): `dragstart` 안에서 리렌더하면 Chrome이 드래그를 취소합니다. 드롭 강조(`is-drop-over`)는 리렌더 없이 class만 토글합니다.
+- **레이아웃 고정**: 드롭 힌트(`.kv2-work-drop-hint`, `.kv2-works-unassign-hint`)와 강조는 전부 overlay/outline(`position: absolute; pointer-events: none`)입니다. 드래그 중 본문이 밀리면 포인터 아래 요소가 바뀝니다.
+- **트레이**(`BoardWorkDropTray`, 화면 하단 고정): 활성 Work 전부(현재 Work는 `(현재)` 흐리게, 드롭 거부) · `＋ 새 Work` · `⊘ Work에서 빼기`(소속이 있을 때만). 트레이는 컬럼 제약이 없어 **대기·진행중 카드를 Work에 넣는 경로**입니다. `sessionId`가 없는 소스는 항목 대신 `세션이 없는 카드는 Work에 넣을 수 없습니다` 안내만 보입니다.
+- **되돌리기**: 모든 변경 뒤 `WorkSessionNotice`(Works 탭과 같은 컴포넌트, `workAssignNotice.ts` 헬퍼)가 뜨고, 되돌리기는 항상 `useWorks` 변경을 **역으로 한 번 더** 호출합니다(`board-work-actions.ts`의 `applyWorkDropAction`). 원본 Work가 마지막 세션을 잃어 서버가 삭제했으면(`from: null`) 되살리면 새 id·Summary 유실이므로 **되돌리기를 내지 않습니다**(경고 톤 notice).
+- **키보드 대안**: 세션 그룹 헤더와 카드 메타 줄의 `⋯`(`BoardWorkMoveMenu`) → `→ <Work>` / `＋ 새 Work 만들어 넣기…` / `⊘ Work에서 빼기`. 항목은 같은 `resolveWorkDrop`으로 거르고, 메뉴 래퍼가 click/keydown 전파를 막아 헤더의 세션 다이얼로그가 같이 열리지 않습니다(포털 이벤트도 React 트리로 버블링됨).
+- `App`은 `useWorks` 변경을 `BoardWorkMutations`로 묶어 `BoardScreen workMutations`로 내립니다 — fetch는 훅에만 있습니다. `workMutations`가 없거나 WORKS 모드가 아니면 컨텍스트가 `null`이고 드래그 핸들러·`⋯`가 렌더되지 않습니다.
+
+#### 목업 대조 (5/5)
+
+목업 B안과 실제 화면(1600×1000, 라이트·다크)을 나란히 비교한 결과·의도적 차이·테스트 결과는 `docs/reports/works-on-board-implementation.md`에 있습니다. 이 단계에서 바뀐 동작은 하나입니다.
+
+- **Work 안 세션 헤더 row ①**: Work 컨테이너 안은 맨 컬럼보다 좁아서, 줄지 않는 오른쪽 묶음(`● N` · `★ N` · `#id` · `⋯`)에 밀려 프로젝트 칩이 `ag` 두 글자로 줄었습니다. `.kv2-work` 범위에서만 프로젝트 칩에 `min-width: min(9ch, 45%)` 바닥을 주고, 세션 `IdChip`이 먼저 줄어들게(말줄임, 클릭 복사는 그대로) 했습니다 — Work 헤더의 id 칩과 같은 규칙입니다(`kv2/board.css`).
+
 ## API 레퍼런스 (`/api/works*`)
 
 전체 규칙(에러 형식, CORS, 인증)은 [`api-reference.md`](./api-reference.md)와 동일합니다. `workStore`가 서버에 주입되지 않은 환경에서는 모든 엔드포인트가 `503 Works not available`을 반환합니다.

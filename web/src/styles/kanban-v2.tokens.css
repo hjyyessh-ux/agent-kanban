@@ -440,10 +440,49 @@
   --kv2-session-prompt-label: var(--kv2-warn-text);
   --kv2-session-result-label: var(--kv2-cyan-text);
   --kv2-session-result-text: var(--kv2-success-text-strong);
-  --kv2-board-mode-active-bg: var(--kv2-status-in-progress-accent);
-  --kv2-board-mode-active-border: var(--kv2-frame);
-  --kv2-board-session-active-bg: var(--kv2-success-surface-vivid);
-  --kv2-board-session-active-border: var(--kv2-frame);
+  /* Board toolbar — `● N UNREAD` · `≡ FILTER` · LIST|BOARD|TIMELINE · GROUP
+     share one control shell (34px, 2px stroke, 3px hard shadow). Each control
+     keeps its own active hue: unread red (`--kv2-unread-*`), filter blue, view
+     yellow, WORKS = the Work blue. Dark lowers the active face and marks it
+     with a bottom line instead (`-active-line-width` is 0 in light). */
+  --kv2-toolbar-bg: var(--kv2-card-action-bg);
+  --kv2-toolbar-border: var(--kv2-card-action-border);
+  --kv2-toolbar-fg: var(--kv2-card-action-fg);
+  --kv2-toolbar-shadow: 3px 3px 0 var(--kv2-shadow-hard-color);
+  --kv2-toolbar-label-bg: var(--kv2-surface-sunken);
+  --kv2-toolbar-label-fg: var(--kv2-text-muted);
+  --kv2-toolbar-unread-fg: var(--kv2-unread-text);
+  --kv2-toolbar-active-line-width: 0px;
+  --kv2-toolbar-view-active-bg: var(--kv2-status-in-progress-accent);
+  --kv2-toolbar-view-active-fg: var(--kv2-text-primary);
+  --kv2-toolbar-filter-active-bg: var(--kv2-btn-primary-bg);
+  --kv2-toolbar-filter-active-fg: var(--kv2-btn-primary-fg);
+  --kv2-toolbar-works-active-bg: var(--kv2-work-tab-bg);
+  --kv2-toolbar-works-active-fg: var(--kv2-work-tab-fg);
+  /* Work on the board (GROUP: WORKS) — the same steel blue as the Timeline's
+     Work bar, so a Work reads as one thing on both views. A Work container is
+     told apart from a session group by four signals: the `WORK` folder tab,
+     a thick Work-blue border, a blue tint face and a stacked-paper shadow.
+     A session group answers with a neutral-ink `SESSION` tab whose left strip
+     continues the group's status strip (`--kv2-session-tab-*`). */
+  --kv2-work-border: var(--kv2-timeline-work-bar);
+  --kv2-work-fg: var(--kv2-timeline-work-bar-fg);
+  --kv2-work-tint: color-mix(in srgb, var(--kv2-work-border) 7%, var(--kv2-surface));
+  --kv2-work-tint-2: color-mix(in srgb, var(--kv2-work-border) 14%, var(--kv2-surface));
+  --kv2-work-text: var(--kv2-timeline-work-bar);
+  --kv2-work-tab-bg: var(--kv2-work-border);
+  --kv2-work-tab-fg: var(--kv2-work-fg);
+  --kv2-work-stacked-shadow: 4px 4px 0 var(--kv2-app-bg), 4px 4px 0 2px var(--kv2-work-border), 8px 8px 0 2px var(--kv2-shadow-hard-color);
+  --kv2-session-tab-bg: var(--kv2-frame);
+  --kv2-session-tab-fg: var(--kv2-text-inverse);
+  /* `★ N` pills (session header, Work meta) — favorites survive the Work
+     completion sweep. The raw star amber is an icon swatch (2:1 on white),
+     so the label is pulled toward the ink. */
+  --kv2-favorite-pill-fg: color-mix(in srgb, var(--kv2-favorite-icon-active) 42%, var(--kv2-text-primary));
+  --kv2-favorite-pill-bg: color-mix(in srgb, var(--kv2-favorite-icon-active) 12%, var(--kv2-surface));
+  --kv2-favorite-pill-border: color-mix(in srgb, var(--kv2-favorite-icon-active) 60%, transparent);
+  /* Drop hints sit *over* content mid-drag (never in flow); near-opaque surface. */
+  --kv2-work-drop-overlay: color-mix(in srgb, var(--kv2-surface) 94%, transparent);
   --kv2-directory-accent-bg: var(--kv2-info-surface-strong);
   --kv2-directory-toggle-bg: var(--kv2-warn-surface);
   --kv2-directory-icon-fill: var(--kv2-status-in-progress-accent);
@@ -848,10 +887,28 @@
   --kv2-session-prompt-label: #b4a276;
   --kv2-session-result-label: #8da9b4;
   --kv2-session-result-text: #9bb9a6;
-  --kv2-board-mode-active-bg: var(--kv2-control-selected-bg);
-  --kv2-board-mode-active-border: var(--kv2-control-selected-border);
-  --kv2-board-session-active-bg: #35483d;
-  --kv2-board-session-active-border: #5f8f72;
+  /* `--kv2-unread-text` is tuned for the panel surface; the raised toolbar
+     face is lighter, so the idle `● N UNREAD` label leans toward the ink. */
+  --kv2-toolbar-unread-fg: color-mix(in srgb, var(--kv2-unread-text) 80%, var(--kv2-text-primary));
+  --kv2-toolbar-active-line-width: 3px;
+  --kv2-toolbar-view-active-bg: color-mix(in srgb, var(--kv2-status-in-progress-accent) 26%, var(--kv2-surface));
+  --kv2-toolbar-view-active-fg: var(--kv2-text-primary);
+  --kv2-toolbar-filter-active-bg: color-mix(in srgb, var(--kv2-status-todo-accent) 40%, var(--kv2-surface));
+  --kv2-toolbar-filter-active-fg: var(--kv2-text-primary);
+  --kv2-toolbar-works-active-bg: color-mix(in srgb, var(--kv2-work-border) 40%, var(--kv2-surface));
+  --kv2-toolbar-works-active-fg: var(--kv2-text-primary);
+  /* The raw Work blue is a swatch here, not a text colour: pulled toward the
+     ink for text (as the directory `-text` twins are), and the tab face is
+     deepened so its light label still clears AA. */
+  --kv2-work-tint: color-mix(in srgb, var(--kv2-work-border) 11%, var(--kv2-surface));
+  --kv2-work-tint-2: color-mix(in srgb, var(--kv2-work-border) 20%, var(--kv2-surface));
+  --kv2-work-text: color-mix(in srgb, var(--kv2-work-border) 62%, var(--kv2-text-primary));
+  --kv2-work-tab-bg: color-mix(in srgb, var(--kv2-work-border) 72%, var(--kv2-frame));
+  --kv2-session-tab-bg: #3c4146;
+  --kv2-session-tab-fg: var(--kv2-text-primary);
+  --kv2-favorite-pill-fg: var(--kv2-favorite-icon-active);
+  --kv2-favorite-pill-bg: color-mix(in srgb, var(--kv2-favorite-icon-active) 12%, var(--kv2-surface));
+  --kv2-work-drop-overlay: color-mix(in srgb, var(--kv2-surface) 94%, transparent);
   --kv2-directory-accent-bg: #30343a;
   --kv2-directory-toggle-bg: #30343a;
   --kv2-directory-icon-fill: #a3a8ae;

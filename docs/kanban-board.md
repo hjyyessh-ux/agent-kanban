@@ -100,17 +100,17 @@ unread 판정은 `board-selectors.ts`의 `isUnreadCompletion` 하나뿐이다(`c
 ### unread 이동
 
 - `u` → 다음 unread, `Shift+U` → 이전 unread(툴바 화살표 버튼은 없다). 보드 끝에서 처음으로 돌아간다.
-- 순서는 화면 읽기 순서다(`unread-navigation.ts`의 `selectBoardNavOrder`): 컬럼 왼쪽→오른쪽, 세션 묶기 컬럼은 그룹 최신순 → turn 최신순(그룹별 정렬 토글과 무관하게 기본 순서). 리스트 뷰는 리스트 섹션 순서(`done → complete → in_progress → todo`).
+- 순서는 화면 읽기 순서다(`unread-navigation.ts`의 `selectBoardNavOrder`): 컬럼 왼쪽→오른쪽, 세션으로 묶인 컬럼(`GROUP: SESSION`/`WORKS`)은 그룹 최신순 → turn 최신순(그룹별 정렬 토글과 무관하게 기본 순서). 리스트 뷰는 리스트 섹션 순서(`done → complete → in_progress → todo`).
 - 다음 대상은 순수 함수 `nextUnreadTarget(entries, cursor, direction, status?)`가 고른다. 커서는 마지막으로 이동한 카드이고, 그 카드가 그새 읽혀도 위치 기준으로 계속 이어간다.
 - 이동하면 접힌 세션 그룹을 펼치고, 대상이 `Show N more` 뒤에 있으면 그것도 펼친 뒤(리스트 뷰는 접힌 섹션을 펼친 뒤) `scrollIntoView({ block: 'center' })` → 1.2초 focus ring(`.kv2-unread-focus`, `UNREAD_FOCUS_RING_MS`).
 - 단축키는 `KeyboardEvent.code === 'KeyU'`로 판정해 한글 자판에서도 동작한다. 입력 필드(`input`/`textarea`/`select`/contenteditable)에 포커스가 있거나, Ctrl/⌘/Alt를 누르고 있거나, 모달(`aria-modal="true"`)이 열려 있으면 무시한다. 타임라인 뷰에서는 꺼진다.
 
 ### unread만 보기
 
-툴바 `● N unread` 버튼이 곧 토글이다(`aria-pressed`). unread가 0이고 꺼져 있으면 비활성. 이 토글은 `board-filters.ts`의 `filterUnreadOnly`를 `BoardFilters` 다음에 적용한다.
+툴바 `● N UNREAD` 버튼이 곧 토글이다(켜지면 `✓ N UNREAD`)(`aria-pressed`). unread가 0이고 꺼져 있으면 비활성. 이 토글은 `board-filters.ts`의 `filterUnreadOnly`를 `BoardFilters` 다음에 적용한다.
 
 - 일반 컬럼: unread 완료 카드만 남는다. 남은 카드의 자식 카드는 함께 남는다.
-- `세션 묶기`(보드 뷰): unread turn이 하나라도 있는 세션의 complete 카드 전부를 남긴다 — unread 있는 그룹만 보이고, 그룹 안 맥락(읽은 turn)은 유지된다.
+- `GROUP: SESSION`/`WORKS`(보드 뷰): unread turn이 하나라도 있는 세션의 complete 카드 전부를 남긴다 — unread 있는 그룹만 보이고, 그룹 안 맥락(읽은 turn)은 유지된다.
 - **타임라인은 이 토글을 무시한다.** 타임라인은 실행된 작업을 그리는 뷰라 읽음 상태가 없고, 그래서 이 값은 `BoardFilters`(타임라인 `sessionFilter`로도 쓰임)에 넣지 않고 `BoardScreen`에만 전달한다.
 
 ---

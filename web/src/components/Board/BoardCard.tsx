@@ -1,5 +1,5 @@
 import React from 'react';
-import type { KanbanStatus } from '../../../../src/core/types';
+import type { KanbanStatus, Work } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
 import { CardActions, ExecutionTypeBadge, FavoriteToggleButton, NestedChildAccordion, OriginExecutionBadges, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
@@ -7,6 +7,18 @@ import { formatDuration, formatElapsedKo, formatRelativeTime, resolveRunDuration
 import { dirAccentClass } from '../../utils/project-color';
 import { IdChip } from '../shared/IdChip';
 import { useNowTick } from '../../hooks/useNowTick';
+import { BOARD_WORKS_COPY } from '../../constants/copy';
+import { BoardWorkMoveMenu } from './BoardWorkMoveMenu';
+import type { WorkDragSource } from './board-works';
+
+/**
+ * `GROUP: WORKS` footer tag on a todo / in-progress card: the Work its session
+ * belongs to (click → Work detail), or `null` for an unassigned card.
+ */
+export interface BoardCardWorkTag {
+  work: Pick<Work, 'id' | 'title'> | null;
+  onOpen?: (workId: string) => void;
+}
 
 export interface BoardCardProps {
   vm: V2CardViewModel;
@@ -20,6 +32,10 @@ export interface BoardCardProps {
   onUnqueue?: () => void;
   onDelete?: () => void;
   onFavoriteToggle?: () => void;
+  /** Set only in `GROUP: WORKS`; omitted, the card has no Work row at all. */
+  workTag?: BoardCardWorkTag;
+  /** `GROUP: WORKS`: adds `⋯ → Work로 이동` to the meta row. */
+  workMoveSource?: WorkDragSource;
 }
 
 export const STATUS_ACCENT: Record<KanbanStatus, string> = {
@@ -115,6 +131,8 @@ export const BoardCard: React.FC<BoardCardProps> = ({
   onUnqueue,
   onDelete,
   onFavoriteToggle,
+  workTag,
+  workMoveSource,
 }) => {
   const projectName = getDirectoryProjectName(vm.projectDir);
   const cls = [
@@ -211,7 +229,30 @@ export const BoardCard: React.FC<BoardCardProps> = ({
           scriptName={vm.scriptName}
         />
         <BoardCardTimeMeta vm={vm} />
+        {workMoveSource && <BoardWorkMoveMenu source={workMoveSource} />}
       </div>
+
+      {workTag && (
+        <div className="kv2-card-work-row">
+          {workTag.work ? (
+            <button
+              type="button"
+              className="kv2-card-work-tag"
+              title={`${workTag.work.title} — ${BOARD_WORKS_COPY.tagHint}`}
+              disabled={!workTag.onOpen}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (workTag.work) workTag.onOpen?.(workTag.work.id);
+              }}
+            >
+              <span className="kv2-card-work-tag-icon" aria-hidden="true">{BOARD_WORKS_COPY.tagIcon}</span>
+              <span className="kv2-card-work-tag-title">{workTag.work.title}</span>
+            </button>
+          ) : (
+            <span className="kv2-card-work-unassigned">{BOARD_WORKS_COPY.unassignedTag}</span>
+          )}
+        </div>
+      )}
 
       {vm.hasScheduledBadge && (
         <div className="kv2-card-scheduled-row">

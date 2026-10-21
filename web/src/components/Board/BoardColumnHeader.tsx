@@ -1,7 +1,7 @@
 import React from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import { BoardColumnMenu, type BoardColumnMenuItem } from './BoardColumnMenu';
-import { COLUMN_MENU_COPY } from '../../constants/copy';
+import { BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
 
 const WIP_LIMIT = 3;
 
@@ -20,6 +20,8 @@ interface BoardColumnHeaderProps {
   onUnreadJump?: () => void;
   onCompleteAll?: () => void;
   onArchive?: () => void;
+  /** `GROUP: WORKS`: Work fragments drawn in this column (`WORK n`, right side). */
+  workCount?: number;
 }
 
 type ColumnMenuInput = Pick<
@@ -76,6 +78,7 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
   onUnreadJump,
   onCompleteAll,
   onArchive,
+  workCount = 0,
 }) => {
   const isWipOver = status === 'in_progress' && count > WIP_LIMIT;
   const isWipWarning = status === 'in_progress' && count === WIP_LIMIT;
@@ -123,9 +126,12 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
           </span>
         )}
       </div>
-      {menuItems.length > 0 && (
+      {(menuItems.length > 0 || workCount > 0) && (
         <div className="kv2-column-header-right">
-          <BoardColumnMenu columnLabel={label} items={menuItems} />
+          {workCount > 0 && (
+            <span className="kv2-column-work-count">{BOARD_WORKS_COPY.columnWorkCount(workCount)}</span>
+          )}
+          {menuItems.length > 0 && <BoardColumnMenu columnLabel={label} items={menuItems} />}
         </div>
       )}
     </div>

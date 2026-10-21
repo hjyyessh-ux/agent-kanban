@@ -134,6 +134,26 @@ Timeline(Board 탭의 `타임라인` 뷰)은 한 화면에 **디렉토리 · Wor
 
 `Timeline.css`에는 미디어 쿼리가 **하나도 없었습니다** — 390px에서 툴바가 잘렸습니다. 지금은 900px에서 범례가 `margin-left: auto`를 버리고 자기 줄로 내려가고, 480px에서 `--tl-col-min`이 줄고 가로 스크롤 안내(`.tl-mobile-hint`)가 나타납니다.
 
+### 보드 툴바 · Work 컨테이너 · SESSION 탭
+
+목업 `docs/mockups/works-on-board.html`(B안)에서 온 계층 ② 토큰입니다. 라이트·다크 모두 정의되어 있고 글자/면 쌍은 `styles/token-contrast.test.ts`(`Works-on-board and toolbar tokens`)가 AA를 검증합니다.
+
+| 토큰 | 쓰임 | 비고 |
+|------|------|------|
+| `--kv2-toolbar-bg/-border/-fg/-shadow` | 툴바 컨트롤 셸(`.kv2-toolbar-ctl`, `.kv2-toolbar-seg`) | 카드 액션 버튼(`--kv2-card-action-*`)과 같은 면 |
+| `--kv2-toolbar-label-bg/-fg` | 세그먼트 앞 라벨(`GROUP`) | |
+| `--kv2-toolbar-unread-fg` | 꺼진 `● N UNREAD` 글자 | 다크에서는 툴바 면이 패널보다 밝아 `--kv2-unread-text`를 잉크 쪽으로 20% 당김 |
+| `--kv2-toolbar-{view,filter,works}-active-bg/-fg` | 눌린 상태: view·CARD·SESSION 노랑 / FILTER 파랑 / WORKS Work 블루 | 라이트 FILTER는 `--kv2-btn-primary-bg` — 흰 글자에 `--kv2-status-todo-accent`는 3.7:1 |
+| `--kv2-toolbar-active-line-width` | 눌린 상태 하단 강조선 | 라이트 `0px`, 다크 `3px`(면을 낮추는 대신 선으로 표시) |
+| `--kv2-work-border` | Work 컨테이너 테두리 = `--kv2-timeline-work-bar` | Timeline과 **같은 색 = 같은 Work** |
+| `--kv2-work-tint` / `--kv2-work-tint-2` | Work 면 / hover 면 | `-tint-2` 위 글자는 잉크만 (`--kv2-work-text`는 4.2~4.4:1) |
+| `--kv2-work-text` | Work 블루 글자 | 다크는 `color-mix(… 62%, --kv2-text-primary)` |
+| `--kv2-work-tab-bg/-fg` | `WORK` 폴더 탭 등 채운 Work 면 위 글자 | 다크에서 원색 `--kv2-work-border` 위 흰 글자는 3.8:1이라 탭 면을 어둡게 섞음 — 채운 면 글자는 항상 이 쌍 |
+| `--kv2-work-stacked-shadow` | Work 컨테이너의 겹친 종이 그림자 | |
+| `--kv2-session-tab-bg/-fg` | 세션 그룹 위 `SESSION` 탭(`.kv2-session-tab`) | 중립 잉크 면 — 상태색은 왼쪽 띠(`--session-strip`)만 |
+| `--kv2-favorite-pill-fg/-bg/-border` | `★ N` pill(`.kv2-favorite-pill` — 세션 헤더 ①, Work 메타 줄) | 라이트는 별 amber를 잉크 쪽으로 당긴 글자(원색은 흰 면에서 2:1), 다크는 amber 그대로 — AA는 `token-contrast.test.ts` |
+| `--kv2-work-drop-overlay` | Works 드롭 힌트 overlay 면(`.kv2-work-drop-hint`, `.kv2-works-unassign-hint`) | surface 94% — 아래 세션이 비치되 글자는 읽히게. 라이트/다크 둘 다 정의 |
+
 ## 다크 테마 (`:root[data-theme="dark"]`)
 
 다크 모드는 `kanban-v2.tokens.css` 끝의 `:root[data-theme="dark"]` 블록으로 **계층 ②만**
@@ -308,7 +328,8 @@ DialogSkeleton이 제공하는 계약:
 화면에 반복되는 문구는 `constants/copy.ts` 한 곳에 둔다 — 탭, Board 툴바, 카드 액션, 컬럼 라벨·`⋯` 메뉴, Works 상태, Settings/Scheduler의 공용 버튼·확인창.
 
 - **언어**: UI 문구는 한국어. 고유명사·런타임·섹션 이름(`Board`, `Works`, `Wiki`, `Claude`, `Codex`, `Skill`, `Telegram`)과 도메인 용어 `unread`는 영어 그대로.
-  - 예: `Session 모아보기` → `세션 묶기`, `✎ Edit` → `✎ 편집`, `Delete "x"? This cannot be undone.` → `"x" 스케줄을 삭제할까요? 되돌릴 수 없습니다.`
+  - **예외 — Board 툴바 컨트롤 라벨은 영어**: `● N UNREAD` · `≡ FILTER` · `LIST`/`BOARD`/`TIMELINE` · `GROUP: CARD|SESSION|WORKS`. 한 줄짜리 대문자 계기판으로 읽히게 하려는 결정이며, tooltip(`title`)은 한국어를 유지한다. 리터럴은 `TOOLBAR_COPY`에 문장 대소문자로 두고 대문자화는 CSS가 한다.
+  - 예: `✎ Edit` → `✎ 편집`, `Delete "x"? This cannot be undone.` → `"x" 스케줄을 삭제할까요? 되돌릴 수 없습니다.`
 - **대소문자는 CSS 한 곳에서**: 리터럴은 문장 대소문자로 쓰고, 대문자 표기가 필요하면 `text-transform: uppercase`가 담당한다. `'START TASK'`처럼 리터럴과 CSS가 대문자를 이중으로 관리하지 않는다. 한국어에는 영향이 없으므로 한국어 문구에 대문자 전용 class를 새로 만들지 않는다.
   - 예: 탭 리터럴 `'Board'` + `.app-tab { text-transform: uppercase }` → 화면 `BOARD` / 리터럴을 `'BOARD'`로 쓰지 않는다.
 - **상태 이름**: `STATUS_LABELS` — `todo 대기 · in_progress 진행중 · complete 검토 대기 · done 완료`. Board 컬럼, Timeline 범례, Work 완료 미리보기가 같은 단어를 쓴다.

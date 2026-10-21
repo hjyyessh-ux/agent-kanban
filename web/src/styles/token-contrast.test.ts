@@ -309,3 +309,52 @@ describe('--kv2-text-muted meets WCAG AA', () => {
     });
   }
 });
+
+/**
+ * Works on the board (GROUP: WORKS) and the unified board toolbar. Each pair is
+ * a label and the face it prints on. `--kv2-work-tint-2` is a hover face for
+ * ink, not for `--kv2-work-text`, so it is only checked against the ink steps.
+ * The raw `--kv2-work-border` swatch is never a text face in dark (white on
+ * #3d7fd0 is 3.8:1) — filled Work labels sit on `--kv2-work-tab-bg`.
+ */
+const WORK_AND_TOOLBAR_PAIRS: [text: string, face: string][] = [
+  ['--kv2-work-text', '--kv2-surface'],
+  ['--kv2-work-text', '--kv2-work-tint'],
+  ['--kv2-text-primary', '--kv2-work-tint'],
+  ['--kv2-text-primary', '--kv2-work-tint-2'],
+  ['--kv2-text-secondary', '--kv2-work-tint'],
+  ['--kv2-text-secondary', '--kv2-work-tint-2'],
+  ['--kv2-work-tab-fg', '--kv2-work-tab-bg'],
+  ['--kv2-session-tab-fg', '--kv2-session-tab-bg'],
+  ['--kv2-favorite-pill-fg', '--kv2-favorite-pill-bg'],
+  ['--kv2-toolbar-fg', '--kv2-toolbar-bg'],
+  ['--kv2-toolbar-label-fg', '--kv2-toolbar-label-bg'],
+  ['--kv2-toolbar-unread-fg', '--kv2-toolbar-bg'],
+  ['--kv2-unread-fill-fg', '--kv2-unread-indicator'],
+  ['--kv2-toolbar-view-active-fg', '--kv2-toolbar-view-active-bg'],
+  ['--kv2-toolbar-filter-active-fg', '--kv2-toolbar-filter-active-bg'],
+  ['--kv2-toolbar-works-active-fg', '--kv2-toolbar-works-active-bg'],
+];
+
+describe('Works-on-board and toolbar tokens meet WCAG AA', () => {
+  for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {
+    for (const [text, face] of WORK_AND_TOOLBAR_PAIRS) {
+      test(`${text} clears 4.5:1 on ${face} in ${theme.label}`, () => {
+        const ratio = contrastRatio(
+          resolveTokenColor(text, theme.tokens),
+          resolveTokenColor(face, theme.tokens),
+        );
+        expect(ratio, `${text} is ${ratio.toFixed(2)}:1 on ${face}`).toBeGreaterThanOrEqual(AA);
+      });
+    }
+
+    test(`the Work border stands out from the app frame and surface in ${theme.label}`, () => {
+      const border = resolveTokenColor('--kv2-work-border', theme.tokens);
+      for (const surface of ['--kv2-app-bg', '--kv2-surface']) {
+        const ratio = contrastRatio(border, resolveTokenColor(surface, theme.tokens));
+        // 3:1 is the WCAG non-text bar for the container outline.
+        expect(ratio, `Work border is ${ratio.toFixed(2)}:1 on ${surface}`).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+});

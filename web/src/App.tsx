@@ -15,7 +15,8 @@ import { SettingsView } from './components/Settings/SettingsView';
 import { WorksView } from './components/Works/WorksView';
 import { TimelineView } from './components/Works/TimelineView';
 import { BulkAssignModal } from './components/Works/BulkAssignModal';
-import { WorkDetailDialog } from './components/Works/WorkDetailDialog';
+import { WorkDetailDialog, type WorkDetailIntent } from './components/Works/WorkDetailDialog';
+import type { BoardWorkMutations } from './components/Board/board-work-actions';
 import { WorkSessionNotice, type WorkSessionNoticeState } from './components/Works/WorkSessionNotice';
 import type { WorkAssignUndoActions } from './components/Works/workAssignNotice';
 import { ErrorAlert } from './components/shared/ErrorAlert';
@@ -45,6 +46,14 @@ import { createUiAlert } from './hooks/uiAlert';
 import type { BoardFilters } from './components/Board/board-filters';
 import { DEFAULT_BOARD_FILTERS, filterBoardCards } from './components/Board/board-filters';
 import { isTypingTarget, type UnreadNavDirection } from './components/Board/unread-navigation';
+import {
+  DEFAULT_BOARD_WORK_FILTER,
+  filterCardsByWork,
+  indexWorksBySession,
+  resolveWorkFilter,
+  type BoardWorkFilter,
+} from './components/Board/board-works';
+import { BOARD_GROUP_MODE_STORAGE_KEY, parseBoardGroupMode, type BoardGroupMode } from './components/Board/board-group-mode';
 import { fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
 import { useQuickActions } from './hooks/useQuickActions';
 import { CARD_DETAIL_COPY, TOOLBAR_COPY } from './constants/copy';
@@ -78,7 +87,6 @@ function extractFeedbackBase(rawTitle: string | undefined): { base: string; leve
 }
 
 const BOARD_VIEW_MODE_STORAGE_KEY = 'kanban-board-view-mode';
-const COMPLETE_SESSION_VIEW_STORAGE_KEY = 'kanban-complete-session-view';
 
 /**
  * The Board tab's three views, ClickUp-style: 리스트 / 보드 / 타임라인. Timeline
@@ -102,10 +110,17 @@ function getStoredBoardViewMode(): BoardViewMode {
   return 'board';
 }
 
-function getStoredCompleteSessionView(): boolean {
-  if (typeof localStorage === 'undefined') return false;
+/** Toolbar `GROUP:` segment, left to right. */
+const BOARD_GROUP_MODE_OPTIONS: [BoardGroupMode, string, string][] = [
+  ['card', TOOLBAR_COPY.groupCard, TOOLBAR_COPY.groupCardTitle],
+  ['session', TOOLBAR_COPY.groupSession, TOOLBAR_COPY.groupSessionTitle],
+  ['works', TOOLBAR_COPY.groupWorks, TOOLBAR_COPY.groupWorksTitle],
+];
 
-  return localStorage.getItem(COMPLETE_SESSION_VIEW_STORAGE_KEY) === 'true';
+function getStoredBoardGroupMode(): BoardGroupMode {
+  if (typeof localStorage === 'undefined') return 'card';
+
+  return parseBoardGroupMode(localStorage.getItem(BOARD_GROUP_MODE_STORAGE_KEY));
 }
 
 const APP_TITLE = 'Agent Kanban';
@@ -114,8 +129,9 @@ export default function App() {
   const { cards, loading, error, updateCard, deleteCard, refreshCards, archiveCards, completeAllCards, dispatchCard, createCard, queueCard, unqueueCard, scheduleCard, cancelCardSchedule, reorderCards, setResumeSession, clearResumeSession, markCompletionSeen, markCompletionSeenMany, clearError, showError } = useKanbanBoard();
   const [activeTab, setActiveTab] = useState<MainTab>('board');
   const [boardViewMode, setBoardViewMode] = useState<BoardViewMode>(getStoredBoardViewMode);
-  const [groupCompleteSessions, setGroupCompleteSessions] = useState(getStoredCompleteSessionView);
+  const [boardGroupMode, setBoardGroupMode] = useState<BoardGroupMode>(getStoredBoardGroupMode);
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
+  const [boardWorkFilter, setBoardWorkFilter] = useState<BoardWorkFilter>(DEFAULT_BOARD_WORK_FILTER);
   const [showBoardTools, setShowBoardTools] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [unreadJump, setUnreadJump] = useState<UnreadJumpRequest | null>(null);
@@ -126,13 +142,6 @@ export default function App() {
   useEffect(() => {
     document.title = boardUnreadCount > 0 ? `(${boardUnreadCount}) ${APP_TITLE}` : APP_TITLE;
   }, [boardUnreadCount]);
-  // The toolbar `● N unread` counts what the unread-only filter (and `u`) can
-  // actually reach: the board under the current filters (the tab badge above
-  // stays the whole board).
-  const visibleUnreadCount = useMemo(
-    () => countUnread(groupCardsByParent(filterBoardCards(cards, boardFilters))),
-    [cards, boardFilters],
-  );
   const requestUnreadJump = useCallback((direction: UnreadNavDirection) => {
     setUnreadJump((previous) => ({ direction, token: (previous?.token ?? 0) + 1 }));
   }, []);
@@ -160,7 +169,25 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [requestUnreadJump, unreadJumpEnabled]);
-  const works = useWorks(activeTab === 'works' || timelineActive);
+  const worksGroupActive = activeTab === 'board' && boardGroupMode === 'works';
+  // Gated like every other 10s poll: the board only pays for Works while it
+  // groups by them.
+  const works = useWorks(activeTab === 'works' || timelineActive || worksGroupActive);
+  const activeWorks = useMemo(() => works.works.filter((work) => work.status === 'active'), [works.works]);
+  // `WORK:` only exists in GROUP: WORKS; elsewhere it is ignored (not cleared),
+  // and a Work that closed meanwhile reads as `all`.
+  const effectiveWorkFilter = worksGroupActive ? resolveWorkFilter(boardWorkFilter, activeWorks) : 'all';
+  // The toolbar `● N unread` counts what the unread-only filter (and `u`) can
+  // actually reach: the board under the current filters (the tab badge above
+  // stays the whole board).
+  const visibleUnreadCount = useMemo(
+    () => countUnread(groupCardsByParent(filterCardsByWork(
+      filterBoardCards(cards, boardFilters),
+      effectiveWorkFilter,
+      indexWorksBySession(activeWorks),
+    ))),
+    [cards, boardFilters, effectiveWorkFilter, activeWorks],
+  );
   const scripts = useScripts(activeTab === 'capabilities' || activeTab === 'board');
   const quickActions = useQuickActions(activeTab === 'board');
   const skillRoots = useSkillRoots(activeTab === 'capabilities');
@@ -189,6 +216,9 @@ export default function App() {
    */
   const [archivedSessionCards, setArchivedSessionCards] = useState<{ key: string; cards: KanbanCard[] } | null>(null);
   const [openWorkId, setOpenWorkId] = useState<string | null>(null);
+  // The board's Work `⋯` opens the dialog straight into 이름 변경 / 병합 / 완료.
+  // Read by the dialog on mount only; cleared whenever it closes or re-targets.
+  const [openWorkIntent, setOpenWorkIntent] = useState<WorkDetailIntent | undefined>(undefined);
   // Outcome of a Works session action. Owned here because a move that empties
   // the source Work deletes it, which closes the detail dialog that started it.
   const [workSessionNotice, setWorkSessionNotice] = useState<WorkSessionNoticeState | null>(null);
@@ -239,8 +269,8 @@ export default function App() {
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(COMPLETE_SESSION_VIEW_STORAGE_KEY, String(groupCompleteSessions));
-  }, [groupCompleteSessions]);
+    localStorage.setItem(BOARD_GROUP_MODE_STORAGE_KEY, boardGroupMode);
+  }, [boardGroupMode]);
 
   const answerQuestionAndRefresh = async (questionId: string, answers: string[][]) => {
     await replyQuestion(questionId, answers);
@@ -391,6 +421,28 @@ export default function App() {
   const workSessions = useWorkSessions(openWork?.id ?? null, openWork?.updatedAt);
 
   /**
+   * Board `GROUP: WORKS` drag & drop / `⋯ → Work로 이동`. Same `useWorks`
+   * mutations the Work detail dialog's session menu uses; the undo notice
+   * goes through the shared `WorkSessionNotice`.
+   */
+  const boardWorkMutations = useMemo<BoardWorkMutations>(() => ({
+    link: (workId, session) => works.linkSessionToWork(workId, session),
+    move: (sessionId, input) => works.moveSession(sessionId, input),
+    unlink: works.unlinkSession,
+    createWithSession: (session, title) => works.createWorkFromSession(session, title),
+    moveToNewWork: (session, title) => works.moveSessionToNewWork(session, title),
+    deleteWork: works.deleteWork,
+    notify: setWorkSessionNotice,
+  }), [
+    works.linkSessionToWork,
+    works.moveSession,
+    works.unlinkSession,
+    works.createWorkFromSession,
+    works.moveSessionToNewWork,
+    works.deleteWork,
+  ]);
+
+  /**
    * Re-use the board's SessionConversationModal for a session addressed from the
    * Works tab or the Timeline.
    *
@@ -529,7 +581,7 @@ export default function App() {
                   between unread cards stays on the `u` / `Shift+U` keys. */}
               <button
                 type="button"
-                className={`kv2-unread-filter${unreadOnly ? ' is-active' : ''}`}
+                className={`kv2-toolbar-ctl kv2-unread-filter${unreadOnly ? ' is-active' : ''}`}
                 aria-pressed={unreadOnly}
                 aria-live="polite"
                 title={timelineActive
@@ -538,21 +590,27 @@ export default function App() {
                 disabled={!unreadOnly && visibleUnreadCount === 0}
                 onClick={() => setUnreadOnly((previous) => !previous)}
               >
-                {unreadOnly ? '✓' : '●'} {visibleUnreadCount} unread
+                {unreadOnly ? '✓' : '●'} {visibleUnreadCount} {TOOLBAR_COPY.unread}
               </button>
               <BoardFilterBar
                 cards={cards}
                 filters={boardFilters}
                 onFiltersChange={setBoardFilters}
-                onFiltersReset={() => setBoardFilters(DEFAULT_BOARD_FILTERS)}
+                onFiltersReset={() => {
+                  setBoardFilters(DEFAULT_BOARD_FILTERS);
+                  setBoardWorkFilter(DEFAULT_BOARD_WORK_FILTER);
+                }}
+                workFilter={worksGroupActive
+                  ? { works: activeWorks, value: effectiveWorkFilter, onChange: setBoardWorkFilter }
+                  : undefined}
               />
-              <fieldset className="app-board-view-toggle">
-                <legend className="app-board-view-toggle-legend">Board view mode</legend>
+              <fieldset className="kv2-toolbar-seg app-board-view-toggle">
+                <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.viewModeLegend}</legend>
                 {BOARD_VIEW_MODES.map(([viewMode, label]) => (
                   <button
                     key={viewMode}
                     type="button"
-                    className={`app-board-view-toggle-btn${boardViewMode === viewMode ? ' is-active' : ''}`}
+                    className={`kv2-toolbar-seg-btn app-board-view-toggle-btn${boardViewMode === viewMode ? ' is-active' : ''}`}
                     aria-pressed={boardViewMode === viewMode}
                     onClick={() => setBoardViewMode(viewMode)}
                   >
@@ -560,15 +618,26 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              <button
-                type="button"
-                className={`app-board-session-toggle${groupCompleteSessions ? ' is-active' : ''}`}
-                aria-pressed={groupCompleteSessions}
-                title={timelineActive ? TOOLBAR_COPY.groupSessionsTimelineTitle : TOOLBAR_COPY.groupSessionsTitle}
-                onClick={() => setGroupCompleteSessions((previous) => !previous)}
+              <fieldset
+                className="kv2-toolbar-seg app-board-group-toggle"
+                title={timelineActive ? TOOLBAR_COPY.groupTimelineTitle : undefined}
               >
-                {TOOLBAR_COPY.groupSessions}
-              </button>
+                <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.groupLegend}</legend>
+                <span className="kv2-toolbar-seg-label" aria-hidden="true">{TOOLBAR_COPY.groupLabel}</span>
+                {BOARD_GROUP_MODE_OPTIONS.map(([mode, label, title]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    className={`kv2-toolbar-seg-btn${boardGroupMode === mode ? ' is-active' : ''}`}
+                    data-group={mode}
+                    aria-pressed={boardGroupMode === mode}
+                    title={timelineActive ? undefined : title}
+                    onClick={() => setBoardGroupMode(mode)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </fieldset>
             </div>
           )}
           {activeTab === 'board' && !timelineActive && (
@@ -672,7 +741,14 @@ export default function App() {
                 onReorder={(cardIds) => reorderCards(cardIds)}
                 questions={questions}
                 viewMode={boardViewMode === 'list' ? 'list' : 'board'}
-                groupCompleteSessions={groupCompleteSessions}
+                groupMode={boardGroupMode}
+                works={worksGroupActive && !works.loading ? activeWorks : undefined}
+                workMutations={boardWorkMutations}
+                onWorkOpen={(workId, intent) => {
+                  setOpenWorkIntent(intent);
+                  setOpenWorkId(workId);
+                }}
+                workFilter={effectiveWorkFilter}
                 filters={boardFilters}
                 unreadOnly={unreadOnly}
                 onMarkCardsRead={(cardIds) => {
@@ -828,7 +904,11 @@ export default function App() {
           detail={workSessions.detail}
           detailLoading={workSessions.loading}
           detailError={workSessions.error}
-          onClose={() => setOpenWorkId(null)}
+          initialIntent={openWorkIntent}
+          onClose={() => {
+            setOpenWorkId(null);
+            setOpenWorkIntent(undefined);
+          }}
           onComplete={works.completeWork}
           onDiscard={works.discardWork}
           // A reopen lifts the Work's cards out of the archive, so the board
@@ -847,6 +927,7 @@ export default function App() {
           // The source survives as 병합됨, but it is no longer the Work being
           // worked on — so the dialog follows the sessions to the target.
           onMerge={(id, intoWorkId) => works.mergeWork(id, intoWorkId).then((result) => {
+            setOpenWorkIntent(undefined);
             setOpenWorkId(result.to.id);
             setWorkSessionNotice({
               tone: 'success',
