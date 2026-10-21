@@ -29,6 +29,7 @@ Human-facing documentation for agent-kanban, written in Korean. Covers installat
 | Directory | Description |
 |-----------|-------------|
 | `assets/` | Static images embedded in the markdown docs; no AGENTS.md (image-only) |
+| `reports/` | Korean implementation/verification reports (e.g. `works-on-board-implementation.md`); screenshots live under `reports/assets/<topic>/` and are linked relatively |
 
 ## For AI Agents
 

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { TOOLBAR_COPY } from '../web/src/constants/copy';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -241,10 +242,10 @@ test('capture: session 모아보기', async ({ page }) => {
   await page.setViewportSize(BOARD_VIEWPORT);
   await page.goto('/');
   await expect(page.locator('.kv2-board')).toBeVisible();
-  await page.locator('.app-board-session-toggle').click();
+  await page.locator('.app-board-group-toggle [data-group="session"]').click();
   await settle(page);
   await page.screenshot({ path: path.join(OUT_DIR, '02-session-group.png'), fullPage: false });
-  await page.locator('.app-board-session-toggle').click();
+  await page.locator('.app-board-group-toggle [data-group="card"]').click();
 });
 
 test('capture: workspace switcher', async ({ page }) => {
@@ -331,7 +332,7 @@ test('capture: list view', async ({ page }) => {
   await page.setViewportSize(BOARD_VIEWPORT);
   await page.goto('/');
   await expect(page.locator('.kv2-board')).toBeVisible();
-  const listBtn = page.locator('.app-board-view-toggle-btn', { hasText: '리스트' });
+  const listBtn = page.locator('.app-board-view-toggle-btn', { hasText: TOOLBAR_COPY.viewList });
   await listBtn.click();
   await settle(page, 700);
   await page.screenshot({ path: path.join(OUT_DIR, '11-list-view.png'), fullPage: false });

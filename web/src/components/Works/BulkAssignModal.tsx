@@ -9,7 +9,6 @@ import {
   recommendWorksForSession,
   resolveBulkAssignShortcut,
   suggestWorkTitle,
-  shortSessionId,
   formatTimeAgo,
   type BulkAssignTally,
   type WorkRecommendation,
@@ -22,6 +21,8 @@ import {
   type WorkAssignUndoActions,
 } from './workAssignNotice';
 import { WorkAffinityMarks, DirChip } from './WorkAffinityMarks';
+import { IdChip } from '../shared/IdChip';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import './Works.css';
 
 interface BulkAssignModalProps {
@@ -323,9 +324,9 @@ export function BulkAssignModal({
 
         <div className="bulk-assign-session">
           <div className="bulk-assign-session-head">
-            <span className="kv2-badge works-runtime-chip">{session.agentRuntime}</span>
-            <DirChip projectDir={session.projectDir} className="bulk-assign-dir" />
-            <span className="works-mono">{shortSessionId(session.sessionId)}</span>
+            <RuntimeBadge runtime={session.agentRuntime} />
+            <DirChip projectDir={session.projectDir} />
+            <IdChip id={session.sessionId} kind="session" />
             <span className="bulk-assign-session-meta">
               {formatTimeAgo(session.updatedAt)} · 카드 {session.relatedCardCount}
             </span>

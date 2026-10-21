@@ -12,6 +12,7 @@ import {
   apiGetSchedulers,
   apiGetSchedulerHistory,
 } from './helpers/api';
+import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from '../web/src/constants/copy';
 
 const BASE_CLOCK = (() => {
   const date = new Date();
@@ -228,19 +229,20 @@ test.describe('Scheduled dispatch and Scheduler user flows', () => {
     const detailDialog = page.locator('.kv2-dialog').last();
     await expect(detailDialog).toBeVisible();
     await detailDialog.getByRole('button', { name: 'Scheduled Dispatch' }).click();
-    await expect(detailDialog.getByRole('note')).toContainText('Queued cards cannot be scheduled');
+    await expect(detailDialog.getByRole('note')).toContainText(CARD_DETAIL_COPY.scheduleDisabledQueued);
     await page.keyboard.press('Escape');
 
     await openSchedulePanelForCard(page, scheduledTitle);
     await saveSchedulePanel(page, kstScheduleAt(10).input);
     const scheduledBoardCard = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: scheduledTitle });
-    await scheduledBoardCard.getByRole('button', { name: 'Queue', exact: true }).click();
-    await expect(page.getByRole('alert')).toContainText('예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.');
+    await scheduledBoardCard.getByRole('button', { name: CARD_ACTION_COPY.queue, exact: true }).click();
+    await expect(page.getByRole('alert')).toContainText(CARD_DETAIL_COPY.queueDisabledScheduled);
 
     await scheduledBoardCard.click();
     await apiE2ESetClock(baseClockPlus(10));
     await Promise.all([
-      page.getByRole('button', { name: 'START NOW', exact: true }).click(),
+      // The board card shows the same `지금 시작` label — click the dialog's.
+      page.getByRole('dialog').getByRole('button', { name: CARD_ACTION_COPY.startNow, exact: true }).click(),
       apiE2EKickScheduledDispatch(),
     ]);
 

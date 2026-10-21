@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/kanban';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 test.describe('Dispatch', () => {
   test('dispatch with route intercept moves card to in_progress', async ({ page, seedCard }) => {
@@ -19,7 +20,7 @@ test.describe('Dispatch', () => {
     const cardEl = todoColumn.locator('.kv2-card', { hasText: '[E2E] Dispatch Mock' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.getByText('Start').click();
+    await cardEl.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true }).click();
 
     // After dispatch succeeds, the hook calls refreshCards which reloads from server.
     // The card is still 'todo' on server because mock only intercepts the dispatch call.
@@ -45,7 +46,7 @@ test.describe('Dispatch', () => {
     const cardEl = todoColumn.locator('.kv2-card', { hasText: '[E2E] Dispatch Error' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.getByText('Start').click();
+    await cardEl.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true }).click();
 
     // Dispatch will fail with 503 — error banner should appear
     await expect(page.locator('.error-banner')).toBeVisible({ timeout: 5_000 });

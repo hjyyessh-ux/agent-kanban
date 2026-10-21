@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { TOOLBAR_COPY } from '../web/src/constants/copy';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { test, expect } from './fixtures/kanban';
@@ -191,7 +192,7 @@ test('capture: Timeline in both themes', async ({ page, seedCard, trackWork }) =
   await page.setViewportSize(DESKTOP);
   await page.goto('/');
   await setTheme(page, 'light');
-  await page.getByRole('button', { name: '타임라인' }).click();
+  await page.getByRole('button', { name: TOOLBAR_COPY.viewTimeline, exact: true }).click();
   await expect(page.locator('.timeline')).toBeVisible();
   await shot(page, '11-timeline-light');
 
@@ -211,7 +212,7 @@ test('capture: 390px mobile, and nothing overflows sideways', async ({ page, see
   // so the view switch is one tap deeper than on desktop.
   const boardTools = page.getByRole('button', { name: /Board 도구/ });
   if (await boardTools.count() > 0) await boardTools.first().click();
-  await page.getByRole('button', { name: '타임라인' }).click();
+  await page.getByRole('button', { name: TOOLBAR_COPY.viewTimeline, exact: true }).click();
   await expect(page.locator('.timeline')).toBeVisible();
   await shot(page, '13-timeline-mobile-390');
 

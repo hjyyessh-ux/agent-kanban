@@ -97,6 +97,32 @@ soft-delete된 카드 목록을 반환합니다.
 
 soft-delete된 카드의 `deletedAt`을 제거하고 active view로 복구합니다.
 
+### `POST /api/cards/:id/completion-seen`
+
+`complete` 카드의 완료를 "읽음"으로 표시합니다(`completedSeenAt = now`, `completedAt`이 없으면 `updatedAt`으로 채움). `updatedAt`은 바꾸지 않습니다. 없는 카드는 `404`, `complete`가 아니면 `400`.
+
+### `POST /api/cards/completion-seen`
+
+위 단건 route의 일괄 버전입니다. 보드의 complete 컬럼 `⋯ → 모두 읽음`와 세션 대화 모달 열람이 씁니다. 하나의 store lock 안에서 한 번에 기록하고, 모든 카드에 같은 `completedSeenAt`이 찍힙니다.
+
+```json
+{ "ids": ["card-a", "card-b"] }
+```
+
+응답 (`CompletionSeenBatchResponse`):
+
+```json
+{
+  "cards": [{ "id": "card-a", "completedSeenAt": "2026-10-19T03:00:00.000Z", "...": "..." }],
+  "skipped": [{ "id": "card-b", "reason": "not_complete" }]
+}
+```
+
+- 각 id는 독립입니다. 없는 id(`not_found`)나 `complete`가 아닌 id(`not_complete`)는 `skipped`로 보고하고 나머지는 처리합니다 — 보드 폴링 사이에 카드가 옮겨져도 클릭 하나가 통째로 실패하지 않게 하기 위해서입니다.
+- 중복 id는 한 번만 처리합니다. `ids: []`이거나 처리할 카드가 없으면 `200 { cards: [], skipped }`이고 `active.json`을 다시 쓰지 않습니다.
+- `ids`가 문자열 배열이 아니거나(빈 문자열 포함) JSON이 아니면 `400`, `1000`개를 넘으면 `400`.
+- literal 경로라 `/api/cards/:id` catch-all보다 앞에 등록되어 있습니다.
+
 ### `POST /api/cards/:id/dispatch`
 
 `todo` 카드만 디스패치합니다. 성공 시 `{ sessionId, runId, startedAt }`를 반환합니다. feedback card는 원본 세션을 우선 재사용하고, queued card는 `queueSessionMode=continue_queued_after_session`일 때 queued-after 카드 세션 재사용을 시도한 뒤 필요하면 새 세션으로 fallback합니다.

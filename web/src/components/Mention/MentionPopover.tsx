@@ -5,7 +5,8 @@ import type {
   MentionSearchResponse,
 } from '../../../../src/core/mention-search';
 import { RuntimeBadge } from '../Board/BoardCardSections';
-import { dirAccentClass } from '../Works/worksAffinity';
+import { dirAccentClass } from '../../utils/project-color';
+import { IdText } from '../shared/IdChip';
 
 /**
  * `@` 멘션 팝오버 — 탭 4개 · 그룹 리스트 · 스니펫.
@@ -260,7 +261,9 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
                     {disabled && <span className="kv2-mention-row-aside"> (이 카드의 세션)</span>}
                   </span>
                   <span className="kv2-mention-row-meta">
-                    <span className="kv2-mention-row-id">{candidate.id}</span>
+                    {candidate.kind === 'doc'
+                      ? <span className="kv2-mention-row-id">{candidate.id}</span>
+                      : <IdText id={candidate.id} kind={candidate.kind} className="kv2-mention-row-id" />}
                     {candidate.status && (
                       <span
                         className={`kv2-session-status-badge kv2-session-status-badge--${statusModifier(candidate.status)}`}

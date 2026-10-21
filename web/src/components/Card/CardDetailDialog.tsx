@@ -31,9 +31,12 @@ import { FeedbackPanel } from "./FeedbackPanel";
 import { formatAgentTypeLabel } from "../../utils/agent-label";
 import { formatDuration } from "../../utils/format-duration";
 import { getAgentConfig } from "../../constants/agents";
-import { FavoriteToggleButton, formatRuntimeLabel, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
+import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from "../../constants/copy";
+import { primaryActionFor, secondaryActionFor } from "../../constants/card-actions";
+import { FavoriteToggleButton, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
 import { formatScheduledKstLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
+import { IdChip, ResumeCopyButton } from "../shared/IdChip";
 
 const AGENT_ROW_COLORS: Record<string, { border: string; bg: string }> = {
   explore:              { border: "var(--kv2-agent-explore)", bg: "var(--kv2-info-surface-pale)" },
@@ -183,8 +186,6 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean>>(() => getDefaultCollapsedPhases(card));
   const [editingField, setEditingField] = useState<EditingField>(null);
   const [editValue, setEditValue] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [copiedResumeCommand, setCopiedResumeCommand] = useState<string | null>(null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [queueTargetId, setQueueTargetId] = useState("");
   const [queueSessionMode, setQueueSessionMode] = useState<QueueSessionMode>(
@@ -249,8 +250,6 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
     setCollapsedPhases(getDefaultCollapsedPhases(card));
     setEditingField(null);
     setEditValue("");
-    setCopiedId(null);
-    setCopiedResumeCommand(null);
     setQueueTargetId("");
     setQueueSessionMode(card.queueSessionMode ?? DEFAULT_QUEUE_SESSION_MODE);
     setIsSubmittingFeedback(false);
@@ -389,20 +388,6 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
 
   const togglePhase = (phase: string) => {
     setCollapsedPhases((prev) => ({ ...prev, [phase]: !prev[phase] }));
-  };
-
-  const handleCopyId = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(id);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
-  };
-
-  const handleCopyResumeCommand = (e: React.MouseEvent, command: string) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(command);
-    setCopiedResumeCommand(command);
-    setTimeout(() => setCopiedResumeCommand(null), 1500);
   };
 
   const startEditing = useCallback(
@@ -702,51 +687,34 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   })();
 
   const footerPrimaryAction = (() => {
-    if (card.status === "todo" && onDispatch) {
+    const action = primaryActionFor(card.status, { scheduled: activeScheduledReservation, surface: 'detail' });
+    const { target } = action;
+    if (target === 'dispatch') {
+      if (!onDispatch) return null;
       return (
         <button type="button" className="kv2-btn kv2-btn--primary kv2-btn--primary-strong" onClick={handleStartTask}>
-          {activeScheduledReservation ? 'START NOW' : 'START TASK'}
+          {action.label}
         </button>
       );
     }
 
-    if (card.status === "in_progress") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--success kv2-btn--primary-strong" onClick={() => handleStatusAction("complete")}>
-          DONE
-        </button>
-      );
-    }
-
-    if (card.status === "complete") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--success kv2-btn--primary-strong" onClick={() => handleStatusAction("done")}>
-          DONE
-        </button>
-      );
-    }
-
-    if (card.status === "done") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction("todo")}>
-          REOPEN
-        </button>
-      );
-    }
-
-    return null;
+    const tone = action.kind === 'reopen' ? 'kv2-btn--outline' : 'kv2-btn--success';
+    return (
+      <button type="button" className={`kv2-btn ${tone} kv2-btn--primary-strong`} onClick={() => handleStatusAction(target)}>
+        {action.label}
+      </button>
+    );
   })();
 
   const footerSecondaryActions = (() => {
-    if (card.status === "in_progress" || card.status === "complete") {
-      return (
-        <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction("todo")}>
-          REOPEN
-        </button>
-      );
-    }
-
-    return null;
+    const action = secondaryActionFor(card.status);
+    if (!action || action.target === 'dispatch') return null;
+    const { target } = action;
+    return (
+      <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--primary-strong" onClick={() => handleStatusAction(target)}>
+        {action.label}
+      </button>
+    );
   })();
 
   const metaPanel = (
@@ -826,14 +794,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
               originChannel={card.originChannel}
               quickActionId={card.quickActionId}
             />
-            <button
-              type="button"
-              className={`kv2-card-id-meta ${copiedId ? 'kv2-card-id-meta--copied' : ''}`}
-              onClick={(e) => handleCopyId(e, card.id)}
-              title="Click to copy full ID"
-            >
-              🆔 {copiedId ? 'Copied!' : card.id.slice(0, 8)}
-            </button>
+            <IdChip id={card.id} kind="card" showKind className="kv2-card-detail-id" />
             <button
               type="button"
               className="kv2-dialog-close"
@@ -949,7 +910,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 queueModeSummary={queueModeSummary}
                 queueTargetId={queueTargetId}
                 queueSessionMode={queueSessionMode}
-                disabledReason={activeScheduledReservation ? '예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.' : undefined}
+                disabledReason={activeScheduledReservation ? CARD_DETAIL_COPY.queueDisabledScheduled : undefined}
                 onQueueTargetChange={setQueueTargetId}
                 onQueueSessionModeChange={setQueueSessionMode}
                 onQueue={onQueue}
@@ -960,7 +921,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
             {!card.parentCardId && (card.status === 'todo' || card.scheduledDispatch) && (
               <ScheduleSettingsPanel
                 card={card}
-                disabledReason={card.queuedAfterCardId ? 'Queued cards cannot be scheduled. Remove it from the queue first.' : undefined}
+                disabledReason={card.queuedAfterCardId ? CARD_DETAIL_COPY.scheduleDisabledQueued : undefined}
                 onSave={onScheduleSave}
                 onCancelSchedule={onCancelSchedule}
               />
@@ -985,7 +946,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
             <div className="kv2-dialog-actions-rail">
               <div className="kv2-dialog-danger-row">
                 <button type="button" className="kv2-btn kv2-btn--subtle-danger" onClick={handleDeleteCard}>
-                  DELETE
+                  {CARD_ACTION_COPY.delete}
                 </button>
               </div>
 
@@ -997,7 +958,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                     className="kv2-btn kv2-btn--success"
                     onClick={() => handleStatusAction("complete")}
                   >
-                    MARK COMPLETE
+                    {CARD_ACTION_COPY.markComplete}
                   </button>
                 )}
                 {footerPrimaryAction}
@@ -1011,22 +972,16 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 {card.sessionId && (
                   <span style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
                     {card.sessionTitle && <span>💬 {card.sessionTitle}</span>}
-                    {resumeCommand ? (
-                      <button
-                        type="button"
-                        className="kv2-dialog-footer-session-copy"
-                        onClick={(e) => handleCopyResumeCommand(e, resumeCommand)}
-                        title={`Copy ${formatRuntimeLabel(cardRuntime)} resume command: ${resumeCommand}`}
-                        aria-label={`Copy ${formatRuntimeLabel(cardRuntime)} resume command`}
-                      >
-                        <span>🪪 {copiedResumeCommand === resumeCommand ? "Copied resume command" : card.sessionId}</span>
-                      </button>
-                    ) : (
-                      <span>🪪 {card.sessionId}</span>
-                    )}
+                    <span className="kv2-dialog-footer-session-ids">
+                      <IdChip id={card.sessionId} kind="session" showKind />
+                      {resumeCommand && <ResumeCopyButton command={resumeCommand} />}
+                    </span>
                     {card.forkedFromSessionId && (
-                      <span title="이 세션은 Claude Code /fork 로 복제된 세션입니다 (원본 세션 ID)">
-                        🍴 fork from {card.forkedFromSessionId}
+                      <span
+                        className="kv2-dialog-footer-session-ids"
+                        title="이 세션은 Claude Code /fork 로 복제된 세션입니다 (원본 세션 ID)"
+                      >
+                        🍴 fork from <IdChip id={card.forkedFromSessionId} kind="session" />
                       </span>
                     )}
                   </span>

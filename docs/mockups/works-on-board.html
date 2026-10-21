@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Mockup — 메인 보드 Works 묶기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
+<script>
+  // ?theme=dark 로 바로 열기 (스크린샷용)
+  if (new URLSearchParams(location.search).get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+</script>
+<style>
+/* ── 테마 토큰: kanban-v2.tokens.css 의 라이트 / 다크 값을 그대로 옮김 ─────── */
+:root {
+  /* 브랜드 (불변) */
+  --todo: #3b82f6; --prog: #facc15; --complete: #ff3b6b; --done: #22c55e;
+  --d-ak: #dd4b9c; --d-mcp: #787fed; --d-sms: #357718; --d-zadar: #a7361b;
+  --fav-active: #f59e0b;
+  --sans: 'Work Sans', system-ui, sans-serif; --mono: 'Source Code Pro', ui-monospace, monospace;
+
+  /* 시맨틱 — 라이트 */
+  --app-bg: #FFF8E7; --surface: #fff; --sunken: #f8fafc; --hover: #fffdf5;
+  --ink: #1A1A2E; --ink-2: #536074; --ink-3: #627089;
+  --border: #D7DCE6; --frame: #1f2233; --card-border: #1f2233; --hard: #000;
+  --accent-w: 8px; --card-accent-w: 6px;
+  --unread: #dc2626; --unread-fg: #fff; --unread-surface: color-mix(in srgb, #dc2626 8%, #fff);
+  --colh-border: #1f2233; --colh-shadow-x: 4px 4px 0 #000;
+  --colh-todo-bg: var(--todo); --colh-todo-fg: #fff;
+  --colh-prog-bg: var(--prog); --colh-prog-fg: #1A1A2E;
+  --colh-complete-bg: var(--complete); --colh-complete-fg: #fff;
+  --colh-done-bg: var(--done); --colh-done-fg: #1A1A2E;
+  --colh-inset: 0;
+  --rt-claude-bg: #f7d9cd; --rt-codex-bg: #dbe6ff; --rt-border: #1f2233; --rt-fg: #1A1A2E;
+  --btn-bg: #fff; --btn-border: #1f2233; --btn-fg: #1A1A2E; --btn-shadow: 2px 2px 0 #000;
+  --btn-ok-bg: var(--done); --btn-ok-border: #1f2233; --btn-ok-fg: #1A1A2E;
+  --turns-bg: #f8fafc; --prompt-label: #b45309; --result-label: #0e7490;
+  --fav-idle: #6b5342;
+  /* Work = Timeline 의 Work 바 (--kv2-timeline-work-bar) */
+  --work: #2f6cb6; --work-done: #3b8a5c; --work-fg: #f9fafb;
+  --work-text: #2f6cb6;
+  --work-tint: color-mix(in srgb, var(--work) 7%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 14%, var(--surface));
+  --overlay: rgba(255,255,255,.94);
+  --mock-bar-bg: #1f2233; --toast-bg: #1f2233; --toast-fg: #fff;
+  --sess-tab-bg: #1f2233; --sess-tab-fg: #fff;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --app-bg: #1b1d20; --surface: #272a2e; --sunken: #202327; --hover: #30343a;
+  --ink: #d4d7db; --ink-2: #a3a8ae; --ink-3: #979ea6;
+  --border: #34383d; --frame: #454a50; --card-border: #3c4146; --hard: #0d0f10;
+  --accent-w: 3px; --card-accent-w: 4px;
+  --unread: #f26b6b; --unread-fg: #16181b; --unread-surface: color-mix(in srgb, #f26b6b 12%, #272a2e);
+  --colh-border: #3a3f44; --colh-shadow-x: 3px 3px 0 #0d0f10;
+  --colh-todo-bg: color-mix(in srgb, var(--todo) 24%, #25282c); --colh-todo-fg: var(--ink);
+  --colh-prog-bg: color-mix(in srgb, var(--prog) 22%, #25282c); --colh-prog-fg: var(--ink);
+  --colh-complete-bg: color-mix(in srgb, var(--complete) 20%, #25282c); --colh-complete-fg: var(--ink);
+  --colh-done-bg: color-mix(in srgb, var(--done) 20%, #25282c); --colh-done-fg: var(--ink);
+  --colh-inset: 1;
+  --rt-claude-bg: #2d3135; --rt-codex-bg: #2d3135; --rt-border: #484e54; --rt-fg: #c2c6ca;
+  --btn-bg: #2d3135; --btn-border: #4a5056; --btn-fg: #cfd3d7; --btn-shadow: 2px 2px 0 #0d0f10;
+  --btn-ok-bg: #35483d; --btn-ok-border: #5f8f72; --btn-ok-fg: #d4d7db;
+  --turns-bg: #23272b; --prompt-label: #b4a276; --result-label: #8da9b4;
+  --fav-idle: #897a68;
+  --work: #3d7fd0; --work-done: #3f9a6a; --work-fg: #f4f6f8;
+  --work-text: color-mix(in srgb, #3d7fd0 62%, #d4d7db);
+  --work-tint: color-mix(in srgb, var(--work) 11%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 20%, var(--surface));
+  --overlay: rgba(39,42,46,.94);
+  --mock-bar-bg: #0e0e15; --toast-bg: #30343a; --toast-fg: #d4d7db;
+  --sess-tab-bg: #3c4146; --sess-tab-fg: #d4d7db;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--app-bg); color: var(--ink); font: 14px/1.4 var(--sans); transition: background .15s; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ── 앱 헤더 / 툴바 ─────────────────────────────────────────────── */
+.app-head { display: flex; align-items: center; gap: 22px; padding: 14px 32px; white-space: nowrap; flex-wrap: wrap; row-gap: 10px; background: var(--surface); border-bottom: 3px solid var(--frame); }
+:root[data-theme="dark"] .app-head { background: #222428; }
+.brand { font-weight: 800; font-size: 22px; }
+.tabs { display: flex; gap: 20px; font-weight: 700; letter-spacing: .08em; font-size: 13px; color: var(--ink-2); }
+.tabs .on { color: var(--ink); border-bottom: 3px solid var(--todo); padding-bottom: 6px; }
+.toolbar { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 2px solid var(--btn-border); box-shadow: 3px 3px 0 var(--hard); background: var(--btn-bg); }
+.seg button { border: 0; background: transparent; padding: 6px 12px; font-weight: 700; font-size: 12px; color: var(--btn-fg); }
+.seg button + button { border-left: 2px solid var(--btn-border); }
+.seg button.on { background: var(--prog); color: #1A1A2E; }
+.seg-label { font-size: 11px; font-weight: 700; color: var(--ink-2); margin-right: 2px; }
+.tabs .badge { display: inline-block; min-width: 18px; margin-left: 5px; padding: 0 5px; border-radius: 999px; background: var(--unread); color: var(--unread-fg); font: 700 10.5px/18px var(--mono); text-align: center; letter-spacing: 0; }
+
+/* ── 툴바: 모든 컨트롤 같은 높이(34px) · 같은 타이포 · 같은 테두리/그림자 ── */
+.tb-row { display: flex; align-items: center; gap: 10px; position: relative; }
+.tb, .tb-seg { height: 34px; border: 2px solid var(--btn-border); background: var(--btn-bg); box-shadow: 3px 3px 0 var(--hard); }
+.tb, .tb-seg button, .tb-seg .tb-label { font: 700 11.5px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--btn-fg); }
+.tb { display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; white-space: nowrap; }
+.tb-seg { display: inline-flex; align-items: stretch; }
+.tb-seg button { border: 0; background: transparent; padding: 0 12px; white-space: nowrap; }
+.tb-seg button + button, .tb-seg .tb-label + button { border-left: 2px solid var(--btn-border); }
+.tb-seg .tb-label { display: inline-flex; align-items: center; padding: 0 10px; font: 700 10px/1 var(--mono); color: var(--ink-3); background: var(--sunken); }
+.tb .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unread); }
+.tb-unread { color: var(--unread); border-color: var(--unread); }
+.tb-unread.on { background: var(--unread); color: var(--unread-fg); border-color: var(--btn-border); }
+.tb-unread.on .dot { background: var(--unread-fg); }
+.tb-filter.on, .tb-filter.has { background: var(--todo); color: #fff; }
+.tb-seg button.on { background: var(--prog); color: #1A1A2E; }
+.tb-seg button.on[data-group="works"] { background: var(--work); color: var(--work-fg); }
+:root[data-theme="dark"] .tb-seg button.on { background: color-mix(in srgb, var(--prog) 26%, var(--surface)); color: var(--ink); box-shadow: inset 0 -3px 0 var(--prog); }
+:root[data-theme="dark"] .tb-seg button.on[data-group="works"] { background: color-mix(in srgb, var(--work) 40%, var(--surface)); color: var(--ink); box-shadow: inset 0 -3px 0 var(--work); }
+:root[data-theme="dark"] .tb-filter.on, :root[data-theme="dark"] .tb-filter.has { background: color-mix(in srgb, var(--todo) 40%, var(--surface)); color: var(--ink); }
+
+/* Filter 팝오버 (BoardFilterBar 와 같은 자리 · 같은 필드) */
+.filter-pop { position: absolute; top: 44px; left: 110px; z-index: 40; width: 360px; background: var(--surface); border: 2px solid var(--frame); box-shadow: 5px 5px 0 var(--hard); padding: 12px; display: none; }
+.filter-pop.open { display: block; }
+.filter-pop h5 { margin: 0 0 8px; display: flex; justify-content: space-between; font: 800 11px var(--mono); letter-spacing: .08em; color: var(--ink-2); }
+.filter-pop label { display: block; font: 700 10.5px var(--mono); color: var(--ink-3); margin: 8px 0 4px; letter-spacing: .06em; }
+.filter-pop input, .filter-pop select { width: 100%; height: 32px; border: 2px solid var(--btn-border); background: var(--app-bg); color: var(--ink); padding: 0 8px; font: 13px var(--sans); }
+.filter-pop .two { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.filter-pop .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* 프로젝트 바 (BoardProjectSwitcher) */
+.proj-bar { display: flex; gap: 10px; padding: 12px 32px; background: var(--surface); border-bottom: 3px solid var(--frame); }
+:root[data-theme="dark"] .proj-bar { background: #222428; }
+.pbtn { --dc: var(--ink-3); height: 28px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px; border: 2px solid color-mix(in srgb, var(--dc) 70%, var(--frame)); background: color-mix(in srgb, var(--dc) 12%, var(--surface)); color: color-mix(in srgb, var(--dc) 58%, var(--ink)); box-shadow: 2px 2px 0 var(--hard); font: 700 12px var(--sans); }
+.pbtn .c { font: 600 10.5px var(--mono); color: var(--ink-3); }
+.pbtn.all { --dc: var(--ink); }
+.pbtn.all.on { background: var(--ink); color: var(--surface); }
+.pbtn.all.on .c { color: var(--surface); opacity: .75; }
+.pbtn.on:not(.all) { outline: 2px solid var(--dc); outline-offset: 2px; }
+
+.mock-bar { display: flex; gap: 14px; align-items: center; padding: 10px 32px; background: var(--mock-bar-bg); color: #fff; font-size: 12.5px; flex-wrap: wrap; }
+.mock-bar b { color: var(--prog); }
+.mock-bar .seg { box-shadow: none; border-color: #fff; background: transparent; }
+.mock-bar .seg button { color: #fff; }
+.mock-bar .seg button + button { border-left-color: #fff; }
+.mock-bar .seg button.on { background: var(--prog); color: #1A1A2E; }
+.mock-bar .hint { opacity: .8; }
+
+/* ── 보드 ───────────────────────────────────────────────────────── */
+.board { display: grid; grid-template-columns: repeat(4, minmax(290px, 1fr)); gap: 22px; padding: 22px 32px 140px; align-items: start; }
+.col-head { --st: var(--todo); display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 2px solid var(--colh-border); font-weight: 700; font-size: 16px; margin-bottom: 14px;
+  box-shadow: var(--colh-shadow-x); }
+:root[data-theme="dark"] .col-head { box-shadow: inset 0 6px 0 var(--st), var(--colh-shadow-x); padding-top: 16px; }
+.col-head .n { font: 600 11px var(--mono); background: var(--surface); color: var(--ink); border: 2px solid var(--frame); padding: 0 5px; }
+.col-head .u { font: 700 11px var(--mono); background: var(--unread); color: var(--unread-fg); border: 2px solid var(--frame); padding: 0 5px; }
+.col-head .spacer { flex: 1; }
+.col-head .wc { font: 600 10.5px var(--mono); background: var(--work); color: var(--work-fg); border: 2px solid var(--frame); padding: 0 5px; }
+.c-todo .col-head { --st: var(--todo); background: var(--colh-todo-bg); color: var(--colh-todo-fg); }
+.c-in_progress .col-head { --st: var(--prog); background: var(--colh-prog-bg); color: var(--colh-prog-fg); }
+.c-complete .col-head { --st: var(--complete); background: var(--colh-complete-bg); color: var(--colh-complete-fg); }
+.c-done .col-head { --st: var(--done); background: var(--colh-done-bg); color: var(--colh-done-fg); }
+.col-body { display: flex; flex-direction: column; gap: 18px; min-height: 120px; }
+.col-body > .loose-zone.has-sess { padding-top: 20px; }
+.empty-col { text-align: center; padding: 26px 0; border: 2px dashed var(--border); color: var(--ink-3); font: 600 11px var(--mono); }
+
+/* 공통 칩 */
+.chip { display: inline-block; font: 600 10.5px var(--mono); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.pchip { --dc: var(--d-ak); font-weight: 700; color: color-mix(in srgb, var(--dc) 58%, var(--ink)); border: 1px solid color-mix(in srgb, var(--dc) 60%, transparent);
+  background: color-mix(in srgb, var(--dc) 14%, var(--surface)); max-width: 140px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.idchip { color: var(--ink-2); font: 600 11px var(--mono); }
+.runtime { font: 700 9.5px var(--mono); letter-spacing: .04em; border: 1.5px solid var(--rt-border); color: var(--rt-fg); border-radius: 999px; padding: 1px 8px; background: var(--rt-claude-bg); }
+.runtime.codex { background: var(--rt-codex-bg); }
+.unread-pill { font: 700 10.5px var(--mono); background: var(--unread); color: var(--unread-fg); border: 1.5px solid var(--frame); padding: 0 5px; border-radius: 3px; }
+.fav-pill { font: 700 10.5px var(--mono); color: var(--fav-active); border: 1.5px solid color-mix(in srgb, var(--fav-active) 60%, transparent); background: color-mix(in srgb, var(--fav-active) 12%, var(--surface)); padding: 0 5px; border-radius: 3px; }
+.cnt { font: 600 11px var(--mono); color: var(--ink-2); }
+.kb { min-width: 24px; min-height: 24px; border: 0; background: transparent; font-weight: 800; padding: 0 2px; color: var(--ink-2); }
+.kb:hover { background: var(--work-tint-2); }
+
+/* 즐겨찾기 토글 — BoardCardSections 의 FavoriteToggleButton(kv2-favorite-toggle) 그대로 */
+.fav { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 0; padding: 0; background: transparent; color: var(--fav-idle); transition: transform 120ms, opacity 120ms; flex-shrink: 0; }
+.fav--list { width: 20px; height: 20px; }
+.fav:hover { transform: translate(-1px, -1px); opacity: .84; }
+.fav.on { color: var(--fav-active); }
+.fav svg { width: 18px; height: 18px; }
+.fav--list svg { width: 16px; height: 16px; }
+
+/* ── 단일 카드 (대기 / 진행중) — 현재 보드 모양 유지 ─────────────── */
+.card { background: var(--surface); border: 2px solid var(--card-border); border-left-width: var(--card-accent-w); box-shadow: 4px 4px 0 var(--hard); padding: 10px 12px; cursor: grab; }
+.card.st-todo { border-left-color: var(--todo); }
+.card.st-in_progress { border-left-color: var(--prog); }
+:root[data-theme="dark"] .card.st-in_progress { background: color-mix(in srgb, var(--prog) 6%, var(--surface)); }
+.card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.card .top .rt { display: flex; align-items: center; gap: 4px; }
+.card .t { font-weight: 700; font-size: 15px; line-height: 1.3; }
+.card .p { font-size: 12px; color: var(--ink-2); margin: 4px 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 2px dashed var(--border); padding-bottom: 8px; }
+.card .meta { display: flex; gap: 8px; align-items: center; font: 11px var(--mono); color: var(--ink-3); }
+.work-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font: 700 11px var(--sans); color: var(--work-text); border: 1.5px solid var(--work); background: var(--work-tint); padding: 2px 8px 2px 4px; border-radius: 3px; max-width: 100%; cursor: pointer; }
+.wi { background: var(--work); color: var(--work-fg); font: 800 9px var(--mono); padding: 1px 4px; border-radius: 2px; }
+.work-tag span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.no-work-tag { margin-top: 8px; font: 600 11px var(--sans); color: var(--ink-3); border: 1.5px dashed var(--border); padding: 2px 8px; display: inline-block; border-radius: 3px; }
+
+/* ── 세션 그룹 (현재 UI: BoardCompleteSessionView) ─────────────────── */
+.sess { --st-c: var(--complete); position: relative; background: var(--surface); border: 2px solid var(--card-border); border-left-width: var(--accent-w); border-left-color: var(--st-c); box-shadow: 4px 4px 0 var(--hard); }
+/* WORK 탭과 짝이 되는 SESSION 탭 — 중립 잉크 면 + 상태색 왼쪽 띠가 카드 본체와 이어짐 */
+.sess-tab { position: absolute; top: -19px; left: calc(-1 * var(--accent-w)); background: var(--sess-tab-bg); color: var(--sess-tab-fg); font: 800 10px/1 var(--mono); letter-spacing: .12em; padding: 4px 10px 3px; border-left: var(--accent-w) solid var(--st-c); }
+.srow-open .sess-tab { display: none; }
+.sess.st-done { --st-c: var(--done); }
+.sess.unread { --st-c: var(--unread); }
+.sess-head { padding: 9px 12px; cursor: grab; }
+.sess-head .r1 { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.sess-head .r1 .rt { display: flex; gap: 6px; align-items: center; }
+.sess-head .t { font-weight: 700; font-size: 15px; margin: 6px 0; line-height: 1.3; }
+.sess-head .r4 { display: flex; align-items: center; gap: 8px; border-top: 2px dashed var(--border); padding-top: 7px; }
+.sess-head .r4 .resume { margin-left: auto; font: 600 10.5px var(--mono); border: 1px solid var(--border); padding: 1px 6px; color: var(--ink-2); }
+.sess-head .chev-s { font: 700 10.5px var(--mono); color: var(--ink-3); }
+.sess-actions { display: flex; justify-content: space-between; padding: 0 12px 10px; }
+.btn { border: 2px solid var(--btn-border); background: var(--btn-bg); color: var(--btn-fg); box-shadow: var(--btn-shadow); padding: 3px 10px; font-weight: 700; font-size: 12px; }
+.btn.ok { background: var(--btn-ok-bg); border-color: var(--btn-ok-border); color: var(--btn-ok-fg); }
+.turns { border-top: 2px solid var(--card-border); background: var(--turns-bg); padding: 10px 12px 10px 28px; position: relative; }
+.turns::before { content: ''; position: absolute; left: 14px; top: 14px; bottom: 14px; width: 2px; background: var(--frame); }
+.turn { background: var(--surface); border: 1.5px solid var(--border); margin-bottom: 8px; padding: 6px 8px; position: relative; font-size: 12px; }
+.turn::before { content: ''; position: absolute; left: -19px; top: 9px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--frame); background: var(--surface); }
+.turn.latest::before { background: var(--ink); }
+.turn.new { background: var(--unread-surface); border-color: var(--unread); }
+.turn.new::before { border-color: var(--unread); }
+.turn .th { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.turn .th .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn .th .stamp { font: 600 10px var(--mono); color: var(--ink-2); white-space: nowrap; }
+.turn .lb { font: 700 9.5px var(--mono); color: var(--prompt-label); margin-right: 8px; }
+.turn .lb.r { color: var(--result-label); }
+.turn .ln { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.newtag { font: 700 9px var(--mono); color: var(--unread-fg); background: var(--unread); padding: 0 4px; margin-right: 4px; }
+.more-btn { text-align: center; }
+
+/* ── WORK 컨테이너 (신규) ─────────────────────────────────────────
+   세션과 구분되는 4가지 신호:
+   ① 상단 폴더 탭 "WORK"  ② Work 블루 두꺼운 테두리 (세션은 중립 테두리 + 상태색 왼쪽 띠)
+   ③ 푸른 틴트 배경 (세션은 surface)  ④ 겹친 종이 그림자 (= 여러 장을 묶은 것) */
+.work { position: relative; margin-top: 14px; background: var(--work-tint); border: 3px solid var(--work);
+  box-shadow: 4px 4px 0 var(--app-bg), 4px 4px 0 2px var(--work), 8px 8px 0 2px var(--hard); outline: 3px dashed transparent; outline-offset: 4px; }
+.work-tab { position: absolute; top: -17px; left: -3px; background: var(--work); color: var(--work-fg); font: 800 10px var(--mono); letter-spacing: .12em; padding: 2px 10px 1px; border: 3px solid var(--work); border-bottom: 0; }
+.work-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 4px; }
+.work-head .chev { border: 0; background: transparent; font-size: 12px; width: 18px; padding: 0; color: var(--work-text); }
+.work-head .wt { font-weight: 800; font-size: 15px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.work-head .wt:hover { text-decoration: underline; }
+.work-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 8px 36px; font: 11px var(--mono); color: var(--ink-2); }
+.elsewhere { border: 1px dashed var(--work); color: var(--work-text); padding: 0 5px; border-radius: 3px; cursor: pointer; background: var(--surface); font-weight: 600; }
+.elsewhere:hover { background: var(--work); color: var(--work-fg); }
+.work-body { display: flex; flex-direction: column; gap: 8px; padding: 0 8px 8px; }
+.work-body.b { gap: 32px; padding: 26px 12px 12px; }
+.work-body.b .sess { box-shadow: 3px 3px 0 var(--hard); }
+.work-more { border: 0; border-top: 1.5px dashed color-mix(in srgb, var(--work) 45%, transparent); background: transparent; width: 100%; padding: 6px; font: 700 11.5px var(--sans); color: var(--work-text); }
+.work-drop-hint { display: none; position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 10px; text-align: center; border: 2px dashed var(--work); color: var(--work-text); font-weight: 700; font-size: 12px; background: var(--overlay); pointer-events: none; z-index: 2; }
+.work-collapsed-sum { padding: 0 10px 10px 36px; display: flex; gap: 4px; flex-wrap: wrap; }
+.mini { width: 22px; height: 8px; border: 1.5px solid var(--frame); }
+.mini.st-complete { background: var(--complete); } .mini.st-done { background: var(--done); } .mini.st-in_progress { background: var(--prog); } .mini.st-todo { background: var(--todo); }
+.mini.unread { outline: 2px solid var(--unread); outline-offset: 1px; }
+
+/* 안 A: WORK 안의 세션 = 한 줄 행 */
+.srow { display: flex; align-items: center; gap: 7px; background: var(--surface); border: 2px solid var(--card-border); border-left: 6px solid var(--complete); padding: 4px 6px 4px 4px; cursor: pointer; min-height: 36px; }
+.srow.st-done { border-left-color: var(--done); }
+.srow.st-todo { border-left-color: var(--todo); } .srow.st-in_progress { border-left-color: var(--prog); }
+.srow.unread { border-left-color: var(--unread); }
+.srow:hover { background: var(--hover); }
+.srow .grip { cursor: grab; color: var(--ink-3); font-size: 13px; padding: 0 2px; user-select: none; }
+.srow .st { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .tm { font: 600 10.5px var(--mono); color: var(--ink-3); }
+.srow-open { border: 2px solid var(--card-border); background: var(--surface); }
+.srow-open .crumb { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--work); color: var(--work-fg); font: 700 11px var(--sans); cursor: pointer; }
+.srow-open .crumb .x { margin-left: auto; font: 700 10.5px var(--mono); opacity: .9; }
+.srow-open .sess { box-shadow: none; border: 0; border-left: var(--accent-w) solid var(--complete); }
+.srow-open .sess.st-done { border-left-color: var(--done); }
+.srow-open .sess.unread { border-left-color: var(--unread); }
+
+/* 미배정 영역 */
+.loose-head { display: flex; align-items: center; gap: 8px; margin-top: 10px; font: 700 11px var(--mono); color: var(--ink-2); letter-spacing: .05em; }
+.loose-head::after { content: ''; flex: 1; border-top: 2px dashed var(--ink-3); }
+.loose-zone { position: relative; display: flex; flex-direction: column; gap: 32px; min-height: 64px; outline: 3px dashed transparent; outline-offset: 4px; }
+.loose-zone:empty::after { content: 'NO UNASSIGNED SESSIONS'; text-align: center; font: 600 11px var(--mono); color: var(--ink-3); padding: 22px 0; border: 2px dashed var(--border); }
+
+/* ── 드래그 상태 ───────────────────────────────────────────────── */
+body.dragging .work { outline-color: color-mix(in srgb, var(--work) 45%, transparent); }
+body.dragging .work .work-drop-hint { display: block; }
+body.dragging.from-work .loose-zone.unassign-ok { outline-color: var(--ink-3); }
+body.dragging.from-work .loose-zone.unassign-ok::before { content: '여기에 놓으면 Work에서 빼기 (미배정)'; position: absolute; left: 0; right: 0; top: 0; z-index: 2; text-align: center; font: 700 12px var(--sans); color: var(--ink-2); padding: 10px; border: 2px dashed var(--ink-3); background: var(--overlay); pointer-events: none; }
+body.dragging.from-work .loose-zone.unassign-ok:empty::after { visibility: hidden; }
+.drop-over { outline-color: var(--work) !important; outline-style: solid !important; transform: translateY(-2px); }
+.drop-over .work-drop-hint { background: var(--work); color: var(--work-fg); }
+.drop-self { opacity: .55; }
+.is-dragged { opacity: .35; }
+.peer { outline: 3px solid var(--prog) !important; outline-offset: 3px; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { 0%,40% { outline: 4px solid var(--prog); outline-offset: 4px; } 100% { outline-color: transparent; } }
+
+/* 하단 드롭 트레이 */
+.tray { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 160%); transition: transform .18s ease-out; background: var(--surface); border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--hard); padding: 10px 12px; display: flex; gap: 10px; align-items: center; max-width: calc(100vw - 64px); z-index: 50; visibility: hidden; }
+body.dragging .tray { transform: translate(-50%, 0); visibility: visible; }
+.tray .tl { font: 700 11px var(--mono); color: var(--ink-2); white-space: nowrap; }
+.tray-list { display: flex; gap: 8px; overflow-x: auto; }
+.tdrop { border: 2px solid var(--work); background: var(--work-tint); color: var(--ink); padding: 8px 12px; font-weight: 700; font-size: 12.5px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.tdrop.cur { opacity: .45; border-style: dashed; }
+.tdrop.new { border-style: dashed; background: var(--surface); color: var(--work-text); }
+.tdrop.out { border-color: var(--ink-2); background: var(--surface); color: var(--ink-2); border-style: dashed; }
+.tdrop.drop-over { background: var(--work); color: var(--work-fg); transform: translateY(-3px); }
+.tdrop.out.drop-over { background: var(--ink-2); color: var(--surface); }
+
+/* 토스트 + 되돌리기 */
+.toast { position: fixed; right: 24px; bottom: 24px; background: var(--toast-bg); color: var(--toast-fg); padding: 10px 14px; border: 2px solid var(--hard); box-shadow: 4px 4px 0 var(--prog); display: flex; gap: 14px; align-items: center; font-size: 13px; z-index: 60; transform: translateY(160%); transition: transform .2s; max-width: 520px; visibility: hidden; }
+.toast.show { transform: none; visibility: visible; }
+.toast button { background: var(--prog); border: 2px solid #fff; font-weight: 800; padding: 2px 10px; color: #1A1A2E; }
+body.dragging .toast { transform: translateY(160%); }
+
+/* 컨텍스트 메뉴 */
+.menu { position: fixed; background: var(--surface); color: var(--ink); border: 2px solid var(--frame); box-shadow: 4px 4px 0 var(--hard); min-width: 230px; z-index: 70; padding: 4px 0; font-size: 13px; }
+.menu .mh { font: 700 10px var(--mono); color: var(--ink-3); padding: 6px 12px 2px; letter-spacing: .06em; }
+.menu button { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 12px; }
+.menu button:hover { background: var(--work-tint-2); }
+.menu button[disabled] { color: var(--ink-3); cursor: default; background: transparent; }
+
+/* ── 안 C: 스윔레인 ─────────────────────────────────────────────── */
+.lanes { padding: 22px 32px 140px; }
+.lane-grid { display: grid; grid-template-columns: 230px repeat(4, minmax(220px, 1fr)); border: 3px solid var(--frame); background: var(--surface); box-shadow: 6px 6px 0 var(--hard); }
+.lane-grid > .lh { padding: 10px 12px; font-weight: 700; border-bottom: 3px solid var(--frame); border-left: 2px solid var(--frame); }
+.lane-grid > .lh:first-child { border-left: 0; background: var(--sunken); font: 700 11px var(--mono); color: var(--ink-2); }
+.lane-label { padding: 10px 12px; border-top: 2px solid var(--border); background: var(--work-tint); border-left: 6px solid var(--work); }
+.lane-label .lt { font-weight: 800; font-size: 13.5px; margin-left: 4px; }
+.lane-label.loose { background: var(--sunken); border-left-color: var(--ink-3); }
+.lane-cell { padding: 8px; border-top: 2px solid var(--border); border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 6px; min-height: 56px; outline: 3px dashed transparent; outline-offset: -4px; }
+.lane-row-work .lane-cell { background: color-mix(in srgb, var(--work) 3%, var(--surface)); }
+body.dragging .lane-row-work .lane-cell { outline-color: color-mix(in srgb, var(--work) 30%, transparent); }
+
+/* 설계 노트 */
+.notes { margin: 0 32px 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.note { background: var(--surface); border: 2px solid var(--card-border); box-shadow: 4px 4px 0 var(--hard); padding: 12px 14px; font-size: 12.5px; }
+.note h4 { margin: 0 0 6px; font-size: 13px; }
+.note ul { margin: 0; padding-left: 18px; }
+.note li { margin: 2px 0; }
+.note code { font: 600 11px var(--mono); }
+.note.rec { border-color: var(--work); box-shadow: 4px 4px 0 var(--work); }
+</style>
+</head>
+<body>
+
+<header class="app-head">
+  <div class="brand">Agent Kanban</div>
+  <nav class="tabs"><span class="on">BOARD<span class="badge" id="tabBadge"></span></span><span>WORKS<span class="badge">2</span></span><span>WIKI</span><span>CAPABILITIES</span><span>SCHEDULER</span><span>SETTINGS</span></nav>
+  <div class="toolbar tb-row">
+    <button class="tb tb-unread" id="unreadBtn" data-unread aria-pressed="false"><span class="dot"></span><span id="unreadLabel">5 UNREAD</span></button>
+    <button class="tb tb-filter" id="filterBtn" data-filter-open aria-expanded="false">≡ FILTER</button>
+    <div class="filter-pop" id="filterPop" role="dialog" aria-label="Board filters">
+      <h5><span>FILTER</span><button class="kb" data-filter-open>✕</button></h5>
+      <label>SEARCH</label><input id="fq" placeholder="Title, description, progress, result" />
+      <label>CREATED</label><div class="two"><input type="date" /><input type="date" /></div>
+      <label>UPDATED</label><div class="two"><input type="date" /><input type="date" /></div>
+      <label>WORK</label><select id="fwork"><option value="">All</option><option value="__none">Unassigned</option></select>
+      <div class="acts"><button class="btn" data-filter-reset>RESET</button><button class="btn ok" data-filter-open>DONE</button></div>
+    </div>
+    <div class="tb-seg" id="viewSeg" role="group" aria-label="Board view mode">
+      <button data-view="list">LIST</button><button data-view="board" class="on">BOARD</button><button data-view="timeline">TIMELINE</button>
+    </div>
+    <div class="tb-seg" id="groupSeg" role="group" aria-label="Group by">
+      <span class="tb-label">GROUP</span><button data-group="card">CARD</button><button data-group="session">SESSION</button><button data-group="works" class="on">WORKS</button>
+    </div>
+  </div>
+</header>
+<nav class="proj-bar" id="projBar"></nav>
+
+<div class="mock-bar">
+  <span><b>MOCKUP</b> 메인 보드 Works 묶기</span>
+  <span>표현 안:</span>
+  <div class="seg" id="variantSeg">
+    <button data-v="B" class="on">B · LATEST 2 SESSIONS (선택)</button>
+    <button data-v="A">A · SESSION ROWS</button>
+    <button data-v="C">C · SWIMLANE</button>
+  </div>
+  <span>테마:</span>
+  <div class="seg" id="themeSeg">
+    <button data-theme-set="light">Light</button>
+    <button data-theme-set="dark">Dark</button>
+  </div>
+  <span class="hint">UNREAD · FILTER · 프로젝트 바 · GROUP 모두 동작 · 세션을 Work / 하단 트레이 / 같은 컬럼 UNASSIGNED로 드래그</span>
+</div>
+
+<main id="root"></main>
+
+<section class="notes" id="notes"></section>
+
+<div class="tray" id="tray"></div>
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="undoBtn">되돌리기</button></div>
+
+<script>
+// ── 목 데이터 ──────────────────────────────────────────────────────
+const DIRS = { 'agent-kanban': 'var(--d-ak)', 'mcp-server': 'var(--d-mcp)', 'sms': 'var(--d-sms)', 'zadar': 'var(--d-zadar)' };
+let works = [
+  { id: 'W-7f2a', title: 'Agent-kanban UI 개선 점검', dir: 'agent-kanban' },
+  { id: 'W-31cd', title: 'ZEPETOFUL OSS·FC 배포 검증', dir: 'mcp-server' },
+  { id: 'W-9b10', title: 'SMS Whitelist 관리', dir: 'sms' },
+  { id: 'W-c4e8', title: 'OVPN HyperDX 사이드카', dir: 'zadar' },
+];
+let sessions = [
+  { id: 's-0GQQ71', title: 'Session 묶기 보다 한단계 높은 Works 로 묶기 기능', dir: 'agent-kanban', status: 'in_progress', rt: 'claude', work: 'W-7f2a', cards: 1, unread: 0, t: '실행 37초', prompt: '메인 보드에서 Session 묶기가 있는데, 이걸 Works 로 묶기…' },
+  { id: 's-b0933a', title: '● unread 토글 · 세션 헤더 정리', dir: 'agent-kanban', status: 'complete', rt: 'claude', work: 'W-7f2a', cards: 10, unread: 2, t: '18:00' },
+  { id: 's-7e273c', title: 'id chip / 세션 헤더 anatomy 통일', dir: 'agent-kanban', status: 'complete', rt: 'claude', work: 'W-7f2a', cards: 4, unread: 0, t: '17:20' },
+  { id: 's-3af269', title: 'complete 세션 헤더에 프로젝트 칩', dir: 'agent-kanban', status: 'complete', rt: 'codex', work: 'W-7f2a', cards: 3, unread: 0, t: '16:02' },
+  { id: 's-b41cc5', title: 'UI audit — 한국어 카피, 대비 토큰', dir: 'agent-kanban', status: 'complete', rt: 'claude', work: 'W-7f2a', cards: 6, unread: 1, t: '10-20' },
+  { id: 's-e894d3', title: 'opus 5.5 / gpt-6 모델 추가', dir: 'agent-kanban', status: 'done', rt: 'claude', work: 'W-7f2a', cards: 2, unread: 0, t: '10-19' },
+  { id: 's-GMcYDo', title: 'ZEPETOFUL 배포 전 테스트 시나리오', dir: 'mcp-server', status: 'todo', rt: 'claude', work: 'W-31cd', cards: 1, unread: 0, t: '17h ago', prompt: 'https://zepetoful.zepeto.io/spaces/ttn7jks47ozr/asset…' },
+  { id: 's-b9337a', title: 'ZEPETOFUL - OSS & FC 동작 확인 putSy…', dir: 'mcp-server', status: 'complete', rt: 'claude', work: 'W-31cd', cards: 10, unread: 1, t: '17:54' },
+  { id: 's-9lpTXz', title: 'Asset 2018 정리 다음 스텝', dir: 'mcp-server', status: 'complete', rt: 'claude', work: 'W-31cd', cards: 5, unread: 0, t: '15:44' },
+  { id: 's-NoLXQ2', title: 'zetta2-ingestion 을 포함 어드민 페이지', dir: 'mcp-server', status: 'complete', rt: 'codex', work: null, cards: 2, unread: 1, t: '14:10' },
+  { id: 's-SPTdKK', title: 'E2E 테스트 모듈', dir: 'agent-kanban', status: 'complete', rt: 'claude', work: null, cards: 1, unread: 0, t: '11:32' },
+  { id: 's-FnvdAl', title: 'OVPN 전용 HyperDX 연결 — 사이드카(B안) 도입', dir: 'zadar', status: 'todo', rt: 'claude', work: null, cards: 1, unread: 0, t: '2026. 9. 19.', prompt: '계획 문서 docs/plans/12-ovpn-hyperdx-sidecar.md 참고…' },
+  { id: 's-wl01ab', title: 'Whitelist API 정리', dir: 'sms', status: 'done', rt: 'claude', work: 'W-9b10', cards: 6, unread: 0, t: '10-18' },
+  { id: 's-wl02cd', title: 'Whitelist 관리 UI', dir: 'sms', status: 'done', rt: 'codex', work: 'W-9b10', cards: 3, unread: 0, t: '10-17' },
+  { id: 's-ch44ee', title: 'clickhouse 쿼리 튜닝', dir: 'zadar', status: 'done', rt: 'claude', work: null, cards: 4, unread: 0, t: '10-16' },
+];
+// 즐겨찾기: 세션 턴(카드) 단위 = `${sessionId}:${turnNo}` / 단일 카드 = sessionId
+const favs = new Set(['s-b0933a:8', 's-9lpTXz:5', 's-GMcYDo']);
+const COLS = [
+  { key: 'todo', label: '대기' }, { key: 'in_progress', label: '진행중' },
+  { key: 'complete', label: '검토 대기' }, { key: 'done', label: '완료' },
+];
+const GROUPED = new Set(['complete', 'done']);   // 현재도 세션 묶기가 적용되는 컬럼
+const MAX_ROWS = { A: 3, B: 2 };
+const TURNS_SHOWN = 3;
+
+const ui = { unreadOnly: false, q: '', proj: '', fwork: '', filterOpen: false, group: 'works', variant: 'B', open: {}, showAll: {}, collapsed: { 'W-9b10': true }, sessOpen: { 's-b0933a': true, 'in-s-b0933a': true } };
+ui.open['W-7f2a'] = 's-b0933a';
+let undo = null;
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const W = (id) => works.find((w) => w.id === id);
+const S = (id) => sessions.find((s) => s.id === id);
+const pchip = (dir) => `<span class="chip pchip" style="--dc:${DIRS[dir]}">${esc(dir)}</span>`;
+const rtBadge = (rt) => `<span class="runtime ${rt}">${rt === 'codex' ? '◎ CODEX' : '✳ CLAUDE'}</span>`;
+const STAR = (on) => `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.8 14.95 8.76 21.52 9.72 16.76 14.35 17.88 20.88 12 17.79 6.12 20.88 7.24 14.35 2.48 9.72 9.05 8.76 12 2.8Z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+const favBtn = (key, list) => `<button class="fav ${list ? 'fav--list' : ''} ${favs.has(key) ? 'on' : ''}" data-fav="${key}" title="${favs.has(key) ? '즐겨찾기 해제' : '즐겨찾기'}" aria-pressed="${favs.has(key)}">${STAR(favs.has(key))}</button>`;
+// 툴바 / 프로젝트 바 / Filter 를 거친 세션만 보드에 그린다 (BoardScreen: filterBoardCards → filterUnreadOnly)
+const passBase = (s) => (!ui.proj || s.dir === ui.proj)
+  && (!ui.q || s.title.toLowerCase().includes(ui.q.toLowerCase()))
+  && (!ui.fwork || (ui.fwork === '__none' ? !s.work : s.work === ui.fwork));
+const vis = (s) => passBase(s) && (!ui.unreadOnly || s.unread > 0);
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const favCount = (s) => [...favs].filter((k) => k.startsWith(s.id + ':')).length;
+
+// ── 렌더러 ────────────────────────────────────────────────────────
+function turnsHtml(s) {
+  const n = Math.min(s.cards, TURNS_SHOWN);
+  let h = '<div class="turns">';
+  for (let i = 0; i < n; i++) {
+    const no = s.cards - i, isNew = i < s.unread, key = `${s.id}:${no}`;
+    h += `<div class="turn ${i === 0 ? 'latest' : ''} ${isNew ? 'new' : ''}">
+      <div class="th"><span class="tt">${isNew ? '<span class="newtag">NEW</span>' : ''}${no}. Feedback #${no - 1}: ${esc(s.title)}</span><span class="stamp">${i === 0 ? 'LATEST · ' : ''}10-20 1${8 - i}:0${i}</span>${favBtn(key, true)}</div>
+      <div class="ln"><span class="lb">PROMPT</span>2번은 쿼리가 실패해서 allowDiskUse …</div>
+      <div class="ln"><span class="lb r">RESULT</span>## 결론 — 샘플 해석을 마쳤고, 위키 상위 문서도 갱신…</div></div>`;
+  }
+  // 접힌 턴 안의 즐겨찾기도 버튼 라벨에서 드러냄
+  const hiddenFav = [...favs].filter((k) => k.startsWith(s.id + ':') && Number(k.split(':')[1]) <= s.cards - n).length;
+  if (s.cards > n) h += `<div class="more-btn"><span class="btn" style="font-size:11px">Show ${s.cards - n} more${hiddenFav ? ` · ★ ${hiddenFav}` : ''}</span></div>`;
+  return h + '</div>';
+}
+
+// 현재 UI 그대로의 세션 그룹 (B안 / 미배정 세션 / A안 펼친 세션에서 재사용)
+function sessHtml(s, { openKey = s.id } = {}) {
+  const open = !!ui.sessOpen[openKey];
+  const fc = favCount(s);
+  return `<article class="sess st-${s.status} ${s.unread ? 'unread' : ''}" data-sid="${s.id}">
+    <div class="sess-tab">SESSION</div>
+    <div class="sess-head" draggable="true" data-drag="${s.id}" data-toggle-sess="${openKey}" title="클릭: 턴 펼치기/접기 · 드래그: Work로 넣기/옮기기">
+      <div class="r1">${pchip(s.dir)}<span class="rt">${s.unread ? `<span class="unread-pill">● ${s.unread}</span>` : ''}${fc ? `<span class="fav-pill" title="즐겨찾기 카드 ${fc}장 — Work 완료 시 보드에 남음">★ ${fc}</span>` : ''}<span class="idchip">#${s.id.slice(2)}</span><button class="kb" data-menu="${s.id}">⋯</button></span></div>
+      <div class="t">${esc(s.title)}</div>
+      <div class="r4">${rtBadge(s.rt)}<span class="cnt">${s.cards} cards</span><span class="chev-s">${open ? '▴' : '▾'}</span><span class="resume">⏎ resume</span></div>
+    </div>
+    ${open ? `<div class="sess-actions"><span class="btn">HIDE</span><span class="btn ok">✓ 완료</span></div>${turnsHtml(s)}` : ''}
+  </article>`;
+}
+
+function cardHtml(s) {
+  const w = s.work && W(s.work);
+  return `<div class="card st-${s.status}" draggable="true" data-drag="${s.id}" data-sid="${s.id}" ${w ? `data-work="${w.id}"` : ''}>
+    <div class="top">${pchip(s.dir)}<span class="rt">${favBtn(s.id, false)}<span class="idchip">#${s.id.slice(2)}</span></span></div>
+    <div class="t">${esc(s.title)}</div>
+    <div class="p">${esc(s.prompt || '')}</div>
+    <div class="meta">${rtBadge(s.rt)}<span>${esc(s.t)}</span><button class="kb" data-menu="${s.id}" style="margin-left:auto">⋯</button></div>
+    ${ui.group === 'works' ? (w ? `<div class="work-tag" data-work-link="${w.id}" title="Work 상세"><span class="wi">W</span><span>${esc(w.title)}</span></div>` : `<span class="no-work-tag">Work 미배정 · 드래그해서 넣기</span>`) : ''}
+  </div>`;
+}
+
+function srowHtml(s, w) {
+  const key = w.id;
+  if (ui.open[key] === s.id) {
+    return `<div class="srow-open" data-sid="${s.id}">
+      <div class="crumb" data-close-row="${key}"><span>▣ ${esc(w.title)}</span><span>›</span><span>세션</span><span class="x">접기 ▴</span></div>
+      ${sessHtml(s, { openKey: 'in-' + s.id })}
+    </div>`;
+  }
+  const fc = favCount(s);
+  return `<div class="srow st-${s.status} ${s.unread ? 'unread' : ''}" draggable="true" data-drag="${s.id}" data-sid="${s.id}" data-open-row="${key}|${s.id}" title="클릭: 세션 펼치기 · 드래그: 다른 Work로 이동">
+    <span class="grip">⠿</span>
+    <span class="st">${esc(s.title)}</span>
+    ${s.unread ? `<span class="unread-pill">● ${s.unread}</span>` : ''}
+    ${fc ? `<span class="fav-pill">★ ${fc}</span>` : ''}
+    <span class="cnt">${s.cards}</span>
+    <span class="tm">${esc(s.t)}</span>
+    <button class="kb" data-menu="${s.id}">⋯</button>
+  </div>`;
+}
+
+function workHtml(w, colKey) {
+  const all = sessions.filter((s) => s.work === w.id && vis(s));
+  const here = all.filter((s) => s.status === colKey);
+  const elsewhere = COLS.filter((c) => c.key !== colKey)
+    .map((c) => ({ c, n: all.filter((s) => s.status === c.key).length })).filter((x) => x.n);
+  const unread = here.reduce((a, s) => a + s.unread, 0);
+  const fc = all.reduce((a, s) => a + favCount(s) + (favs.has(s.id) ? 1 : 0), 0);
+  const collapsed = !!ui.collapsed[w.id];
+  const showAll = !!ui.showAll[w.id + colKey];
+  const limit = MAX_ROWS[ui.variant] || 3;
+  const visible = showAll ? here : here.slice(0, limit);
+  const hidden = here.length - visible.length;
+  const hiddenUnread = here.slice(visible.length).reduce((a, s) => a + s.unread, 0);
+
+  let body = '';
+  if (collapsed) {
+    body = `<div class="work-collapsed-sum">${here.map((s) => `<span class="mini st-${s.status} ${s.unread ? 'unread' : ''}" title="${esc(s.title)}"></span>`).join('')}</div>`;
+  } else {
+    body = `<div class="work-body ${ui.variant === 'B' ? 'b' : ''}">${visible.map((s) => ui.variant === 'B' ? sessHtml(s) : srowHtml(s, w)).join('')}</div>
+      ${hidden > 0 ? `<button class="work-more" data-show-all="${w.id + colKey}">＋ Show ${hidden} more session${hidden > 1 ? 's' : ''}${hiddenUnread ? ` · ● ${hiddenUnread} unread` : ''}</button>` : ''}
+      ${showAll && here.length > limit ? `<button class="work-more" data-show-all="${w.id + colKey}">Show less ▴</button>` : ''}`;
+  }
+  return `<section class="work" data-drop-work="${w.id}" data-work="${w.id}" data-col="${colKey}">
+    <div class="work-tab">WORK</div>
+    <div class="work-head">
+      <button class="chev" data-collapse="${w.id}">${collapsed ? '▸' : '▾'}</button>
+      <span class="wt" data-hover-work="${w.id}" title="클릭: Work 상세 (WorkDetailDialog)">${esc(w.title)}</span>
+      ${unread ? `<span class="unread-pill">● ${unread}</span>` : ''}
+      <span class="idchip">#${w.id.slice(2)}</span>
+      <button class="kb" data-wmenu="${w.id}">⋯</button>
+    </div>
+    <div class="work-meta">${pchip(w.dir)}<span>${all.length !== here.length ? `${here.length} / ${plural(all.length, 'session')}` : plural(here.length, 'session')}</span>
+      ${fc ? `<span class="fav-pill" title="Work 완료 시에도 보드에 남는 즐겨찾기 카드">★ ${fc}</span>` : ''}
+      ${elsewhere.map((x) => `<span class="elsewhere" data-jump="${w.id}|${x.c.key}" title="다른 컬럼의 같은 Work로 이동">${x.c.label} ${x.n} ↗</span>`).join('')}
+    </div>
+    ${body}
+    <div class="work-drop-hint">여기에 놓아 이 Work에 넣기</div>
+  </section>`;
+}
+
+function columnHtml(c) {
+  const inCol = sessions.filter((s) => s.status === c.key && vis(s));
+  const unread = inCol.reduce((a, s) => a + s.unread, 0);
+  let body = '';
+  const worksMode = ui.group === 'works';
+  if (GROUPED.has(c.key) && ui.group !== 'card') {
+    if (worksMode) {
+      const ws = works.filter((w) => inCol.some((s) => s.work === w.id));
+      const loose = inCol.filter((s) => !s.work);
+      body = ws.map((w) => workHtml(w, c.key)).join('') +
+        `<div class="loose-head">UNASSIGNED SESSIONS ${loose.length}</div>
+         <div class="loose-zone ${loose.length ? 'has-sess' : ''}" data-drop-unassign="1" data-col="${c.key}">${loose.map((s) => sessHtml(s)).join('')}</div>`;
+    } else {
+      body = `<div class="loose-zone has-sess">${inCol.map((s) => sessHtml(s)).join('')}</div>`;
+    }
+  } else {
+    body = `<div class="loose-zone" ${worksMode ? `data-drop-unassign="1" data-col="${c.key}"` : ''}>${inCol.map(cardHtml).join('')}</div>`;
+    if (!inCol.length) body = `<div class="empty-col" ${worksMode ? `data-drop-unassign="1" data-col="${c.key}"` : ''}>${ui.unreadOnly ? 'NO UNREAD' : 'NO CARDS'}</div>`;
+  }
+  const wc = worksMode && GROUPED.has(c.key) ? new Set(inCol.filter((s) => s.work).map((s) => s.work)).size : 0;
+  return `<div class="col c-${c.key}">
+    <div class="col-head">${c.label}<span class="n">${inCol.length}</span>${unread ? `<span class="u">● ${unread}</span>` : ''}<span class="spacer"></span>${wc ? `<span class="wc">WORK ${wc}</span>` : ''}</div>
+    <div class="col-body">${body}</div>
+  </div>`;
+}
+
+function lanesHtml() {
+  const rows = [...works.map((w) => ({ w })), { w: null }];
+  let h = `<div class="lane-grid"><div class="lh">WORK ＼ 상태</div>${COLS.map((c) => `<div class="lh c-${c.key}"><div class="col-head" style="margin:0;box-shadow:none;border:0;padding:0;background:none">${c.label}</div></div>`).join('')}`;
+  for (const { w } of rows) {
+    const mine = sessions.filter((s) => (w ? s.work === w.id : !s.work) && vis(s));
+    h += w
+      ? `<div class="lane-label" data-drop-work="${w.id}"><span class="wi">WORK</span><span class="lt">${esc(w.title)}</span><div class="work-meta" style="padding:4px 0 0">${pchip(w.dir)}<span>${plural(mine.length, 'session')}</span></div></div>`
+      : `<div class="lane-label loose" data-drop-unassign="1"><span class="lt">UNASSIGNED</span><div class="work-meta" style="padding:4px 0 0"><span>${plural(mine.length, 'session')}</span></div></div>`;
+    for (const c of COLS) {
+      const cell = mine.filter((s) => s.status === c.key);
+      const attrs = w ? `data-drop-work="${w.id}"` : 'data-drop-unassign="1"';
+      h += `<div class="lane-cell ${w ? 'lane-row-work' : ''}" ${attrs}>${cell.map((s) => srowHtml(s, w || { id: '__loose', title: '미배정' })).join('')}</div>`;
+    }
+  }
+  return h + '</div>';
+}
+
+const NOTES = {
+  B: [
+    ['선택 · B: Work 안에 최신 2개 세션 카드', true, [
+      'Work 안의 세션은 <b>지금의 세션 카드 그대로</b>(프로젝트 칩 · unread · ★ · id · 런타임 · 카드 수 · resume)',
+      'Work당 최신 2개까지 보이고, 나머지는 <code>＋ 세션 N개 더 · ● k unread</code>로 접힘',
+      '세션 카드를 클릭하면 턴 타임라인이 펼쳐짐 — <b>기본은 헤더만</b> 보여서 3단 중첩이 상시로 생기지 않음',
+      'Work를 접으면(▸) 세션당 상태 색 막대 1칸 → 컬럼 높이 1줄']],
+    ['즐겨찾기 (★)', false, [
+      '턴 헤더 오른쪽 · 단일 카드 id 왼쪽에 기존 <code>FavoriteToggleButton</code> 그대로',
+      '세션 헤더 <code>★ N</code> = 그 세션의 즐겨찾기 카드 수 (접힌 턴 포함, <code>Show N more · ★ k</code>)',
+      'Work 메타 <code>★ N</code> = <b>Work 완료 시에도 보드에 남는 카드 수</b> (완료 sweep이 즐겨찾기를 제외하기 때문)']],
+    ['Work vs 세션 구분 · 드래그', false, [
+      '폴더 탭 <b>WORK</b> + Work 블루 3px 테두리 + 틴트 면 + 겹친 종이 그림자',
+      '세션 카드 헤더를 Work / 하단 트레이로 끌어 넣기·옮기기, <b>같은 컬럼</b> 미배정 영역에 놓아 빼기',
+      '다른 컬럼으로 끄는 건 지금처럼 <b>상태 변경</b> · 모든 이동에 되돌리기 토스트 · <code>⋯ → Work로 이동</code>']],
+  ],
+  A: [
+    ['A · Work › 세션 한 줄', false, [
+      'Work 안의 세션은 한 줄 행(제목 · unread · ★ · 카드 수 · 시각)',
+      '행을 클릭하면 그 자리에서 기존 세션 UI가 펼쳐짐 (Work당 1개)',
+      '단점: 런타임·resume·프로젝트 칩이 행에서 빠져 <b>정보가 부족</b>하게 느껴짐']],
+    ['', false, []], ['', false, []],
+  ],
+  C: [
+    ['C · 스윔레인 (Work = 가로 행)', false, [
+      'Work 하나가 컬럼 전체를 가로지르는 행 → 컬럼 간 분산 문제가 사라짐',
+      '단점: 보드 구조 자체가 바뀌고, 미배정 세션이 맨 아래로 밀림']],
+    ['제안', true, ['C는 메인 보드보다 <b>Works 탭의 “보드 보기”</b>로 두는 편이 자연스러움']],
+    ['', false, []],
+  ],
+};
+
+function render() {
+  document.body.classList.remove('dragging', 'from-work');
+  $('#groupSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.group === ui.group));
+  // UNREAD: 프로젝트/Filter 를 거친 뒤의 unread 수 (App.tsx visibleUnreadCount)
+  const unreadN = sessions.filter(passBase).reduce((a, s) => a + s.unread, 0);
+  const ub = $('#unreadBtn'); ub.classList.toggle('on', ui.unreadOnly); ub.setAttribute('aria-pressed', ui.unreadOnly);
+  ub.firstElementChild.textContent = ''; $('#unreadLabel').textContent = `${ui.unreadOnly ? '✓ ' : ''}${unreadN} UNREAD`;
+  $('#tabBadge').textContent = sessions.reduce((a, s) => a + s.unread, 0);
+  const fActive = !!(ui.q || ui.fwork);
+  $('#filterBtn').classList.toggle('on', ui.filterOpen); $('#filterBtn').classList.toggle('has', fActive);
+  $('#filterBtn').textContent = fActive ? '≡ FILTER · ON' : '≡ FILTER';
+  $('#filterPop').classList.toggle('open', ui.filterOpen);
+  $('#fwork').innerHTML = `<option value="">All</option><option value="__none">Unassigned</option>${works.map((w) => `<option value="${w.id}">${esc(w.title)}</option>`).join('')}`;
+  $('#fwork').value = ui.fwork;
+  const dirs = Object.keys(DIRS).map((d) => ({ d, n: sessions.filter((s) => s.dir === d).length })).sort((a, b) => b.n - a.n);
+  $('#projBar').innerHTML = `<button class="pbtn all ${ui.proj ? '' : 'on'}" data-proj="">All <span class="c">${sessions.length}</span></button>` +
+    dirs.map(({ d, n }) => `<button class="pbtn ${ui.proj === d ? 'on' : ''}" style="--dc:${DIRS[d]}" data-proj="${d}">▣ ${d} <span class="c">${n}</span></button>`).join('');
+  $('#variantSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === ui.variant));
+  $('#themeSeg').querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.themeSet === document.documentElement.dataset.theme));
+  $('#root').innerHTML = ui.group === 'works' && ui.variant === 'C'
+    ? `<div class="lanes">${lanesHtml()}</div>`
+    : `<div class="board">${COLS.map(columnHtml).join('')}</div>`;
+  $('#notes').innerHTML = (NOTES[ui.variant] || []).filter((n) => n[0]).map(([h, rec, items]) =>
+    `<div class="note ${rec ? 'rec' : ''}"><h4>${h}</h4><ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul></div>`).join('');
+}
+
+// ── 이동 + 되돌리기 ────────────────────────────────────────────────
+function moveSession(sid, toWork) {
+  const s = S(sid); if (!s || s.work === toWork) return;
+  const from = s.work; s.work = toWork;
+  undo = { sid, from, createdWork: null };
+  const fromT = from ? `‘${W(from).title}’` : '미배정';
+  const toT = toWork ? `‘${W(toWork).title}’` : '미배정';
+  toast(`세션 ‘${s.title.slice(0, 22)}…’ : ${fromT} → ${toT}`);
+  render();
+  if (toWork) requestAnimationFrame(() => document.querySelectorAll(`[data-work="${toWork}"]`).forEach((el) => el.classList.add('flash')));
+}
+function newWorkFor(sid) {
+  const s = S(sid);
+  const title = prompt('새 Work 이름', s.title.slice(0, 24));
+  if (!title) return;
+  const w = { id: 'W-' + Math.random().toString(16).slice(2, 6), title, dir: s.dir };
+  works.unshift(w);
+  moveSession(sid, w.id);
+  undo.createdWork = w.id;
+}
+let toastTimer;
+function toast(msg, withUndo = true) {
+  $('#toastMsg').textContent = msg;
+  $('#undoBtn').style.display = withUndo ? '' : 'none';
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 6000);
+}
+$('#undoBtn').onclick = () => {
+  if (!undo) return;
+  S(undo.sid).work = undo.from;
+  if (undo.createdWork) works = works.filter((w) => w.id !== undo.createdWork);
+  undo = null; $('#toast').classList.remove('show'); render();
+};
+
+// ── 드래그 & 드롭 (네이티브 HTML5, 보드와 동일한 방식) ────────────────
+let dragSid = null;
+function buildTray(s) {
+  $('#tray').innerHTML = `<span class="tl">Work로 넣기 ▸</span><div class="tray-list">
+    ${works.map((w) => `<div class="tdrop ${s.work === w.id ? 'cur' : ''}" data-drop-work="${w.id}"><span class="wi">W</span>${esc(w.title)}${s.work === w.id ? ' (현재)' : ''}</div>`).join('')}
+    <div class="tdrop new" data-drop-new="1">＋ 새 Work</div>
+    ${s.work ? `<div class="tdrop out" data-drop-unassign="1">⊘ Work에서 빼기</div>` : ''}</div>`;
+}
+document.addEventListener('dragstart', (e) => {
+  const el = e.target.closest('[data-drag]'); if (!el) return;
+  dragSid = el.dataset.drag; const s = S(dragSid);
+  e.dataTransfer.setData('text/plain', dragSid); e.dataTransfer.effectAllowed = 'move';
+  buildTray(s);
+  requestAnimationFrame(() => {
+    document.body.classList.add('dragging'); if (s.work) document.body.classList.add('from-work');
+    (el.closest('.srow, .sess, .card') || el).classList.add('is-dragged');
+    if (s.work) document.querySelectorAll(`.work[data-work="${s.work}"]`).forEach((w) => w.classList.add('drop-self'));
+    // 다른 컬럼으로 끄는 건 기존 보드의 '상태 변경' 의미 → 빼기 존은 같은 컬럼에만
+    document.querySelectorAll(`.loose-zone[data-col="${s.status}"]`).forEach((z) => z.classList.add('unassign-ok'));
+  });
+});
+document.addEventListener('dragend', () => {
+  dragSid = null;
+  document.body.classList.remove('dragging', 'from-work');
+  document.querySelectorAll('.is-dragged, .drop-over, .drop-self, .unassign-ok').forEach((el) => el.classList.remove('is-dragged', 'drop-over', 'drop-self', 'unassign-ok'));
+});
+const dropTarget = (e) => {
+  const t = e.target.closest('[data-drop-work], [data-drop-unassign], [data-drop-new]');
+  if (t && t.dataset.col && t.dataset.col !== S(dragSid)?.status) return null; // 다른 컬럼 = 상태 변경(기존 동작)
+  return t;
+};
+document.addEventListener('dragover', (e) => {
+  if (!dragSid) return;
+  const t = dropTarget(e); if (!t) return;
+  e.preventDefault();
+  document.querySelectorAll('.drop-over').forEach((el) => el !== t && el.classList.remove('drop-over'));
+  t.classList.add('drop-over');
+});
+document.addEventListener('dragleave', (e) => {
+  const t = dropTarget(e); if (t && !t.contains(e.relatedTarget)) t.classList.remove('drop-over');
+});
+document.addEventListener('drop', (e) => {
+  const t = dropTarget(e); if (!t || !dragSid) return;
+  e.preventDefault();
+  const sid = dragSid;
+  if (t.dataset.dropNew) return setTimeout(() => newWorkFor(sid), 0);
+  moveSession(sid, t.dataset.dropUnassign ? null : t.dataset.dropWork);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+
+// ── 클릭 ───────────────────────────────────────────────────────────
+function closeMenu() { document.querySelectorAll('.menu').forEach((m) => m.remove()); }
+function openMenu(x, y, html) {
+  closeMenu();
+  const m = document.createElement('div'); m.className = 'menu'; m.innerHTML = html;
+  document.body.appendChild(m);
+  m.style.left = Math.max(8, Math.min(x, innerWidth - 250)) + 'px'; m.style.top = Math.min(y, innerHeight - m.offsetHeight - 10) + 'px';
+  m.querySelector('button:not([disabled])')?.focus();
+}
+document.addEventListener('click', (e) => {
+  const d = e.target.closest('[data-unread],[data-filter-open],[data-filter-reset],[data-view],[data-proj],[data-fav],[data-theme-set],[data-group],[data-v],[data-menu],[data-wmenu],[data-mv],[data-collapse],[data-show-all],[data-open-row],[data-close-row],[data-toggle-sess],[data-jump],[data-work-link],[data-hover-work]');
+  if (!e.target.closest('.menu') && !e.target.closest('[data-menu],[data-wmenu]')) closeMenu();
+  if (ui.filterOpen && !e.target.closest('#filterPop, #filterBtn')) { ui.filterOpen = false; render(); }
+  if (!d) return;
+  const ds = d.dataset;
+  if (d.hasAttribute('data-unread')) { ui.unreadOnly = !ui.unreadOnly; return render(); }
+  if (d.hasAttribute('data-filter-open')) { ui.filterOpen = !ui.filterOpen; render(); if (ui.filterOpen) $('#fq').focus(); return; }
+  if (d.hasAttribute('data-filter-reset')) { ui.q = ''; ui.fwork = ''; $('#fq').value = ''; return render(); }
+  if (ds.view) { if (ds.view !== 'board') toast(`${ds.view.toUpperCase()} 뷰는 이 목업 범위 밖입니다 — BOARD 만 다룹니다`, false); return; }
+  if (ds.proj !== undefined) { ui.proj = ds.proj; return render(); }
+  if (ds.fav) { e.stopPropagation(); favs.has(ds.fav) ? favs.delete(ds.fav) : favs.add(ds.fav); return render(); }
+  if (ds.themeSet) { document.documentElement.dataset.theme = ds.themeSet; return render(); }
+  if (ds.group) { ui.group = ds.group; return render(); }
+  if (ds.v) { ui.group = 'works'; ui.variant = ds.v; return render(); }
+  if (ds.menu) {
+    e.stopPropagation();
+    const s = S(ds.menu); const r = d.getBoundingClientRect();
+    return openMenu(r.left, r.bottom + 4, `<div class="mh">WORK로 이동</div>
+      ${works.map((w) => `<button data-mv="${s.id}|${w.id}" ${s.work === w.id ? 'disabled' : ''}>▣ ${esc(w.title)}${s.work === w.id ? ' ✓' : ''}</button>`).join('')}
+      <button data-mv="${s.id}|__new">＋ 새 Work 만들어 넣기</button>
+      ${s.work ? `<div class="mh">—</div><button data-mv="${s.id}|__out">⊘ Work에서 빼기</button>` : ''}`);
+  }
+  if (ds.wmenu) {
+    e.stopPropagation(); const r = d.getBoundingClientRect();
+    return openMenu(r.left - 200, r.bottom + 4, `<button>Work 상세 열기</button><button>이름 변경</button><button>다른 Work와 병합…</button><button>Work 완료 (카드 일괄 보관 · ★ 제외)</button>`);
+  }
+  if (ds.mv) {
+    const [sid, to] = ds.mv.split('|'); closeMenu();
+    if (to === '__new') return newWorkFor(sid);
+    return moveSession(sid, to === '__out' ? null : to);
+  }
+  if (ds.collapse) { ui.collapsed[ds.collapse] = !ui.collapsed[ds.collapse]; return render(); }
+  if (ds.showAll) { ui.showAll[ds.showAll] = !ui.showAll[ds.showAll]; return render(); }
+  if (ds.openRow) { if (e.target.closest('.grip')) return; const [wk, sid] = ds.openRow.split('|'); ui.open[wk] = sid; ui.sessOpen['in-' + sid] = true; return render(); }
+  if (ds.closeRow) { ui.open[ds.closeRow] = null; return render(); }
+  if (ds.toggleSess) { ui.sessOpen[ds.toggleSess] = !ui.sessOpen[ds.toggleSess]; return render(); }
+  if (ds.jump) {
+    const [wid, col] = ds.jump.split('|');
+    const el = document.querySelector(`.work[data-work="${wid}"][data-col="${col}"]`) || document.querySelector(`.c-${col} .card[data-work="${wid}"]`);
+    if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
+    return;
+  }
+  if (ds.workLink || ds.hoverWork) toast(`Work 상세 열기 → 기존 WorkDetailDialog (${W(ds.workLink || ds.hoverWork).title})`, false);
+});
+// 같은 Work의 다른 컬럼 조각을 함께 강조
+document.addEventListener('mouseover', (e) => {
+  const h = e.target.closest('[data-hover-work], .work-tag');
+  document.querySelectorAll('.peer').forEach((el) => el.classList.remove('peer'));
+  if (!h || dragSid) return;
+  const wid = h.dataset.hoverWork || h.dataset.workLink;
+  document.querySelectorAll(`[data-work="${wid}"]`).forEach((el) => el.classList.add('peer'));
+});
+
+$('#fq').addEventListener('input', (e) => { ui.q = e.target.value; render(); });
+$('#fwork').addEventListener('change', (e) => { ui.fwork = e.target.value; render(); });
+render();
+</script>
+</body>
+</html>

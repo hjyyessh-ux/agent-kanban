@@ -37,15 +37,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 16px 20px;
   border-bottom: var(--kv2-card-border-width) solid var(--kv2-frame);
   background: var(--kv2-status-in-progress-accent);
 }
 
 .question-banner-title {
+  margin: 0;
   font-family: var(--kv2-font-heading);
   font-weight: 800;
-  font-size: 1rem;
+  font-size: var(--kv2-text-md);
   color: var(--kv2-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -55,14 +57,27 @@
 }
 
 .question-banner-title-icon {
-  font-size: 1.1rem;
+  font-size: var(--kv2-text-lg);
 }
 
 .question-banner-meta {
+  margin-left: auto;
   font-family: var(--kv2-font-mono);
-  font-size: 11px;
+  font-size: var(--kv2-text-caption);
   color: var(--kv2-text-primary);
   opacity: 0.6;
+}
+
+/* ── Minimized state ──────────────────────────────────────────
+   Escape / backdrop click park the question here instead of rejecting it. */
+.question-reopen-pill {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* ── Single question block ────────────────────────────────────── */
@@ -81,7 +96,7 @@
 .question-header-text {
   font-family: var(--kv2-font-heading);
   font-weight: 700;
-  font-size: 0.9375rem;
+  font-size: var(--kv2-text-base);
   color: var(--kv2-text-primary);
   opacity: 0.7;
   margin: 0;
@@ -90,7 +105,7 @@
 .question-text {
   font-family: var(--kv2-font-sans);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: var(--kv2-text-md);
   color: var(--kv2-text-primary);
   margin: 0;
   line-height: 1.4;
@@ -134,7 +149,7 @@
 .question-option-label {
   font-family: var(--kv2-font-heading);
   font-weight: 700;
-  font-size: 0.875rem;
+  font-size: var(--kv2-text-sm);
   color: var(--kv2-text-primary);
 }
 
@@ -144,7 +159,7 @@
 
 .question-option-desc {
   font-family: var(--kv2-font-sans);
-  font-size: 0.8125rem;
+  font-size: var(--kv2-text-xs);
   color: var(--kv2-text-primary);
   opacity: 0.7;
 }
@@ -162,7 +177,7 @@
 .question-custom-label {
   font-family: var(--kv2-font-heading);
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -191,7 +206,7 @@
 /* ── Multiple selection hint ──────────────────────────────────── */
 .question-multi-hint {
   font-family: var(--kv2-font-mono);
-  font-size: 11px;
+  font-size: var(--kv2-text-caption);
   color: var(--kv2-text-primary);
   opacity: 0.45;
   margin-top: calc(-1 * 4px);

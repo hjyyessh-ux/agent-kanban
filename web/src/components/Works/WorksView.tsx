@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type {
   Work,
   WorkListEntry,
@@ -11,12 +11,21 @@ import type {
 } from '../../../../src/core/types';
 import { selectWorks, workProjectDirs } from '../../../../src/core/work-list';
 import { ErrorAlert } from '../shared/ErrorAlert';
+import { IdChip } from '../shared/IdChip';
+import { RuntimeBadge } from '../Board/BoardCardSections';
 import type { UiAlert } from '../../hooks/uiAlert';
 import type { BulkAssignResult, UseWorksResult, WorkResolveOutcome } from '../../hooks/useWorks';
 import { WorkAssignInline } from './WorkAssignInline';
+import { WorksOverflowMenu } from './WorksOverflowMenu';
 import { InboxSuggestions } from './InboxSuggestions';
 import { DirChip } from './WorkAffinityMarks';
 import { chainedWorkIds } from './worksAffinity';
+import {
+  IGNORED_SESSIONS_PAGE_SIZE,
+  filterIgnoredSessions,
+  ignoredSessionTitle,
+  pageIgnoredSessions,
+} from './ignoredSessions';
 import { WorksConfigPanel } from './WorksConfigPanel';
 import {
   noticeForDiscardedSession,
@@ -38,7 +47,6 @@ import {
   projectDirLabel,
   rowIndexAtPointer,
   sessionIdsBetween,
-  shortSessionId,
   DEFAULT_SESSION_ROLE,
   suggestWorkAssignments,
   suggestWorkTitle,
@@ -67,7 +75,7 @@ export interface WorksViewProps {
   /** Create one Work for a whole Inbox selection. */
   onCreateWorkFromSessions: UseWorksResult['createWorkFromSessions'];
   onIgnoreSession: (sessionId: string) => Promise<void>;
-  /** The ignore list behind the Inbox header's "무시한 세션 N개" link. */
+  /** The ignore list behind the Inbox header's "폐기한 세션 N개" menu item. */
   ignoredSessions?: WorkIgnoredSession[];
   /** Take a session off the ignore list — omit to hide the restore list. */
   onRestoreIgnoredSession?: (sessionId: string) => Promise<void>;
@@ -96,6 +104,13 @@ export interface WorksViewProps {
   config?: WorksConfigDto | null;
   /** Persist a works settings update (from the ⚙ panel). */
   onSaveConfig?: (input: WorksConfigInput) => Promise<void>;
+  /**
+   * The 진행 중 timeline strip (`<TimelineView variant="strip">`), rendered
+   * above the Inbox in the 진행 중 section. A slot rather than built here: the
+   * strip needs App-owned callbacks (Work detail, date PATCH + undo notice,
+   * Board timeline switch) this view has no other use for.
+   */
+  timelineStrip?: ReactNode;
 }
 
 /**
@@ -104,12 +119,18 @@ export interface WorksViewProps {
  */
 const DRAG_SELECT_THRESHOLD_PX = 4;
 
+/**
+ * What on an Inbox row keeps its own clicks and keys instead of opening the
+ * conversation / toggling the selection / starting a drag. The assign popup is
+ * named explicitly: it is portalled out of the row's DOM, but React still
+ * bubbles its events through the row, and its options are not buttons.
+ */
+const ROW_CONTROL_SELECTOR = 'button, a, input, select, textarea, .works-assign-inline, .works-assign-popup, .works-overflow-popover';
+
 /** One Inbox row + its inline assignment panel when expanded. */
 function InboxRow({
   session,
   works,
-  expanded,
-  onToggle,
   selectionMode,
   selected,
   onToggleSelect,
@@ -124,8 +145,6 @@ function InboxRow({
 }: {
   session: WorkInboxSession;
   works: WorkListEntry[];
-  expanded: boolean;
-  onToggle: () => void;
   /** Checkboxes are only rendered once a selection exists (or was requested). */
   selectionMode: boolean;
   selected: boolean;
@@ -165,6 +184,10 @@ function InboxRow({
     [session, works, chained, preferSameDir],
   );
   const newWorkTitle = useMemo(() => suggestWorkTitle(session), [session]);
+  // The combobox's popup lists the same Works, ranked, right over the
+  // suggestions — two places offering one choice is the confusion the header's
+  // old 모두 배정하기 caused, so the suggestions step aside while it is open.
+  const [assigning, setAssigning] = useState(false);
   const chainMark = !suggestSessionChain
     ? null
     : chainedCount > 0
@@ -187,14 +210,14 @@ function InboxRow({
   // Assignment controls keep their own actions; the remaining row opens the
   // conversation, or toggles this session while selecting a batch.
   const handleRowClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+    if ((event.target as HTMLElement).closest(ROW_CONTROL_SELECTOR)) return;
     activateRow();
   };
 
   // Enter and Space mirror a click. The checkbox keeps its own Space.
   const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+    if ((event.target as HTMLElement).closest(ROW_CONTROL_SELECTOR)) return;
     event.preventDefault();
     activateRow();
   };
@@ -235,9 +258,9 @@ function InboxRow({
                 {chainMark.label}
               </span>
             )}
-            <span className="kv2-badge works-runtime-chip">{session.agentRuntime}</span>
+            <RuntimeBadge runtime={session.agentRuntime} />
             <DirChip projectDir={session.projectDir} />
-            <span className="works-mono">{shortSessionId(session.sessionId)}</span>
+            <IdChip id={session.sessionId} kind="session" />
             <span>
               카드 {session.relatedCardCount} · {formatTimeAgo(session.updatedAt)}
               {isOld && <b className="works-warn"> ⚠ 오래됨</b>}
@@ -251,11 +274,34 @@ function InboxRow({
               ⚠ 배정 실패 — {assignFailure}
             </div>
           )}
-          {/* Hidden while selecting (the row is a toggle then) and while the
-              panel is open (the panel lists the same Works, ranked, right
-              below — two places offering the same choice is the confusion the
-              header's 모두 배정하기 already caused). */}
-          {!selectionMode && !expanded && (
+          {/* `[🔍 combobox ▾][배정][⋯]` — the whole assignment on one line, no
+              panel to open first. Hidden while selecting: the row *is* a toggle
+              then, per-row controls invited the wrong click and put button
+              surface in the way of the range drag, and the sticky selection
+              bar owns the batch's own combobox. The project chip stays in the
+              meta line above; the combobox does not repeat it. */}
+          {!selectionMode && (
+            <WorkAssignInline
+              session={session}
+              works={works}
+              chained={chained}
+              preferSameDir={preferSameDir}
+              onOpenChange={setAssigning}
+              onCreateWork={async (workTitle, role) => {
+                await onCreateWorkFromSession(session, workTitle, role);
+              }}
+              onLinkToWork={async (workId, role) => {
+                await onLinkSessionToWork(workId, session, role);
+              }}
+              secondary={{
+                label: '폐기',
+                run: async () => {
+                  await onIgnoreSession(session.sessionId);
+                },
+              }}
+            />
+          )}
+          {!selectionMode && !assigning && (
             <InboxSuggestions
               suggestions={suggestions}
               newWorkTitle={newWorkTitle}
@@ -268,62 +314,13 @@ function InboxRow({
             />
           )}
         </div>
-        {/* Hidden while selecting: in selection mode the row *is* a toggle, and
-            per-row actions next to it both invited the wrong click and
-            put button surface in the way of the range drag. The batch panel
-            below the list owns the actions for a selection. */}
-        {!selectionMode && (
-          <div className="works-inbox-actions">
-            <button
-              type="button"
-              className={`kv2-btn kv2-btn--small${expanded ? '' : ' kv2-btn--primary'}`}
-              aria-expanded={expanded}
-              onClick={onToggle}
-            >
-              {expanded ? '접기 ▲' : '배정'}
-            </button>
-            {!expanded && (
-              <button
-                type="button"
-                className="kv2-btn kv2-btn--small kv2-btn--subtle-danger"
-                // The hook reports the failure through the shared Works error
-                // alert and rethrows; swallowing here keeps a failed 폐기 from
-                // becoming an unhandled rejection.
-                onClick={() => { void onIgnoreSession(session.sessionId).catch(() => {}); }}
-              >
-                폐기
-              </button>
-            )}
-          </div>
-        )}
       </div>
-      {expanded && !selectionMode && (
-        <WorkAssignInline
-          session={session}
-          works={works}
-          chained={chained}
-          preferSameDir={preferSameDir}
-          onCancel={onToggle}
-          onCreateWork={async (title, role) => {
-            await onCreateWorkFromSession(session, title, role);
-          }}
-          onLinkToWork={async (workId, role) => {
-            await onLinkSessionToWork(workId, session, role);
-          }}
-          secondary={{
-            label: '이 세션 무시 (Work 없이 보관)',
-            run: async () => {
-              await onIgnoreSession(session.sessionId);
-            },
-          }}
-        />
-      )}
     </div>
   );
 }
 
 /**
- * The restore list behind the Inbox header's `🗑 무시한 세션 N개`.
+ * The restore list behind the Inbox header's `⋯ → 🗑 폐기한 세션 N개`.
  *
  * 폐기 is one click on an Inbox row and one keystroke in the assign-all modal,
  * and until this list existed it was also permanent: `ignoredSessionIds` was
@@ -343,6 +340,17 @@ function IgnoredSessionsPanel({
   onRestore: (sessionId: string) => Promise<void>;
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [limit, setLimit] = useState(IGNORED_SESSIONS_PAGE_SIZE);
+
+  const matched = useMemo(() => filterIgnoredSessions(sessions, query), [sessions, query]);
+  const { visible, remaining } = pageIgnoredSessions(matched, limit);
+
+  const changeQuery = (next: string) => {
+    setQuery(next);
+    // A new search starts from the first page again.
+    setLimit(IGNORED_SESSIONS_PAGE_SIZE);
+  };
 
   const restore = (sessionId: string) => {
     setBusyId(sessionId);
@@ -360,50 +368,77 @@ function IgnoredSessionsPanel({
         폐기한 세션입니다. 복원하면 다시 Inbox에서 배정할 수 있습니다.
       </div>
       {sessions.length === 0 ? (
-        <p className="works-empty">무시한 세션이 없습니다.</p>
+        <p className="works-empty">폐기한 세션이 없습니다.</p>
       ) : (
-        <ul className="works-ignored-list">
-          {sessions.map((entry) => {
-            const summary = entry.session;
-            const title = summary?.sessionTitle?.trim()
-              || summary?.cardTitle
-              || shortSessionId(entry.sessionId);
-            return (
-              <li key={entry.sessionId} className="works-ignored-row">
-                <div className="works-ignored-body">
-                  <div className="works-ignored-title">{title}</div>
-                  <div className="works-inbox-meta">
-                    {summary && (
-                      <>
-                        <span className="kv2-badge works-runtime-chip">{summary.agentRuntime}</span>
-                        <DirChip projectDir={summary.projectDir} />
-                      </>
-                    )}
-                    <span className="works-mono">{shortSessionId(entry.sessionId)}</span>
-                    {summary && (
-                      <span>
-                        카드 {summary.relatedCardCount} · {formatTimeAgo(summary.updatedAt)}
-                      </span>
-                    )}
-                    {!entry.returnsToInbox && (
-                      <span className="works-warn">
-                        ⚠ 복원해도 Inbox에는 나타나지 않습니다 (카드 없음 또는 기간 초과)
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="kv2-btn kv2-btn--small kv2-btn--outline"
-                  disabled={busyId === entry.sessionId}
-                  onClick={() => restore(entry.sessionId)}
-                >
-                  {busyId === entry.sessionId ? '복원 중…' : '복원'}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          <div className="works-ignored-toolbar">
+            <input
+              type="search"
+              className="kv2-input works-ignored-search"
+              placeholder="제목 · 세션 ID · 디렉토리 검색"
+              value={query}
+              aria-label="폐기한 세션 검색"
+              onChange={(e) => changeQuery(e.target.value)}
+            />
+            <span className="kv2-badge" aria-live="polite">
+              {query.trim()
+                ? `${matched.length} / ${sessions.length}개`
+                : `${visible.length} / ${sessions.length}개 표시`}
+            </span>
+          </div>
+          {matched.length === 0 ? (
+            <p className="works-empty">“{query.trim()}”와 일치하는 폐기한 세션이 없습니다.</p>
+          ) : (
+            <ul className="works-ignored-list">
+              {visible.map((entry) => {
+                const summary = entry.session;
+                return (
+                  <li key={entry.sessionId} className="works-ignored-row">
+                    <div className="works-ignored-body">
+                      <div className="works-ignored-title">{ignoredSessionTitle(entry)}</div>
+                      <div className="works-inbox-meta">
+                        {summary && (
+                          <>
+                            <RuntimeBadge runtime={summary.agentRuntime} />
+                            <DirChip projectDir={summary.projectDir} />
+                          </>
+                        )}
+                        <IdChip id={entry.sessionId} kind="session" />
+                        {summary && (
+                          <span>
+                            카드 {summary.relatedCardCount} · {formatTimeAgo(summary.updatedAt)}
+                          </span>
+                        )}
+                        {!entry.returnsToInbox && (
+                          <span className="works-warn">
+                            ⚠ 복원해도 Inbox에는 나타나지 않습니다 (카드 없음 또는 기간 초과)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="kv2-btn kv2-btn--small kv2-btn--outline"
+                      disabled={busyId === entry.sessionId}
+                      onClick={() => restore(entry.sessionId)}
+                    >
+                      {busyId === entry.sessionId ? '복원 중…' : '복원'}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {remaining > 0 && (
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--small kv2-btn--ghost works-ignored-more"
+              onClick={() => setLimit((n) => n + IGNORED_SESSIONS_PAGE_SIZE)}
+            >
+              더 보기 ({Math.min(remaining, IGNORED_SESSIONS_PAGE_SIZE)}개 · 남은 {remaining}개)
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -529,8 +564,8 @@ export function WorksView({
   onAssignAll,
   config,
   onSaveConfig,
+  timelineStrip,
 }: WorksViewProps) {
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [showConfig, setShowConfig] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [section, setSection] = useState<'active' | 'resolved'>('active');
@@ -543,7 +578,6 @@ export function WorksView({
   // header toggle exists so the same batch flow is reachable without a pointer.
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [selecting, setSelecting] = useState(false);
-  const [bulkPanelOpen, setBulkPanelOpen] = useState(false);
   // Only used to suppress text selection while sweeping: the checkboxes and the
   // row tint already trace the exact range, so there is no rubber band to draw.
   const [dragging, setDragging] = useState(false);
@@ -577,10 +611,6 @@ export function WorksView({
       const live = new Set(inbox.map((session) => session.sessionId));
       const next = new Set([...current].filter((id) => live.has(id)));
       if (next.size === current.size) return current;
-      // Pruning to empty must also put the batch panel away. It used to stay
-      // `bulkPanelOpen`, so the next row the user checked re-opened an assign
-      // panel they never asked for — and it was seeded from that one row.
-      if (next.size === 0) setBulkPanelOpen(false);
       return next;
     });
   }, [inbox]);
@@ -597,29 +627,10 @@ export function WorksView({
       : undefined),
     [bulkTarget, works, config?.assignSuggestResumeChain],
   );
-  const showBulkPanel = bulkPanelOpen && bulkTarget !== null;
-
-  // Entering selection mode retires the single-row panel: the row's actions are
-  // hidden while selecting, so an open panel would be the one piece of the row
-  // UI left pointing at a single session mid-batch.
-  useEffect(() => {
-    if (selectionMode) setExpandedSessionId(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectionMode]);
-
-  // The batch panel has to render *below* the rows (see the drag notes), so on
-  // an Inbox longer than the viewport it opened outside it. `nearest` scrolls
-  // only as far as it has to, leaving the selected rows on screen where they
-  // are the context for the choice.
-  const bulkPanelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (showBulkPanel) bulkPanelRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [showBulkPanel]);
 
   const clearSelection = () => {
     setSelectedIds(new Set());
     setSelecting(false);
-    setBulkPanelOpen(false);
     setAssignFailures(new Map());
   };
 
@@ -689,7 +700,7 @@ export function WorksView({
     // Touch drags belong to the scroller, and the row's own controls keep their
     // clicks — a drag-select only starts on empty row surface.
     if (event.button !== 0 || event.pointerType === 'touch') return;
-    if ((event.target as HTMLElement).closest('button, a, input, select, textarea, .works-assign-inline')) return;
+    if ((event.target as HTMLElement).closest(ROW_CONTROL_SELECTOR)) return;
     const container = listRef.current;
     if (!container) return;
 
@@ -851,31 +862,33 @@ export function WorksView({
 
   return (
     <div className="works-view">
+      {/* One line: title, the 진행 중 │ 완료·폐기 switch, ⚙. It used to be four
+          stacked layers (title / helper sentence / 📥 heading / Inbox count)
+          before the first actionable row. */}
       <div className="works-view-header">
         <span className="works-view-title">Works</span>
+        <div className="works-navigation" role="group" aria-label="Work 목록 보기">
+          {(['active', 'resolved'] as const).map(value => (
+            <button key={value} type="button" aria-pressed={section === value}
+              className="works-navigation-option"
+              onClick={() => setSection(value)}>
+              {value === 'active' ? `진행 중 ${works.filter(w => w.status === 'active').length}`
+                : `완료·폐기 ${works.filter(w => w.status !== 'active').length}`}
+            </button>
+          ))}
+        </div>
         {canConfig && (
           <button
             type="button"
             className={`kv2-btn kv2-btn--small kv2-btn--ghost works-config-gear${showConfig ? ' works-config-gear--on' : ''}`}
             aria-label="Works 설정"
             aria-expanded={showConfig}
+            title="Works 설정"
             onClick={() => setShowConfig((v) => !v)}
           >
-            ⚙ 설정
+            ⚙
           </button>
         )}
-      </div>
-
-      <p className="kv2-session-helper">미배정 세션을 하나의 목표로 묶고, 진행 중인 Work를 관리하세요.</p>
-      <div className="works-navigation" role="group" aria-label="Work 목록 보기">
-        {(['active', 'resolved'] as const).map(value => (
-          <button key={value} type="button" aria-pressed={section === value}
-            className={`kv2-btn${section === value ? ' kv2-btn--primary' : ' kv2-btn--ghost'}`}
-            onClick={() => setSection(value)}>
-            {value === 'active' ? `진행 중 ${works.filter(w => w.status === 'active').length}`
-              : `완료·폐기 ${works.filter(w => w.status !== 'active').length}`}
-          </button>
-        ))}
       </div>
 
       {showConfig && config && onSaveConfig && (
@@ -895,6 +908,8 @@ export function WorksView({
         />
       )}
 
+      {section === 'active' && timelineStrip}
+
       {loading && works.length === 0 && inbox.length === 0 ? (
         <div className="loading-spinner" role="status" aria-label="Loading works..." />
       ) : (
@@ -905,27 +920,12 @@ export function WorksView({
               exactly when the Inbox is finally clean. */}
           {section === 'active' && (
             <section className="works-section works-triage-section" aria-label="미배정 세션">
-              <div className="works-section-heading">
-                <span>📥 미배정 세션</span>
-                <span className="works-section-hint">함께 진행한 세션만 선택해 Work로 묶으세요</span>
-                <span className="works-section-rule" />
-              </div>
               <div className="works-inbox">
                 <div className="works-inbox-header">
-                  <span>미배정 세션 {inbox.length}개</span>
+                  <span className="works-inbox-title-count">📥 미배정 {inbox.length}</span>
                   <span className="works-inbox-header-sub">
                     · 최근 활동순 · 드래그하면 여러 개 선택
                   </span>
-                  {ignoredCount > 0 && canRestore && (
-                    <button
-                      type="button"
-                      className={`kv2-btn kv2-btn--small works-inbox-ignored-toggle${showIgnored ? ' kv2-btn--outline' : ' kv2-btn--ghost'}`}
-                      aria-expanded={showIgnored}
-                      onClick={() => setShowIgnored((v) => !v)}
-                    >
-                      🗑 무시한 세션 {ignoredCount}개
-                    </button>
-                  )}
                   <button
                     type="button"
                     className={`kv2-btn kv2-btn--small works-inbox-select-toggle${selectionMode ? ' kv2-btn--outline' : ' kv2-btn--ghost'}`}
@@ -933,14 +933,14 @@ export function WorksView({
                     disabled={inbox.length === 0}
                     onClick={() => (selectionMode ? clearSelection() : setSelecting(true))}
                   >
-                    {selectionMode ? '☑ 선택 끝내기' : '☑ 선택'}
+                    {selectionMode ? '☑ 선택 끝내기' : '☑ 여러 개 선택'}
                   </button>
                   {/* Disabled for the whole of selection mode, not just when
-                      something is checked. It assigns the *entire* Inbox one
-                      row at a time — it has never had anything to do with the
+                      something is checked. It walks the *entire* Inbox one row
+                      at a time — it has never had anything to do with the
                       selection — but sitting live above a list of checkboxes it
                       read as "배정 the ones I picked", and the button that
-                      actually does that is the one at the bottom of the list.
+                      actually does that is the one in the selection bar.
                       Two enabled primaries with opposite scopes is the
                       ambiguity; dimming one of them resolves it. */}
                   <button
@@ -949,13 +949,28 @@ export function WorksView({
                     disabled={inbox.length === 0 || selectionMode}
                     title={
                       selectionMode
-                        ? '선택한 세션만 배정하려면 목록 아래 "배정하기"를 사용하세요. 미배정 세션 전체를 한 건씩 배정하려면 먼저 "선택 끝내기"를 누르세요.'
+                        ? '선택한 세션만 배정하려면 아래 선택 바의 "N개 배정"을 사용하세요. 미배정 세션 전체를 한 건씩 배정하려면 먼저 "선택 끝내기"를 누르세요.'
                         : '미배정 세션을 하나씩 순서대로 배정합니다'
                     }
                     onClick={onAssignAll}
                   >
-                    ⚡ 모두 배정하기
+                    ⚡ 순서대로 배정
                   </button>
+                  {/* The restore list is a recovery path, not a triage action,
+                      so it lives behind the header's ⋯ rather than as a third
+                      button competing with the two above. Still rendered while
+                      the panel is open after its last entry was restored, so
+                      the panel can always be closed again. */}
+                  {canRestore && (ignoredCount > 0 || showIgnored) && (
+                    <WorksOverflowMenu
+                      label="미배정 세션 메뉴"
+                      items={[{
+                        id: 'ignored',
+                        label: showIgnored ? '🗑 폐기한 세션 목록 닫기' : `🗑 폐기한 세션 ${ignoredCount}개`,
+                        onSelect: () => setShowIgnored((v) => !v),
+                      }]}
+                    />
+                  )}
                 </div>
 
                 {showIgnored && onRestoreIgnoredSession && (
@@ -967,12 +982,12 @@ export function WorksView({
 
                 {inbox.length === 0 && (
                   <p className="works-empty">
-                    미배정 세션이 없습니다. 무시한 세션을 되살리려면 위 목록에서 복원하세요.
+                    미배정 세션이 없습니다. 폐기한 세션은 위 ⋯ 메뉴에서 복원할 수 있습니다.
                   </p>
                 )}
 
                 <div
-                  className={`works-inbox-rows${dragging ? ' is-dragging' : ''}${expandedSessionId ? ' works-inbox-rows--assigning' : ''}`}
+                  className={`works-inbox-rows${dragging ? ' is-dragging' : ''}`}
                   ref={listRef}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
@@ -985,13 +1000,6 @@ export function WorksView({
                       key={session.sessionId}
                       session={session}
                       works={works}
-                      expanded={expandedSessionId === session.sessionId}
-                      onToggle={() => {
-                        setBulkPanelOpen(false);
-                        setExpandedSessionId((current) =>
-                          current === session.sessionId ? null : session.sessionId,
-                        );
-                      }}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(session.sessionId)}
                       onToggleSelect={() => toggleSelect(session.sessionId)}
@@ -1006,102 +1014,51 @@ export function WorksView({
                     />
                   ))}
                 </div>
+                {/* The batch's own `[combobox][N개 배정]`, in a bar that sticks
+                    to the bottom of the viewport: it renders below the rows
+                    (mounting it above would push every row out from under a
+                    starting drag), and on a long Inbox a panel opened there was
+                    off-screen. It is the same component as each row's, keyed on
+                    the batch so a changed selection re-seeds the title
+                    suggestion and the recommended target. */}
                 {selectionMode && (
                   <div className="works-inbox-selection">
-                    <span className="works-inbox-selection-count">
-                      {selectedIds.size > 0
-                        ? `선택 ${selectedIds.size}개`
-                        : '세션을 드래그하거나 체크해서 선택하세요'}
-                    </span>
-                    <button
-                      type="button"
-                      className="kv2-btn kv2-btn--small kv2-btn--ghost"
-                      onClick={() => setSelectedIds(new Set(inbox.map((session) => session.sessionId)))}
-                    >
-                      전체 선택
-                    </button>
-                    {/* One meaning of 선택 해제, per docs/works.md: clear the
-                        selection *and* put the checkboxes away. It used to only
-                        empty the set here while the batch panel's own 선택 해제
-                        (same words, same screen) also left selection mode. */}
-                    <button
-                      type="button"
-                      className="kv2-btn kv2-btn--small kv2-btn--ghost"
-                      disabled={selectedIds.size === 0}
-                      onClick={clearSelection}
-                    >
-                      선택 해제
-                    </button>
-                    <button
-                      type="button"
-                      className="kv2-btn kv2-btn--small kv2-btn--primary"
-                      disabled={selectedIds.size === 0}
-                      aria-expanded={showBulkPanel}
-                      title={
-                        selectedIds.size === 0
-                          ? '먼저 세션을 선택하세요'
-                          : `선택한 ${selectedIds.size}개를 하나의 Work에 배정합니다`
-                      }
-                      onClick={() => {
-                        setBulkPanelOpen((open) => !open);
-                        setExpandedSessionId(null);
-                      }}
-                    >
-                      {showBulkPanel
-                        ? '접기 ▲'
-                        : `선택한 ${selectedIds.size}개 배정하기`}
-                    </button>
-                  </div>
-                )}
-
-                {/* Scrolled into view when it opens: it renders below the rows
-                    (mounting it above would push every row out from under a
-                    starting drag), so on a long Inbox the panel the user just
-                    asked for opened off-screen. The selection chips are here
-                    too — the panel body only shows the representative session,
-                    so this is the only place the batch is enumerated. */}
-                {showBulkPanel && bulkTarget && (
-                  <div className="works-bulk-panel" ref={bulkPanelRef}>
-                    <div className="works-bulk-selected">
-                      <span className="works-bulk-selected-label">
-                        선택한 세션 {selectedSessions.length}개
+                    <div className="works-inbox-selection-tools">
+                      <span className="works-inbox-selection-count">
+                        {selectedIds.size > 0
+                          ? `선택 ${selectedIds.size}개`
+                          : '세션을 드래그하거나 체크해서 선택하세요'}
                       </span>
-                      {selectedSessions.map((session) => (
-                        <span key={session.sessionId} className="works-bulk-chip">
-                          <span className="works-bulk-chip-title">
-                            {session.sessionTitle?.trim() || session.cardTitle}
-                          </span>
-                          <button
-                            type="button"
-                            className="works-bulk-chip-remove"
-                            aria-label={`${session.sessionTitle?.trim() || session.cardTitle} 선택 해제`}
-                            onClick={() => toggleSelect(session.sessionId)}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                      <button
+                        type="button"
+                        className="kv2-btn kv2-btn--small kv2-btn--ghost"
+                        onClick={() => setSelectedIds(new Set(inbox.map((session) => session.sessionId)))}
+                      >
+                        전체 선택
+                      </button>
+                      {/* One meaning of 선택 해제, per docs/works.md: clear the
+                          selection *and* put the checkboxes away. */}
+                      <button
+                        type="button"
+                        className="kv2-btn kv2-btn--small kv2-btn--ghost"
+                        disabled={selectedIds.size === 0}
+                        onClick={clearSelection}
+                      >
+                        선택 해제
+                      </button>
                     </div>
-                    <WorkAssignInline
-                      // Keyed on the batch so switching selection re-seeds the
-                      // title suggestion and the recommended target.
-                      key={selectedSessions.map((session) => session.sessionId).join(',')}
-                      session={bulkTarget}
-                      works={works}
-                      bulk={{ count: selectedSessions.length }}
-                      chained={bulkChained}
-                      preferSameDir={preferSameDir}
-                      onCancel={() => setBulkPanelOpen(false)}
-                      onCreateWork={handleBulkCreateWork}
-                      onLinkToWork={handleBulkLinkToWork}
-                      secondary={{
-                        label: '선택 해제',
-                        tone: 'neutral',
-                        run: async () => {
-                          clearSelection();
-                        },
-                      }}
-                    />
+                    {bulkTarget && (
+                      <WorkAssignInline
+                        key={selectedSessions.map((session) => session.sessionId).join(',')}
+                        session={bulkTarget}
+                        works={works}
+                        bulk={{ count: selectedSessions.length }}
+                        chained={bulkChained}
+                        preferSameDir={preferSameDir}
+                        onCreateWork={handleBulkCreateWork}
+                        onLinkToWork={handleBulkLinkToWork}
+                      />
+                    )}
                   </div>
                 )}
               </div>

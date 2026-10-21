@@ -463,6 +463,7 @@ describe('TelegramPoller', () => {
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-5');
     expect(claudeResult && 'text' in claudeResult ? claudeResult.text : '').toContain('claude-opus-4-8');
     expect(codexResult?.type).toBe('reply');
+    expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-6.1-sol');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-6-astra');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.5');
     expect(codexResult && 'text' in codexResult ? codexResult.text : '').toContain('gpt-5.6-sol');
@@ -520,6 +521,7 @@ describe('TelegramPoller', () => {
     expect(modelOf('/claude_model fable5')).toBe('claude-fable-5');
     expect(modelOf('/codex_model astra')).toBe('gpt-6-astra');
     expect(modelOf('/codex_model gpt6sol')).toBe('gpt-6-sol');
+    expect(modelOf('/codex_model gpt6.1sol')).toBe('gpt-6.1-sol');
     expect(modelOf('/codex_model gpt6luna')).toBe('gpt-6-luna');
     expect(modelOf('/codex_model gpt5.5')).toBe('gpt-5.5');
   });

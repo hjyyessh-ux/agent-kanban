@@ -11,6 +11,7 @@ function makeColumn(status: V2ColumnViewModel['status']): V2ColumnViewModel {
     label: status,
     cards: [],
     count: 0,
+    unreadCount: 0,
   };
 }
 
@@ -51,6 +52,7 @@ describe('BoardListView', () => {
       status: 'todo',
       label: 'To Do',
       count: 1,
+      unreadCount: 0,
       cards: [{
         id: card.id,
         title: card.title,

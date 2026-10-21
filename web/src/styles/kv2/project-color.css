@@ -1,0 +1,62 @@
+/* =============================================================
+   Project colour — directory palette slots + chip/mark
+   Global so every screen that names a project (Works, Timeline,
+   mentions, board) paints it in the same slot. Class names keep
+   their original `works-dir-` prefix; renaming them would touch
+   every consumer for no visual gain.
+   ============================================================= */
+
+/* `.works-dir-c{n}` publishes one palette slot as two variables: the swatch
+   (`--works-dir-accent`, for bars and tints) and its AA-safe text twin
+   (`--works-dir-text`, for anything with letters in it). The slot is hashed
+   from the full projectDir in `utils/project-color.ts`, so the same project is
+   the same colour on every screen. Anything that wants a colour reads one of
+   the two variables — never a literal, and never `--kv2-dir-{n}` directly.
+
+   Text uses the twin because the swatch is not a text colour: painting a
+   directory name in the raw accent left `--kv2-dir-2` at 3.7:1 on light and
+   `--kv2-affinity-chain` at 3.1:1 on dark. See `styles/token-contrast.test.ts`. */
+.works-dir-c1 { --works-dir-accent: var(--kv2-dir-1); --works-dir-text: var(--kv2-dir-1-text); }
+.works-dir-c2 { --works-dir-accent: var(--kv2-dir-2); --works-dir-text: var(--kv2-dir-2-text); }
+.works-dir-c3 { --works-dir-accent: var(--kv2-dir-3); --works-dir-text: var(--kv2-dir-3-text); }
+.works-dir-c4 { --works-dir-accent: var(--kv2-dir-4); --works-dir-text: var(--kv2-dir-4-text); }
+.works-dir-c5 { --works-dir-accent: var(--kv2-dir-5); --works-dir-text: var(--kv2-dir-5-text); }
+.works-dir-c6 { --works-dir-accent: var(--kv2-dir-6); --works-dir-text: var(--kv2-dir-6-text); }
+.works-dir-c7 { --works-dir-accent: var(--kv2-dir-7); --works-dir-text: var(--kv2-dir-7-text); }
+.works-dir-c8 { --works-dir-accent: var(--kv2-dir-8); --works-dir-text: var(--kv2-dir-8-text); }
+
+/*
+ * Directory chip / mark — the colour carries the *name*, not a separate dot.
+ *
+ * An 8–10px dot beside grey text is the smallest possible sample of a hue, and
+ * it was doing the whole job of "which project is this": at that size two
+ * neighbouring slots are the same dot. Tinting the label instead spends a whole
+ * word's worth of area on the colour and puts the hue and the text it labels in
+ * the same place, so the chip is legible before the path is read.
+ */
+.works-dir-chip,
+.works-dir-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+  padding: 1px var(--kv2-sp-2);
+  border: 2px solid color-mix(in srgb, var(--works-dir-accent, var(--kv2-border)) 55%, transparent);
+  border-radius: var(--kv2-radius-sm);
+  /* 14% — matched by CHIP_TINT_PERCENT in styles/token-contrast.test.ts, which
+     asserts the text twin still clears AA against this tint. */
+  background: color-mix(in srgb, var(--works-dir-accent, transparent) 14%, var(--kv2-surface));
+  color: var(--works-dir-text, var(--kv2-text-secondary));
+  font-weight: 700;
+}
+
+/* Single-row modifier for a chip that shares a line with other content (the
+   board card's first row): it shrinks before its neighbours do and truncates
+   the name instead of wrapping. The full path stays on `title`. */
+.kv2-project-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

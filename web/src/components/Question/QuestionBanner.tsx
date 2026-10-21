@@ -1,11 +1,14 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useId, useRef } from 'react';
 import type { QuestionRequest, QuestionInfo, QuestionOption } from '../../hooks/useQuestionsApi';
+import { hasOtherEscapeLayer, resolveQuestionEscape } from './questionBannerModel';
 import './Question.css';
 
 interface Props {
   questions: QuestionRequest[];
   onReply: (id: string, answers: string[][]) => Promise<void>;
   onReject: (id: string) => Promise<void>;
+  /** Label of the runtime that owns `sessionId` (see `questionRuntimeLabel`). */
+  runtimeLabel?: (sessionId: string) => string;
 }
 
 /**
@@ -103,35 +106,61 @@ const QuestionBlock: React.FC<QuestionBlockProps> = ({
 };
 
 /**
- * QuestionBanner — overlays the UI when opencode has pending questions.
- * Displays the first pending QuestionRequest. User can answer or reject.
- * Disappears automatically when all questions are answered/rejected.
+ * QuestionBanner — overlays the UI when an agent session has pending questions.
+ * Displays the first pending QuestionRequest. User can answer, reject, or
+ * minimize it to a corner pill and come back later.
+ *
+ * Escape and a backdrop click only ever **minimize**: rejecting discards the
+ * agent's question, and an Escape meant for a filter popover used to do exactly
+ * that. Rejecting is the explicit `Reject` button only.
  */
-export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }) => {
+export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject, runtimeLabel }) => {
   // Display the first pending request
   const request = questions[0];
+  const titleId = useId();
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
 
   // Track selections per QuestionInfo index: Record<questionIndex, string[]>
   const [selections, setSelections] = useState<Record<number, string[]>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
-  // Reset selections when the active request changes
+  // Reset selections when the active request changes. A different question
+  // opens expanded again — minimizing parked *that* question, not the banner.
   useEffect(() => {
     setSelections({});
     setIsSubmitting(false);
+    setMinimized(false);
   }, [request?.id]);
 
-  // Close on Escape key
+  // An expanded banner is modal (`aria-modal`), so focus moves into it.
+  useEffect(() => {
+    if (request && !minimized) bannerRef.current?.focus();
+  }, [request?.id, minimized]);
+
+  // Escape minimizes — after any other open popover/modal has had its turn.
   useEffect(() => {
     if (!request) return;
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSubmitting) {
-        void onReject(request.id);
-      }
+      const action = resolveQuestionEscape({
+        key: e.key,
+        defaultPrevented: e.defaultPrevented,
+        minimized,
+        isSubmitting,
+        otherLayerOpen: e.key === 'Escape' && hasOtherEscapeLayer(document, bannerRef.current),
+      });
+      if (action !== 'minimize') return;
+      e.preventDefault();
+      setMinimized(true);
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [request, isSubmitting, onReject]);
+  }, [request, isSubmitting, minimized]);
+
+  useEffect(() => {
+    if (minimized) pillRef.current?.focus();
+  }, [minimized]);
 
   const handleSelectionsChange = useCallback(
     (questionIndex: number, newSelections: string[]) => {
@@ -174,27 +203,60 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
 
   const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget && !isSubmitting) {
-      void handleReject();
+      setMinimized(true);
     }
   };
 
   if (!request) return null;
 
+  const label = runtimeLabel?.(request.sessionID) ?? null;
+  const title = label ? `${label} needs your input` : 'Agent needs your input';
+
+  if (minimized) {
+    return (
+      <button
+        ref={pillRef}
+        type="button"
+        className="kv2-btn kv2-btn--primary question-reopen-pill"
+        onClick={() => setMinimized(false)}
+        aria-label={`Reopen question: ${title}`}
+      >
+        <span aria-hidden="true">❓</span>
+        {title}
+        {questions.length > 1 && <span className="kv2-badge">{questions.length}</span>}
+      </button>
+    );
+  }
+
   return (
     <div className="question-overlay" onClick={handleOverlayClick}>
       <div
+        ref={bannerRef}
         className={`question-banner${isSubmitting ? ' question-banner--submitting' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="question-banner-header">
-          <span className="question-banner-title">
-            <span className="question-banner-title-icon">❓</span>
-            opencode needs your input
-          </span>
+          <h2 id={titleId} className="question-banner-title">
+            <span className="question-banner-title-icon" aria-hidden="true">❓</span>
+            {title}
+          </h2>
           <span className="question-banner-meta">
             session {request.sessionID.substring(0, 8)}
           </span>
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--ghost kv2-btn--small question-minimize-btn"
+            onClick={() => setMinimized(true)}
+            aria-label="Minimize question"
+            title="최소화 (Esc) — 구석의 버튼으로 다시 열 수 있습니다"
+          >
+            —
+          </button>
         </div>
 
         {/* One block per QuestionInfo */}
@@ -213,12 +275,12 @@ export const QuestionBanner: React.FC<Props> = ({ questions, onReply, onReject }
         <div className="question-actions kv2-actions-split">
           <button
             type="button"
-            className="kv2-btn question-reject-btn kv2-action-cancel"
-            style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            className="kv2-btn kv2-btn--subtle-danger question-reject-btn kv2-action-cancel"
             onClick={() => void handleReject()}
             disabled={isSubmitting}
+            title="에이전트의 질문을 거절합니다"
           >
-            Dismiss
+            Reject
           </button>
           <button
             type="button"

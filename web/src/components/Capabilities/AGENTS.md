@@ -20,6 +20,7 @@ Discovery, inventory, and lifecycle management for skills, MCP servers, and oper
 | `ColdDetailModal.tsx` | Per-cold-entry detail dialog on `Card/DialogSkeleton`: fetches `GET /api/scope/cold/:kind/:ref`, renders the frozen SKILL.md (markdown Preview / Raw toggle) or the masked MCP definition JSON, plus the same restore/delete controls. |
 | `ColdEntryActions.tsx` | Restore-to-target select + preview/apply (MCP restore goes through `DiffPreview`) + permanent delete for one cold entry. Shared by the list row and the detail dialog so both behave identically. |
 | `cold-filters.ts` | Search/kind/runtime predicates and count selectors for cold storage entries (covered by `cold-filters.test.ts`). |
+| `capability-errors.ts` | `buildCapabilityAlerts` — turns the `useSkills` / `useScripts` / `useSkillRoots` `error` strings into one `ErrorAlert` each (title per source). `CapabilitiesView` renders them under the header with `다시 시도` (refresh) and `Dismiss` (the hook's `clearError`). Covered by `capability-errors.test.ts` + `CapabilitiesView.test.tsx`. |
 | `capability-format.ts` | Shared formatting helpers: `timeAgo`, `stripFrontmatter` (SKILL.md preview), `maskSecretDef` (MCP definition preview). |
 | `VisibilityControl.tsx` | Two exported controls: `SkillVisibilityControl` (skillOverrides: on/name-only/user-invocable-only/off + `disable-model-invocation`) and `McpAlwaysLoadControl` (toggle forced tool-schema preloading). Both preview a diff before the user applies. |
 | `DiffPreview.tsx` | Generic before/after diff renderer (`computeDiffLines`) shared by every mutation flow (visibility, copy/move, alwaysLoad) — always shown before a config file write, with a git-tracked-file warning banner. |
@@ -36,6 +37,8 @@ Discovery, inventory, and lifecycle management for skills, MCP servers, and oper
 - Secret detection: when a copy/move preview returns `result.secretWarning`, hold the request in `secretPendingBody` and require an explicit "force" re-submit (`handleForceApply` in `McpDetailModal.tsx`) rather than silently proceeding.
 - New scope-mutation API calls belong in `web/src/hooks/useScopeInventory.ts` (not inline `fetch`), matching `copyMcpServer`/`moveMcpServer`/`removeMcpServer`/`freezeMcpApi`/`freezeSkillApi`/`moveSkillApi`.
 - All modals in this directory use the resizable-dialog pattern (`usePersistedDialogSize` with a unique `cap-*-size` localStorage key) plus the overlay-mousedown-vs-click dismiss guard.
+
+- Fetch/sync failures must surface: pass a hook's `error`/`clearError` into `CapabilitiesView` (`skillsError`, `scriptsError`, `skillRootsError` + `onClear*`). A failure that only empties a list reads as "you have no capabilities".
 
 ### Testing Requirements
 - New logic worth unit testing (diff computation, secret masking, name sanitization, filter predicates) should be extracted into a plain function and tested the way `capability-filters.test.ts` / `cold-filters.test.ts` do.

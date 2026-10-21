@@ -15,6 +15,19 @@ function monthKey(date: Date): string {
 }
 
 /**
+ * Archive months read *after* the window's own last month.
+ *
+ * A card that ran inside the window is filed under the month it was last
+ * updated — usually the same month, later when it sat in `complete` or rode a
+ * long Work until that Work's completion swept it. Three months covers both in
+ * practice. Past it is the documented trade-off of the `to` ceiling: a card
+ * archived more than three months after it ran no longer shows on a window
+ * that old. Without the ceiling, a window a year back parsed every month file
+ * up to today (~13) on every 10s poll.
+ */
+export const TIMELINE_ARCHIVE_TAIL_MONTHS = 3;
+
+/**
  * Which archive month files a timeline window has to read.
  *
  * Archive files are keyed by `card.updatedAt.slice(0, 7)` (UTC), and a card is
@@ -24,16 +37,33 @@ function monthKey(date: Date): string {
  * month). One month of slack before the window covers the UTC/local skew at a
  * month boundary: 2026-03-01 00:30 KST is 2026-02-28 UTC.
  *
+ * `toIso` adds a ceiling: `to`'s month plus `TIMELINE_ARCHIVE_TAIL_MONTHS`
+ * (see there for the trade-off). Only `GET /api/timeline` passes it. The Work
+ * readers (`workCardScanFloor` callers) omit it on purpose — they count *every*
+ * card a Work owns, and a Work's cards are archived whenever it completes,
+ * however long after its start that is.
+ *
  * The result is bounded by how far back the window reaches — a window inside the
  * current month reads ~2 files, not the whole archive — and `loadArchives()` is
  * deliberately not involved, so the wiki and Telegram paths keep their own
  * full-archive scans unchanged.
  */
-export function timelineArchiveMonths(available: string[], fromIso: string): string[] {
+export function timelineArchiveMonths(
+  available: string[],
+  fromIso: string,
+  toIso?: string,
+): string[] {
   const from = new Date(fromIso);
   if (Number.isNaN(from.getTime())) return [];
   const floor = monthKey(new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() - 1, 1)));
-  return available.filter((month) => month >= floor).sort();
+  const to = toIso === undefined ? null : new Date(toIso);
+  if (to && Number.isNaN(to.getTime())) return [];
+  const ceiling = to
+    ? monthKey(new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth() + TIMELINE_ARCHIVE_TAIL_MONTHS, 1)))
+    : null;
+  return available
+    .filter((month) => month >= floor && (ceiling === null || month <= ceiling))
+    .sort();
 }
 
 /**
@@ -68,10 +98,11 @@ function validInstant(value: string | undefined): string | null {
  * Longest window `GET /api/timeline` will serve, in days.
  *
  * The window is the *only* thing bounding how much archive the route parses:
- * `timelineArchiveMonths` reads every month from the window's month −1 upward,
- * so `from=1970-01-01` reads the entire archive in one unauthenticated GET. The
- * grid itself never asks for more than 35 columns (a month view rounded up to
- * whole weeks), so 400 days leaves room for a year-scale view later while still
+ * `timelineArchiveMonths` reads from the window's month −1 up to its month
+ * +`TIMELINE_ARCHIVE_TAIL_MONTHS`, so `from=1970-01-01&to=2030-01-01` would read
+ * the entire archive in one unauthenticated GET. The grid asks for its visible
+ * columns plus margins aligned to 14-day blocks (`timelineFetchWindow`, at most
+ * the 168-day scroll buffer + ~6 weeks), so 400 days leaves headroom while still
  * refusing the pathological request.
  */
 export const TIMELINE_MAX_WINDOW_DAYS = 400;

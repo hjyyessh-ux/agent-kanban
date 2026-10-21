@@ -1,4 +1,5 @@
 import type { KanbanCard } from '../../../../src/core/types';
+import { isUnreadCompletion } from './board-selectors';
 
 export type BoardFilters = {
   search: string;
@@ -96,4 +97,46 @@ export function filterBoardCards(cards: KanbanCard[], filters: BoardFilters): Ka
 
     return true;
   });
+}
+
+function sessionGroupKey(card: KanbanCard): string {
+  // Same key `groupCompleteCardsBySession` groups by.
+  return card.sessionId ? `session:${card.sessionId}` : `card:${card.id}`;
+}
+
+/**
+ * The toolbar's `Unread only` toggle. Kept apart from `BoardFilters` on
+ * purpose: those also narrow the Timeline (`sessionFilter`), and the Timeline
+ * draws executed work, which has no read state — it ignores this one.
+ *
+ * - Flat columns keep only unread completions.
+ * - With `groupBySession` (Session 모아보기) a session that has *any* unread
+ *   card keeps all of its `complete` cards, so the group reads as a
+ *   conversation rather than one orphan turn. Its `done` cards stay out: the
+ *   Done column is a different group.
+ * - Children of a kept card stay with it, so the parent's child counts do not
+ *   change just because the filter is on.
+ */
+export function filterUnreadOnly(
+  cards: KanbanCard[],
+  { groupBySession }: { groupBySession: boolean },
+): KanbanCard[] {
+  const unreadSessions = new Set<string>();
+  if (groupBySession) {
+    for (const card of cards) {
+      if (isUnreadCompletion(card)) unreadSessions.add(sessionGroupKey(card));
+    }
+  }
+
+  const kept = new Set<string>();
+  for (const card of cards) {
+    if (
+      isUnreadCompletion(card)
+      || (groupBySession && card.status === 'complete' && unreadSessions.has(sessionGroupKey(card)))
+    ) {
+      kept.add(card.id);
+    }
+  }
+
+  return cards.filter((card) => kept.has(card.id) || (!!card.parentCardId && kept.has(card.parentCardId)));
 }

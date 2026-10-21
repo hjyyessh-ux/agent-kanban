@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import { createServer } from '../server/index';
 import { KanbanStore } from '../core/store';
 import { withTempDir } from './setup';
+import type { CompletionSeenBatchResponse } from '../core/types';
 
 async function withTestServer(callback: (baseUrl: string, store: KanbanStore) => Promise<void>) {
   await withTempDir(async (dir) => {
@@ -117,6 +118,55 @@ describe('HTTP API Server', () => {
       expect(seen.completedSeenAt).toBeTruthy();
       expect(seen.completedAt).toBe(completed.completedAt);
       expect(seen.updatedAt).toBe(completed.updatedAt);
+    });
+  });
+
+  test('POST /api/cards/completion-seen stamps a batch and reports skipped ids', async () => {
+    await withTestServer(async (url, store) => {
+      const first = await store.createCard({ title: 'First', description: 'Desc' });
+      const second = await store.createCard({ title: 'Second', description: 'Desc' });
+      const todo = await store.createCard({ title: 'Todo', description: 'Desc' });
+      const completed = await store.updateCard(first.id, { status: 'complete' });
+      await store.updateCard(second.id, { status: 'complete' });
+
+      const res = await fetch(`${url}/api/cards/completion-seen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [first.id, second.id, todo.id, 'missing'] }),
+      });
+
+      expect(res.status).toBe(200);
+      const body = await res.json() as CompletionSeenBatchResponse;
+      expect(body.cards.map((card) => card.id)).toEqual([first.id, second.id]);
+      expect(body.cards[0].updatedAt).toBe(completed.updatedAt);
+      expect(body.cards.every((card) => !!card.completedSeenAt)).toBe(true);
+      expect(body.skipped).toEqual([
+        { id: todo.id, reason: 'not_complete' },
+        { id: 'missing', reason: 'not_found' },
+      ]);
+    });
+  });
+
+  test('POST /api/cards/completion-seen accepts an empty batch and rejects malformed bodies', async () => {
+    await withTestServer(async (url) => {
+      const post = (body: string) => fetch(`${url}/api/cards/completion-seen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+
+      const empty = await post(JSON.stringify({ ids: [] }));
+      expect(empty.status).toBe(200);
+      expect(await empty.json()).toEqual({ cards: [], skipped: [] });
+
+      for (const bad of ['not json', JSON.stringify({}), JSON.stringify({ ids: 'abc' }), JSON.stringify({ ids: [1] }), JSON.stringify({ ids: [''] })]) {
+        const res = await post(bad);
+        expect(res.status).toBe(400);
+        expect(typeof (await res.json()).error).toBe('string');
+      }
+
+      const tooMany = await post(JSON.stringify({ ids: Array.from({ length: 1001 }, (_, i) => `id-${i}`) }));
+      expect(tooMany.status).toBe(400);
     });
   });
 

@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/kanban';
 import { apiUpdateCard } from './helpers/api';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 test.describe('Card Button Visibility by Status', () => {
   test('TODO card shows start, dequeue, queue target chip, and delete when queued', async ({ page, seedCard, seedCardWithStatus }) => {
@@ -22,16 +23,17 @@ test.describe('Card Button Visibility by Status', () => {
     const card = col.locator('.kv2-card', { hasText: '[E2E] BtnVis TODO' });
     await expect(card).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '▶ Start' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Dequeue' })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.dequeue, exact: true })).toBeVisible();
     await expect(card.locator('.kv2-card-queue-target')).toBeVisible();
     await expect(card.getByRole('button', { name: 'Delete card' })).toBeVisible();
-    await expect(card.locator('.kv2-card-section-label')).toHaveText('Prompt');
+    await expect(card.locator('.kv2-card-prompt')).toBeVisible();
+    await expect(card.locator('.kv2-card-section-label')).toHaveCount(0);
     await expect(card.locator('.kv2-card-divider')).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: 'Reopen' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: '✓ Done' })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.finish, exact: true })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true })).not.toBeVisible();
   });
 
   test('IN_PROGRESS card shows finish and reopen on board', async ({ page, seedCardWithStatus }) => {
@@ -45,11 +47,11 @@ test.describe('Card Button Visibility by Status', () => {
     const card = col.locator('.kv2-card', { hasText: '[E2E] BtnVis Progress' });
     await expect(card).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '✓ Finish' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Reopen' })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.finish, exact: true })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '▶ Start' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: '✓ Done' })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true })).not.toBeVisible();
   });
 
   test('OPENCODE_COMPLETE card shows done and reopen on board', async ({ page, seedCardWithStatus }) => {
@@ -64,11 +66,11 @@ test.describe('Card Button Visibility by Status', () => {
     const card = col.locator('.kv2-card', { hasText: '[E2E] BtnVis OC' });
     await expect(card).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '✓ Done' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Reopen' })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true })).toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).toBeVisible();
 
-    await expect(card.getByRole('button', { name: '▶ Start' })).not.toBeVisible();
-    await expect(card.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true })).not.toBeVisible();
+    await expect(card.getByRole('button', { name: CARD_ACTION_COPY.finish, exact: true })).not.toBeVisible();
   });
 
   test('DONE card exposes archive on board and reopen in detail dialog', async ({ page, seedCardWithStatus }) => {
@@ -84,15 +86,15 @@ test.describe('Card Button Visibility by Status', () => {
     const col = page.locator('.kv2-column[data-status="done"]');
     const group = col.locator('.kv2-complete-session-group').first();
     await expect(group).toBeVisible();
-    await expect(group.getByRole('button', { name: 'ARCHIVE', exact: true })).toBeVisible();
-    await expect(col.getByRole('button', { name: '▶ Start' })).not.toBeVisible();
-    await expect(col.getByRole('button', { name: '✓ Finish' })).not.toBeVisible();
-    await expect(col.getByRole('button', { name: '✓ Done' })).not.toBeVisible();
+    await expect(group.getByRole('button', { name: CARD_ACTION_COPY.archive, exact: true })).toBeVisible();
+    await expect(col.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true })).not.toBeVisible();
+    await expect(col.getByRole('button', { name: CARD_ACTION_COPY.finish, exact: true })).not.toBeVisible();
+    await expect(col.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true })).not.toBeVisible();
 
     await col.locator('.kv2-complete-session-toggle').first().click();
     await col.locator('.kv2-complete-session-card-title', { hasText: '[E2E] BtnVis Done' }).click();
     const dialog = page.locator('.kv2-dialog');
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /REOPEN/i })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).toBeVisible();
   });
 });

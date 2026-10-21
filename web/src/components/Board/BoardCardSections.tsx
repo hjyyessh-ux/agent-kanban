@@ -3,6 +3,8 @@ import type { AgentRuntime, CardExecutionKind, KanbanStatus } from '../../../../
 import codexIconUrl from '../../assets/codex-icon-transparent.png';
 import { ScheduledDispatchBadge } from '../shared/ScheduledDispatchUi';
 import type { ChildItem, V2CardViewModel } from './board-selectors';
+import { CARD_ACTION_COPY } from '../../constants/copy';
+import { primaryActionFor, secondaryActionFor, type CardActionKind } from '../../constants/card-actions';
 
 export const ActionSpinner: React.FC = () => (
   <span className="kv2-action-spinner" aria-hidden="true" />
@@ -265,6 +267,13 @@ interface CardActionsProps {
   onUnqueue?: () => void;
 }
 
+const CARD_ACTION_CLASS: Record<CardActionKind, string> = {
+  start: 'kv2-card-action--start',
+  finish: 'kv2-card-action--finish',
+  done: 'kv2-card-action--done',
+  reopen: 'kv2-card-action--secondary',
+};
+
 export const CardActions: React.FC<CardActionsProps> = ({
   vm,
   onStatusChange,
@@ -277,7 +286,7 @@ export const CardActions: React.FC<CardActionsProps> = ({
   // Keep the busy state until the card actually leaves `todo`. Dispatch only
   // *initiates* the run; the status flips to in_progress asynchronously (via
   // polling), so resetting right after onDispatch() would briefly flash the
-  // "▶ Start" button again before the card transitions. A safety timeout
+  // "▶ 시작" button again before the card transitions. A safety timeout
   // clears the state if the status never changes.
   useEffect(() => {
     if (!starting) return;
@@ -292,9 +301,9 @@ export const CardActions: React.FC<CardActionsProps> = ({
   if (vm.parentCardId) return null;
 
   const stop = (e: React.MouseEvent) => e.stopPropagation();
-  const startLabel = vm.hasScheduledBadge ? '▶ Start Now' : '▶ Start';
+  const primary = primaryActionFor(vm.status, { scheduled: vm.hasScheduledBadge, surface: 'card' });
 
-  if (vm.status === 'todo') {
+  if (primary.kind === 'start') {
     return (
       <div className="kv2-card-actions">
         {onDispatch && (
@@ -318,10 +327,10 @@ export const CardActions: React.FC<CardActionsProps> = ({
           >
             {starting ? (
               <>
-                <ActionSpinner /> Starting…
+                <ActionSpinner /> {CARD_ACTION_COPY.starting}
               </>
             ) : (
-              startLabel
+              primary.label
             )}
           </button>
         )}
@@ -329,13 +338,13 @@ export const CardActions: React.FC<CardActionsProps> = ({
         {vm.queuedAfterCardId && onUnqueue ? (
           <button
             type="button"
-            className="kv2-card-action kv2-card-action--queue kv2-card-action--no-upper"
+            className="kv2-card-action kv2-card-action--queue"
             onClick={(e) => {
               stop(e);
               onUnqueue();
             }}
           >
-            Dequeue
+            {CARD_ACTION_COPY.dequeue}
           </button>
         ) : onQueueOpen ? (
           <button
@@ -346,7 +355,7 @@ export const CardActions: React.FC<CardActionsProps> = ({
               onQueueOpen();
             }}
           >
-            Queue
+            {CARD_ACTION_COPY.queue}
           </button>
         ) : null}
 
@@ -362,82 +371,26 @@ export const CardActions: React.FC<CardActionsProps> = ({
     );
   }
 
-  if (vm.status === 'in_progress') {
-    return (
-      <div className="kv2-card-actions">
-        {onStatusChange && (
-          <button
-            type="button"
-            className="kv2-card-action kv2-card-action--finish"
-            onClick={(e) => {
-              stop(e);
-              onStatusChange('complete');
-            }}
-          >
-            ✓ Finish
-          </button>
-        )}
-        {onStatusChange && (
-          <button
-            type="button"
-            className="kv2-card-action kv2-card-action--secondary"
-            onClick={(e) => {
-              stop(e);
-              onStatusChange('todo');
-            }}
-          >
-            Reopen
-          </button>
-        )}
-      </div>
-    );
-  }
+  if (!onStatusChange) return <div className="kv2-card-actions" />;
 
-  if (vm.status === 'complete') {
-    return (
-      <div className="kv2-card-actions">
-        {onStatusChange && (
-          <button
-            type="button"
-            className="kv2-card-action kv2-card-action--done"
-            onClick={(e) => {
-              stop(e);
-              onStatusChange('done');
-            }}
-          >
-            ✓ Done
-          </button>
-        )}
-        {onStatusChange && (
-          <button
-            type="button"
-            className="kv2-card-action kv2-card-action--secondary"
-            onClick={(e) => {
-              stop(e);
-              onStatusChange('todo');
-            }}
-          >
-            Reopen
-          </button>
-        )}
-      </div>
-    );
-  }
+  const secondary = secondaryActionFor(vm.status);
+  const actions = secondary ? [primary, secondary] : [primary];
 
   return (
     <div className="kv2-card-actions">
-      {onStatusChange && (
+      {actions.map((action) => (
         <button
+          key={action.kind}
           type="button"
-          className="kv2-card-action kv2-card-action--secondary"
+          className={`kv2-card-action ${CARD_ACTION_CLASS[action.kind]}`}
           onClick={(e) => {
             stop(e);
-            onStatusChange('todo');
+            if (action.target !== 'dispatch') onStatusChange(action.target);
           }}
         >
-          Reopen
+          {action.label}
         </button>
-      )}
+      ))}
     </div>
   );
 };

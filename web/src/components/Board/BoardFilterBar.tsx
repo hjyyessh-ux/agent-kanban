@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { KanbanCard } from '../../../../src/core/types';
+import type { KanbanCard, Work } from '../../../../src/core/types';
 import { usePersistedDialogSize } from '../../hooks/usePersistedDialogSize';
 import type { BoardFilters } from './board-filters';
+import type { BoardWorkFilter } from './board-works';
+import { TOOLBAR_COPY } from '../../constants/copy';
 
 type DateInputWithPicker = HTMLInputElement & { showPicker?: () => void };
 
@@ -15,6 +17,21 @@ interface BoardFilterBarProps {
   filters: BoardFilters;
   onFiltersChange: (next: BoardFilters) => void;
   onFiltersReset: () => void;
+  /**
+   * The `WORK:` section. Kept out of `BoardFilters` (which also drives the
+   * Timeline's `sessionFilter`); `App` passes it only in `GROUP: WORKS`, the
+   * only mode that loads Works.
+   */
+  workFilter?: {
+    works: readonly Work[];
+    value: BoardWorkFilter;
+    onChange: (next: BoardWorkFilter) => void;
+  };
+}
+
+function isSameWorkFilter(left: BoardWorkFilter, right: BoardWorkFilter): boolean {
+  if (typeof left === 'string' || typeof right === 'string') return left === right;
+  return left.workId === right.workId;
 }
 
 function getCardRecency(card: KanbanCard): number {
@@ -174,12 +191,16 @@ export const BoardFilterBar: React.FC<BoardFilterBarProps> = ({
   filters,
   onFiltersChange,
   onFiltersReset,
+  workFilter,
 }) => {
   const [open, setOpen] = useState(false);
   const [sessionIdExpanded, setSessionIdExpanded] = useState(false);
   const anchorRef = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  const activeCount = useMemo(() => getActiveFilterCount(filters), [filters]);
+  const activeCount = useMemo(
+    () => getActiveFilterCount(filters) + (workFilter && workFilter.value !== 'all' ? 1 : 0),
+    [filters, workFilter],
+  );
   const summary = activeCount === 0
     ? 'No filters applied'
     : `${activeCount} filter${activeCount > 1 ? 's' : ''} active`;
@@ -290,14 +311,13 @@ export const BoardFilterBar: React.FC<BoardFilterBarProps> = ({
     <section ref={anchorRef} className="kv2-filter-anchor" aria-label="Board filters">
       <button
         type="button"
-        className={`kv2-filter-trigger${open ? ' is-open' : ''}${activeCount > 0 ? ' is-active' : ''}`}
+        className={`kv2-toolbar-ctl kv2-filter-trigger${open ? ' is-open' : ''}${activeCount > 0 ? ' is-active' : ''}`}
         aria-expanded={open}
         aria-controls="kv2-filter-panel"
         onClick={() => setOpen((previous) => !previous)}
       >
-        <span className="kv2-filter-trigger-icon" aria-hidden="true">☰</span>
-        <span>Filter{activeCount > 0 ? ` (${activeCount})` : ''}</span>
-        {activeCount > 0 && <span className="kv2-filter-trigger-badge" aria-hidden="true">ON</span>}
+        <span className="kv2-filter-trigger-icon" aria-hidden="true">≡</span>
+        <span>{TOOLBAR_COPY.filter}{activeCount > 0 ? ` (${activeCount})` : ''}</span>
       </button>
 
       {open && (
@@ -429,6 +449,38 @@ export const BoardFilterBar: React.FC<BoardFilterBarProps> = ({
                   </label>
                 </div>
               </fieldset>
+
+              {workFilter && (
+                <fieldset className="kv2-filter-section kv2-filter-card">
+                  <legend className="kv2-filter-label">{TOOLBAR_COPY.workFilterLegend}</legend>
+                  <div className="kv2-filter-checklist">
+                    {([
+                      ['all', TOOLBAR_COPY.workFilterAll, undefined],
+                      ['unassigned', TOOLBAR_COPY.workFilterUnassigned, undefined],
+                      ...workFilter.works.map((work): [BoardWorkFilter, string, string] => [
+                        { workId: work.id },
+                        work.title,
+                        `${work.sessionLinks.length} session${work.sessionLinks.length === 1 ? '' : 's'}`,
+                      ]),
+                    ] as [BoardWorkFilter, string, string | undefined][]).map(([value, label, meta]) => {
+                      const selected = isSameWorkFilter(workFilter.value, value);
+                      return (
+                        <button
+                          key={typeof value === 'string' ? value : value.workId}
+                          type="button"
+                          className={`kv2-filter-option${selected ? ' is-selected' : ''}`}
+                          aria-pressed={selected}
+                          title={meta ? `${label} · ${meta}` : label}
+                          onClick={() => workFilter.onChange(value)}
+                        >
+                          <span className="kv2-filter-option-text">{label}</span>
+                          {meta && <span className="kv2-filter-option-meta">{meta}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
 
               <div className="kv2-filter-actions kv2-filter-card kv2-filter-card--actions">
                 <span className="kv2-filter-summary" aria-live="polite">{summary}</span>

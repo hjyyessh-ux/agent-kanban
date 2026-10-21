@@ -9,6 +9,13 @@ import type {
 } from '../../../../src/core/types';
 import {
   assignKeywords,
+  assignOptionKeys,
+  assignTargetForQuery,
+  filterAssignRecommendations,
+  groupAssignRecommendations,
+  newWorkTitleFor,
+  stepAssignTarget,
+  NEW_WORK_OPTION,
   confirmDeleteWorkMessage,
   describeAssignSuggestion,
   describeBulkAssignProgress,
@@ -169,6 +176,89 @@ describe('recommendWorksForSession', () => {
     ];
     expect(recommendWorksForSession(session, works).map((r) => r.work.id))
       .toEqual(['same-dir', 'elsewhere']);
+  });
+});
+
+describe('assign combobox', () => {
+  const session = inboxSessionFromLink(link, []);
+  const works = [
+    work({ id: 'zepe-error', title: 'zepetoful - error inspect', projectDir: '/repo/mcp-server' }),
+    work({ id: 'zepe-reset', title: 'Zepetoful - Reset 기능', projectDir: '/repo/mcp-server' }),
+    work({ id: 'sms', title: 'SMS - Whitelist 관리', projectDir: '/repo' }),
+    work({ id: 'lineage', title: 'Zadar 고도화', projectDir: '/elsewhere' }),
+  ];
+  const ranked = recommendWorksForSession(session, works, undefined, new Set(['lineage']));
+
+  test('filters by title, case-insensitively, keeping the ranking order', () => {
+    expect(filterAssignRecommendations(ranked, 'ZEPE').map((r) => r.work.id))
+      .toEqual(['zepe-error', 'zepe-reset']);
+    // Every term must match — "zepe reset" is one Work, not two.
+    expect(filterAssignRecommendations(ranked, 'zepe reset').map((r) => r.work.id))
+      .toEqual(['zepe-reset']);
+  });
+
+  test('filters by directory — the full path and the chip label both count', () => {
+    expect(filterAssignRecommendations(ranked, 'mcp-server').map((r) => r.work.id))
+      .toEqual(['zepe-error', 'zepe-reset']);
+    expect(filterAssignRecommendations(ranked, 'elsewhere').map((r) => r.work.id))
+      .toEqual(['lineage']);
+  });
+
+  test('a blank query lists everything', () => {
+    expect(filterAssignRecommendations(ranked, '   ')).toHaveLength(ranked.length);
+  });
+
+  test('groups follow the ranking: lineage, then same directory, then the rest', () => {
+    const groups = groupAssignRecommendations(ranked);
+    expect(groups.map((g) => [g.key, g.items.map((r) => r.work.id)])).toEqual([
+      ['chained', ['lineage']],
+      ['sameDirectory', ['sms']],
+      ['rest', ['zepe-error', 'zepe-reset']],
+    ]);
+    expect(groups.map((g) => g.label)).toEqual(['🔗 이어진 세션', '📁 같은 디렉토리', '그 밖의 진행 중 Work']);
+  });
+
+  test('with preferSameDir off there is no same-directory group', () => {
+    const plain = recommendWorksForSession(session, works, undefined, undefined, { preferSameDir: false });
+    expect(groupAssignRecommendations(plain, false).map((g) => g.key)).toEqual(['rest']);
+  });
+
+  test('the create option is always the first option', () => {
+    expect(assignOptionKeys(ranked)[0]).toBe(NEW_WORK_OPTION);
+    expect(assignOptionKeys([])).toEqual([NEW_WORK_OPTION]);
+  });
+
+  test('default selection is the 1순위 추천, not the top of the browse order', () => {
+    // The list leads with the lineage group, but the row suggested `sms`;
+    // plain 배정 must land on what the row was offering.
+    expect(assignTargetForQuery('', ranked, 'sms')).toBe('sms');
+    expect(assignTargetForQuery('', ranked)).toBe('lineage');
+    // A suggestion that dropped out of the list (completed on a poll) is ignored.
+    expect(assignTargetForQuery('', ranked, 'gone')).toBe('lineage');
+  });
+
+  test('with no Work to link, the default is a new Work', () => {
+    expect(assignTargetForQuery('', [])).toBe(NEW_WORK_OPTION);
+  });
+
+  test('typing selects the first matching Work, and create only when nothing matches', () => {
+    expect(assignTargetForQuery('zepe', ranked, 'sms')).toBe('zepe-error');
+    expect(assignTargetForQuery('완전히 새 작업', ranked, 'sms')).toBe(NEW_WORK_OPTION);
+  });
+
+  test('the new Work title is what was typed, else the suggestion', () => {
+    expect(newWorkTitleFor('  zepe ', 'TEST - hi')).toBe('zepe');
+    expect(newWorkTitleFor('', 'TEST - hi')).toBe('TEST - hi');
+  });
+
+  test('arrow keys walk the options and wrap', () => {
+    const keys = [NEW_WORK_OPTION, 'a', 'b'];
+    expect(stepAssignTarget(keys, 'a', 1)).toBe('b');
+    expect(stepAssignTarget(keys, 'b', 1)).toBe(NEW_WORK_OPTION);
+    expect(stepAssignTarget(keys, NEW_WORK_OPTION, -1)).toBe('b');
+    // A filtered-out selection restarts from the matching end.
+    expect(stepAssignTarget(keys, 'gone', 1)).toBe(NEW_WORK_OPTION);
+    expect(stepAssignTarget(keys, 'gone', -1)).toBe('b');
   });
 });
 

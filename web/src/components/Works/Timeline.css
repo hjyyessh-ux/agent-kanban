@@ -50,6 +50,22 @@
   cursor: pointer;
 }
 
+.tl-seg-caption {
+  align-self: center;
+  padding: 0 4px 0 12px;
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-3xs);
+  color: var(--kv2-text-muted);
+}
+
+/* Keyboard / drag affordances, spelled out once next to the controls. */
+.tl-scroll-hint {
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-3xs);
+  color: var(--kv2-text-muted);
+}
+
 .tl-seg-option[aria-pressed='true'] {
   background: var(--kv2-control-selected-bg);
   color: var(--kv2-tab-active-fg);
@@ -76,7 +92,11 @@
 /* Three layers, three colour axes — see the Timeline section of
    docs/design-system.md. Work = ink (a plan), session = the affinity violet
    (a measurement), cards = the board's own status hues. */
-.tl-legend-swatch--work { background: var(--kv2-timeline-work-bar); }
+/* Work bars come in four fills — the same four `.tl-bar--*` rules below paint. */
+.tl-legend-swatch--work-active { background: var(--kv2-timeline-work-bar); }
+.tl-legend-swatch--work-overrun { background: var(--kv2-warn-accent); }
+.tl-legend-swatch--work-done { background: var(--kv2-timeline-work-bar-done); }
+.tl-legend-swatch--work-discarded { background: var(--kv2-neutral-400); }
 .tl-legend-swatch--session { background: var(--kv2-affinity-chain); }
 .tl-legend-swatch--todo { background: var(--kv2-status-todo-display); }
 .tl-legend-swatch--in_progress { background: var(--kv2-status-progress-display); }
@@ -114,28 +134,177 @@
   --tl-label-track: min(var(--tl-label-width), var(--tl-label-cap));
   --tl-row-height: 60px;
   --tl-bar-height: 34px;
-  --tl-col-min: 78px;
+  /* Default only — TimelineView sets the real one inline from the zoom
+     (TIMELINE_COLUMN_WIDTH: 78 / 34, strip 56). Its scroll math assumes this
+     exact width, so no stylesheet rule may override it. */
+  --tl-col-width: 78px;
+  /* Height of the month band row; the strip's sticky header stacks under it. */
+  --tl-month-height: 22px;
 }
 
 .timeline--month {
   --tl-row-height: 38px;
   --tl-bar-height: 20px;
-  --tl-col-min: 34px;
 }
 
-/* Month view needs more columns than fit; the label column stays pinned. */
+/* ── Scroller ─────────────────────────────────────────────── */
+
+/* Native horizontal scroll over fixed-width day columns, snapping to whole
+   days. The snap edge is the label column's right edge (scroll-padding), so a
+   snapped `scrollLeft` is always `column × --tl-col-width`.
+   `overscroll-behavior-x: contain` stops a macOS two-finger swipe that hits the
+   end from turning into browser back/forward. Scroll anchoring is off because
+   TimelineView corrects `scrollLeft` itself after prepending days. */
 .tl-scroll {
   overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-left: var(--tl-label-track);
+  overscroll-behavior-x: contain;
+  overflow-anchor: none;
 }
 
+.tl-scroll:focus-visible {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: -3px;
+}
+
+/* Snap fights every programmatic scrollLeft a drag-pan writes; the pan
+   settles on a day itself when it ends. */
+.timeline--panning .tl-scroll {
+  scroll-snap-type: none;
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* `max-content`, not 100%: the tracks are wider than the scroller, and the
+   sticky label column is confined to this box — at 100% it would scroll away
+   once the view passed the first screenful. */
 .tl-grid {
   display: grid;
+  width: max-content;
   min-width: 100%;
+}
+
+/* ── Month band ───────────────────────────────────────────── */
+
+/* One cell per calendar month above the day header. The label is sticky just
+   right of the label column, so the month in view stays named. */
+.tl-month {
+  height: var(--tl-month-height);
+  display: flex;
+  align-items: center;
+  border-left: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-surface-sunken);
+  font-family: var(--kv2-font-sans);
+  font-weight: 800;
+  font-size: var(--kv2-text-3xs);
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+}
+
+.tl-month-label {
+  position: sticky;
+  left: calc(var(--tl-label-track) + 6px);
+  padding: 0 6px;
+}
+
+/* The day a month starts carries the same rule as the band above it. */
+.tl-head--month-start {
+  border-left: 2px solid var(--kv2-border-strong);
+}
+
+/* ── Works-tab strip (variant="strip") ─────────────────────── */
+
+/* The frame moves from `.timeline` to the section so the toolbar sits inside
+   it; the grid only draws active Works' plan bars, so rows and columns are
+   tighter than the Board view's. */
+.tl-strip {
+  border: 3px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-md);
+  overflow: hidden;
+  margin-bottom: var(--kv2-sp-4);
+}
+
+.tl-strip-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+}
+
+.tl-strip:not(.tl-strip--collapsed) .tl-strip-toolbar {
+  border-bottom: 2px solid var(--kv2-border-strong);
+}
+
+.tl-strip-title {
+  font-family: var(--kv2-font-heading);
+  font-weight: 900;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+}
+
+.tl-strip .tl-range-label {
+  font-size: var(--kv2-text-sm);
+  min-width: 0;
+}
+
+.tl-strip-actions {
+  display: inline-flex;
+  gap: var(--kv2-sp-2);
+  margin-left: auto;
+}
+
+.timeline--strip {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  --tl-row-height: 36px;
+  --tl-bar-height: 24px;
+}
+
+/* Capped height: the strip is a glance above the Inbox, not the full grid.
+   The day header stays pinned while the rows scroll under it. */
+.timeline--strip .tl-scroll {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.timeline--strip .tl-month {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+}
+
+.timeline--strip .tl-head {
+  position: sticky;
+  top: var(--tl-month-height);
+  /* Above the sticky labels (4), bars and their handles (≤7). */
+  z-index: 8;
+  padding: 6px 4px;
+}
+
+.timeline--strip .tl-head--label {
+  top: 0;
+  z-index: 9;
+}
+
+.timeline--strip .tl-label {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+/* No caret on a strip row, so the title takes the caret's indent back. */
+.timeline--strip .tl-label--work {
+  padding-left: var(--kv2-sp-3);
 }
 
 /* ── Header row ───────────────────────────────────────────── */
 
 .tl-head {
+  scroll-snap-align: start;
   padding: 10px 8px;
   text-align: center;
   font-family: var(--kv2-font-sans);
@@ -151,7 +320,15 @@
   padding: 10px 2px;
 }
 
+/* …but not the label head, which keeps its indent and the grip's room. */
+.timeline--month .tl-head--label {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
 .tl-head--label {
+  /* Pinned, so not a snap target — the day cells are. */
+  scroll-snap-align: none;
   position: sticky;
   left: 0;
   z-index: 4;
@@ -362,9 +539,26 @@
   font-size: var(--kv2-text-sm);
   color: var(--kv2-timeline-work-bar-fg);
   white-space: nowrap;
-  overflow: hidden;
+  /* `clip`, not `hidden`: `hidden` makes the bar a scroll container, which
+     would pin the sticky `.tl-bar-lead` to the bar instead of the viewport. */
+  overflow: clip;
   cursor: pointer;
   text-align: left;
+}
+
+/* Title (plus `◂ M/D부터` when the start is off-screen), sticky against the
+   label column: a bar that began left of the viewport keeps its name in view.
+   Content-width so it has room to slide; the chips stay at the far end. */
+.tl-bar-lead {
+  position: sticky;
+  left: calc(var(--tl-label-track) + 8px);
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  overflow: hidden;
 }
 
 .timeline--month .tl-bar {
@@ -449,8 +643,9 @@
 }
 
 .tl-bar-title {
-  /* The title is the only flexible child, so the chips never squeeze it away. */
-  flex: 1 1 auto;
+  /* Shrinks inside the lead (which is the bar's flexible child) so the chips
+     never squeeze it away. */
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1057,8 +1252,8 @@
 
 /* ── Narrow viewports ─────────────────────────────────────── */
 
-/* Shown only under 480px: the day grid cannot shrink below --tl-col-min, so on
-   a phone the answer is horizontal scrolling and the hint says so. */
+/* Shown only under 480px, where the toolbar's ←/→ hint is meaningless: on a
+   phone the grid is swiped, and this says so. */
 .tl-mobile-hint {
   display: none;
   margin: 0 0 var(--kv2-sp-2);
@@ -1094,11 +1289,10 @@
 
   .timeline {
     --tl-label-cap: 132px;
-    --tl-col-min: 56px;
   }
 
-  .timeline--month {
-    --tl-col-min: 30px;
+  .tl-scroll-hint {
+    display: none;
   }
 
   .tl-controls {

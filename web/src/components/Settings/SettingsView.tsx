@@ -9,8 +9,10 @@ import { useFontScale } from '../../hooks/useFontScale';
 import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import { SettingsEntryModal } from './SettingsEntryModal';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
+import { toggleLanFullAccess } from './lanAccess';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
+import { SETTINGS_COPY } from '../../constants/copy';
 import './Settings.css';
 
 interface SettingsViewProps {
@@ -52,6 +54,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onClearError,
 }) => {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [lanTogglePending, setLanTogglePending] = useState(false);
   const [editEntry, setEditEntry] = useState<SettingsEntry | null>(null);
   const [revealedIds, setRevealedIds] = useState<Set<string>>(new Set());
   // Plaintext secret values fetched on demand (the list endpoint redacts them).
@@ -258,8 +261,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   };
 
   const handleLanFullAccessToggle = async () => {
-    if (!lanFullAccessEntry) return;
-    await onUpdateEntry(lanFullAccessEntry.id, { value: isLanFullAccess ? 'false' : 'true' });
+    if (!lanFullAccessEntry || lanTogglePending) return;
+    setLanTogglePending(true);
+    try {
+      await toggleLanFullAccess({
+        isOn: isLanFullAccess,
+        confirm: (message) => window.confirm(message),
+        update: (value) => onUpdateEntry(lanFullAccessEntry.id, { value }),
+      });
+    } catch {
+      // `useSettings` surfaces the failure through the shared error alert.
+    } finally {
+      setLanTogglePending(false);
+    }
   };
 
   return (
@@ -276,7 +290,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           className="kv2-btn kv2-btn--primary"
           onClick={() => setShowCreateModal(true)}
         >
-          + 새 설정
+          {SETTINGS_COPY.newEntry}
         </button>
       </div>
 
@@ -321,7 +335,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <button
             type="button"
             className={`settings-toggle-switch ${isLanFullAccess ? 'settings-toggle-switch--on' : ''}`}
-            onClick={handleLanFullAccessToggle}
+            onClick={() => void handleLanFullAccessToggle()}
+            disabled={lanTogglePending}
+            aria-busy={lanTogglePending || undefined}
             role="switch"
             aria-checked={isLanFullAccess}
             aria-label="Toggle LAN full access"
@@ -550,7 +566,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     className="kv2-btn kv2-btn--outline kv2-btn--small"
                     onClick={(e) => { e.stopPropagation(); setEditEntry(entry); }}
                   >
-                    ✎ Edit
+                    {SETTINGS_COPY.edit}
                   </button>
                   <button
                     type="button"

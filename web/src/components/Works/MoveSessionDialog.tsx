@@ -136,11 +136,10 @@ export function MoveSessionDialog({
           works={works}
           initialRole={link.role}
           move={{ currentWork: fromWork, renderPreview }}
-          onCancel={onClose}
           onCreateWork={attempt((title, role) => onMoveToNewWork(title, role))}
           onLinkToWork={attempt((workId, role) => onMove(workId, role))}
-          // Left, like the Inbox panel's 무시 — but not destructive (the
-          // session returns to the Inbox), so it keeps the outline variant.
+          // In the `⋯` menu, like the Inbox's 폐기 — but not destructive (the
+          // session returns to the Inbox), so it is not tinted.
           secondary={{ label: '⤺ Inbox로 되돌리기', run: attempt(onUnlink), tone: 'neutral' }}
         />
         {error && <p className="work-move-error">⚠ {error}</p>}

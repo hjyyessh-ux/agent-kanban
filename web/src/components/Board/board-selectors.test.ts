@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { KanbanCard } from '../../../../src/core/types';
-import { selectColumns } from './board-selectors';
+import { countUnread, isUnreadCompletion, selectColumns } from './board-selectors';
+import { groupCompleteCardsBySession } from './BoardCompleteSessionView';
 
 function makeCard(id: string, overrides: Partial<KanbanCard> = {}): KanbanCard {
   return {
@@ -143,5 +144,87 @@ describe('selectColumns — board summary', () => {
     });
 
     expect(getTodoCard([card], 'header-only').boardSummary).toBe('진행 중');
+  });
+});
+
+describe('isUnreadCompletion / countUnread', () => {
+  const COMPLETED = '2026-06-01T10:00:00.000Z';
+  const RESPONDED = '2026-06-01T12:00:00.000Z';
+
+  function completeCard(id: string, overrides: Partial<KanbanCard> = {}): KanbanCard {
+    return makeCard(id, { status: 'complete', completedAt: COMPLETED, ...overrides });
+  }
+
+  test('a completion never opened is unread', () => {
+    expect(isUnreadCompletion(completeCard('never-seen'))).toBe(true);
+  });
+
+  test('seen before the completion is unread again', () => {
+    const card = completeCard('seen-before', { completedSeenAt: '2026-06-01T09:00:00.000Z' });
+    expect(isUnreadCompletion(card)).toBe(true);
+  });
+
+  test('seen at exactly the completion moment is read', () => {
+    expect(isUnreadCompletion(completeCard('seen-same', { completedSeenAt: COMPLETED }))).toBe(false);
+  });
+
+  test('responseAt wins over completedAt as the completion moment', () => {
+    // Seen after the card entered complete, but before the latest response
+    // landed: the response is what the user has not seen.
+    const newer = completeCard('response-newer', {
+      responseAt: RESPONDED,
+      completedSeenAt: '2026-06-01T11:00:00.000Z',
+    });
+    expect(isUnreadCompletion(newer)).toBe(true);
+
+    // And a stale completedAt does not resurrect a response already seen.
+    const seen = completeCard('response-seen', {
+      responseAt: '2026-06-01T09:00:00.000Z',
+      completedSeenAt: '2026-06-01T09:30:00.000Z',
+    });
+    expect(isUnreadCompletion(seen)).toBe(false);
+  });
+
+  test('falls back to updatedAt when there is no response or completion stamp', () => {
+    const card = makeCard('legacy', { status: 'complete', updatedAt: COMPLETED });
+    expect(isUnreadCompletion(card)).toBe(true);
+    expect(isUnreadCompletion({ ...card, completedSeenAt: COMPLETED })).toBe(false);
+  });
+
+  test('a completion with no usable moment at all is never unread', () => {
+    // The App.tsx copy lacked this guard and called such a card unread; the
+    // board badge and session count did not. The unified rule sides with them.
+    const card = makeCard('no-moment', { status: 'complete', updatedAt: '' });
+    expect(isUnreadCompletion(card)).toBe(false);
+  });
+
+  test('only complete cards can be unread', () => {
+    for (const status of ['todo', 'in_progress', 'done'] as const) {
+      expect(isUnreadCompletion(completeCard(`s-${status}`, { status }))).toBe(false);
+    }
+  });
+
+  test('countUnread counts exactly the cards isUnreadCompletion flags', () => {
+    const cards = [
+      completeCard('a'),
+      completeCard('b', { completedSeenAt: COMPLETED }),
+      completeCard('c', { responseAt: RESPONDED, completedSeenAt: COMPLETED }),
+      makeCard('d'),
+    ];
+    expect(countUnread(cards)).toBe(2);
+    expect(countUnread([])).toBe(0);
+  });
+
+  test('board badge and session group count agree', () => {
+    const cards = [
+      completeCard('g1', { sessionId: 'ses-1' }),
+      completeCard('g2', { sessionId: 'ses-1', completedSeenAt: COMPLETED }),
+      completeCard('g3', { sessionId: 'ses-1', responseAt: RESPONDED, completedSeenAt: COMPLETED }),
+    ];
+    const [group] = groupCompleteCardsBySession(cards);
+    const column = selectColumns(cards).find((c) => c.status === 'complete')!;
+    const badged = column.cards.filter((vm) => vm.hasUnreadCompletion).length;
+    expect(group.unreadCount).toBe(2);
+    expect(badged).toBe(group.unreadCount);
   });
 });

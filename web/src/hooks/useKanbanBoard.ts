@@ -6,6 +6,7 @@ import {
   createCard as apiCreateCard,
   updateCard as apiUpdateCard,
   markCompletionSeen as apiMarkCompletionSeen,
+  markCompletionSeenMany as apiMarkCompletionSeenMany,
   deleteCard as apiDeleteCard,
   archiveCards as apiArchiveCards,
   dispatchCard as apiDispatchCard,
@@ -25,6 +26,7 @@ type KanbanAction =
   | { type: 'LOAD'; cards: KanbanCard[] }
   | { type: 'CREATE'; card: KanbanCard }
   | { type: 'UPDATE'; card: KanbanCard }
+  | { type: 'UPDATE_MANY'; cards: KanbanCard[] }
   | { type: 'DELETE'; id: string }
   | { type: 'ARCHIVE'; ids: string[] }
   | { type: 'SET_ERROR'; error: UiAlert }
@@ -42,6 +44,8 @@ function kanbanReducer(state: KanbanBoardState, action: KanbanAction): KanbanBoa
         ...state,
         cards: state.cards.map((c) => (c.id === action.card.id ? action.card : c)),
       };
+    case 'UPDATE_MANY':
+      return { ...state, cards: replaceCards(state.cards, action.cards) };
     case 'DELETE':
       return { ...state, cards: state.cards.filter((c) => c.id !== action.id) };
     case 'ARCHIVE':
@@ -55,6 +59,17 @@ function kanbanReducer(state: KanbanBoardState, action: KanbanAction): KanbanBoa
     default:
       return state;
   }
+}
+
+/**
+ * Swap in the server's copies of `updated` by id, keeping board order. A card
+ * the poll has already dropped stays dropped — the batch response must not
+ * resurrect it.
+ */
+export function replaceCards(cards: KanbanCard[], updated: readonly KanbanCard[]): KanbanCard[] {
+  if (updated.length === 0) return cards;
+  const byId = new Map(updated.map((card) => [card.id, card]));
+  return cards.map((card) => byId.get(card.id) ?? card);
 }
 
 const initialState: KanbanBoardState = {
@@ -101,6 +116,7 @@ export function useKanbanBoard(): {
   setResumeSession: (cardId: string, sessionId: string) => Promise<void>;
   clearResumeSession: (cardId: string) => Promise<void>;
   markCompletionSeen: (cardId: string) => Promise<KanbanCard>;
+  markCompletionSeenMany: (cardIds: string[]) => Promise<KanbanCard[]>;
   clearError: () => void;
   showError: (error: UiAlert) => void;
 } {
@@ -318,6 +334,19 @@ export function useKanbanBoard(): {
     }
   }, []);
 
+  const markCompletionSeenMany = useCallback(async (cardIds: string[]): Promise<KanbanCard[]> => {
+    if (cardIds.length === 0) return [];
+    try {
+      const { cards } = await apiMarkCompletionSeenMany(cardIds);
+      dispatch({ type: 'UPDATE_MANY', cards });
+      return cards;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to mark completions as seen';
+      dispatch({ type: 'SET_ERROR', error: createUiAlert('Completion update failed', message, 'Refresh board') });
+      throw err;
+    }
+  }, []);
+
   const clearError = useCallback(() => {
     dispatch({ type: 'CLEAR_ERROR' });
   }, []);
@@ -346,6 +375,7 @@ export function useKanbanBoard(): {
     setResumeSession,
     clearResumeSession,
     markCompletionSeen,
+    markCompletionSeenMany,
     clearError,
     showError,
   };

@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/kanban';
+import { STATUS_LABELS } from '../web/src/constants/copy';
 
 test.describe('Board Structure', () => {
   test('renders with 4 columns', async ({ page }) => {
@@ -29,10 +30,10 @@ test.describe('Board Structure', () => {
     const completeCol = page.locator('.kv2-column[data-status="complete"] .kv2-column-header');
     const doneCol = page.locator('.kv2-column[data-status="done"] .kv2-column-header');
 
-    await expect(todoCol).toContainText('To Do');
-    await expect(progressCol).toContainText('In Progress');
-    await expect(completeCol).toContainText('Complete');
-    await expect(doneCol).toContainText('Done');
+    await expect(todoCol).toContainText(STATUS_LABELS.todo);
+    await expect(progressCol).toContainText(STATUS_LABELS.in_progress);
+    await expect(completeCol).toContainText(STATUS_LABELS.complete);
+    await expect(doneCol).toContainText(STATUS_LABELS.done);
   });
 
   test('column counts show card numbers', async ({ page, seedCard }) => {

@@ -3,6 +3,7 @@ import { apiCreateCard, apiGetCards, apiUpdateCard, apiUploadScreenshot, type Ca
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,7 +17,7 @@ async function startCard(page: import('@playwright/test').Page, title: string) {
     has: page.locator('.kv2-card-title', { hasText: title }),
   });
   await expect(cardEl).toBeVisible();
-  await cardEl.getByText('Start').click();
+  await cardEl.getByRole('button', { name: CARD_ACTION_COPY.start, exact: true }).click();
 }
 
 async function expectCardInColumn(page: import('@playwright/test').Page, status: string, title: string) {
@@ -230,7 +231,7 @@ test.describe('Runtime integration', () => {
     await openCard(page, fail.title);
     const failDialog = page.getByRole('dialog');
     await expect(failDialog.getByText('[failed] fake codex failure', { exact: false })).toBeVisible();
-    await failDialog.getByRole('button', { name: 'START TASK' }).click();
+    await failDialog.getByRole('button', { name: CARD_ACTION_COPY.startTask, exact: true }).click();
     await expectCardInColumn(page, 'complete', fail.title);
   });
 
@@ -275,7 +276,7 @@ test.describe('Runtime integration', () => {
     await openCard(page, fail.title);
     const failDialog = page.getByRole('dialog');
     await expect(failDialog.getByText('[failed] fake claude failure', { exact: false })).toBeVisible();
-    await failDialog.getByRole('button', { name: 'START TASK' }).click();
+    await failDialog.getByRole('button', { name: CARD_ACTION_COPY.startTask, exact: true }).click();
     await expectCardInColumn(page, 'complete', fail.title);
   });
 

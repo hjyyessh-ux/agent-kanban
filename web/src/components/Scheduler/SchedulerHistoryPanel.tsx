@@ -3,6 +3,7 @@ import type { SchedulerEntry, SchedulerRun } from '../../../../src/core/types';
 import { fetchSchedulerHistory } from '../../hooks/useSchedulerApi';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import './Scheduler.css';
+import { formatShortId } from '../../utils/short-id';
 
 interface SchedulerHistoryPanelProps {
   entry: SchedulerEntry;
@@ -65,7 +66,7 @@ export const SchedulerHistoryRunCard: React.FC<SchedulerHistoryRunCardProps> = (
               className="kv2-btn kv2-btn--outline kv2-btn--small"
               onClick={() => onOpenCard?.(run.cardId as string)}
             >
-              카드로 전달됨 · {run.cardId}
+              카드로 전달됨 · {formatShortId(run.cardId)}
             </button>
           ) : (
             <span className="scheduler-history-value">카드로 전달되지 않았습니다.</span>

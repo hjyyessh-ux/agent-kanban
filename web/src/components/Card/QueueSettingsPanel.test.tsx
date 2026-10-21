@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { KanbanCard } from "../../../../src/core/types";
 import { QueueSettingsPanel } from "./QueueSettingsPanel";
+import { CARD_DETAIL_COPY } from "../../constants/copy";
 
 function makeCard(overrides: Partial<KanbanCard>): KanbanCard {
   return {
@@ -107,7 +108,7 @@ describe("QueueSettingsPanel", () => {
         queueModeSummary={{ title: "Continue previous card session", description: "" }}
         queueTargetId="target"
         queueSessionMode="continue_queued_after_session"
-        disabledReason="예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다."
+        disabledReason={CARD_DETAIL_COPY.queueDisabledScheduled}
         onQueueTargetChange={mock(() => undefined)}
         onQueueSessionModeChange={mock(() => undefined)}
         onQueue={mock(() => undefined)}
@@ -115,7 +116,7 @@ describe("QueueSettingsPanel", () => {
       />,
     );
 
-    expect(html).toContain("예약된 카드는 먼저 예약을 취소해야 Queue에 넣을 수 있습니다.");
+    expect(html).toContain(CARD_DETAIL_COPY.queueDisabledScheduled);
     expect(html).not.toContain("SAVE QUEUE SETTINGS");
   });
 });

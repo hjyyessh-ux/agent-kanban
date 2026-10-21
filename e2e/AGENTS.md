@@ -37,6 +37,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `theme.e2e.ts` | Light/dark/system theme toggle, `data-theme` + localStorage persistence |
 | `v2-visual-audit.e2e.ts` | V2 design-system compliance checks (light + dark screenshot variants) |
 | `wiki-archive-cards.e2e.ts` | LLM wiki processing triggered by card archival, excluding child cards |
+| `board-works.e2e.ts` | Board `GROUP: WORKS`: drag a session onto a Work (link) / another Work (move) / same-column UNASSIGNED (unlink) with 되돌리기, cross-column drop is inert, bottom tray (in-progress card, `(현재)`, `＋ 새 Work` dialog), `⋯ → Work로 이동`, unread-only + WORK filter on Work containers. DnD is dispatched DragEvents with a shared DataTransfer (wait a frame after `dragstart`) |
 | `works.e2e.ts` | Works tab (Inbox → new Work, tab badge), assign-all modal N/1/S/X shortcuts, Work completion → card archive, Timeline bar geometry + detail dialog, re-dating a Work by bar-edge drag and by the detail dialog's date inputs, an open Work's planned end surviving completion |
 | `tsconfig.json` | TypeScript config scoped to the e2e test tree |
 
@@ -55,8 +56,10 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 - Import `test` and `expect` from `./fixtures/kanban`, not directly from `@playwright/test` — the custom fixture adds card, script, and Quick Action seed/track helpers with automatic cleanup.
 - Seed data through `e2e/helpers/api.ts` (`apiCreateCard`, `apiUpdateCard`, `apiDeleteCard`, `apiGetCards`, `apiCreateScript`, `apiDeleteScript`, `apiCreateQuickAction`, `apiRunQuickAction`, and related helpers) rather than clicking through creation forms, unless the UI path itself is what's under test.
 - Base URL for API helpers defaults to `http://127.0.0.1:24681`, overridable via `E2E_BASE_URL`.
+- Text selectors for shared UI copy (card actions, column labels, `⋯` menu items) import the constants from `web/src/constants/copy.ts` (`CARD_ACTION_COPY`, `STATUS_LABELS`, `COLUMN_MENU_COPY`) instead of repeating the string, and pass `exact: true` — `getByRole` name matching is a case-insensitive substring by default, so `다시 열기` / `✓ 완료` would otherwise match neighbouring buttons.
 - Rely on Playwright auto-waiting and locator assertions; avoid `page.waitForTimeout()` as a synchronization mechanism.
 - Track every card, script, Quick Action, and Work you create for cleanup (`trackCard`, `trackScript`, `trackQuickAction`, `trackWork`, or the matching seed fixture). `trackQuickAction` depends on `trackScript` so teardown removes references before deleting ScriptEntries; preserve that ordering.
+- Timeline column numbers are **buffer-relative** (the grid is a horizontal scroll buffer starting ~8 weeks before today), so never assume this week's Monday is grid column 2: read a day's column off its header with `dayGridColumn(page, date)` (`.tl-head[data-tl-date="YYYY-MM-DD"]` → `data-tl-col` + 2). Zoom buttons are named `주 단위 줌` / `월 단위 줌`; stepping is `7일 전으로` / `7일 뒤로` / `오늘`.
 - Timeline column geometry (`style.gridColumnStart/End`) lives on `.tl-bar-slot`, the wrapper — **not** on `.tl-bar`, which is just the clickable label inside it. Reading `grid-column` off `.tl-bar` silently returns empty strings.
 - The Works domain is **global server state**, not per-card: the Inbox, the Active/Resolved lists, and the Works tab badge all reflect every session in the store. Any spec that asserts on them must start from `apiResetWorksState()` (deletes every Work, then ignores every leftover Inbox session), or sessions from earlier spec files will leak into the assertions.
 

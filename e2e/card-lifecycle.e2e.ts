@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/kanban';
 import { apiUpdateCard } from './helpers/api';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 test.describe('Card Lifecycle — Status Transitions', () => {
   test('Start button on TODO card triggers dispatch and shows error (no plugin)', async ({ page, seedCard }) => {
@@ -51,7 +52,7 @@ test.describe('Card Lifecycle — Status Transitions', () => {
     const cardEl = completeColumn.locator('.kv2-card', { hasText: '[E2E] Verify Test' });
     await expect(cardEl).toBeVisible();
 
-    await cardEl.getByRole('button', { name: 'Done' }).click();
+    await cardEl.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true }).click();
 
     // Card should move to done (rendered inside a collapsed session group)
     const doneColumn = page.locator('.kv2-column[data-status="done"]');

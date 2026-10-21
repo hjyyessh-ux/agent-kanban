@@ -1,11 +1,18 @@
 import React, { useCallback, useState } from 'react';
-import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
+import type { KanbanCard, KanbanStatus, Work } from '../../../../src/core/types';
 import { BoardColumnHeader } from './BoardColumnHeader';
 import { selectCardById } from './board-selectors';
 import type { V2ColumnViewModel } from './board-selectors';
 import { BoardCard, STATUS_ACCENT } from './BoardCard';
 import { BoardCompleteSessionView } from './BoardCompleteSessionView';
-import type { CompleteSessionGroup } from './BoardCompleteSessionView';
+import type { CardRevealRequest, CompleteSessionGroup } from './BoardCompleteSessionView';
+import { isUnreadCompletion } from './board-selectors';
+import { groupsCompleteBySession, type BoardGroupMode } from './board-group-mode';
+import { BoardWorkContainer } from './BoardWorkContainer';
+import { workForCard, type WorkDragSource, type WorksColumnModel } from './board-works';
+import { useBoardWorkDnD, workDropTargetProps, writeWorkDragData } from './board-work-dnd';
+import type { WorkDetailIntent } from '../Works/WorkDetailDialog';
+import { BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
 
 /* ── DnD helpers ──────────────────────────────────────────── */
 
@@ -47,8 +54,21 @@ interface BoardColumnProps {
   onQueueOpen?: (card: KanbanCard) => void;
   onUnqueue?: (card: KanbanCard) => void;
   onDelete?: (card: KanbanCard) => void;
-  groupCompleteSessions?: boolean;
+  groupMode?: BoardGroupMode;
   onArchiveCards?: (cards: KanbanCard[]) => void;
+  /** Batch read stamp for the column's `Mark all read`. */
+  onMarkCardsRead?: (cardIds: string[]) => void;
+  /** The column `● N` pill: jump to this column's next unread card. */
+  onUnreadJump?: () => void;
+  revealRequest?: CardRevealRequest | null;
+  /**
+   * `GROUP: WORKS` (board-works.ts `selectWorkFragments`, this column's slice).
+   * A session-grouped column draws its Work fragments, then the UNASSIGNED
+   * zone; a flat column tags each card with its Work via `worksIndex`.
+   */
+  worksColumn?: WorksColumnModel;
+  worksIndex?: Map<string, Work>;
+  onWorkOpen?: (workId: string, intent?: WorkDetailIntent) => void;
 }
 
 export const BoardColumn: React.FC<BoardColumnProps> = ({
@@ -66,16 +86,30 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
   onQueueOpen,
   onUnqueue,
   onDelete,
-  groupCompleteSessions = false,
+  groupMode = 'card',
   onArchiveCards,
+  onMarkCardsRead,
+  onUnreadJump,
+  revealRequest,
+  worksColumn,
+  worksIndex,
+  onWorkOpen,
 }) => {
   const { status, cards } = column;
+  const groupComplete = groupsCompleteBySession(groupMode);
   const isDndEnabled = !!onReorder;
   const [hideAllSessionGroupsToken, setHideAllSessionGroupsToken] = useState(0);
   const [completeSessionsCollapsed, setCompleteSessionsCollapsed] = useState(false);
   const sessionViewCards = cards
     .map((vm) => selectCardById(allCards, vm.id))
     .filter((card): card is KanbanCard => !!card);
+
+  const sessionGrouped = (status === 'complete' && groupComplete) || status === 'done';
+  const dnd = useBoardWorkDnD();
+  // Same-column UNASSIGNED zone = `⊘ Work에서 빼기` for a session dragged out of a Work here.
+  const unassignDropProps = workDropTargetProps(dnd, { kind: 'unassigned', status });
+  const unassignOk = !!unassignDropProps.onDrop;
+  const sessionStatus = status === 'done' ? 'done' : 'complete';
 
   /* ── DnD handlers (only active on todo column) ───────── */
 
@@ -178,22 +212,37 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         status={status}
         label={column.label}
         count={column.count}
+        unreadCount={column.unreadCount}
         actionableCount={
           status === 'complete' || status === 'done'
             ? cards.filter((card) => !card.favorite).length
             : undefined
         }
         onCompleteAll={onCompleteAll}
+        onUnreadJump={status === 'complete' ? onUnreadJump : undefined}
+        onMarkAllRead={
+          status === 'complete' && onMarkCardsRead
+            ? () => {
+                // `allCards` is the filtered board, so this reads exactly what
+                // the column is showing — children included, done untouched.
+                const unreadIds = allCards
+                  .filter((card) => card.status === 'complete' && isUnreadCompletion(card))
+                  .map((card) => card.id);
+                if (unreadIds.length > 0) onMarkCardsRead(unreadIds);
+              }
+            : undefined
+        }
         onHideAllSessions={
-          status === 'complete' && groupCompleteSessions && sessionViewCards.length > 0
+          status === 'complete' && groupComplete && sessionViewCards.length > 0
             ? () => {
                 setCompleteSessionsCollapsed(true);
                 setHideAllSessionGroupsToken((previous) => previous + 1);
               }
             : undefined
         }
-        hideAllSessionsLabel={completeSessionsCollapsed ? 'Collapse All' : 'Hide All'}
+        hideAllSessionsLabel={completeSessionsCollapsed ? COLUMN_MENU_COPY.collapseAll : COLUMN_MENU_COPY.hideAll}
         onArchive={onArchive}
+        workCount={sessionGrouped ? worksColumn?.fragments.length : undefined}
       />
       {status === 'todo' && onCreate && (
         <button
@@ -213,12 +262,61 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         role="listbox"
         aria-label={`${column.label} cards`}
       >
-        {(status === 'complete' && groupCompleteSessions) || status === 'done' ? (
+        {sessionGrouped && worksColumn ? (
+          <div className="kv2-works-column">
+            {worksColumn.fragments.map((fragment) => (
+              <BoardWorkContainer
+                key={fragment.work.id}
+                fragment={fragment}
+                status={sessionStatus}
+                hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+                revealRequest={revealRequest}
+                onWorkOpen={onWorkOpen}
+                onCardClick={onCardClick}
+                onSessionOpen={onSessionOpen}
+                onFavoriteToggle={onFavoriteToggle}
+                onStatusChange={onStatusChange}
+                onArchiveCards={onArchiveCards}
+              />
+            ))}
+            <div className="kv2-works-unassigned-head">
+              <span>{BOARD_WORKS_COPY.unassignedHeading}</span>
+              <span className="kv2-works-unassigned-count">{worksColumn.unassigned.length}</span>
+            </div>
+            <div
+              className={`kv2-works-unassigned${unassignOk ? ' is-drop-target' : ''}`}
+              data-status={status}
+              {...unassignDropProps}
+            >
+              {unassignOk && (
+                <div className="kv2-works-unassign-hint" aria-hidden="true">{BOARD_WORKS_COPY.unassignHint}</div>
+              )}
+              {worksColumn.unassigned.length > 0 ? (
+                <BoardCompleteSessionView
+                  cards={[]}
+                  groups={worksColumn.unassigned}
+                  status={sessionStatus}
+                  defaultCollapsed={status === 'done'}
+                  hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+                  revealRequest={revealRequest}
+                  onCardClick={onCardClick}
+                  onSessionOpen={onSessionOpen}
+                  onFavoriteToggle={onFavoriteToggle}
+                  onStatusChange={onStatusChange}
+                  onArchiveCards={onArchiveCards}
+                />
+              ) : (
+                <div className="kv2-works-unassigned-empty">{BOARD_WORKS_COPY.unassignedEmpty}</div>
+              )}
+            </div>
+          </div>
+        ) : sessionGrouped ? (
           <BoardCompleteSessionView
             cards={sessionViewCards}
-            status={status === 'done' ? 'done' : 'complete'}
+            status={sessionStatus}
             defaultCollapsed={status === 'done'}
             hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+            revealRequest={revealRequest}
             onCardClick={onCardClick}
             onSessionOpen={onSessionOpen}
             onFavoriteToggle={onFavoriteToggle}
@@ -230,17 +328,43 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         ) : (
           cards.map((vm) => {
             const raw = selectCardById(allCards, vm.id);
+            const work = worksIndex && raw ? workForCard(raw, worksIndex) ?? null : undefined;
+            // Works mode: every flat card is a drag source too (todo keeps its
+            // reorder payload — `text/plain` is the same cardId either way).
+            const workSource: WorkDragSource | undefined = dnd && raw
+              ? {
+                  cardId: raw.id,
+                  sessionId: raw.sessionId,
+                  workId: work?.id,
+                  status,
+                  projectDir: raw.projectDir,
+                  title: raw.sessionTitle ?? raw.title,
+                }
+              : undefined;
             return (
               <div
                 key={vm.id}
+                data-card-id={vm.id}
+                data-work-id={work?.id}
+                data-work-status={work ? status : undefined}
                 className="kv2-card-wrapper"
                 style={{ '--kv2-status-line': STATUS_ACCENT[vm.status] } as React.CSSProperties}
               >
                 <BoardCard
                   vm={vm}
-                  draggable={isDndEnabled}
-                  onDragStart={makeDragStart(vm.id)}
-                  onDragEnd={handleDragEnd}
+                  draggable={isDndEnabled || !!workSource}
+                  onDragStart={(event) => {
+                    if (isDndEnabled) makeDragStart(vm.id)(event);
+                    if (workSource && dnd) {
+                      writeWorkDragData(event.dataTransfer, workSource);
+                      dnd.startDrag(workSource);
+                    }
+                  }}
+                  onDragEnd={(event) => {
+                    handleDragEnd(event);
+                    dnd?.endDrag();
+                  }}
+                  workMoveSource={workSource}
                   onClick={() => { if (raw) onCardClick(raw); }}
                   onStatusChange={
                     raw && onStatusChange
@@ -262,6 +386,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                   onFavoriteToggle={
                     raw && onFavoriteToggle ? () => onFavoriteToggle(raw) : undefined
                   }
+                  workTag={work === undefined ? undefined : { work, onOpen: onWorkOpen }}
                 />
               </div>
             );

@@ -547,71 +547,6 @@
   flex: 0 0 auto;
 }
 
-.kv2-filter-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0 12px;
-  border: 2px solid var(--kv2-ink-black);
-  background: var(--kv2-status-todo-accent);
-  color: var(--kv2-status-todo-fg);
-  font-family: var(--kv2-font-heading);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  box-shadow: 4px 4px 0 var(--kv2-ink-black);
-  cursor: pointer;
-  transition: background 120ms ease, transform 120ms ease, box-shadow 120ms ease;
-}
-
-.kv2-filter-trigger:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0 var(--kv2-ink-black);
-}
-
-.kv2-filter-trigger.is-active {
-  background: var(--kv2-warn-surface-strong);
-  border-color: var(--kv2-ink-black);
-  color: var(--kv2-ink-black);
-  box-shadow: 4px 4px 0 var(--kv2-ink-black);
-}
-
-.kv2-filter-trigger.is-open {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--kv2-frame);
-  background: var(--kv2-warn-surface-tint);
-}
-
-.kv2-filter-trigger.is-open.is-active {
-  background: var(--kv2-status-in-progress-accent);
-  box-shadow: 5px 5px 0 var(--kv2-ink-black);
-}
-
-.kv2-filter-trigger-icon {
-  font-size: var(--kv2-text-xs);
-}
-
-.kv2-filter-trigger-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 28px;
-  height: 18px;
-  padding: 0 6px;
-  margin-left: 2px;
-  border: 2px solid var(--kv2-ink-black);
-  background: var(--kv2-surface);
-  color: var(--kv2-ink-black);
-  font-family: var(--kv2-font-mono);
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1;
-}
-
 .kv2-filter-popover {
   position: fixed;
   top: 88px;
@@ -1184,14 +1119,28 @@
   margin: 8px 12px 12px;
 }
 
+/* Every group wears a `SESSION` tab above its top edge, so the stack leaves
+   room for it: the gap and the top padding are tab height + breathing room,
+   or a tab would sit on the previous group's bottom border. */
+/* Also declared on `.kv2-work-body`: a Work stacks session groups the same way. */
+.kv2-complete-session-view,
+.kv2-work-body {
+  --kv2-session-tab-height: calc(var(--kv2-text-2xs) + 8px);
+}
+
 .kv2-complete-session-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: calc(var(--kv2-session-tab-height) + 14px);
+  padding-top: calc(var(--kv2-session-tab-height) + 2px);
 }
 
 .kv2-complete-session-group {
   --session-accent: var(--kv2-status-complete-display);
+  /* Left strip of the header and the tab. Separate from `--session-accent`,
+     which also paints the turn spine — unread must not leak onto that. */
+  --session-strip: var(--session-accent);
+  position: relative;
   border: 3px solid var(--kv2-frame);
   background: var(--kv2-surface);
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--kv2-ink-ambient) 22%, transparent);
@@ -1199,6 +1148,38 @@
 
 .kv2-complete-session-group--done {
   --session-accent: var(--kv2-status-done-display);
+}
+
+/* A group holding an unread turn swaps its strip (header and tab) to the
+   unread colour, so the column can be scanned for it without opening anything. */
+.kv2-complete-session-group--unread {
+  --session-strip: var(--kv2-unread-indicator);
+}
+
+/* `SESSION` folder tab — the counterpart of the Work container's `WORK` tab.
+   Neutral ink face; its left strip sits exactly over the header's status
+   strip (frame edge, then `--kv2-session-header-accent-width` of accent), so
+   the strip reads as one line running from the tab into the card. */
+.kv2-session-tab {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: -3px;
+  display: inline-flex;
+  align-items: center;
+  height: var(--kv2-session-tab-height);
+  padding: 0 10px 0 calc(var(--kv2-session-header-accent-width) + 10px);
+  border-left: 3px solid var(--kv2-frame);
+  background: var(--kv2-session-tab-bg);
+  box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--session-strip);
+  color: var(--kv2-session-tab-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
 }
 
 .kv2-complete-session-header {
@@ -1209,16 +1190,12 @@
   border-bottom: 2px solid var(--kv2-frame);
   background: var(--kv2-surface);
   cursor: pointer;
-  box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--kv2-status-complete-display);
+  box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--session-strip);
 }
 
 .kv2-complete-session-header:focus-visible {
   outline: 2px solid var(--kv2-focus-ring);
   outline-offset: -4px;
-}
-
-.kv2-complete-session-group--done .kv2-complete-session-header {
-  box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--kv2-status-done-display);
 }
 
 .kv2-complete-session-toggle {
@@ -1260,43 +1237,42 @@
   min-width: 0;
 }
 
-.kv2-complete-session-runtime-row {
+/* Row ① — project chip ··· unread · #session. Mirrors `.kv2-card-top`: the chip
+   shrinks/truncates, the right group never does. */
+.kv2-complete-session-top {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
   min-height: 24px;
 }
 
-/* Session ID — 보드 카드 #id와 동일한 plain 텍스트 형태(네모칸 없음). 클릭하면 resume 명령 복사 */
-.kv2-complete-session-id-chip {
-  margin-left: auto;
+.kv2-complete-session-top-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 0 0 auto;
-  border: none;
-  background: none;
-  padding: 0;
-  box-shadow: none;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--kv2-card-date-color);
-  white-space: nowrap;
-  cursor: pointer;
-  transition: opacity var(--kv2-transition-fast), color var(--kv2-transition-fast);
+  margin-left: auto;
 }
 
-.kv2-complete-session-id-chip:hover {
-  opacity: 0.7;
+/* Row ④ — runtime badge · count · last update ··· resume. Mirrors `.kv2-card-meta-row`. */
+.kv2-complete-session-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  min-height: 24px;
+  margin-top: 2px;
 }
 
-.kv2-complete-session-id-chip:active {
-  opacity: 0.5;
+/* Scoped so it outranks `.kv2-resume-copy { all: unset }` (primitives.css loads later). */
+.kv2-complete-session-meta-row .kv2-complete-session-resume {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.kv2-complete-session-id-chip.is-copied {
-  color: var(--kv2-success-text);
-  opacity: 1;
+.kv2-complete-session-meta-row > .kv2-runtime-badge {
+  flex-shrink: 0;
 }
 
 /* 타임라인 안의 인라인 정렬 컨트롤 (프롬프트 리스트 상단) */
@@ -1357,6 +1333,11 @@
   color: var(--kv2-frame);
 }
 
+.kv2-complete-session-more-unread {
+  color: var(--kv2-unread-text);
+  font-weight: 800;
+}
+
 .kv2-complete-session-title-row {
   display: flex;
   align-items: center;
@@ -1378,38 +1359,46 @@
   white-space: nowrap;
 }
 
-.kv2-complete-session-count,
-.kv2-complete-session-unread {
+/* Plain meta text next to the runtime badge, like the card's time line. */
+.kv2-complete-session-count {
   flex: 0 0 auto;
-  border: 2px solid var(--kv2-session-count-border);
-  background: var(--kv2-session-count-bg);
-  color: var(--kv2-session-count-fg);
   font-family: var(--kv2-font-mono);
-  font-size: 0.85rem;
+  font-size: var(--kv2-text-xs);
   font-weight: 800;
-  line-height: 1.1;
-  padding: 4px 9px;
-  box-shadow: 2px 2px 0 var(--kv2-session-count-shadow);
+  color: var(--kv2-session-count-fg);
+  white-space: nowrap;
 }
 
+/* Compact filled pill in row ① (next to the session id). */
 .kv2-complete-session-unread {
-  border-color: var(--kv2-session-unread-border);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  border: 2px solid var(--kv2-session-unread-border);
   background: var(--kv2-session-unread-bg);
   color: var(--kv2-session-unread-fg);
-  box-shadow: 2px 2px 0 var(--kv2-session-unread-shadow);
-}
-
-.kv2-complete-session-project {
-  width: fit-content;
-  margin-top: 0;
   font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  line-height: 1.3;
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  line-height: 1.1;
+  padding: 1px 6px;
+  box-shadow: 2px 2px 0 var(--kv2-session-unread-shadow);
+  white-space: nowrap;
 }
 
-.kv2-complete-session-project .kv2-card-directory-label,
-.kv2-complete-session-project .kv2-card-directory-name {
-  font-size: var(--kv2-text-caption);
+/* Filled, with a dot, so it reads as a signal rather than plain meta. */
+.kv2-complete-session-unread::before {
+  content: '●';
+  font-size: 0.7em;
+}
+
+/* Project chip — first row of the session header, matching the board card's
+   row-1 chip (`.kv2-card-top > .kv2-card-project`). */
+.kv2-complete-session-project {
+  display: block;
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1.4;
 }
 
 .kv2-complete-session-divider {
@@ -1479,13 +1468,18 @@
   background: var(--session-accent);
 }
 
+/* Latest = position, not state: a filled ink node and the `LATEST` stamp.
+   No accent here — the complete accent is the same red family as unread, and
+   a red latest border was being read as "unread". */
 .kv2-complete-session-turn--current .kv2-complete-session-turn-node {
-  background: var(--session-accent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-status-complete-display) 16%, transparent);
+  border-color: var(--kv2-text-primary);
+  background: var(--kv2-text-primary);
 }
 
-.kv2-complete-session-group--done .kv2-complete-session-turn--current .kv2-complete-session-turn-node {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-status-done-display) 18%, transparent);
+.kv2-complete-session-turn--unread .kv2-complete-session-turn-node {
+  border-color: var(--kv2-unread-indicator);
+  background: var(--kv2-unread-indicator);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kv2-unread-indicator) 25%, transparent);
 }
 
 .kv2-complete-session-turn-updated {
@@ -1519,8 +1513,9 @@
   border-color: var(--kv2-border-strong);
 }
 
-.kv2-complete-session-turn--current .kv2-complete-session-turn-body {
-  border-color: var(--session-accent);
+.kv2-complete-session-turn--unread .kv2-complete-session-turn-body {
+  border: 2px solid var(--kv2-unread-indicator);
+  background: var(--kv2-unread-surface);
 }
 
 .kv2-complete-session-turn-body:focus-visible {
@@ -1563,6 +1558,34 @@
 
 .kv2-complete-session-card-title:hover {
   text-decoration: underline;
+}
+
+.kv2-complete-session-new-tag {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+
+.kv2-complete-session-turn-stamp {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.kv2-complete-session-turn--current .kv2-complete-session-turn-stamp {
+  color: var(--kv2-text-primary);
 }
 
 .kv2-complete-session-turn-header .kv2-favorite-toggle {
@@ -2092,16 +2115,6 @@
   text-overflow: ellipsis;
 }
 
-.kv2-session-id {
-  display: block;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-xs);
-  font-weight: 500;
-  line-height: 1.35;
-  color: var(--kv2-neutral-500);
-  word-break: break-all;
-}
-
 .kv2-session-item-path {
   font-size: var(--kv2-text-xs);
   color: var(--kv2-neutral-700);
@@ -2260,20 +2273,37 @@
   outline-offset: 2px;
 }
 
-.kv2-card-header {
+/* Row 1 — `[project chip] ··· [unread · origin · ☆ · #ID]`.
+   The chip takes only its name's width and truncates (`.kv2-project-chip`);
+   the right group never shrinks, so a long project name can neither push
+   ☆/#ID off the card nor wrap the row. `pointer-events: none` lets clicks on
+   the gap fall through to the click layer; the chip and the right group opt
+   back in (chip for its `title`, group for its buttons). */
+.kv2-card-top {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--kv2-sp-2);
+  min-width: 0;
+  min-height: 24px;
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
 }
 
-.kv2-card-runtime-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 100%;
-  flex-wrap: wrap;
+.kv2-card-top > .kv2-card-project {
+  pointer-events: auto;
+  display: block;
+  font-size: var(--kv2-text-ui-sm);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.kv2-card-project-spacer {
+  flex: 1 1 auto;
+}
+
+.kv2-card-top > .kv2-card-header-meta {
+  margin-left: auto;
 }
 
 .kv2-card-header-meta {
@@ -2286,13 +2316,6 @@
   position: relative;
   z-index: 2;
   pointer-events: auto;
-}
-
-.kv2-card-header-meta--floating {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  z-index: 3;
 }
 
 .kv2-card-unread-dot {
@@ -2484,32 +2507,6 @@
   box-shadow: inset 0 0 0 1px var(--kv2-runtime-opencode-icon-a);
 }
 
-.kv2-card-id {
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--kv2-card-date-color);
-}
-
-.kv2-card-id--copyable {
-  all: unset;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-sm);
-  font-weight: 800;
-  line-height: 1;
-  color: var(--kv2-card-date-color);
-  cursor: pointer;
-}
-
-.kv2-card-id--copyable:hover {
-  opacity: 0.7;
-}
-
-.kv2-card-id--copyable:active {
-  opacity: 0.5;
-}
-
 .kv2-card-title {
   font-family: var(--kv2-font-heading);
   font-size: var(--kv2-text-xl);
@@ -2524,50 +2521,19 @@
   -webkit-box-orient: vertical;
 }
 
-.kv2-card-section-label {
-  margin-top: calc(var(--kv2-card-title-gap) + 2px);
-  margin-bottom: 2px;
-  font-family: var(--kv2-font-sans);
-  font-size: var(--kv2-text-2xs);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  color: var(--kv2-prompt-label-color);
-  opacity: 0.78;
-  text-transform: capitalize;
-}
-
-.kv2-card-prompt-shell {
-  display: grid;
-  grid-template-columns: var(--kv2-prompt-accent-width) minmax(0, 1fr);
-  align-items: stretch;
-  column-gap: calc(var(--kv2-prompt-column-gap) + 2px);
-  margin-top: 2px;
-  min-height: var(--kv2-prompt-min-height);
-}
-
-.kv2-card-prompt-accent {
-  width: var(--kv2-prompt-accent-width);
-  min-height: var(--kv2-prompt-min-height);
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--kv2-prompt-accent-color) 28%, white);
-}
-
+/* Row 3 — the prompt, one line. No label and no accent bar: the title above
+   already says what this is, and the old shell spent a line and a gutter on it. */
 .kv2-card-summary,
 .kv2-card-prompt {
-  margin-top: 0;
-  min-height: var(--kv2-prompt-min-height);
-  padding: var(--kv2-prompt-padding-y) var(--kv2-prompt-padding-right) var(--kv2-prompt-padding-y) 0;
-  border-top: none;
+  margin-top: var(--kv2-sp-1);
   font-family: var(--kv2-font-sans);
   font-size: var(--kv2-text-xs);
   font-weight: 400;
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--kv2-neutral-ink-soft);
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .kv2-card-divider {
@@ -2584,74 +2550,6 @@
   );
 }
 
-.kv2-card-directory {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  margin-top: 8px;
-  margin-bottom: 0;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0;
-  color: var(--kv2-card-date-color);
-  opacity: 0.84;
-}
-
-.kv2-card-directory-label {
-  flex: 0 0 auto;
-  opacity: 0.68;
-}
-
-.kv2-card-directory-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--kv2-neutral-ink-strong);
-  font-weight: 800;
-}
-
-.kv2-card-session-command {
-  all: unset;
-  display: inline-flex;
-  position: relative;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  margin-top: 6px;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0;
-  color: var(--kv2-card-date-color);
-  opacity: 0.88;
-  cursor: pointer;
-  z-index: 2;
-}
-
-.kv2-card-session-command:hover {
-  opacity: 1;
-}
-
-.kv2-card-session-label {
-  flex: 0 0 auto;
-  opacity: 0.68;
-}
-
-.kv2-card-session-command code {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--kv2-neutral-ink-strong);
-  font: inherit;
-  font-weight: 800;
-}
-
 .kv2-card-footer {
   display: flex;
   flex-direction: column;
@@ -2660,52 +2558,49 @@
   margin-top: 2px;
 }
 
-.kv2-card-footer-meta {
+/* Meta line under the divider — `[CLAUDE] 27d ago` / `● 12분 34초째 실행 중`
+   / `⏱ 18m 2s · 3h ago`. Rendered by `BoardCardTimeMeta`. */
+.kv2-card-meta-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: var(--kv2-sp-2);
   min-width: 0;
-  padding-top: 8px;
+  margin-top: var(--kv2-sp-2);
 }
 
-.kv2-card-directory + .kv2-card-footer .kv2-card-footer-meta,
-.kv2-card-session-command + .kv2-card-footer .kv2-card-footer-meta {
-  padding-top: var(--kv2-sp-3);
+.kv2-card-meta-row > :first-child {
+  flex-shrink: 0;
 }
 
-.kv2-card-footer-meta > div:first-child {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 8px;
+.kv2-card-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  flex: 1;
-}
-
-.kv2-card-timestamp {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-caption);
   font-weight: 500;
-  letter-spacing: 0;
   line-height: 1.35;
   color: var(--kv2-card-date-color);
-  opacity: 0.82;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
 }
 
-.kv2-card-timestamp--updated {
-  margin-left: auto;
-  text-align: right;
+/* Running: ink text (the status yellow is not a text colour on light) with
+   the status colour carried by the dot. */
+.kv2-card-time--live {
+  font-weight: 700;
+  color: var(--kv2-neutral-ink-strong);
 }
 
-.kv2-card-timestamp--duration {
-  flex: none;
-  opacity: 0.85;
-  color: var(--kv2-accent, var(--kv2-card-date-color));
+.kv2-card-live-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kv2-status-in-progress-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--kv2-status-in-progress-accent) 30%, transparent);
 }
 
 /* ── Column header layout ─────────────────────────────────── */
@@ -2724,9 +2619,189 @@
 }
 
 .kv2-column-label {
+  /* Never the element that gives way: with the bulk actions folded into `⋯`
+     there is room for `COMPLETE` at the narrowest column. */
+  flex: 0 0 auto;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* `● 5` on the complete column header — filled like the group pill. */
+.kv2-column-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 2px solid var(--kv2-column-header-stroke-color);
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+}
+
+.kv2-column-unread::before {
+  content: '●';
+  font-size: 0.75em;
+}
+
+.kv2-column-unread--jump {
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  line-height: inherit;
+}
+
+.kv2-column-unread--jump:hover {
+  opacity: 0.9;
+}
+
+.kv2-column-unread--jump:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Board toolbar — one control shell ────────────────────────
+   `● N UNREAD` · `≡ FILTER` · LIST|BOARD|TIMELINE · GROUP: CARD|SESSION|WORKS
+   share height (34px), type, 2px stroke, 3px hard shadow and stay on one line
+   (docs/mockups/works-on-board.html, B안). Each control keeps its own active
+   hue — unread red, filter blue, view yellow, WORKS = the Work blue. Dark
+   lowers the active face and marks it with a bottom line instead
+   (`--kv2-toolbar-active-line-width` is 0 in light). */
+.kv2-toolbar-ctl,
+.kv2-toolbar-seg {
+  box-sizing: border-box;
+  height: 34px;
+  min-height: 34px;
+  margin: 0;
+  flex-shrink: 0;
+  border: 2px solid var(--kv2-toolbar-border);
+  background: var(--kv2-toolbar-bg);
+  box-shadow: var(--kv2-toolbar-shadow);
+}
+
+.kv2-toolbar-ctl,
+.kv2-toolbar-seg-btn {
+  color: var(--kv2-toolbar-fg);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kv2-toolbar-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  transition: transform var(--kv2-transition-fast), box-shadow var(--kv2-transition-fast);
+}
+
+.kv2-toolbar-ctl:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+}
+
+.kv2-toolbar-ctl:focus-visible,
+.kv2-toolbar-seg-btn:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+/* A `<fieldset>`: reset its UA padding/min-width so it sizes like a button. */
+.kv2-toolbar-seg {
+  display: inline-flex;
+  align-items: stretch;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.kv2-toolbar-seg-btn {
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+}
+
+.kv2-toolbar-seg-btn + .kv2-toolbar-seg-btn,
+.kv2-toolbar-seg-label + .kv2-toolbar-seg-btn {
+  border-left: 2px solid var(--kv2-toolbar-border);
+}
+
+.kv2-toolbar-seg-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--kv2-toolbar-label-bg);
+  color: var(--kv2-toolbar-label-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kv2-toolbar-seg-btn.is-active {
+  background: var(--kv2-toolbar-view-active-bg);
+  color: var(--kv2-toolbar-view-active-fg);
+  box-shadow: inset 0 calc(-1 * var(--kv2-toolbar-active-line-width)) 0 var(--kv2-status-in-progress-accent);
+}
+
+.kv2-toolbar-seg-btn.is-active[data-group="works"] {
+  background: var(--kv2-toolbar-works-active-bg);
+  color: var(--kv2-toolbar-works-active-fg);
+  box-shadow: inset 0 calc(-1 * var(--kv2-toolbar-active-line-width)) 0 var(--kv2-work-border);
+}
+
+/* `● N UNREAD` — the unread-only filter itself. Idle: unread outline + label;
+   pressed: filled unread face (`✓ N UNREAD`). One unread family only. */
+.kv2-unread-filter {
+  border-color: var(--kv2-unread-indicator);
+  color: var(--kv2-toolbar-unread-fg);
+}
+
+.kv2-unread-filter.is-active {
+  border-color: var(--kv2-toolbar-border);
+  background: var(--kv2-unread-indicator);
+  color: var(--kv2-unread-fill-fg);
+}
+
+.kv2-unread-filter:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+/* `≡ FILTER` — blue while open or while any filter is applied. */
+.kv2-filter-trigger.is-open,
+.kv2-filter-trigger.is-active {
+  background: var(--kv2-toolbar-filter-active-bg);
+  color: var(--kv2-toolbar-filter-active-fg);
+  box-shadow: var(--kv2-toolbar-shadow), inset 0 calc(-1 * var(--kv2-toolbar-active-line-width)) 0 var(--kv2-status-todo-accent);
+}
+
+/* Where an unread jump landed — a ring for UNREAD_FOCUS_RING_MS (1.2s). */
+.kv2-unread-focus {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: 3px;
+  transition: outline-color var(--kv2-transition-fast);
+}
+
+.kv2-column-menu-trigger {
+  min-width: 30px;
+  justify-content: center;
+  font-size: var(--kv2-text-md);
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.kv2-column-menu-popover {
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Column action buttons ────────────────────────────────── */
@@ -2797,7 +2872,7 @@
   width: 100%;
   background: none;
   border: none;
-  padding: 0 86px 0 0;
+  padding: 0;
   cursor: pointer;
   text-align: left;
   color: inherit;
@@ -3109,10 +3184,6 @@
   width: var(--kv2-btn-primary-width);
 }
 
-.kv2-card-action--no-upper {
-  text-transform: none;
-}
-
 .kv2-card-action--finish {
   background: var(--kv2-card-action-done-bg);
   border-color: var(--kv2-card-action-done-border);
@@ -3164,16 +3235,6 @@
 
 /* ── Container queries (card-width-based responsiveness) ── */
 @container (max-width: 260px) {
-  .kv2-card-footer-meta > div:first-child {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .kv2-card-timestamp--updated {
-    margin-left: 0;
-    text-align: left;
-  }
-
   .kv2-card-action {
     font-size: var(--kv2-text-ui-sm);
     padding: 0 8px;
@@ -3183,24 +3244,12 @@
 }
 
 @container (max-width: 200px) {
-  .kv2-card-footer-meta {
+  .kv2-card-time {
     display: none;
   }
 }
 
 @media (max-width: 420px) {
-  .kv2-card-footer-meta {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .kv2-card-timestamp,
-  .kv2-card-timestamp--updated {
-    white-space: normal;
-    margin-left: 0;
-    text-align: left;
-  }
-
   .kv2-card-actions {
     flex-wrap: wrap;
   }
@@ -3208,4 +3257,635 @@
   .kv2-card-queue-target {
     width: min(100%, var(--kv2-btn-queue-target-width));
   }
+}
+
+/* ── GROUP: WORKS (docs/mockups/works-on-board.html, B안) ─────────────────
+   A Work fragment is told apart from a session group by four signals: the
+   `WORK` folder tab, a 3px Work-blue border, the tint face and the stacked-
+   paper shadow. Filled Work labels use `--kv2-work-tab-*` (AA in dark too). */
+.kv2-works-column {
+  --kv2-work-tab-height: calc(var(--kv2-text-2xs) + 7px);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--kv2-work-tab-height) + 14px);
+  padding-top: var(--kv2-work-tab-height);
+}
+
+.kv2-work {
+  position: relative;
+  border: 3px solid var(--kv2-work-border);
+  background: var(--kv2-work-tint);
+  box-shadow: var(--kv2-work-stacked-shadow);
+  /* Leave room for the stacked sheet so the next fragment's tab clears it. */
+  margin-bottom: var(--kv2-sp-2);
+}
+
+.kv2-work-tab {
+  position: absolute;
+  bottom: 100%;
+  left: -3px;
+  display: inline-flex;
+  align-items: center;
+  height: var(--kv2-work-tab-height);
+  padding: 0 10px;
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  pointer-events: none;
+  user-select: none;
+}
+
+.kv2-work-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  padding: 10px 12px 4px;
+}
+
+.kv2-work-chevron {
+  flex: 0 0 auto;
+  width: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--kv2-work-text);
+  font-size: var(--kv2-text-ui-sm);
+  cursor: pointer;
+}
+
+.kv2-work-title {
+  flex: 1 1 auto;
+  min-width: 6ch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-base);
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.kv2-work-title:hover,
+.kv2-work-title:focus-visible {
+  text-decoration: underline;
+}
+
+.kv2-work-title:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+.kv2-work-chevron:focus-visible,
+.kv2-work-title:focus-visible,
+.kv2-work-elsewhere:focus-visible,
+.kv2-work-more:focus-visible,
+.kv2-card-work-tag:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.kv2-work-unread {
+  flex: 0 0 auto;
+  border: 2px solid var(--kv2-session-unread-border);
+  background: var(--kv2-session-unread-bg);
+  color: var(--kv2-session-unread-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+/* `● N` · Work id ride the meta line's right end — beside the title they cut
+   it to `Agent-kanban …`. A Work id is a 21-char nanoid, so the chip still
+   gives way first (click copies the full id). */
+.kv2-work-meta-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.kv2-work-meta-end .kv2-id-chip {
+  flex: 0 1 auto;
+  min-width: 6ch;
+  max-width: 10ch;
+  font-size: var(--kv2-text-caption);
+}
+
+.kv2-work-meta-end .kv2-id-chip-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-work-meta-end .kv2-id-chip-icon {
+  display: none;
+}
+
+/* A session header inside a Work is ~40px narrower than a bare column, and
+   its right group (● N · ★ N · #id · ⋯) never shrank — so the project chip
+   collapsed to two letters (`ag`). Inside a Work the chip keeps a readable
+   floor and the session id chip gives way first (click still copies it). */
+.kv2-work .kv2-complete-session-top .kv2-project-chip {
+  min-width: min(9ch, 45%);
+}
+
+.kv2-work .kv2-complete-session-top-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kv2-work .kv2-complete-session-top-meta > * {
+  flex-shrink: 0;
+}
+
+.kv2-work .kv2-complete-session-top-meta > .kv2-id-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.kv2-work .kv2-complete-session-top-meta .kv2-id-chip-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-work .kv2-complete-session-top-meta .kv2-id-chip-icon {
+  display: none;
+}
+
+.kv2-work-head .kv2-column-menu-trigger,
+.kv2-work-move-menu .kv2-column-menu-trigger {
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-work-head .kv2-column-menu-trigger:hover,
+.kv2-work-move-menu .kv2-column-menu-trigger:hover {
+  background: var(--kv2-work-tint-2);
+}
+
+.kv2-work-meta,
+.kv2-work-jumps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 8px 38px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-secondary);
+}
+
+/* One line: project chip · x / y sessions · ★ N ··· ● N · #id. Starts under
+   the chevron (not the title) so a 4-column board still fits it; the project
+   chip and the id chip give way down to a readable floor, the counts never
+   wrap or shrink. */
+.kv2-work-meta {
+  min-width: 0;
+  padding-left: 12px;
+  overflow: hidden;
+}
+
+.kv2-work-meta > .kv2-work-count,
+.kv2-work-meta > .kv2-favorite-pill {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.kv2-work-meta-end .kv2-work-unread {
+  flex: 0 0 auto;
+}
+
+/* `진행중 1 ↗` chips get their own row under the meta line. */
+.kv2-work-jumps {
+  flex-wrap: wrap;
+  margin-top: -2px;
+  padding-left: 12px;
+}
+
+.kv2-work-project {
+  min-width: min(7ch, 35%);
+  max-width: 160px;
+}
+
+.kv2-work-elsewhere {
+  padding: 0 5px;
+  border: 1px dashed var(--kv2-work-border);
+  background: var(--kv2-surface);
+  color: var(--kv2-work-text);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kv2-work-elsewhere:hover {
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+}
+
+/* Header-only session groups under their own SESSION tabs: the gap and top
+   padding are tab height + breathing room (mockup 32px / 26px). */
+.kv2-work-body {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--kv2-session-tab-height) + 14px);
+  padding: calc(var(--kv2-session-tab-height) + 8px) 12px 12px;
+}
+
+.kv2-work-body .kv2-complete-session-group {
+  box-shadow: 3px 3px 0 var(--kv2-shadow-hard-color);
+}
+
+.kv2-work-more {
+  width: 100%;
+  padding: 6px;
+  border: 0;
+  border-top: 2px dashed color-mix(in srgb, var(--kv2-work-border) 45%, transparent);
+  background: transparent;
+  color: var(--kv2-work-text);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kv2-work-more:hover {
+  background: var(--kv2-work-tint-2);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-work-more-unread {
+  color: var(--kv2-unread-text);
+  font-weight: 800;
+}
+
+/* Folded (chevron or `⋯ → 세션 접기`): header + meta line only. */
+.kv2-work--collapsed {
+  padding-bottom: 2px;
+}
+
+/* Title hover rings every fragment of the same Work; a `진행중 1 ↗` jump
+   flashes the one it lands on. */
+.kv2-work-peer {
+  outline: 3px solid var(--kv2-status-in-progress-accent);
+  outline-offset: 3px;
+}
+
+.kv2-work-flash {
+  animation: kv2-work-flash 1.2s ease-out;
+}
+
+@keyframes kv2-work-flash {
+  0%, 40% { outline: 4px solid var(--kv2-status-in-progress-accent); outline-offset: 4px; }
+  100% { outline: 4px solid transparent; outline-offset: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kv2-work-flash {
+    animation: none;
+    outline: 4px solid var(--kv2-status-in-progress-accent);
+    outline-offset: 4px;
+  }
+}
+
+/* UNASSIGNED SESSIONS n ─ ─ ─ divider, then the column's plain session groups. */
+.kv2-works-unassigned-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin-top: var(--kv2-sp-1);
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.kv2-works-unassigned-head::after {
+  content: '';
+  flex: 1;
+  border-top: 2px dashed var(--kv2-text-muted);
+}
+
+/* The divider already sits in the column's tab-sized gap. */
+.kv2-works-unassigned {
+  position: relative;
+  margin-top: calc(-1 * var(--kv2-work-tab-height));
+}
+
+.kv2-works-unassigned-empty {
+  padding: 22px 0;
+  border: 2px dashed var(--kv2-border-subtle);
+  color: var(--kv2-text-muted);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.kv2-column-work-count {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  padding: 1px 6px;
+  border: 2px solid var(--kv2-column-header-stroke-color);
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Todo / in-progress card footer in GROUP: WORKS. Above the click layer. */
+.kv2-card-work-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  margin-top: var(--kv2-sp-2);
+  pointer-events: none;
+}
+
+.kv2-card-work-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 8px 2px 4px;
+  border: 2px solid var(--kv2-work-border);
+  background: var(--kv2-work-tint);
+  color: var(--kv2-work-text);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.kv2-card-work-tag:disabled {
+  cursor: default;
+}
+
+.kv2-card-work-tag-icon {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-3xs);
+  font-weight: 800;
+}
+
+.kv2-card-work-tag-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-card-work-unassigned {
+  padding: 2px 8px;
+  border: 2px dashed var(--kv2-text-muted);
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+}
+
+/* `★ N` — session header row ① and the Work meta line. */
+.kv2-favorite-pill {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border: 2px solid var(--kv2-favorite-pill-border);
+  background: var(--kv2-favorite-pill-bg);
+  color: var(--kv2-favorite-pill-fg);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.kv2-complete-session-more-favorite {
+  color: var(--kv2-favorite-pill-fg);
+  font-weight: 800;
+}
+
+/* ── GROUP: WORKS drag & drop (4/5) ───────────────────────────────────────
+   Every hint is an overlay (absolute, pointer-events: none) or an outline —
+   nothing in flow changes while a drag is live, so the element under the
+   pointer is the element the user aimed at. */
+.kv2-work-move-menu {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.kv2-card-meta-row > .kv2-work-move-menu {
+  margin-left: auto;
+}
+
+.kv2-complete-session-header[draggable='true'] {
+  cursor: grab;
+}
+
+.kv2-complete-session-group.is-dragged {
+  opacity: 0.35;
+}
+
+.kv2-work.is-drop-target,
+.kv2-works-unassigned.is-drop-target {
+  outline: 3px dashed color-mix(in srgb, var(--kv2-work-border) 45%, transparent);
+  outline-offset: 4px;
+}
+
+.kv2-works-unassigned.is-drop-target {
+  outline-color: var(--kv2-text-muted);
+}
+
+.kv2-work.is-drop-target.is-drop-over,
+.kv2-works-unassigned.is-drop-target.is-drop-over {
+  outline-style: solid;
+  outline-color: var(--kv2-work-border);
+}
+
+.kv2-work.is-drop-self {
+  opacity: 0.55;
+}
+
+.kv2-work-drop-hint,
+.kv2-works-unassign-hint {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  z-index: 3;
+  padding: 10px;
+  border: 2px dashed var(--kv2-work-border);
+  background: var(--kv2-work-drop-overlay);
+  color: var(--kv2-work-text);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+}
+
+.kv2-work-drop-hint {
+  bottom: 8px;
+}
+
+.kv2-works-unassign-hint {
+  top: 0;
+  left: 0;
+  right: 0;
+  border-color: var(--kv2-text-muted);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-work.is-drop-over .kv2-work-drop-hint {
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+}
+
+/* Bottom tray — fixed, so mounting it never moves the board. */
+.kv2-work-tray {
+  position: fixed;
+  left: 50%;
+  bottom: var(--kv2-sp-5);
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 64px);
+  padding: 10px 12px;
+  border: 3px solid var(--kv2-frame);
+  background: var(--kv2-surface);
+  box-shadow: 6px 6px 0 var(--kv2-shadow-hard-color);
+  transform: translateX(-50%);
+  animation: kv2-work-tray-rise 0.18s ease-out;
+}
+
+@keyframes kv2-work-tray-rise {
+  from { transform: translate(-50%, 160%); }
+  to { transform: translate(-50%, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kv2-work-tray {
+    animation: none;
+  }
+}
+
+.kv2-work-tray-label {
+  flex: 0 0 auto;
+  color: var(--kv2-text-secondary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.kv2-work-tray-list {
+  display: flex;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.kv2-work-tray-drop {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  max-width: 260px;
+  padding: 8px 12px;
+  border: 2px solid var(--kv2-work-border);
+  background: var(--kv2-work-tint);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.kv2-work-tray-drop-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-work-tray-drop.is-current {
+  opacity: 0.45;
+  border-style: dashed;
+}
+
+.kv2-work-tray-current {
+  color: var(--kv2-text-secondary);
+  font-weight: 600;
+}
+
+.kv2-work-tray-drop--new {
+  border-style: dashed;
+  background: var(--kv2-surface);
+  color: var(--kv2-work-text);
+}
+
+.kv2-work-tray-drop--out {
+  border-style: dashed;
+  border-color: var(--kv2-text-secondary);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-work-tray-drop.is-drop-over {
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+}
+
+.kv2-work-tray-drop.is-drop-over .kv2-work-tray-current {
+  color: inherit;
+}
+
+.kv2-work-tray-drop--out.is-drop-over {
+  background: var(--kv2-text-secondary);
+  color: var(--kv2-surface);
+}
+
+.kv2-work-tray-note {
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 600;
+}
+
+/* New-Work name dialog (`＋ 새 Work`). */
+.kv2-new-work-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-3);
+}
+
+.kv2-new-work-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
 }

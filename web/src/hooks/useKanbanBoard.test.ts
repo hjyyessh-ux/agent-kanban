@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { KanbanCard } from '../../../src/core/types';
-import { selectArchivableCards, selectCompletableCards } from './useKanbanBoard';
+import { replaceCards, selectArchivableCards, selectCompletableCards } from './useKanbanBoard';
 
 function makeCard(overrides: Partial<KanbanCard>): KanbanCard {
   return {
@@ -64,5 +64,35 @@ describe('selectArchivableCards', () => {
     ]);
 
     expect(result.map((card) => card.id)).toEqual(['default-false']);
+  });
+});
+
+describe('replaceCards', () => {
+  test('swaps in updated copies by id and keeps board order', () => {
+    const cards = [
+      makeCard({ id: 'a', status: 'complete' }),
+      makeCard({ id: 'b', status: 'complete' }),
+      makeCard({ id: 'c', status: 'todo' }),
+    ];
+    const seenB = makeCard({ id: 'b', status: 'complete', completedSeenAt: '2026-10-19T00:00:00.000Z' });
+    const seenA = makeCard({ id: 'a', status: 'complete', completedSeenAt: '2026-10-19T00:00:00.000Z' });
+
+    const result = replaceCards(cards, [seenB, seenA]);
+
+    expect(result.map((card) => card.id)).toEqual(['a', 'b', 'c']);
+    expect(result[0]).toBe(seenA);
+    expect(result[1]).toBe(seenB);
+    expect(result[2]).toBe(cards[2]);
+  });
+
+  test('does not resurrect a card the poll already dropped', () => {
+    const cards = [makeCard({ id: 'a' })];
+    const result = replaceCards(cards, [makeCard({ id: 'gone' })]);
+    expect(result.map((card) => card.id)).toEqual(['a']);
+  });
+
+  test('returns the same array for an empty batch', () => {
+    const cards = [makeCard({ id: 'a' })];
+    expect(replaceCards(cards, [])).toBe(cards);
   });
 });

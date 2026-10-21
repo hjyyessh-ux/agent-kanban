@@ -4,12 +4,13 @@ import type {
   TimelineSessionSpan,
   Work,
 } from '../../../../src/core/types';
+import { workPlanOverrunDays } from '../../../../src/core/work-list';
+import { STATUS_LABELS } from '../../constants/copy';
 import {
-  addDays,
   buildBars,
   columnOf,
   dayDiff,
-  startOfDay,
+  dayWindow,
   type TimelineBar,
   type TimelineRange,
 } from './timelineModel';
@@ -317,6 +318,27 @@ export function buildTimelineRows(input: TimelineRowsInput): TimelineRow[] {
   return rows;
 }
 
+/**
+ * Rows for the Works tab's timeline strip: **active Works' plan bars, nothing
+ * else.** The strip sits above the Works tab's own Inbox, so the grid's 미배정
+ * rows would list the same sessions twice, and session rails are detail the
+ * full Board timeline (`전체 타임라인 ↗`) is for.
+ *
+ * Built with no sessions at all, so a Work row exists only when its own bar
+ * lands in the range — the strip never needs `GET /api/timeline`. Directory
+ * order is kept (the dir header rows are dropped; each label carries its dir
+ * colour instead).
+ */
+export function buildStripRows(works: Work[], range: TimelineRange, now: Date): TimelineWorkRow[] {
+  const rows = buildTimelineRows({
+    sessions: [],
+    works: works.filter((work) => work.status === 'active'),
+    range,
+    now,
+  });
+  return rows.filter((row): row is TimelineWorkRow => row.kind === 'work' && row.bar !== null);
+}
+
 function push<T>(map: Map<string, T[]>, key: string, value: T): void {
   const bucket = map.get(key);
   if (bucket) bucket.push(value);
@@ -388,9 +410,7 @@ export function todayColumn(range: TimelineRange, now: Date): number | null {
 
 /** Inclusive ISO window the grid covers, as `GET /api/timeline` wants it. */
 export function rangeWindow(range: TimelineRange): { from: string; to: string } {
-  const from = startOfDay(range.start);
-  const to = addDays(from, range.days.length);
-  return { from: from.toISOString(), to: new Date(to.getTime() - 1).toISOString() };
+  return dayWindow(range.start, range.days.length);
 }
 
 /* ── Legend · directory filter ────────────────────────────── */
@@ -404,17 +424,19 @@ export function rangeWindow(range: TimelineRange): { from: string; to: string } 
  * board hue is the pink-red `--kv2-status-complete-accent`, which read as
  * *failed*. The colour stays (the board owns it — see docs/design-system.md),
  * so the label carries the meaning: the agent finished and it is waiting on the
- * user, which is exactly what `complete` means here.
+ * user, which is exactly what `complete` means here. The words live in
+ * `constants/copy.ts` (`STATUS_LABELS`) so the board columns say the same.
  */
-export const TIMELINE_STATUS_LABELS: Record<KanbanStatus, string> = {
-  todo: '대기',
-  in_progress: '진행중',
-  complete: '검토 대기',
-  done: '완료',
-};
+export const TIMELINE_STATUS_LABELS: Record<KanbanStatus, string> = STATUS_LABELS;
 
-/** Legend entry key — the two structural layers plus the card statuses. */
-export type TimelineLegendKey = 'work' | 'session' | KanbanStatus;
+/**
+ * Work plan bar fills — one per bar colour the grid can paint
+ * (`.tl-bar--active` / `--done` / `--overrun` / `--discarded`).
+ */
+export type TimelineWorkBarKey = 'work-active' | 'work-done' | 'work-overrun' | 'work-discarded';
+
+/** Legend entry key — the Work bar fills, the session rail, the card statuses. */
+export type TimelineLegendKey = TimelineWorkBarKey | 'session' | KanbanStatus;
 
 export interface TimelineLegendItem {
   key: TimelineLegendKey;
@@ -422,15 +444,29 @@ export interface TimelineLegendItem {
 }
 
 const LEGEND_LABELS: Record<TimelineLegendKey, string> = {
-  work: 'Work 계획',
+  'work-active': 'Work 진행',
+  'work-overrun': 'Work 예정 초과',
+  'work-done': 'Work 완료',
+  'work-discarded': 'Work 폐기',
   session: '세션 실측',
   ...TIMELINE_STATUS_LABELS,
 };
 
 /** Most-live-first, matching `CELL_STATUS_PRIORITY`, after the two layers. */
 const LEGEND_ORDER: TimelineLegendKey[] = [
-  'work', 'session', 'in_progress', 'todo', 'complete', 'done',
+  'work-active', 'work-overrun', 'work-done', 'work-discarded',
+  'session', 'in_progress', 'todo', 'complete', 'done',
 ];
+
+/**
+ * Which fill a Work's bar is painted with — the same precedence the CSS
+ * applies: an overrun active bar is amber, not blue.
+ */
+export function workBarLegendKey(work: Work, now?: number): TimelineWorkBarKey {
+  if (work.status === 'done') return 'work-done';
+  if (work.status === 'discarded') return 'work-discarded';
+  return workPlanOverrunDays(work, now) > 0 ? 'work-overrun' : 'work-active';
+}
 
 /**
  * The legend for what is **actually on screen**.
@@ -441,12 +477,15 @@ const LEGEND_ORDER: TimelineLegendKey[] = [
  * nothing to point at teaches the reader the wrong model of the view. Deriving
  * it from the rows also makes it self-maintaining — a new status hue shows up in
  * the legend the first time it is drawn.
+ *
+ * Work bars come in four fills (진행 / 예정 초과 / 완료 / 폐기); each one is
+ * listed only when a bar of that fill is on the grid, by the same rule.
  */
-export function timelineLegend(rows: TimelineRow[]): TimelineLegendItem[] {
+export function timelineLegend(rows: TimelineRow[], now?: number): TimelineLegendItem[] {
   const present = new Set<TimelineLegendKey>();
   for (const row of rows) {
     if (row.kind === 'work') {
-      if (row.bar) present.add('work');
+      if (row.bar) present.add(workBarLegendKey(row.work, now));
       continue;
     }
     if (row.kind !== 'session') continue;

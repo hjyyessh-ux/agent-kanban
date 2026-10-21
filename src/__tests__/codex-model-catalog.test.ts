@@ -38,7 +38,7 @@ describe('Codex model catalog', () => {
     });
   });
 
-  test('replaces the Codex runtime catalog with CLI models', async () => {
+  test('keeps registered Codex models missing from the CLI catalog', async () => {
     await withTempDir(async (dir) => {
       const fakeCodex = await createFakeCodexBinary(dir);
 
@@ -47,7 +47,10 @@ describe('Codex model catalog', () => {
       });
 
       const codex = catalog.find((entry) => entry.runtime === 'codex');
-      expect(codex?.models?.map((model) => model.id)).toEqual(['gpt-6-astra', 'gpt-5.7-sol', 'gpt-5.7-mini']);
+      const ids = codex?.models?.map((model) => model.id) ?? [];
+      expect(ids.slice(0, 3)).toEqual(['gpt-6-astra', 'gpt-5.7-sol', 'gpt-5.7-mini']);
+      expect(ids).toContain('gpt-6.1-sol');
+      expect(ids.filter((id) => id === 'gpt-6-astra')).toHaveLength(1);
     });
   });
 });

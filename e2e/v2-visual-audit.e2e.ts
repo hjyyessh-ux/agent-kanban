@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/kanban';
+import { CARD_ACTION_COPY } from '../web/src/constants/copy';
 
 const VIEWPORTS = {
   desktop: { width: 1440, height: 1400 },
@@ -75,7 +76,7 @@ test.describe('v2 visual audit', () => {
     await expect(page.locator('.kv2-create-btn')).toBeVisible();
     await expect(page.locator('.kv2-column[data-status="in_progress"] .kv2-card-summary').first()).toContainText('Prompt block for progress visual audit.');
     await expect(page.locator('.kv2-column[data-status="complete"] .kv2-card-summary').first()).toContainText('Prompt block for opencode complete visual audit.');
-    await expect(page.locator('.kv2-column[data-status="todo"] .kv2-card-section-label').first()).toHaveText('Prompt');
+    await expect(page.locator('.kv2-column[data-status="todo"] .kv2-card-prompt').first()).toBeVisible();
     await expect(page.locator('.kv2-column[data-status="todo"] .kv2-card-divider').first()).toBeVisible();
 
     const metrics = await page.evaluate(() => {
@@ -84,23 +85,23 @@ test.describe('v2 visual audit', () => {
       const board = document.querySelector('.kv2-board');
       const summary = document.querySelector('.kv2-column[data-status="in_progress"] .kv2-card-summary');
       const card = document.querySelector('.kv2-column[data-status="todo"] .kv2-card');
-      const prompt = document.querySelector('.kv2-column[data-status="todo"] .kv2-card-prompt-shell');
+      const prompt = document.querySelector('.kv2-column[data-status="todo"] .kv2-card-prompt');
       return {
         boardGap: board ? getComputedStyle(board).gap : null,
         createHeight: create ? Math.round(create.getBoundingClientRect().height) : null,
         actionCount: progressActions?.querySelectorAll('button').length ?? 0,
-        summaryMinHeight: summary ? getComputedStyle(summary).minHeight : null,
+        summaryWhiteSpace: summary ? getComputedStyle(summary).whiteSpace : null,
         cardRadius: card ? getComputedStyle(card).borderRadius : null,
-        promptColumns: prompt ? getComputedStyle(prompt).gridTemplateColumns : null,
+        promptOverflow: prompt ? getComputedStyle(prompt).textOverflow : null,
       };
     });
 
     expect(metrics.boardGap).toBe('20px');
     expect(metrics.createHeight).toBeGreaterThanOrEqual(34);
     expect(metrics.actionCount).toBe(2);
-    expect(metrics.summaryMinHeight).toBe('38px');
+    expect(metrics.summaryWhiteSpace).toBe('nowrap');
     expect(metrics.cardRadius).toBe('2px');
-    expect(metrics.promptColumns).toContain('3px');
+    expect(metrics.promptOverflow).toBe('ellipsis');
 
     await page.screenshot({ path: 'e2e/results/v2-visual-board-desktop.png', fullPage: true });
 
@@ -215,7 +216,9 @@ test.describe('v2 visual audit', () => {
     expect(darkPalette.headers.every(({ contrast }) => contrast >= 4.5)).toBe(true);
     expect(darkPalette.createButton.foreground).toEqual([212, 215, 219]);
     expect(darkPalette.createButton.contrast).toBeGreaterThanOrEqual(4.5);
-    expect(darkPalette.filterButton.background).toEqual([59, 130, 246]);
+    // Idle `≡ FILTER` wears the shared toolbar face (`--kv2-toolbar-bg`); it only
+    // turns blue while open or filtered.
+    expect(darkPalette.filterButton.background).toEqual([45, 49, 53]);
     expect(darkPalette.filterButton.contrast).toBeGreaterThanOrEqual(4.5);
     expect(darkPalette.selectedProject.background).toEqual([48, 58, 70]);
     expect(darkPalette.selectedProject.foreground).toEqual([212, 215, 219]);
@@ -326,15 +329,15 @@ test.describe('v2 visual audit', () => {
       await expect(page.locator('.kv2-dialog')).not.toBeVisible();
     };
 
-    await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress.png', 'REOPEN');
-    await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete.png', 'DONE');
-    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done.png', 'REOPEN', true);
+    await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress.png', CARD_ACTION_COPY.finish);
+    await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete.png', CARD_ACTION_COPY.done);
+    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done.png', CARD_ACTION_COPY.reopen, true);
 
     // Dark variant: same cards, same assertions inside openAndCapture, just re-themed.
     await setDarkTheme(page);
-    await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress-dark.png', 'REOPEN');
-    await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete-dark.png', 'DONE');
-    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done-dark.png', 'REOPEN', true);
+    await openAndCapture('[V2 VISUAL] Modal Progress', 'e2e/results/v2-visual-modal-progress-dark.png', CARD_ACTION_COPY.finish);
+    await openAndCapture('[V2 VISUAL] Modal Complete', 'e2e/results/v2-visual-modal-complete-dark.png', CARD_ACTION_COPY.done);
+    await openAndCapture('[V2 VISUAL] Modal Done', 'e2e/results/v2-visual-modal-done-dark.png', CARD_ACTION_COPY.reopen, true);
   });
 
   test('captures create modal and responsive board states', async ({ page }) => {
@@ -434,7 +437,7 @@ test.describe('v2 visual audit', () => {
 
     await page.addInitScript(() => {
       localStorage.setItem('kanban-theme', 'dark');
-      localStorage.setItem('kanban-complete-session-view', 'true');
+      localStorage.setItem('kanban-complete-session-view', 'session');
     });
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto('/');

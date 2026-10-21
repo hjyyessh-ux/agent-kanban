@@ -245,6 +245,9 @@ const WIKI_ARCHIVE_CARD_FILTERS = new Set<WikiArchiveCardStatusFilter>([
   'pending',
   'unprocessed',
 ]);
+/** Cap on one `POST /api/cards/completion-seen` — a column holds far fewer, and the body is unauthenticated input. */
+const COMPLETION_SEEN_BATCH_MAX = 1000;
+
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 function json(data: unknown, status: number = 200): Response {
@@ -1502,7 +1505,7 @@ export function createRouteHandler(
       const { from, to } = requested;
       const includesSubagents = url.searchParams.get('subagents') === '1';
       try {
-        const scannedMonths = timelineArchiveMonths(store.listArchiveMonths(), from);
+        const scannedMonths = timelineArchiveMonths(store.listArchiveMonths(), from, to);
         const cards: KanbanCard[] = [...await store.getCards({})];
         for (const month of scannedMonths) {
           const archive = await store.loadArchiveMonth(month);
@@ -2945,6 +2948,29 @@ export function createRouteHandler(
       if (!card) return errorResponse('Card not found', 404);
       const queuedCards = await store.getQueuedCards(id);
       return json(queuedCards);
+    }
+
+    // Route: POST /api/cards/completion-seen — batch read stamp. A literal
+    // segment, so it must stay ahead of the `/api/cards/:id` catch-all.
+    if (method === 'POST' && path === '/api/cards/completion-seen') {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return errorResponse('Invalid JSON body', 400);
+      }
+      const ids = typeof body === 'object' && body !== null ? (body as { ids?: unknown }).ids : undefined;
+      if (!Array.isArray(ids) || !ids.every((id): id is string => typeof id === 'string' && id.length > 0)) {
+        return errorResponse('ids must be an array of card ids', 400);
+      }
+      if (ids.length > COMPLETION_SEEN_BATCH_MAX) {
+        return errorResponse(`ids must contain at most ${COMPLETION_SEEN_BATCH_MAX} entries`, 400);
+      }
+      try {
+        return json(await store.markCompletionSeenMany(ids));
+      } catch {
+        return errorResponse('Completion seen update failed', 500);
+      }
     }
 
     // Route: POST /api/cards/:id/completion-seen

@@ -6,6 +6,9 @@ import {
   confirmBoardCardDelete,
 } from './BoardCard';
 import type { V2CardViewModel } from './board-selectors';
+import { CardActions } from './BoardCardSections';
+import { CARD_ACTION_COPY } from '../../constants/copy';
+import { primaryActionFor, secondaryActionFor } from '../../constants/card-actions';
 
 const originalWindow = globalThis.window;
 
@@ -173,5 +176,149 @@ describe('BoardCard scheduled metadata', () => {
     expect(html).toContain('Script execution · Deploy service');
     expect(html).not.toContain('OPENCODE');
     expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
+  });
+});
+
+describe('BoardCard layout', () => {
+  const render = (overrides: Partial<V2CardViewModel> = {}) => renderToStaticMarkup(
+    <BoardCard
+      vm={makeVm(overrides)}
+      draggable={false}
+      onClick={mock(() => undefined)}
+      onFavoriteToggle={mock(() => undefined)}
+    />,
+  );
+
+  test('row 1 holds the project chip and the #ID, with the full path on the chip title', () => {
+    const projectDir = '/Users/user/workspace/ghe-migration-tools-v1.0.5-darwin-arm64';
+    const html = render({ id: 'NoLXQ2abcdef', projectDir });
+    const top = html.slice(html.indexOf('kv2-card-top'), html.indexOf('kv2-card-surface'));
+
+    expect(top).toContain('kv2-project-chip');
+    expect(top).toMatch(/works-dir-c[1-8]/);
+    expect(top).toContain(`title="${projectDir}"`);
+    expect(top).toContain('>ghe-migration-tools-v1.0.5-darwin-arm64</span>');
+    expect(top).toContain('kv2-id-chip');
+    expect(top).toContain('>#NoLXQ2ab</span>');
+    expect(top).toContain('title="Card ID 복사: NoLXQ2abcdef"');
+    expect(top).toContain('kv2-favorite-toggle--board');
+    expect(html).not.toContain('kv2-card-header-meta--floating');
+  });
+
+  test('moves the runtime badge to the meta line under the divider', () => {
+    const html = render({ agentRuntime: 'codex', executionKind: 'agent' });
+    const meta = html.slice(html.indexOf('kv2-card-meta-row'));
+
+    expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-card-meta-row'));
+    expect(meta).toContain('>CODEX</span>');
+  });
+
+  test('always shows the prompt, without a label, even when it repeats the title', () => {
+    const html = render({ title: 'GHES dry-run 정리', boardSummary: 'GHES dry-run 정리' });
+
+    expect(html).toContain('kv2-card-prompt">GHES dry-run 정리</div>');
+    expect(html).not.toContain('kv2-card-section-label');
+    expect(html).not.toContain('kv2-card-prompt-shell');
+  });
+
+  test('drops the Session, Proj and Created/Updated lines from the card face', () => {
+    const html = render({
+      status: 'in_progress',
+      sessionId: 'f76971a7-92d2-4300-86c2-234ec6fc0000',
+      projectDir: '/Users/user/workspace/mcp-server',
+    });
+
+    expect(html).not.toContain('Session:');
+    expect(html).not.toContain('kv2-card-session-command');
+    expect(html).not.toContain('f76971a7');
+    expect(html).not.toContain('Proj:');
+    expect(html).not.toContain('kv2-card-directory');
+  });
+
+  test('todo shows how long ago the card was touched', () => {
+    const updatedAt = new Date(Date.now() - 27 * 86_400_000).toISOString();
+    const html = render({ status: 'todo', createdAt: updatedAt, updatedAt });
+
+    expect(html).toContain('>27d ago</span>');
+  });
+
+  test('in_progress shows the live elapsed time from startedAt', () => {
+    const startedAt = new Date(Date.now() - (12 * 60 + 34) * 1000 - 200).toISOString();
+    const html = render({ status: 'in_progress', startedAt });
+
+    expect(html).toContain('kv2-card-time--live');
+    expect(html).toContain('kv2-card-live-dot');
+    expect(html).toContain('12분 34초째 실행 중');
+  });
+
+  test('in_progress without startedAt falls back to Updated …', () => {
+    const updatedAt = new Date(Date.now() - 7 * 60_000).toISOString();
+    const html = render({ status: 'in_progress', updatedAt });
+
+    expect(html).not.toContain('kv2-card-time--live');
+    expect(html).toContain('Updated 7m ago');
+  });
+
+  test('complete shows run length and time since it ended', () => {
+    const completedAt = new Date(Date.now() - 3 * 3_600_000).toISOString();
+    const html = render({ status: 'complete', completedAt, durationMs: (18 * 60 + 2) * 1000 });
+
+    expect(html).toContain('⏱ 18m 2s · 3h ago');
+  });
+
+  test('done derives the run length from startedAt/completedAt when durationMs is missing', () => {
+    const completedAt = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    const startedAt = new Date(Date.now() - 2 * 3_600_000 - 4 * 60_000).toISOString();
+    const html = render({ status: 'done', startedAt, completedAt });
+
+    expect(html).toContain('⏱ 4m · 2h ago');
+  });
+});
+
+describe('CardActions mapping', () => {
+  const render = (vm: V2CardViewModel) =>
+    renderToStaticMarkup(
+      <CardActions
+        vm={vm}
+        onStatusChange={mock(() => undefined)}
+        onDispatch={mock(() => undefined)}
+        onQueueOpen={mock(() => undefined)}
+      />,
+    );
+
+  test('todo offers start (or start-now when scheduled) and queue', () => {
+    const html = render(makeVm({ status: 'todo' }));
+    expect(html).toContain(`>${CARD_ACTION_COPY.start}</button>`);
+    expect(html).toContain(`>${CARD_ACTION_COPY.queue}</button>`);
+
+    const scheduled = render(makeVm({ status: 'todo', hasScheduledBadge: true }));
+    expect(scheduled).toContain(`>${CARD_ACTION_COPY.startNow}</button>`);
+  });
+
+  test('in_progress finishes the run and complete signs it off — never the same label', () => {
+    const inProgress = render(makeVm({ status: 'in_progress' }));
+    expect(inProgress).toContain(`kv2-card-action--finish">${CARD_ACTION_COPY.finish}</button>`);
+    expect(inProgress).toContain(`>${CARD_ACTION_COPY.reopen}</button>`);
+    expect(inProgress).not.toContain(CARD_ACTION_COPY.done);
+
+    const complete = render(makeVm({ status: 'complete' }));
+    expect(complete).toContain(`kv2-card-action--done">${CARD_ACTION_COPY.done}</button>`);
+    expect(complete).toContain(`>${CARD_ACTION_COPY.reopen}</button>`);
+    expect(complete).not.toContain(CARD_ACTION_COPY.finish);
+  });
+
+  test('done only reopens', () => {
+    const html = render(makeVm({ status: 'done' }));
+    expect(html).toContain(`>${CARD_ACTION_COPY.reopen}</button>`);
+    expect(html.match(/<button/g)?.length).toBe(1);
+  });
+
+  test('BoardCard, List row and Card detail share primaryActionFor', () => {
+    expect(primaryActionFor('in_progress')).toMatchObject({ kind: 'finish', target: 'complete' });
+    expect(primaryActionFor('complete')).toMatchObject({ kind: 'done', target: 'done' });
+    expect(primaryActionFor('done')).toMatchObject({ kind: 'reopen', target: 'todo' });
+    expect(primaryActionFor('todo', { surface: 'detail' }).label).toBe(CARD_ACTION_COPY.startTask);
+    expect(secondaryActionFor('todo')).toBeNull();
+    expect(secondaryActionFor('done')).toBeNull();
   });
 });

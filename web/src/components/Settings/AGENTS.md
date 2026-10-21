@@ -12,6 +12,7 @@ Key/value settings entry management plus a self-update/maintenance panel that le
 | `SettingsView.tsx` | Tab container: lists `SettingsEntry` items, model-catalog sync (`useModelSync`, `readSyncedCatalog`) against `CLAUDE_MODELS`/`CODEX_MODELS` from `src/core/runtime-config.ts`, font-scale control (`useFontScale`), and mounts `SettingsEntryModal`/`SettingsMaintenancePanel`. |
 | `SettingsEntryModal.tsx` | Create/edit form for a single `SettingsEntry` (key/value pair). |
 | `SettingsMaintenancePanel.tsx` | Runs and polls status for `bash scripts/install.sh` / `bash scripts/restart-opencode-plugin.sh --yes` via `applyUpdateAndRestart`/`fetchMaintenanceStatus`/`fetchMaintenanceLog`, showing a running/success/failed state machine. |
+| `lanAccess.ts` | `toggleLanFullAccess` — turning `lan_full_access` **on** goes through `window.confirm` (it hands every LAN device a full-power token); turning it off is immediate. `SettingsView` disables the switch (`aria-busy`) while the request is in flight. Covered by `lanAccess.test.ts`. |
 | `Settings.css` | `.settings-*` styling, including maintenance status color states. |
 
 ## For AI Agents
@@ -21,7 +22,7 @@ Key/value settings entry management plus a self-update/maintenance panel that le
 - Font scale (`useFontScale`) is a global UI preference persisted outside this tab's own settings entries — don't conflate it with `SettingsEntry` CRUD.
 
 ### Testing Requirements
-- No colocated tests currently. `SettingsMaintenancePanel`'s status-label/class mapping functions (`getStatusLabel`, `getStatusClass`) are simple pure functions worth unit testing if extended.
+- `lanAccess.test.ts` covers the LAN confirm flow. Otherwise no colocated tests. `SettingsMaintenancePanel`'s status-label/class mapping functions (`getStatusLabel`, `getStatusClass`) are simple pure functions worth unit testing if extended.
 
 ### Common Patterns
 - Async mutation panels follow the fetch-status-then-poll pattern: kick off an action, then poll a status endpoint until `success`/`failed`, mirroring the polling model used elsewhere in the app (`usePolling`).

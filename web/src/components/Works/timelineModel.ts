@@ -4,8 +4,9 @@ import { formatShortDate } from './worksAssign';
 /**
  * Pure date geometry for the Timeline view (the Board tab's `타임라인`).
  *
- * The view is a day grid: one column per day, and a Work's plan bar spans
- * `startedAt → resolvedAt` clamped to the visible range. Everything here is date
+ * The view is a day grid: one fixed-width column per day over a horizontally
+ * scrolling buffer (see "Scroll buffer" below), and a Work's plan bar spans
+ * `startedAt → resolvedAt` clamped to that buffer. Everything here is date
  * math on *local* day boundaries — the same boundaries the column headers are
  * rendered from — so a bar never lands one column off from the header it sits
  * under.
@@ -14,7 +15,22 @@ import { formatShortDate } from './worksAssign';
  * in `timelineRows.ts`, which builds on the primitives here.
  */
 
-export type TimelineMode = 'week' | 'month';
+/**
+ * Zoom level. Both zooms draw the same one-column-per-day grid; the zoom only
+ * picks the column width (`TIMELINE_COLUMN_WIDTH`). It used to pick the *range*
+ * (one Monday–Sunday week vs. a whole month, paged with ◀▶), which is why the
+ * grid could not scroll a single day.
+ */
+export type TimelineZoom = 'week' | 'month';
+
+/** Day column width per zoom, px. Fixed so the grid really scrolls sideways. */
+export const TIMELINE_COLUMN_WIDTH: Record<TimelineZoom, number> = {
+  week: 78,
+  month: 34,
+};
+
+/** The Works tab's strip: one density, between the two zooms. */
+export const STRIP_COLUMN_WIDTH = 56;
 
 /** Milliseconds in a day; only safe for spans that ignore DST (we re-normalize). */
 const DAY_MS = 86_400_000;
@@ -43,15 +59,218 @@ export function dayDiff(from: Date, to: Date): number {
   return Math.round((b - a) / DAY_MS);
 }
 
+/**
+ * The day columns the grid holds — the whole scroll **buffer**, not just what is
+ * on screen. Every column index in this module (bars, rails, drag geometry) is
+ * relative to `start`.
+ */
 export interface TimelineRange {
-  mode: TimelineMode;
   /** Local midnight of the first column. */
   start: Date;
   /** One column per day, `start` first. */
   days: Date[];
-  /** Heading, e.g. `2026년 8월 31일 – 9월 6일` / `2026년 9월`. */
-  label: string;
 }
+
+/* ── Scroll buffer ────────────────────────────────────────── */
+// The grid is a horizontally scrolling strip of fixed-width day columns. Only a
+// finite *buffer* of days is rendered; reaching within `BUFFER_EDGE_DAYS` of
+// either end grows it by `BUFFER_EXTEND_DAYS`, and the view compensates
+// `scrollLeft` for anything added before (or trimmed from) the old first column
+// so the dates under the user's eye do not jump. That is what makes the past
+// effectively endless while the DOM stays bounded by `TIMELINE_BUFFER_MAX_DAYS`.
+
+export interface TimelineBuffer {
+  /** Local midnight of column 0. */
+  start: Date;
+  dayCount: number;
+}
+
+/** Days kept before today when a buffer is (re)built. */
+export const BUFFER_INITIAL_PAST_DAYS = 56;
+/** Days kept after the last visible day when a buffer is (re)built. */
+export const BUFFER_INITIAL_FUTURE_DAYS = 28;
+/** Distance from either end that triggers growth. */
+export const BUFFER_EDGE_DAYS = 7;
+/** How much one growth step adds. */
+export const BUFFER_EXTEND_DAYS = 28;
+/**
+ * Hard cap on rendered columns. Growing past it trims the *opposite* end, so
+ * scrolling a year into the past keeps ~24 weeks in the DOM, not 52. Every row
+ * renders one background cell per column, so this is a DOM-size bound first.
+ *
+ * It also bounds the API read: the fetch window is the visible slice plus
+ * margins (`timelineFetchWindow`), never more than the buffer plus the
+ * alignment slack — well inside the server's `TIMELINE_MAX_WINDOW_DAYS` (400).
+ * `timelineModel.test.ts` pins that relationship.
+ */
+export const TIMELINE_BUFFER_MAX_DAYS = 168;
+
+export function rangeFromBuffer(buffer: TimelineBuffer): TimelineRange {
+  return { start: buffer.start, days: buildDays(buffer.start, buffer.dayCount) };
+}
+
+/**
+ * A fresh buffer around today: `BUFFER_INITIAL_PAST_DAYS` behind it, and enough
+ * ahead that `visibleDays` columns starting at today still leave a growth margin.
+ * Used on mount and by `오늘`, which may land far from wherever the old buffer
+ * had drifted.
+ */
+export function bufferAroundToday(now: Date, visibleDays = 0): TimelineBuffer {
+  const ahead = Math.max(visibleDays, 14) + BUFFER_INITIAL_FUTURE_DAYS;
+  return {
+    start: addDays(startOfDay(now), -BUFFER_INITIAL_PAST_DAYS),
+    dayCount: Math.min(TIMELINE_BUFFER_MAX_DAYS, BUFFER_INITIAL_PAST_DAYS + ahead),
+  };
+}
+
+export type BufferEdge = 'start' | 'end';
+
+export interface BufferExtension {
+  buffer: TimelineBuffer;
+  /**
+   * Columns inserted before the old column 0 (negative: trimmed from the
+   * front). The view adds `shift × columnWidth` to `scrollLeft` so the same
+   * dates stay under the viewport, and to anything else holding a column index.
+   */
+  shift: number;
+}
+
+/**
+ * Grows `buffer` by `days` at `edge`, trimming the opposite end once it would
+ * exceed `max`. Prepending moves every existing column right by `days`;
+ * appending past the cap drops columns off the front, moving them left.
+ */
+export function extendBuffer(
+  buffer: TimelineBuffer,
+  edge: BufferEdge,
+  days = BUFFER_EXTEND_DAYS,
+  max = TIMELINE_BUFFER_MAX_DAYS,
+): BufferExtension {
+  if (edge === 'start') {
+    return {
+      buffer: {
+        start: addDays(buffer.start, -days),
+        // Over the cap → the far (future) end is what gets dropped.
+        dayCount: Math.min(max, buffer.dayCount + days),
+      },
+      shift: days,
+    };
+  }
+  const grown = buffer.dayCount + days;
+  const trimmed = Math.max(0, grown - max);
+  return {
+    buffer: { start: addDays(buffer.start, trimmed), dayCount: grown - trimmed },
+    shift: -trimmed,
+  };
+}
+
+/** The day columns currently on screen, as buffer indices (inclusive). */
+export interface VisibleColumns {
+  first: number;
+  last: number;
+}
+
+/**
+ * Which columns the viewport shows.
+ *
+ * The label column is `position: sticky` *inside* the scroller, so column `i`
+ * sits at content x = `labelWidth + i × columnWidth` and the first column fully
+ * right of the label is `scrollLeft / columnWidth` — the label width cancels
+ * out. Rounded rather than floored: scroll-snap lands exactly on a column, and a
+ * sub-pixel `scrollLeft` (zoomed browsers) must not read as the previous day.
+ */
+export function visibleColumns(
+  scrollLeft: number,
+  clientWidth: number,
+  labelWidth: number,
+  columnWidth: number,
+  dayCount: number,
+): VisibleColumns {
+  if (!(columnWidth > 0) || dayCount <= 0) return { first: 0, last: 0 };
+  const lastIndex = dayCount - 1;
+  const first = Math.min(lastIndex, Math.max(0, Math.round(scrollLeft / columnWidth)));
+  const span = Math.max(1, Math.floor((clientWidth - labelWidth) / columnWidth));
+  return { first, last: Math.min(lastIndex, first + span - 1) };
+}
+
+/**
+ * Which end (if any) the viewport is close enough to that the buffer should
+ * grow. The start wins a tie — a viewport wider than the whole buffer grows
+ * into the past first, which is where a timeline's content is.
+ */
+export function bufferEdgeToExtend(
+  visible: VisibleColumns,
+  dayCount: number,
+  edgeDays = BUFFER_EDGE_DAYS,
+): BufferEdge | null {
+  if (visible.first < edgeDays) return 'start';
+  if (visible.last > dayCount - 1 - edgeDays) return 'end';
+  return null;
+}
+
+/** `scrollLeft` that puts buffer column `column` first in the viewport. */
+export function scrollLeftForColumn(column: number, columnWidth: number): number {
+  return Math.max(0, column) * columnWidth;
+}
+
+/**
+ * First visible column for "today": the `오늘` button puts today **second from
+ * the left** (one day of context behind it, the rest ahead); the initial view
+ * puts it second from the right, because what a timeline mostly shows is work
+ * that already ran.
+ */
+export function firstColumnForToday(
+  todayIndex: number,
+  visibleDays: number,
+  anchor: 'left' | 'right',
+): number {
+  if (anchor === 'left') return Math.max(0, todayIndex - 1);
+  return Math.max(0, todayIndex - Math.max(1, visibleDays) + 2);
+}
+
+/* ── API window ───────────────────────────────────────────── */
+
+/** Fetch windows snap to this many days, so scrolling a day does not refetch. */
+export const FETCH_ALIGN_DAYS = 14;
+/** Extra days fetched on each side of the viewport before alignment. */
+export const FETCH_MARGIN_DAYS = 7;
+/** A Monday, local — the phase every 14-day block is counted from. */
+const FETCH_ALIGN_EPOCH = new Date(2024, 0, 1);
+
+function alignDown(day: Date): Date {
+  const offset = dayDiff(FETCH_ALIGN_EPOCH, day);
+  const block = Math.floor(offset / FETCH_ALIGN_DAYS) * FETCH_ALIGN_DAYS;
+  return addDays(FETCH_ALIGN_EPOCH, block);
+}
+
+/** Inclusive ISO window covering `dayCount` whole local days from `start`. */
+export function dayWindow(start: Date, dayCount: number): { from: string; to: string } {
+  const from = startOfDay(start);
+  const to = addDays(from, dayCount);
+  return { from: from.toISOString(), to: new Date(to.getTime() - 1).toISOString() };
+}
+
+/**
+ * The `GET /api/timeline` window for what is on screen: from the visible
+ * columns minus `FETCH_MARGIN_DAYS`, snapped down to a `FETCH_ALIGN_DAYS` block
+ * boundary on a fixed phase, for a whole number of blocks that always reaches
+ * past the last visible column plus the margin.
+ *
+ * The length depends only on how many columns are visible, so while scrolling
+ * the window — and so `useTimeline`'s request key — changes exactly when the
+ * start crosses a block boundary: once per 14 days, not once per day.
+ */
+export function timelineFetchWindow(
+  range: TimelineRange,
+  visible: VisibleColumns,
+): { from: string; to: string } {
+  const first = alignDown(addDays(range.start, visible.first - FETCH_MARGIN_DAYS));
+  const span = Math.max(1, visible.last - visible.first + 1);
+  const blocks = Math.ceil((span + 2 * FETCH_MARGIN_DAYS + FETCH_ALIGN_DAYS - 1) / FETCH_ALIGN_DAYS);
+  return dayWindow(first, blocks * FETCH_ALIGN_DAYS);
+}
+
+/* ── Labels ───────────────────────────────────────────────── */
 
 const RANGE_LABEL_FMT = new Intl.DateTimeFormat('ko-KR', {
   year: 'numeric',
@@ -64,45 +283,50 @@ const RANGE_LABEL_SHORT_FMT = new Intl.DateTimeFormat('ko-KR', {
   day: 'numeric',
 });
 
-const MONTH_LABEL_FMT = new Intl.DateTimeFormat('ko-KR', {
-  year: 'numeric',
-  month: 'long',
-});
+/** Heading for the visible slice, e.g. `2026년 10월 3일 – 10월 16일`. */
+export function visibleRangeLabel(range: TimelineRange, visible: VisibleColumns): string {
+  const first = range.days[visible.first];
+  const last = range.days[visible.last];
+  if (!first || !last) return '';
+  const end = first.getFullYear() === last.getFullYear()
+    ? RANGE_LABEL_SHORT_FMT.format(last)
+    : RANGE_LABEL_FMT.format(last);
+  return `${RANGE_LABEL_FMT.format(first)} – ${end}`;
+}
 
-function buildDays(start: Date, count: number): Date[] {
-  return Array.from({ length: count }, (_, index) => addDays(start, index));
+/** One calendar month's run of columns, for the month band above the header. */
+export interface TimelineMonthSegment {
+  /** First column of the run (inclusive). */
+  startIndex: number;
+  /** Last column of the run (inclusive). */
+  endIndex: number;
+  /** `2026년 10월`. */
+  label: string;
 }
 
 /**
- * The visible range for `offset` steps from today (`0` = current week/month,
- * `-1` = previous). The month view keeps the same day grid but widens it to the
- * whole weeks covering the month — 28–35 columns — so bar geometry is identical
- * in both modes and only the bar height changes.
+ * The buffer split at month boundaries. The day header only shows day numbers
+ * (`28 29 30 1 2`), so without this band a month change was invisible.
  */
-export function buildRange(mode: TimelineMode, offset: number, now: Date): TimelineRange {
-  if (mode === 'week') {
-    const start = addDays(startOfWeek(now), offset * 7);
-    const days = buildDays(start, 7);
-    const end = days[days.length - 1];
-    return {
-      mode,
-      start,
-      days,
-      label: `${RANGE_LABEL_FMT.format(start)} – ${RANGE_LABEL_SHORT_FMT.format(end)}`,
-    };
-  }
+export function monthSegments(range: TimelineRange): TimelineMonthSegment[] {
+  const segments: TimelineMonthSegment[] = [];
+  range.days.forEach((day, index) => {
+    const current = segments[segments.length - 1];
+    if (current && day.getDate() !== 1) {
+      current.endIndex = index;
+      return;
+    }
+    segments.push({
+      startIndex: index,
+      endIndex: index,
+      label: `${day.getFullYear()}년 ${day.getMonth() + 1}월`,
+    });
+  });
+  return segments;
+}
 
-  const monthAnchor = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const start = startOfWeek(monthAnchor);
-  const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
-  // Round up to whole Monday–Sunday weeks so every row stays week-aligned.
-  const count = Math.ceil((dayDiff(start, monthEnd) + 1) / 7) * 7;
-  return {
-    mode,
-    start,
-    days: buildDays(start, count),
-    label: MONTH_LABEL_FMT.format(monthAnchor),
-  };
+function buildDays(start: Date, count: number): Date[] {
+  return Array.from({ length: count }, (_, index) => addDays(start, index));
 }
 
 /** Column index of `iso` within the range, or `null` when it is not a real date. */
@@ -250,9 +474,11 @@ export interface TimelineSpan {
 }
 
 /**
- * Day column under a pointer at `clientX`, clamped into the range. `left` and
- * `width` are measured from the rendered day columns on every move, so this
- * stays correct while the month view is scrolled horizontally.
+ * Day column under a pointer at `clientX`, clamped into the range. `left` is
+ * column 0's viewport x and `width` one column's width. The grid scrolls, so
+ * column 0 is usually far off-screen to the left (`left` negative); the caller
+ * measures it once per drag and shifts it by however far the scroller has
+ * moved since (`dragColumnLeft`), which keeps a drag exact under wheel scroll.
  */
 export function columnAtPointer(
   clientX: number,
@@ -263,6 +489,15 @@ export function columnAtPointer(
   if (!(width > 0) || columnCount <= 0) return 0;
   const raw = Math.floor((clientX - left) / width);
   return Math.min(columnCount - 1, Math.max(0, raw));
+}
+
+/** Column 0's viewport x now, from a measurement taken at another scroll offset. */
+export function dragColumnLeft(
+  measuredLeft: number,
+  scrollLeftAtMeasure: number,
+  scrollLeftNow: number,
+): number {
+  return measuredLeft - (scrollLeftNow - scrollLeftAtMeasure);
 }
 
 /**
@@ -394,7 +629,7 @@ export function describeTimelineError(raw: string): string {
     return '서버에 연결할 수 없습니다. 데몬이 실행 중인지 확인해 주세요.';
   }
   if (/must not exceed/i.test(text)) {
-    return '조회 기간이 너무 깁니다. 주간 또는 월간 범위로 좁혀 주세요.';
+    return '조회 기간이 너무 깁니다. 오늘 버튼으로 돌아간 뒤 다시 시도해 주세요.';
   }
   if (/iso 8601|precede/i.test(text)) {
     return '조회 기간이 잘못 전달됐습니다. 오늘로 돌아간 뒤 다시 시도해 주세요.';

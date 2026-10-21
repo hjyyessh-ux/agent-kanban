@@ -1,4 +1,4 @@
-import type { AgentRuntime, KanbanCard, CreateCardInput, UpdateCardInput, Screenshot, DispatchResult } from '../../../src/core/types';
+import type { AgentRuntime, CompletionSeenBatchResponse, KanbanCard, CreateCardInput, UpdateCardInput, Screenshot, DispatchResult } from '../../../src/core/types';
 import type { RuntimeCatalogEntry } from '../../../src/core/runtime-config';
 import type { MentionResolveResponse, ResolvedReference } from '../../../src/core/mention-reference';
 import type { MentionSearchResponse } from '../../../src/core/mention-search';
@@ -119,6 +119,16 @@ export async function markCompletionSeen(id: string): Promise<KanbanCard> {
     headers: { 'Content-Type': 'application/json' },
   });
   return handleResponse<KanbanCard>(res);
+}
+
+/** Batch read stamp — ids that are gone or no longer complete come back in `skipped`. */
+export async function markCompletionSeenMany(ids: string[]): Promise<CompletionSeenBatchResponse> {
+  const res = await fetch(`${BASE_URL}/cards/completion-seen`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  });
+  return handleResponse<CompletionSeenBatchResponse>(res);
 }
 
 export async function deleteCard(id: string): Promise<void> {

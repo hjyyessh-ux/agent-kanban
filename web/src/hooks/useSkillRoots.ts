@@ -10,6 +10,7 @@ export interface UseSkillRootsResult {
   add: (input: Omit<SkillRoot, 'id'>) => Promise<SkillRoot>;
   update: (id: string, patch: Partial<Omit<SkillRoot, 'id'>>) => Promise<void>;
   remove: (id: string) => Promise<void>;
+  clearError: () => void;
 }
 
 export function useSkillRoots(enabled: boolean): UseSkillRootsResult {
@@ -58,5 +59,7 @@ export function useSkillRoots(enabled: boolean): UseSkillRootsResult {
     [refresh],
   );
 
-  return { roots, loading, error, refresh, add, update, remove };
+  const clearError = useCallback(() => setError(null), []);
+
+  return { roots, loading, error, refresh, add, update, remove, clearError };
 }

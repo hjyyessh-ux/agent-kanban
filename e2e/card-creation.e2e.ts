@@ -30,7 +30,7 @@ test.describe('Card Creation', () => {
 
     const todoColumn = page.locator('.kv2-column[data-status="todo"]');
     const cardEl = todoColumn.locator('.kv2-card', { hasText: card.title });
-    await expect(cardEl.locator('.kv2-card-section-label', { hasText: 'PROMPT' })).toBeVisible();
+    await expect(cardEl.locator('.kv2-card-section-label')).toHaveCount(0);
     await expect(cardEl.locator('.kv2-card-prompt')).toBeVisible();
   });
 

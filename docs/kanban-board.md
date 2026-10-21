@@ -30,6 +30,105 @@ AI가 작업을 완료했지만 아직 사용자가 결과를 확인하지 않�
 
 ---
 
+## 보드 카드 해부도
+
+보드(그리드 뷰)의 카드 한 장은 위에서 아래로 다음 순서다. 구현은 `web/src/components/Board/BoardCard.tsx`, 스타일은 `web/src/styles/kv2/board.css`.
+
+```text
+┃ [zadar]·························· ● ⏰ ☆ #F-n-vd   ← 1행: 프로젝트 칩 ··· 우측 그룹
+┃ OVPN 전용 HyperDX 연결 — 사이드카(B안) 도입        ← 2행: 제목 (최대 2줄)
+┃ 계획 문서 docs/plans/12-ovpn-hyperdx-sidecar.m…    ← 3행: 프롬프트 (1줄 말줄임)
+┃ - - - - - - - - - - - - - - - - - - - - - - - -   ← 구분선
+┃ [✳ CLAUDE]  27d ago                               ← 메타 줄: 실행 배지 + 시간
+┃ [▶ 시작] [큐 연결]                            [✕]  ← 액션
+```
+
+| 영역 | 규칙 |
+|------|------|
+| 왼쪽 띠 | `status` 색 (`STATUS_ACCENT`) |
+| 1행 프로젝트 칩 | `projectDir` 마지막 세그먼트. 색은 공용 프로젝트 색(`dirAccentClass`, `styles/kv2/project-color.css`). 이름 길이만큼만 차지하고 넘치면 `…`, 전체 경로는 `title`. 이름이 길어도 1행 높이는 고정 |
+| 1행 우측 그룹 | unread 점 · Scheduler/Telegram/Quick Action 배지 · ☆ · `IdChip`(`#` + 8자, 클릭 시 전체 ID 복사 → `✓ 복사됨`). `flex-shrink: 0`이라 칩에 밀리지 않음 |
+| 3행 프롬프트 | `boardSummary`. 라벨·accent 바 없음. **제목과 같아도 숨기지 않음** |
+| 메타 줄 | `OPENCODE`/`CODEX`/`CLAUDE`/`SCRIPT` 배지 + 시간 (아래 표) |
+
+| status | 메타 줄 시간 |
+|--------|-------------|
+| `todo` | `27d ago` (`updatedAt` 기준) |
+| `in_progress` | `● 12분 34초째 실행 중` — `startedAt`부터 1초마다 갱신. `startedAt`이 없으면 `Updated 7m ago` |
+| `complete` / `done` | `⏱ 18m 2s · 3h ago` — 실행 시간(`durationMs` 우선, 없으면 `completedAt − startedAt`) · 끝난 지 얼마(`completedAt ?? updatedAt`) |
+
+카드 앞면에는 `Session:`(resume 명령 복사), `Proj:`, 별도 `Created/Updated` 줄이 없다. resume 명령 복사는 카드 상세(`CardDetailDialog`)의 세션 패널에 있고, 정확한 생성/수정 시각은 메타 줄 시간의 `title`로 볼 수 있다.
+
+검토 대기/완료의 **세션 그룹 헤더도 같은 해부도**를 따른다 — 런타임 배지와 ID가 보드 어디서나 같은 자리에 있게 하기 위해서다.
+
+```text
+┃ [agent-kanban]                     [● 1] #24b90f31   ← ① 프로젝트 ··· unread · 세션 IdChip
+┃ agent-kanban - UI 개선 #2                            ← ② 제목
+┃ - - - - - - - - - - - - - - - - - - - - - - - -      ← ③ 구분선
+┃ [✳ CLAUDE]  2 cards                     [⏎ resume]   ← ④ 런타임 · 카드 수(title = 마지막 응답 시각) ··· resume 명령 복사
+┃ [SHOW]                                    [✓ 완료]   ← 액션
+```
+
+## 컬럼 헤더와 unread 신호
+
+컬럼 헤더는 `라벨 · 개수 · (complete만) ● N` 왼쪽, `⋯` 메뉴 오른쪽이다. 일괄 액션(`모두 숨기기`/`모두 접기` · `모두 읽음` · `모두 완료` · `모두 아카이브`)은 모두 `⋯` 메뉴(`BoardColumnMenu`) 안에 있고, 할 일이 없으면 메뉴 자체가 없다. 라벨은 줄어들지 않는다(`COMP…` 잘림 방지).
+
+unread 판정은 `board-selectors.ts`의 `isUnreadCompletion` 하나뿐이다(`complete` 상태 + `responseAt ?? completedAt ?? updatedAt` 이후 `completedSeenAt` 없음). 신호는 단계별로 같은 unread 색(`--kv2-unread-*`)을 쓴다.
+
+| 단계 | 표시 |
+|------|------|
+| 브라우저 탭 | `document.title = "(12) Agent Kanban"`, 0이면 `Agent Kanban` |
+| Board 탭 | 채운 배지 `12` (`aria-label="12 unread"`) |
+| complete 컬럼 헤더 | 채운 pill `● 5` — 클릭하면 그 컬럼의 다음 unread로 이동 |
+| 툴바 | `● 12 unread` 버튼 하나 (현재 필터 기준 개수). 누르면 unread만 보기 필터가 켜지고 `✓ 12 unread`(눌린 모양)로 바뀜. 다시 누르면 해제 |
+| 세션 그룹 | 왼쪽 띠가 unread 색 + 1행 `#세션ID` 앞 채운 pill `● 2` (`title`/`aria-label`은 `2 unread`) |
+| turn | unread 면 + 테두리 + `NEW` 태그 + 강조 노드 |
+| 숨은 turn | `Show 13 more · 1 unread` |
+
+**latest ≠ unread.** 그룹의 최신 turn(`kv2-complete-session-turn--current`)은 채운 잉크색 노드와 `LATEST · hh:mm` 텍스트로만 표시한다. 테두리·면에 빨강 계열(complete accent 포함)을 쓰지 않는다 — 예전 빨간 최신 테두리가 unread로 오인됐다. 다른 turn의 오른쪽 시각은 오늘이면 `hh:mm`, 아니면 `MM-DD hh:mm`.
+
+탭/제목 카운트는 필터와 무관하게 전체 보드의 top-level 카드 기준이고, 컬럼 pill과 툴바 `● N unread`는 현재 필터가 적용된 보드 기준이다(unread만 보기와 `u`가 실제로 닿을 수 있는 개수).
+
+### 읽음 처리
+
+| 동작 | 결과 |
+|------|------|
+| 카드 상세 열기 | 그 카드 1장 (`POST /api/cards/:id/completion-seen`) |
+| 세션 대화 모달(`SessionConversationModal`) 열기 | 그 세션 그룹의 unread 보드 카드 전부를 한 번에 (`POST /api/cards/completion-seen`). Works/Timeline에서 연 세션도 같다 — 보드에 남은 카드만 보낸다 |
+| complete 컬럼 `⋯` → `모두 읽음` | 현재 필터가 적용된 complete 카드 중 unread 전부(자식 카드 포함). **DONE으로 옮기지 않는다** — 읽음 표시만 지운다 |
+
+### unread 이동
+
+- `u` → 다음 unread, `Shift+U` → 이전 unread(툴바 화살표 버튼은 없다). 보드 끝에서 처음으로 돌아간다.
+- 순서는 화면 읽기 순서다(`unread-navigation.ts`의 `selectBoardNavOrder`): 컬럼 왼쪽→오른쪽, 세션으로 묶인 컬럼(`GROUP: SESSION`/`WORKS`)은 그룹 최신순 → turn 최신순(그룹별 정렬 토글과 무관하게 기본 순서). 리스트 뷰는 리스트 섹션 순서(`done → complete → in_progress → todo`).
+- 다음 대상은 순수 함수 `nextUnreadTarget(entries, cursor, direction, status?)`가 고른다. 커서는 마지막으로 이동한 카드이고, 그 카드가 그새 읽혀도 위치 기준으로 계속 이어간다.
+- 이동하면 접힌 세션 그룹을 펼치고, 대상이 `Show N more` 뒤에 있으면 그것도 펼친 뒤(리스트 뷰는 접힌 섹션을 펼친 뒤) `scrollIntoView({ block: 'center' })` → 1.2초 focus ring(`.kv2-unread-focus`, `UNREAD_FOCUS_RING_MS`).
+- 단축키는 `KeyboardEvent.code === 'KeyU'`로 판정해 한글 자판에서도 동작한다. 입력 필드(`input`/`textarea`/`select`/contenteditable)에 포커스가 있거나, Ctrl/⌘/Alt를 누르고 있거나, 모달(`aria-modal="true"`)이 열려 있으면 무시한다. 타임라인 뷰에서는 꺼진다.
+
+### unread만 보기
+
+툴바 `● N UNREAD` 버튼이 곧 토글이다(켜지면 `✓ N UNREAD`)(`aria-pressed`). unread가 0이고 꺼져 있으면 비활성. 이 토글은 `board-filters.ts`의 `filterUnreadOnly`를 `BoardFilters` 다음에 적용한다.
+
+- 일반 컬럼: unread 완료 카드만 남는다. 남은 카드의 자식 카드는 함께 남는다.
+- `GROUP: SESSION`/`WORKS`(보드 뷰): unread turn이 하나라도 있는 세션의 complete 카드 전부를 남긴다 — unread 있는 그룹만 보이고, 그룹 안 맥락(읽은 turn)은 유지된다.
+- **타임라인은 이 토글을 무시한다.** 타임라인은 실행된 작업을 그리는 뷰라 읽음 상태가 없고, 그래서 이 값은 `BoardFilters`(타임라인 `sessionFilter`로도 쓰임)에 넣지 않고 `BoardScreen`에만 전달한다.
+
+---
+
+## 프로젝트 필터 바
+
+헤더 아래 한 줄에 `All` + 들어가는 만큼의 프로젝트 칩 + `+N More ▾`가 놓인다 (`BoardProjectSwitcher`). 가로 스크롤은 없다 — 폭을 넘는 칩은 More 드롭다운으로 넘어간다.
+
+| 항목 | 규칙 |
+|------|------|
+| 숫자 | 진행 중 **상위** 카드 수(`todo` + `in_progress` + `complete`). `done`과 child 카드는 빼고, `title` 툴팁에 `active 12 · done 40 · child 2`로 내역을 보인다. `All`도 같은 정의라 세 컬럼 숫자의 합과 같다 (필터 미적용 기준) |
+| 정렬 | 최근 7일 안에 손댄 상위 카드 수 → 진행 중 카드 수 → 최근 활동 → 이름 |
+| 선택 고정 | 선택한 프로젝트가 More로 밀려날 상황이면 마지막 보이는 칩 자리를 대신 차지한다. 이미 보이는 칩은 제자리에 있다 (별도 pin 저장 기능 없음) |
+| 칩 모양 | 공용 프로젝트 색(`dirAccentClass`), 선택은 같은 색 테두리 강조. 이름은 `max-width: 190px` + `…`, 전체 경로는 `title` |
+| More 드롭다운 | 검색 입력(이름·경로) + `프로젝트 칩 · count · 마지막 활동(2d)` 목록. ↑/↓/Home/End 이동, Enter 선택, Escape 닫기 |
+
+칩을 다시 누르거나 `All`을 누르면 필터가 풀린다.
+
 ## 카드 구조
 
 카드는 `src/core/types.ts`의 `KanbanCard` 인터페이스로 정의된다. 상태, 세션, parent-child, feedback, queue, screenshot, Telegram 컨텍스트를 함께 담는다.
