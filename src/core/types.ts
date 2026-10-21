@@ -456,6 +456,7 @@ export interface KanbanCard {
   telegramReplyUpdatedAt?: string;
   staleDetectedAt?: string;  // ISO 8601 — when stale status was first detected
   resumeSessionId?: string;  // user-selected session ID to resume on dispatch
+  forkedFromSessionId?: string;  // Claude Code /fork origin — the session whose transcript this card's session was copied from (hook-minted; lineage only, never dispatched)
   wiki?: CardWikiState;      // LLM wiki processing state (stamped at archive time)
   git?: CardGitState;        // dispatch~완료 사이 git 브랜치 활동 (RESULT 와 분리 표시)
   usage?: CardUsageStats;    // run 동안 실제 사용한 tool/skill/MCP/subagent 집계
@@ -642,6 +643,7 @@ export interface CreateCardInput {
   scheduledDispatch?: CreateScheduledDispatchInput;
   queueSessionMode?: QueueSessionMode;
   resumeSessionId?: string;
+  forkedFromSessionId?: string;
   dispatchType?: 'instant' | 'manual';
   telegramChatId?: number;
   originChannel?: CardOriginChannel;
@@ -696,6 +698,7 @@ export interface UpdateCardInput {
   staleStatus?: 'orphan' | 'stuck' | null;  // null = clear stale flag
   staleDetectedAt?: string | null;           // null = clear detection timestamp
   resumeSessionId?: string | null;           // null = clear session resume
+  forkedFromSessionId?: string | null;       // null = clear fork lineage
   resolution?: CardResolution | null;
   supersededByCardId?: string | null;
   supersededAt?: string | null;
@@ -1719,7 +1722,7 @@ export interface WorkInboxSession {
   updatedAt: string;      // ISO 8601
   /**
    * Sessions this one continues (subagent parent / queue chain / resumed
-   * session) — see `buildSessionChainMap`. Triage colors a Work that already
+   * session / fork origin) — see `buildSessionChainMap`. Triage colors a Work that already
    * holds one of these as "🔗 이어진 세션" and ranks it first. Computed from all
    * cards including archived ones, so it is absent only when there is no
    * lineage at all.

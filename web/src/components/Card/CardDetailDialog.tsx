@@ -976,6 +976,14 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                       <IdChip id={card.sessionId} kind="session" showKind />
                       {resumeCommand && <ResumeCopyButton command={resumeCommand} />}
                     </span>
+                    {card.forkedFromSessionId && (
+                      <span
+                        className="kv2-dialog-footer-session-ids"
+                        title="이 세션은 Claude Code /fork 로 복제된 세션입니다 (원본 세션 ID)"
+                      >
+                        🍴 fork from <IdChip id={card.forkedFromSessionId} kind="session" />
+                      </span>
+                    )}
                   </span>
                 )}
                 {card.sessionCreatedAt && (
