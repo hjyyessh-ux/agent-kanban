@@ -72,9 +72,9 @@ describe('BoardWorkContainer', () => {
     expect(html).toContain('aria-label="Work Work W1"');
   });
 
-  test('header: chevron · title button · ⋯ menu — unread and the Work id live on the meta line', () => {
+  test('header: title button · ⋯ menu (no chevron) — unread and the Work id live on the meta line', () => {
     const html = render(cards, works);
-    expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.collapse}"`);
+    expect(html).not.toContain('kv2-work-chevron');
     expect(html).toMatch(/<button type="button" class="kv2-work-title"[^>]*>Work W1<\/button>/);
     expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.menuLabel('Work W1')}"`);
     const head = html.slice(html.indexOf('<header class="kv2-work-head"'), html.indexOf('</header>'));
@@ -86,23 +86,27 @@ describe('BoardWorkContainer', () => {
     expect(end).toContain('kv2-id-chip');
   });
 
-  test('⋯ menu leads with 세션 접기, then the Work dialog flows', () => {
+  test('⋯ menu carries only the Work dialog flows — folding is the footer toggle', () => {
     const html = render(cards, works);
     expect(html).toContain(`title="${[
-      BOARD_WORKS_COPY.menuCollapseSessions,
       BOARD_WORKS_COPY.menuOpen,
       BOARD_WORKS_COPY.menuRename,
       BOARD_WORKS_COPY.menuMerge,
       BOARD_WORKS_COPY.menuComplete,
     ].join(' · ')}"`);
-    // Folded, the same item reads 세션 펼치기.
-    expect(render(cards, works, { defaultCollapsed: true })).toContain(`title="${BOARD_WORKS_COPY.menuExpandSessions} · `);
   });
 
-  test('without onWorkOpen the title is inert and ⋯ only folds sessions', () => {
+  test('without onWorkOpen the title is inert and there is no ⋯ menu', () => {
     const html = render(cards, works, { onWorkOpen: undefined });
     expect(html).toMatch(/class="kv2-work-title"[^>]*disabled=""/);
-    expect(html).toContain(`title="${BOARD_WORKS_COPY.menuCollapseSessions}"`);
+    expect(html).not.toContain(BOARD_WORKS_COPY.menuLabel('Work W1'));
+    expect(html).toContain('kv2-work-toggle');
+  });
+
+  test('open: footer hide toggle styled like a session group toggle, no hidden note', () => {
+    const html = render(cards, works);
+    expect(html).toMatch(new RegExp(`class="kv2-complete-session-toggle kv2-work-toggle" aria-expanded="true" aria-label="${BOARD_WORKS_COPY.collapse}">${BOARD_WORKS_COPY.toggleHide}</button>`));
+    expect(html).not.toContain('kv2-work-foot-note');
   });
 
   test('meta line: project chip · x / y sessions · ★ N · other-column chips', () => {
@@ -145,7 +149,10 @@ describe('BoardWorkContainer', () => {
   test('collapsed: header and meta line only — no session groups, no Show more', () => {
     const html = render(cards, works, { defaultCollapsed: true });
     expect(html).toContain('kv2-work kv2-work--collapsed');
-    expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.expand}"`);
+    expect(html).toContain(`aria-expanded="false" aria-label="${BOARD_WORKS_COPY.expand}">${BOARD_WORKS_COPY.toggleShow(3)}</button>`);
+    expect(html).toContain('show 3');
+    expect(html).toContain(`<span class="kv2-work-foot-note">${BOARD_WORKS_COPY.hiddenNote(3, 1)}</span>`);
+    expect(html).toContain('숨긴 세션 3 · unread 1');
     expect(html).toContain('class="kv2-work-meta"');
     expect(html).toContain('3 / 4 sessions');
     expect(html).toContain('● 1');

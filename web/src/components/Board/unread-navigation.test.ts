@@ -98,8 +98,8 @@ describe('selectBoardNavOrder', () => {
     expect(order.find((item) => item.id === 's1-old')?.groupKey).toBe('session:s1');
   });
 
-  test('works layout walks Work fragments first, then the unassigned groups', () => {
-    // s2 is older than s1, but its Work fragment is drawn above the UNASSIGNED zone.
+  test('works layout walks the unassigned groups first, then Work fragments', () => {
+    // The UNASSIGNED zone is drawn above the Work fragments, so s1 (unassigned) comes before s2 (in W1).
     const works = [{
       id: 'W1',
       title: 'Work one',
@@ -111,7 +111,7 @@ describe('selectBoardNavOrder', () => {
     }];
     const model = selectWorkFragments({ cards, works });
     const order = selectBoardNavOrder(selectColumns(cards), cards, { groupComplete: true, groupDone: true, works: model });
-    expect(order.map((item) => item.id)).toEqual(['todo-1', 's2-only', 's1-new', 's1-old']);
+    expect(order.map((item) => item.id)).toEqual(['todo-1', 's1-new', 's1-old', 's2-only']);
     expect(order.find((item) => item.id === 's2-only')?.groupKey).toBe('session:s2');
   });
 

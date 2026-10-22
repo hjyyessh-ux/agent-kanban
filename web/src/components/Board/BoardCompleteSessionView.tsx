@@ -10,10 +10,13 @@ import { dirAccentClass } from '../../utils/project-color';
 import { IdChip, ResumeCopyButton } from '../shared/IdChip';
 import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY } from '../../constants/copy';
 import { summarizeGroupFavorites, type WorkDragSource } from './board-works';
-import { useBoardWorkDnD, writeWorkDragData } from './board-work-dnd';
-import { BoardWorkMoveMenu } from './BoardWorkMoveMenu';
+import { useBoardWorkDnD, useBoardWorkField, writeWorkDragData } from './board-work-dnd';
+import { BoardCardWorkField } from './BoardCardWorkField';
 
 // A long-running session runs to 20+ turns; only the newest few are usually wanted.
+/** A session group always has a session, so it never reserves. */
+const NOOP_SET_PLANNED = () => undefined;
+
 const INITIAL_VISIBLE_TURNS = 5;
 
 export type SessionViewStatus = 'complete' | 'done';
@@ -284,8 +287,21 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
 }) => {
   const [oldestFirst, setOldestFirst] = useState(false);
   const isCollapsed = disclosure.isCollapsed(group.key);
-  // GROUP: WORKS — the header is a drag source and carries `⋯ → Work로 이동`.
+  // GROUP: WORKS — the header is a drag source.
   const dnd = useBoardWorkDnD();
+  // Every group mode — the same Work field a todo/in-progress card has.
+  const workField = useBoardWorkField();
+  const fieldCard = workField && group.sessionId && group.cards[0]
+    ? {
+        id: group.cards[0].id,
+        sessionId: group.sessionId,
+        projectDir: group.projectDir,
+        plannedWorkId: undefined,
+        status,
+        title: group.title,
+        sessionTitle: undefined,
+      }
+    : null;
   const workSource: WorkDragSource | null = dnd && group.cards[0]
     ? {
         cardId: group.cards[0].id,
@@ -421,7 +437,6 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
                 </span>
               )}
               {group.sessionId && <IdChip id={group.sessionId} kind="session" />}
-              {workSource && <BoardWorkMoveMenu source={workSource} />}
             </div>
           </div>
           <div className="kv2-complete-session-title-row">
@@ -447,6 +462,22 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
               <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />
             )}
           </div>
+          {workField && fieldCard && (
+            // The header opens the session dialog; the field must not.
+            <div
+              className="kv2-card-work-row kv2-complete-session-work-row"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <BoardCardWorkField
+                card={fieldCard}
+                works={workField.works}
+                linkedWork={workField.workForSession(group.sessionId)}
+                onSetPlanned={NOOP_SET_PLANNED}
+                onDrop={workField.run}
+              />
+            </div>
+          )}
           <div className="kv2-complete-session-group-actions">
             {status === 'complete' && onStatusChange && (
               <button

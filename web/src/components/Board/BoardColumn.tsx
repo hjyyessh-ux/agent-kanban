@@ -8,11 +8,16 @@ import { BoardCompleteSessionView } from './BoardCompleteSessionView';
 import type { CardRevealRequest, CompleteSessionGroup } from './BoardCompleteSessionView';
 import { isUnreadCompletion } from './board-selectors';
 import { groupsCompleteBySession, type BoardGroupMode } from './board-group-mode';
-import { BoardWorkContainer } from './BoardWorkContainer';
-import { workForCard, type WorkDragSource, type WorksColumnModel } from './board-works';
+import { BoardWorkContainer, type WorkCollapseRequest } from './BoardWorkContainer';
+import { workForCard, type WorkDragSource, type WorkDropTarget, type WorksColumnModel } from './board-works';
 import { useBoardWorkDnD, workDropTargetProps, writeWorkDragData } from './board-work-dnd';
+import { BoardCardWorkField } from './BoardCardWorkField';
 import type { WorkDetailIntent } from '../Works/WorkDetailDialog';
 import { BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
+
+/** `BoardCardWorkField` defaults when a caller omits its mutation props — e.g. a test rendering `works` alone. */
+const NOOP_SET_PLANNED = () => {};
+const NOOP_WORK_DROP = () => {};
 
 /* ── DnD helpers ──────────────────────────────────────────── */
 
@@ -69,6 +74,16 @@ interface BoardColumnProps {
   worksColumn?: WorksColumnModel;
   worksIndex?: Map<string, Work>;
   onWorkOpen?: (workId: string, intent?: WorkDetailIntent) => void;
+  /**
+   * Active Works, `BoardCardWorkField`'s picker options — present whenever
+   * Works have loaded, in every group mode (see `worksIndex` above, which
+   * tells the field which one a flat card's session already belongs to).
+   */
+  works?: readonly Work[];
+  /** `plannedWorkId` on a sessionless card — a plain card PATCH, see `work-planned-link.ts`. */
+  onSetPlannedWork?: (cardId: string, workId: string | null) => void | Promise<unknown>;
+  /** The session case — `BoardScreen`'s `runWorkAction`, same as `GROUP: WORKS` drag & drop. */
+  onWorkFieldDrop?: (source: WorkDragSource, target: WorkDropTarget, title?: string) => void;
 }
 
 export const BoardColumn: React.FC<BoardColumnProps> = ({
@@ -94,12 +109,16 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
   worksColumn,
   worksIndex,
   onWorkOpen,
+  works,
+  onSetPlannedWork,
+  onWorkFieldDrop,
 }) => {
   const { status, cards } = column;
   const groupComplete = groupsCompleteBySession(groupMode);
   const isDndEnabled = !!onReorder;
   const [hideAllSessionGroupsToken, setHideAllSessionGroupsToken] = useState(0);
   const [completeSessionsCollapsed, setCompleteSessionsCollapsed] = useState(false);
+  const [worksCollapse, setWorksCollapse] = useState<WorkCollapseRequest>({ collapsed: false, token: 0 });
   const sessionViewCards = cards
     .map((vm) => selectCardById(allCards, vm.id))
     .filter((card): card is KanbanCard => !!card);
@@ -243,6 +262,12 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         hideAllSessionsLabel={completeSessionsCollapsed ? COLUMN_MENU_COPY.collapseAll : COLUMN_MENU_COPY.hideAll}
         onArchive={onArchive}
         workCount={sessionGrouped ? worksColumn?.fragments.length : undefined}
+        worksCollapsed={worksCollapse.collapsed}
+        onToggleWorksCollapsed={
+          sessionGrouped && worksColumn
+            ? () => setWorksCollapse((previous) => ({ collapsed: !previous.collapsed, token: previous.token + 1 }))
+            : undefined
+        }
       />
       {status === 'todo' && onCreate && (
         <button
@@ -264,12 +289,48 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
       >
         {sessionGrouped && worksColumn ? (
           <div className="kv2-works-column">
+            {/* UNASSIGNED shows only when it holds sessions, so an empty zone never
+                pushes the Works down. Not even mid-drag: popping in under the
+                pointer shifted the whole column ~130px; unlinking from an empty
+                zone goes through the tray's `⊘ Work에서 빼기`. */}
+            {worksColumn.unassigned.length > 0 && (
+              <>
+                <div className="kv2-works-unassigned-head">
+                  <span>{BOARD_WORKS_COPY.unassignedHeading}</span>
+                  <span className="kv2-works-unassigned-count">{worksColumn.unassigned.length}</span>
+                </div>
+                <div
+                  className={`kv2-works-unassigned${unassignOk ? ' is-drop-target' : ''}`}
+                  data-status={status}
+                  {...unassignDropProps}
+                >
+                  <BoardCompleteSessionView
+                    cards={[]}
+                    groups={worksColumn.unassigned}
+                    status={sessionStatus}
+                    defaultCollapsed={status === 'done'}
+                    hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+                    revealRequest={revealRequest}
+                    onCardClick={onCardClick}
+                    onSessionOpen={onSessionOpen}
+                    onFavoriteToggle={onFavoriteToggle}
+                    onStatusChange={onStatusChange}
+                    onArchiveCards={onArchiveCards}
+                  />
+                </div>
+              </>
+            )}
+            {worksColumn.unassigned.length === 0 && worksColumn.fragments.length === 0 && (
+              <div className="kv2-empty">No cards</div>
+            )}
             {worksColumn.fragments.map((fragment) => (
               <BoardWorkContainer
                 key={fragment.work.id}
                 fragment={fragment}
                 status={sessionStatus}
+                defaultCollapsed={worksCollapse.collapsed}
                 hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
+                collapseRequest={worksCollapse}
                 revealRequest={revealRequest}
                 onWorkOpen={onWorkOpen}
                 onCardClick={onCardClick}
@@ -279,36 +340,6 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                 onArchiveCards={onArchiveCards}
               />
             ))}
-            <div className="kv2-works-unassigned-head">
-              <span>{BOARD_WORKS_COPY.unassignedHeading}</span>
-              <span className="kv2-works-unassigned-count">{worksColumn.unassigned.length}</span>
-            </div>
-            <div
-              className={`kv2-works-unassigned${unassignOk ? ' is-drop-target' : ''}`}
-              data-status={status}
-              {...unassignDropProps}
-            >
-              {unassignOk && (
-                <div className="kv2-works-unassign-hint" aria-hidden="true">{BOARD_WORKS_COPY.unassignHint}</div>
-              )}
-              {worksColumn.unassigned.length > 0 ? (
-                <BoardCompleteSessionView
-                  cards={[]}
-                  groups={worksColumn.unassigned}
-                  status={sessionStatus}
-                  defaultCollapsed={status === 'done'}
-                  hideAllToken={status === 'complete' ? hideAllSessionGroupsToken : undefined}
-                  revealRequest={revealRequest}
-                  onCardClick={onCardClick}
-                  onSessionOpen={onSessionOpen}
-                  onFavoriteToggle={onFavoriteToggle}
-                  onStatusChange={onStatusChange}
-                  onArchiveCards={onArchiveCards}
-                />
-              ) : (
-                <div className="kv2-works-unassigned-empty">{BOARD_WORKS_COPY.unassignedEmpty}</div>
-              )}
-            </div>
           </div>
         ) : sessionGrouped ? (
           <BoardCompleteSessionView
@@ -364,7 +395,6 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                     handleDragEnd(event);
                     dnd?.endDrag();
                   }}
-                  workMoveSource={workSource}
                   onClick={() => { if (raw) onCardClick(raw); }}
                   onStatusChange={
                     raw && onStatusChange
@@ -386,7 +416,17 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                   onFavoriteToggle={
                     raw && onFavoriteToggle ? () => onFavoriteToggle(raw) : undefined
                   }
-                  workTag={work === undefined ? undefined : { work, onOpen: onWorkOpen }}
+                  workField={
+                    works && raw ? (
+                      <BoardCardWorkField
+                        card={raw}
+                        works={works}
+                        linkedWork={work || undefined}
+                        onSetPlanned={onSetPlannedWork ?? NOOP_SET_PLANNED}
+                        onDrop={onWorkFieldDrop ?? NOOP_WORK_DROP}
+                      />
+                    ) : undefined
+                  }
                 />
               </div>
             );

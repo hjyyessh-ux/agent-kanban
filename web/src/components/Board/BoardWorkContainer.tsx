@@ -42,6 +42,11 @@ function prefersReducedMotion(): boolean {
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+export interface WorkCollapseRequest {
+  collapsed: boolean;
+  token: number;
+}
+
 export interface BoardWorkContainerProps {
   fragment: WorkFragment;
   status: SessionViewStatus;
@@ -50,6 +55,8 @@ export interface BoardWorkContainerProps {
   /** Session groups start header-only inside a Work (B안) unless the owner says otherwise. */
   defaultSessionsCollapsed?: boolean;
   hideAllToken?: number;
+  /** Column `⋯ → 모든 Work 세션 접기/펼치기`: each new token folds or unfolds this container; its own toggle still works after. */
+  collapseRequest?: WorkCollapseRequest;
   revealRequest?: CardRevealRequest | null;
   /** Title click / `⋯` items — App opens `WorkDetailDialog`, optionally straight into a flow. */
   onWorkOpen?: (workId: string, intent?: WorkDetailIntent) => void;
@@ -66,8 +73,9 @@ export interface BoardWorkContainerProps {
  * the `WORK` folder tab, the Work-blue border, the tint face and the stacked
  * paper shadow. The body is the newest `WORK_VISIBLE_SESSIONS` session groups,
  * drawn by the same `BoardSessionGroupCard` the column uses, then
- * `＋ Show N more sessions`. Collapsed (chevron or `⋯ → 세션 접기`), only the
- * header and the meta line remain; opening again starts from the newest two.
+ * `＋ Show N more sessions`. The footer `hide` / `show N` button (same face as a
+ * session group's) folds it to the header, meta line and that button; opening
+ * again starts from the newest two. `⋯` carries only the Work's own actions.
  */
 export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
   fragment,
@@ -75,6 +83,7 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
   defaultCollapsed = false,
   defaultSessionsCollapsed = true,
   hideAllToken,
+  collapseRequest,
   revealRequest,
   onWorkOpen,
   onCardClick,
@@ -92,6 +101,14 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
     hideAllToken,
     revealRequest,
   });
+
+  const appliedCollapseTokenRef = useRef(collapseRequest?.token ?? 0);
+  useEffect(() => {
+    if (!collapseRequest || collapseRequest.token === appliedCollapseTokenRef.current) return;
+    appliedCollapseTokenRef.current = collapseRequest.token;
+    setShowAll(false);
+    setCollapsed(collapseRequest.collapsed);
+  }, [collapseRequest]);
 
   // An unread jump into this Work opens the container and, when the target
   // is a folded session, `Show N more`; the group itself opens in the
@@ -133,21 +150,15 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
     setCollapsed((previous) => !previous);
   };
 
-  const menuItems: BoardColumnMenuItem[] = [
-    {
-      id: 'toggle-sessions',
-      label: collapsed ? BOARD_WORKS_COPY.menuExpandSessions : BOARD_WORKS_COPY.menuCollapseSessions,
-      onSelect: toggleCollapsed,
-    },
-    ...(onWorkOpen
-      ? [
-        { id: 'open', label: BOARD_WORKS_COPY.menuOpen, onSelect: () => onWorkOpen(work.id) },
-        { id: 'rename', label: BOARD_WORKS_COPY.menuRename, onSelect: () => onWorkOpen(work.id, 'rename') },
-        { id: 'merge', label: BOARD_WORKS_COPY.menuMerge, onSelect: () => onWorkOpen(work.id, 'merge') },
-        { id: 'complete', label: BOARD_WORKS_COPY.menuComplete, onSelect: () => onWorkOpen(work.id, 'complete') },
-      ]
-      : []),
-  ];
+  // `⋯` holds the Work's own actions only; folding is the footer toggle.
+  const menuItems: BoardColumnMenuItem[] = onWorkOpen
+    ? [
+      { id: 'open', label: BOARD_WORKS_COPY.menuOpen, onSelect: () => onWorkOpen(work.id) },
+      { id: 'rename', label: BOARD_WORKS_COPY.menuRename, onSelect: () => onWorkOpen(work.id, 'rename') },
+      { id: 'merge', label: BOARD_WORKS_COPY.menuMerge, onSelect: () => onWorkOpen(work.id, 'merge') },
+      { id: 'complete', label: BOARD_WORKS_COPY.menuComplete, onSelect: () => onWorkOpen(work.id, 'complete') },
+    ]
+    : [];
 
   return (
     <section
@@ -161,15 +172,6 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
       <header className="kv2-work-head">
         <button
           type="button"
-          className="kv2-work-chevron"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? BOARD_WORKS_COPY.expand : BOARD_WORKS_COPY.collapse}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? '▸' : '▾'}
-        </button>
-        <button
-          type="button"
           className="kv2-work-title"
           title={`${work.title} — ${BOARD_WORKS_COPY.titleHint}`}
           disabled={!onWorkOpen}
@@ -181,11 +183,13 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
         >
           {work.title}
         </button>
-        <BoardColumnMenu
-          columnLabel={work.title}
-          menuLabel={BOARD_WORKS_COPY.menuLabel(work.title)}
-          items={menuItems}
-        />
+        {menuItems.length > 0 && (
+          <BoardColumnMenu
+            columnLabel={work.title}
+            menuLabel={BOARD_WORKS_COPY.menuLabel(work.title)}
+            items={menuItems}
+          />
+        )}
       </header>
 
       <div className="kv2-work-meta">
@@ -280,11 +284,24 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
           )}
         </>
       )}
-      {/* Overlay, never in flow: a hint that pushed the body down mid-drag made
-          the pointer land on the wrong element in the mockup. */}
-      {isDropTarget && (
-        <div className="kv2-work-drop-hint" aria-hidden="true">{BOARD_WORKS_COPY.dropHint}</div>
-      )}
+
+      {/* Same hide / show button as a session group; folded, it names how many sessions it hides. */}
+      <div className="kv2-work-foot">
+        <button
+          type="button"
+          className="kv2-complete-session-toggle kv2-work-toggle"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? BOARD_WORKS_COPY.expand : BOARD_WORKS_COPY.collapse}
+          onClick={toggleCollapsed}
+        >
+          {collapsed ? BOARD_WORKS_COPY.toggleShow(fragment.sessionCount) : BOARD_WORKS_COPY.toggleHide}
+        </button>
+        {collapsed && (
+          <span className="kv2-work-foot-note">
+            {BOARD_WORKS_COPY.hiddenNote(fragment.sessionCount, fragment.unreadCount)}
+          </span>
+        )}
+      </div>
     </section>
   );
 };

@@ -2274,8 +2274,8 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   await expect(resolvedRow.locator('.work-session-meta')).toContainText('카드 2');
   await expect(resolvedRow.locator('.work-session-meta')).toContainText('보관됨');
 
-  // 대화 now opens the conversation off the archive.
-  await resolvedRow.getByRole('button', { name: '대화' }).click();
+  // The row opens the conversation off the archive.
+  await resolvedRow.locator('.work-session-title').click();
   const conversation = page.locator('.session-conversation-dialog');
   await expect(conversation).toBeVisible();
   // The header carries the session's own title; the turns carry each card's

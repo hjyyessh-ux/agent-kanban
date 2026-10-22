@@ -34,6 +34,7 @@ function setup(overrides: Partial<BoardWorkMutations> = {}) {
       to: work('NEW', title),
     })),
     deleteWork: mock(async () => {}),
+    createWork: mock(async (input: { title: string }) => work('NEW', input.title)),
     notify: (notice) => { notices.push(notice); },
     ...overrides,
   };

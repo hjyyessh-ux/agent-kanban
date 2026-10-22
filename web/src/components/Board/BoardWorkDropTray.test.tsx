@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Work } from '../../../../src/core/types';
-import { BoardWorkDropTray } from './BoardWorkDropTray';
-import { BoardWorkMoveMenu } from './BoardWorkMoveMenu';
-import { BoardWorkDnDContext, type BoardWorkDnD } from './board-work-dnd';
+import { BoardWorkDropTray, describeDropHover } from './BoardWorkDropTray';
+import { BoardWorkDnDContext, clearDropHover, getDropHover, setDropHover, type BoardWorkDnD } from './board-work-dnd';
 import type { WorkDragSource } from './board-works';
 import { BOARD_WORKS_COPY } from '../../constants/copy';
 
@@ -67,17 +66,40 @@ describe('BoardWorkDropTray', () => {
   });
 });
 
-describe('BoardWorkMoveMenu', () => {
-  test('a ⋯ trigger named for the session, only in works mode and only with a session', () => {
-    const html = withDnD(dnd(null), <BoardWorkMoveMenu source={inBeta} />);
-    expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.moveMenuLabel('Session one')}"`);
-    // The trigger's title previews the choices: the other Work, new, out — never its own Work.
-    expect(html).toContain(BOARD_WORKS_COPY.moveTo('Alpha'));
-    expect(html).not.toContain(BOARD_WORKS_COPY.moveTo('Beta'));
-    expect(html).toContain(BOARD_WORKS_COPY.moveNew);
-    expect(html).toContain(BOARD_WORKS_COPY.moveOut);
+describe('tray hover label', () => {
+  const loose: WorkDragSource = { cardId: 'c2', sessionId: 's2', status: 'complete', title: 'Loose' };
 
-    expect(withDnD(null, <BoardWorkMoveMenu source={inBeta} />)).toBe('');
-    expect(withDnD(dnd(null), <BoardWorkMoveMenu source={{ ...inBeta, sessionId: undefined }} />)).toBe('');
+  test('describeDropHover names the action and the target Work', () => {
+    expect(describeDropHover(loose, { kind: 'work', workId: 'W1', status: 'complete' }, works))
+      .toBe(BOARD_WORKS_COPY.trayHoverLink('Alpha'));
+    expect(describeDropHover(inBeta, { kind: 'work', workId: 'W1' }, works))
+      .toBe(BOARD_WORKS_COPY.trayHoverMove('Alpha'));
+    expect(describeDropHover(inBeta, { kind: 'unassigned', status: 'complete' }, works))
+      .toBe(BOARD_WORKS_COPY.trayHoverUnlink);
+    expect(describeDropHover(loose, { kind: 'new' }, works)).toBe(BOARD_WORKS_COPY.trayHoverNew);
+  });
+
+  test('no label without a target, or for a drop that does nothing', () => {
+    expect(describeDropHover(loose, null, works)).toBeNull();
+    expect(describeDropHover(inBeta, { kind: 'work', workId: 'W2' }, works)).toBeNull();
+  });
+
+  test('the tray swaps its label for the hovered target and back', () => {
+    setDropHover({ kind: 'work', workId: 'W1' });
+    const hovered = withDnD(dnd(loose), <BoardWorkDropTray />);
+    expect(hovered).toContain(BOARD_WORKS_COPY.trayHoverPrefix);
+    expect(hovered).toContain(BOARD_WORKS_COPY.trayHoverLink('Alpha'));
+    setDropHover(null);
+    const idle = withDnD(dnd(loose), <BoardWorkDropTray />);
+    expect(idle).toContain(BOARD_WORKS_COPY.trayLabel);
+  });
+
+  test('a late leave from the previous target does not clear the new one', () => {
+    setDropHover({ kind: 'work', workId: 'W1' });
+    setDropHover({ kind: 'work', workId: 'W2' });
+    clearDropHover({ kind: 'work', workId: 'W1' });
+    expect(getDropHover()).toEqual({ kind: 'work', workId: 'W2' });
+    clearDropHover({ kind: 'work', workId: 'W2' });
+    expect(getDropHover()).toBeNull();
   });
 });

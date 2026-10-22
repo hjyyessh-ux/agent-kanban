@@ -19,10 +19,11 @@ import {
   type WorkDropAction,
   type WorkDropTarget,
 } from './board-works';
-import { BoardWorkDnDContext, clearDropHighlights, type BoardWorkDnD } from './board-work-dnd';
+import { BoardWorkDnDContext, BoardWorkFieldContext, clearDropHighlights, type BoardWorkDnD, type BoardWorkField } from './board-work-dnd';
 import { applyWorkDropAction, type BoardWorkMutations } from './board-work-actions';
 import { BoardWorkDropTray } from './BoardWorkDropTray';
 import { BoardNewWorkDialog } from './BoardNewWorkDialog';
+import { BOARD_WORKS_COPY } from '../../constants/copy';
 import { inboxSessionFromLink, suggestWorkTitle } from '../Works/worksAssign';
 import type { WorkDetailIntent } from '../Works/WorkDetailDialog';
 import { nextUnreadTarget, selectBoardNavOrder, type UnreadNavDirection } from './unread-navigation';
@@ -80,6 +81,9 @@ export interface BoardScreenProps {
   works?: readonly Work[];
   /** Work title / tag / `⋯` — App opens `WorkDetailDialog`, optionally straight into a flow. */
   onWorkOpen?: (workId: string, intent?: WorkDetailIntent) => void;
+  /** `BoardCardWorkField` (every group mode) — a sessionless card's `plannedWorkId` PATCH. */
+  /** Returns the PATCH when it has one, so `새 Work 만들기` can report the reservation only once it stuck. */
+  onSetPlannedWork?: (cardId: string, workId: string | null) => void | Promise<unknown>;
   /**
    * `useWorks` mutations + App's notice setter. With it (and `works`), the
    * works grid gets drag & drop, the bottom tray and `⋯ → Work로 이동`.
@@ -115,6 +119,7 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
   groupMode = 'card',
   works,
   onWorkOpen,
+  onSetPlannedWork,
   workMutations,
   workFilter = DEFAULT_BOARD_WORK_FILTER,
   filters,
@@ -200,12 +205,28 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
     };
   }, [workDrag, endWorkDrag]);
 
-  const runWorkAction = useCallback((source: WorkDragSource, target: WorkDropTarget) => {
+  const runWorkAction = useCallback((source: WorkDragSource, target: WorkDropTarget, title?: string) => {
     if (!workMutations || !works || !source.sessionId) return;
     const action = resolveWorkDrop(source, target);
     if (!action) return;
     if (action.kind === 'create' || action.kind === 'moveToNew') {
-      setPendingCreate({ source, action });
+      const name = title?.trim();
+      // The Work field names the new Work from its search box; the tray asks.
+      if (!name) {
+        setPendingCreate({ source, action });
+        return;
+      }
+      void applyWorkDropAction({
+        action,
+        session: { sessionId: source.sessionId, projectDir: source.projectDir },
+        inboxSession: inboxSessionFromLink(
+          { sessionId: source.sessionId, projectDir: source.projectDir, linkedAt: '' },
+          cards,
+        ),
+        title: name,
+        works,
+        mutations: workMutations,
+      });
       return;
     }
     void applyWorkDropAction({
@@ -214,7 +235,22 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
       works,
       mutations: workMutations,
     });
-  }, [workMutations, works]);
+  }, [workMutations, works, cards]);
+
+  const createPlannedWork = useCallback((cardId: string, title: string, projectDir: string | undefined) => {
+    if (!workMutations || !onSetPlannedWork) return;
+    void workMutations.createWork({ title, projectDir })
+      .then(async (work) => {
+        await onSetPlannedWork(cardId, work.id);
+        workMutations.notify({ tone: 'success', message: BOARD_WORKS_COPY.noticeCreatedPlanned(work.title) });
+      })
+      .catch((error: unknown) => {
+        workMutations.notify({
+          tone: 'warn',
+          message: `⚠ ${error instanceof Error ? error.message : BOARD_WORKS_COPY.noticeFailed}`,
+        });
+      });
+  }, [workMutations, onSetPlannedWork]);
 
   const dndValue = useMemo<BoardWorkDnD | null>(() => (
     worksDnDEnabled && works
@@ -228,6 +264,17 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
         }
       : null
   ), [worksDnDEnabled, works, workDrag, worksIndex, startWorkDrag, endWorkDrag, runWorkAction]);
+
+  const workFieldValue = useMemo<BoardWorkField | null>(() => (
+    workMutations && works
+      ? {
+          works,
+          workForSession: (sessionId) => (sessionId ? worksIndex.get(sessionId) : undefined),
+          run: runWorkAction,
+          createPlanned: createPlannedWork,
+        }
+      : null
+  ), [workMutations, works, worksIndex, runWorkAction, createPlannedWork]);
 
   const pendingInboxSession = pendingCreate?.source.sessionId
     ? inboxSessionFromLink(
@@ -325,6 +372,7 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
               </button>
             ))}
           </nav>
+          <BoardWorkFieldContext.Provider value={workFieldValue}>
           <BoardWorkDnDContext.Provider value={dndValue}>
           <div
             className={`kv2-board${workDrag ? ' is-work-dragging' : ''}`}
@@ -355,13 +403,17 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
                 onUnreadJump={col.status === 'complete' ? () => jumpToUnread('next', 'complete') : undefined}
                 revealRequest={revealRequest?.status === col.status ? revealRequest : null}
                 worksColumn={worksModel?.[col.status]}
-                worksIndex={worksModel ? worksIndex : undefined}
+                worksIndex={works ? worksIndex : undefined}
                 onWorkOpen={onWorkOpen}
+                works={works}
+                onSetPlannedWork={onSetPlannedWork}
+                onWorkFieldDrop={runWorkAction}
               />
             ))}
           </div>
           <BoardWorkDropTray />
           </BoardWorkDnDContext.Provider>
+          </BoardWorkFieldContext.Provider>
           {pendingCreate && pendingInboxSession && workMutations && works && (
             <BoardNewWorkDialog
               initialTitle={suggestWorkTitle(pendingInboxSession)}

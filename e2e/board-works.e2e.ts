@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures/kanban';
 import { apiAddWorkSession, apiGetCards, apiGetWork, apiGetWorks } from './helpers/api';
-import { BOARD_WORKS_COPY, TOOLBAR_COPY } from '../web/src/constants/copy';
+import { BOARD_WORKS_COPY, TOOLBAR_COPY, WORK_PICKER_COPY } from '../web/src/constants/copy';
 
 /**
  * Board `GROUP: WORKS` drag & drop, bottom tray, undo and `⋯ → Work로 이동`
@@ -115,9 +115,11 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
 
   test('its own Work and the same column UNASSIGNED zone: unlink on the zone, nothing on its own Work', async ({ page, seedCardWithStatus, seedWork }) => {
     const run = Date.now();
-    const [a, a2] = [`bw-a-${run}`, `bw-a2-${run}`];
+    const [a, a2, loose] = [`bw-a-${run}`, `bw-a2-${run}`, `bw-l-${run}`];
     await seedSession(seedCardWithStatus, a, `[BW] Leaver ${run}`);
     await seedSession(seedCardWithStatus, a2, `[BW] Keeper ${run}`);
+    // The zone is drawn only while it holds a session.
+    await seedSession(seedCardWithStatus, loose, `[BW] Already loose ${run}`);
     const w1 = await seedWork({ title: `[BW] Home ${run}` });
     await apiAddWorkSession(w1.id, { sessionId: a });
     await apiAddWorkSession(w1.id, { sessionId: a2 });
@@ -157,12 +159,12 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
 
     await page.goto('/');
     const runningCard = page.locator('.kv2-column[data-status="in_progress"] .kv2-card', { hasText: `[BW] Running ${run}` });
-    await expect(runningCard).toContainText(BOARD_WORKS_COPY.unassignedTag);
+    await expect(runningCard.locator('.kv2-work-picker-label')).toHaveText(WORK_PICKER_COPY.none);
     const cardId = await runningCard.getAttribute('data-id');
 
     expect(await dragTo(page, `.kv2-card[data-id="${cardId}"]`, `[data-tray-work-id="${w1.id}"]`)).toBe(true);
     await expect.poll(() => linkedSessions(w1.id)).toContain(running);
-    await expect(runningCard.locator('.kv2-card-work-tag')).toContainText(w1.title);
+    await expect(runningCard.locator('.kv2-work-picker-label')).toHaveText(w1.title);
     await expect(page.locator('.kv2-work-tray')).toHaveCount(0);
 
     // Dragging it again: its Work is listed as (현재) and refuses the drop.
@@ -203,24 +205,103 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
     if (created) trackWork(created.id);
   });
 
-  test('⋯ → Work로 이동 is the keyboard path to the same move', async ({ page, seedCardWithStatus, seedWork }) => {
+  test('the session group Work field is the keyboard path to the same move', async ({ page, seedCardWithStatus, seedWork }) => {
     const run = Date.now();
     const [inW1, loose] = [`bw-a-${run}`, `bw-m-${run}`];
-    await seedSession(seedCardWithStatus, inW1, `[BW] Menu anchor ${run}`);
-    await seedSession(seedCardWithStatus, loose, `[BW] Menu loose ${run}`);
-    const w1 = await seedWork({ title: `[BW] Menu target ${run}` });
+    await seedSession(seedCardWithStatus, inW1, `[BW] Picker anchor ${run}`);
+    await seedSession(seedCardWithStatus, loose, `[BW] Picker loose ${run}`);
+    const w1 = await seedWork({ title: `[BW] Picker target ${run}` });
     await apiAddWorkSession(w1.id, { sessionId: inW1 });
 
     await page.goto('/');
-    const trigger = page.getByRole('button', { name: BOARD_WORKS_COPY.moveMenuLabel(`[BW] Menu loose ${run}`), exact: true });
+    const trigger = page.locator(`article[data-session-group-key="session:${loose}"] .kv2-work-picker-trigger`);
+    await expect(trigger).toContainText(WORK_PICKER_COPY.none);
     await trigger.focus();
     await page.keyboard.press('Enter');
-    const menu = page.getByRole('menu', { name: BOARD_WORKS_COPY.moveMenuLabel(`[BW] Menu loose ${run}`) });
-    await expect(menu).toBeVisible();
-    await menu.getByRole('menuitem', { name: BOARD_WORKS_COPY.moveTo(w1.title) }).click();
+    // Opening focuses the search box: type to filter, Enter picks the match.
+    const search = page.getByRole('textbox', { name: WORK_PICKER_COPY.searchPlaceholder });
+    await expect(search).toBeFocused();
+    await page.keyboard.type(`Picker target ${run}`);
+    // The cursor lands on the first match — Enter assigns it.
+    await page.keyboard.press('Enter');
     await expect.poll(() => linkedSessions(w1.id)).toContain(loose);
-    // No session dialog opened behind the menu.
+    // No session dialog opened behind the picker.
     await expect(page.locator('.work-session-notice')).toContainText(w1.title);
+    await expect(page.locator('.session-conversation-dialog')).toHaveCount(0);
+  });
+
+  test('typing a new name and Enter in a session group Work field creates that Work with the session', async ({ page, seedCardWithStatus, trackWork }) => {
+    const run = Date.now();
+    const loose = `bw-c-${run}`;
+    await seedSession(seedCardWithStatus, loose, `[BW] Create seed ${run}`);
+
+    await page.goto('/');
+    await page.locator(`article[data-session-group-key="session:${loose}"] .kv2-work-picker-trigger`).click();
+    const popover = page.locator('.kv2-work-picker-popover');
+    // `새 Work 만들기` sits above the existing Works.
+    await expect(popover.locator('.kv2-work-picker-option').first()).toContainText(WORK_PICKER_COPY.createNew);
+    await page.keyboard.type(`[BW] Typed ${run}`);
+    await expect(popover.locator('.kv2-work-picker-option').first()).toHaveText(new RegExp(`새 Work 만들기: "\\[BW\\] Typed ${run}"`));
+    await page.keyboard.press('Enter');
+
+    await expect.poll(async () => (await apiGetWorks()).find((work) => work.title === `[BW] Typed ${run}`)?.sessionLinks.map((l) => l.sessionId))
+      .toEqual([loose]);
+    const created = (await apiGetWorks()).find((work) => work.title === `[BW] Typed ${run}`);
+    if (created) trackWork(created.id);
+    // No name dialog — the search text was the name.
+    await expect(page.getByRole('dialog', { name: BOARD_WORKS_COPY.newWorkTitle })).toHaveCount(0);
+  });
+
+  test('a sessionless todo card creates a Work from its field and reserves it', async ({ page, seedCardWithStatus, trackWork }) => {
+    const run = Date.now();
+    const title = `[BW] Todo create ${run}`;
+    await seedCardWithStatus({ title, description: 'reserve me', projectDir: '/tmp/board-works-e2e' }, 'todo');
+
+    await page.goto('/');
+    const card = page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title });
+    await card.locator('.kv2-work-picker-trigger').click();
+    await page.keyboard.type(`[BW] Planned ${run}`);
+    await page.keyboard.press('Enter');
+
+    await expect(card.locator('.kv2-work-picker-label')).toHaveText(`[BW] Planned ${run}`);
+    await expect(card.locator('.kv2-work-picker-state')).toHaveText(WORK_PICKER_COPY.planned);
+    const created = (await apiGetWorks()).find((work) => work.title === `[BW] Planned ${run}`);
+    expect(created?.sessionLinks).toEqual([]);
+    if (created) trackWork(created.id);
+    const saved = (await apiGetCards()).find((candidate) => candidate.title === title);
+    expect(saved?.plannedWorkId).toBe(created?.id);
+  });
+
+  test('NEW TASK creates a Work from its Work field and the new card is born reserved', async ({ page, trackWork }) => {
+    const run = Date.now();
+    const title = `[BW] New task ${run}`;
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    await page.locator('#create-card-title-input').fill(title);
+    await page.locator('.kv2-work-picker-trigger--input').click();
+    await page.keyboard.type(`[BW] From new task ${run}`);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.kv2-work-picker-trigger--input .kv2-work-picker-label')).toHaveText(`[BW] From new task ${run}`);
+
+    await page.locator('#create-card-description-input').fill('born reserved');
+    await page.getByRole('button', { name: 'CREATE', exact: true }).click();
+    await expect(page.locator('.kv2-column[data-status="todo"] .kv2-card', { hasText: title })).toBeVisible();
+    const created = (await apiGetWorks()).find((work) => work.title === `[BW] From new task ${run}`);
+    if (created) trackWork(created.id);
+    const saved = (await apiGetCards()).find((candidate) => candidate.title === title);
+    expect(saved?.plannedWorkId).toBe(created?.id);
+  });
+
+  test('Escape closes the session group Work picker', async ({ page, seedCardWithStatus }) => {
+    const run = Date.now();
+    const loose = `bw-e-${run}`;
+    await seedSession(seedCardWithStatus, loose, `[BW] Escape ${run}`);
+
+    await page.goto('/');
+    await page.locator(`article[data-session-group-key="session:${loose}"] .kv2-work-picker-trigger`).click();
+    await expect(page.locator('.kv2-work-picker-popover')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.kv2-work-picker-popover')).toHaveCount(0);
   });
 });
 
@@ -276,24 +357,23 @@ test.describe('Board GROUP: WORKS — ⋯ 세션 접기', () => {
     await expect(container.locator('.kv2-work-head .kv2-work-unread')).toHaveCount(0);
     await expect(container.locator('.kv2-work-meta .kv2-work-unread')).toHaveText('● 1');
 
-    const menu = container.getByRole('button', { name: BOARD_WORKS_COPY.menuLabel(w.title) });
-    await menu.click();
-    await page.getByRole('menuitem', { name: BOARD_WORKS_COPY.menuCollapseSessions }).click();
+    // The footer hide / show button folds the Work — `⋯` no longer does.
+    const toggle = container.locator('.kv2-work-toggle');
+    await expect(toggle).toHaveText('hide');
+    await toggle.click();
     await expect(container).toHaveClass(/kv2-work--collapsed/);
     await expect(groups).toHaveCount(0);
     await expect(container.locator('.kv2-work-meta')).toContainText('3 sessions');
+    await expect(toggle).toHaveText(BOARD_WORKS_COPY.toggleShow(3));
 
-    await menu.click();
-    await page.getByRole('menuitem', { name: BOARD_WORKS_COPY.menuExpandSessions }).click();
+    await toggle.click();
     await expect(groups).toHaveCount(2);
     await container.getByRole('button', { name: new RegExp(BOARD_WORKS_COPY.showMore(1)) }).click();
     await expect(groups).toHaveCount(3);
 
     // Folding and opening again starts from the newest two once more.
-    await menu.click();
-    await page.getByRole('menuitem', { name: BOARD_WORKS_COPY.menuCollapseSessions }).click();
-    await menu.click();
-    await page.getByRole('menuitem', { name: BOARD_WORKS_COPY.menuExpandSessions }).click();
+    await toggle.click();
+    await toggle.click();
     await expect(groups).toHaveCount(2);
   });
 });

@@ -24,6 +24,7 @@ import { ScheduledDispatchService } from './scheduled-dispatch-service';
 import { WikiWorker } from './wiki/wiki-worker';
 import { sweepWikiInternalCards } from './wiki/wiki-sweep';
 import { reconcileWorkSessionLinks } from './works/work-links';
+import { createPlannedWorkLinker } from './works/work-planned-link';
 import { appendRuntimeDebugLog } from './debug-log';
 import type { QuestionMonitor } from './question-monitor';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
@@ -120,6 +121,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const scriptStore = new ScriptStore(dataDir);
   const quickActionStore = new QuickActionStore(dataDir, scriptStore);
   const workStore = new WorkStore(dataDir);
+  // `plannedWorkId` auto-link — see work-planned-link.ts. Wired here (not in
+  // `store.ts`) so `KanbanStore` never imports `WorkStore` directly.
+  store.setSessionAssignedHook(createPlannedWorkLinker(store, workStore));
   const skillStore = new SkillStore(dataDir);
   const skillRootsStore = new SkillRootsStore(dataDir);
   const placementTargetsStore = new PlacementTargetsStore(dataDir);

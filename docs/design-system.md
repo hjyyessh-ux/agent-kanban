@@ -152,7 +152,7 @@ Timeline(Board 탭의 `타임라인` 뷰)은 한 화면에 **디렉토리 · Wor
 | `--kv2-work-stacked-shadow` | Work 컨테이너의 겹친 종이 그림자 | |
 | `--kv2-session-tab-bg/-fg` | 세션 그룹 위 `SESSION` 탭(`.kv2-session-tab`) | 중립 잉크 면 — 상태색은 왼쪽 띠(`--session-strip`)만 |
 | `--kv2-favorite-pill-fg/-bg/-border` | `★ N` pill(`.kv2-favorite-pill` — 세션 헤더 ①, Work 메타 줄) | 라이트는 별 amber를 잉크 쪽으로 당긴 글자(원색은 흰 면에서 2:1), 다크는 amber 그대로 — AA는 `token-contrast.test.ts` |
-| `--kv2-work-drop-overlay` | Works 드롭 힌트 overlay 면(`.kv2-work-drop-hint`, `.kv2-works-unassign-hint`) | surface 94% — 아래 세션이 비치되 글자는 읽히게. 라이트/다크 둘 다 정의 |
+| `--kv2-work-drop-over-face` | 드래그 중 포인터가 올라간 Work 컨테이너의 면(`.kv2-work.is-drop-target.is-drop-over`) | `--kv2-work-tint-2` — 평소 면(`tint`)보다 한 단계 진하게. 대상 위에 글자를 띄우지 않으므로 이 면 변화와 실선 outline이 유일한 표시. 라이트/다크 둘 다 정의 |
 
 ## 다크 테마 (`:root[data-theme="dark"]`)
 

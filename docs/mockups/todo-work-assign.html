@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — 대기 카드 Work 지정</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
+<script>
+  // ?theme=dark / ?view=detail / ?variant=B 로 바로 열기 (스크린샷용)
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+</script>
+<style>
+/* ── 테마 토큰: works-on-board.html 과 같은 값 (kanban-v2.tokens.css 기반) ── */
+:root {
+  --todo: #3b82f6; --prog: #facc15; --complete: #ff3b6b; --done: #22c55e;
+  --d-ak: #dd4b9c; --d-mcp: #787fed; --d-sms: #357718; --d-zadar: #a7361b;
+  --fav-active: #f59e0b;
+  --sans: 'Work Sans', system-ui, sans-serif; --mono: 'Source Code Pro', ui-monospace, monospace;
+  --app-bg: #FFF8E7; --surface: #fff; --sunken: #f8fafc; --hover: #fffdf5;
+  --ink: #1A1A2E; --ink-2: #536074; --ink-3: #627089;
+  --border: #D7DCE6; --frame: #1f2233; --card-border: #1f2233; --hard: #000;
+  --card-accent-w: 6px;
+  --warn: #b45309; --warn-surface: color-mix(in srgb, #f59e0b 12%, #fff);
+  --colh-border: #1f2233; --colh-shadow-x: 4px 4px 0 #000;
+  --colh-todo-bg: var(--todo); --colh-todo-fg: #fff;
+  --colh-prog-bg: var(--prog); --colh-prog-fg: #1A1A2E;
+  --rt-claude-bg: #f7d9cd; --rt-border: #1f2233; --rt-fg: #1A1A2E;
+  --btn-bg: #fff; --btn-border: #1f2233; --btn-fg: #1A1A2E; --btn-shadow: 2px 2px 0 #000;
+  --btn-start-bg: var(--todo); --btn-start-fg: #fff;
+  --btn-queue-bg: var(--prog); --btn-queue-fg: #1A1A2E;
+  --meta-border: #f3c58b; --meta-bg: #fffaf2; --meta-plain-border: #D7DCE6;
+  --work: #2f6cb6; --work-fg: #f9fafb; --work-text: #2f6cb6;
+  --work-tint: color-mix(in srgb, var(--work) 7%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 14%, var(--surface));
+  --mock-bar-bg: #1f2233; --toast-bg: #1f2233; --toast-fg: #fff;
+  --scrim: rgba(26,26,46,.35);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --app-bg: #1b1d20; --surface: #272a2e; --sunken: #202327; --hover: #30343a;
+  --ink: #d4d7db; --ink-2: #a3a8ae; --ink-3: #979ea6;
+  --border: #34383d; --frame: #454a50; --card-border: #3c4146; --hard: #0d0f10;
+  --card-accent-w: 4px;
+  --warn: #e0b46a; --warn-surface: color-mix(in srgb, #f59e0b 14%, #272a2e);
+  --colh-border: #3a3f44; --colh-shadow-x: 3px 3px 0 #0d0f10;
+  --colh-todo-bg: color-mix(in srgb, var(--todo) 24%, #25282c); --colh-todo-fg: var(--ink);
+  --colh-prog-bg: color-mix(in srgb, var(--prog) 22%, #25282c); --colh-prog-fg: var(--ink);
+  --rt-claude-bg: #2d3135; --rt-border: #484e54; --rt-fg: #c2c6ca;
+  --btn-bg: #2d3135; --btn-border: #4a5056; --btn-fg: #cfd3d7; --btn-shadow: 2px 2px 0 #0d0f10;
+  --btn-start-bg: color-mix(in srgb, var(--todo) 30%, #2d3135); --btn-start-fg: var(--ink);
+  --btn-queue-bg: color-mix(in srgb, var(--prog) 22%, #2d3135); --btn-queue-fg: var(--ink);
+  --meta-border: #6b5638; --meta-bg: #2b2a27; --meta-plain-border: #3c4146;
+  --work: #3d7fd0; --work-fg: #f4f6f8;
+  --work-text: color-mix(in srgb, #3d7fd0 62%, #d4d7db);
+  --work-tint: color-mix(in srgb, var(--work) 11%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 20%, var(--surface));
+  --mock-bar-bg: #0e0e15; --toast-bg: #30343a; --toast-fg: #d4d7db;
+  --scrim: rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--app-bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* ── 목업 컨트롤 바 ───────────────────────────────────────────── */
+.mock-bar { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 24px; background: var(--mock-bar-bg); color: #fff; font-size: 13px; }
+.mock-bar b { color: var(--prog); letter-spacing: .04em; }
+.seg { display: inline-flex; border: 2px solid #fff; }
+.seg button { border: 0; background: transparent; color: #fff; padding: 4px 10px; font-weight: 700; font-size: 12px; }
+.seg button + button { border-left: 2px solid #fff; }
+.seg button.on { background: var(--prog); color: #1A1A2E; }
+.mock-bar .hint { opacity: .8; }
+
+main { padding: 24px; max-width: 1440px; margin: 0 auto; }
+.view[hidden] { display: none !important; }
+
+/* ── 보드 ─────────────────────────────────────────────────────── */
+.board { display: grid; grid-template-columns: repeat(2, minmax(300px, 380px)) minmax(280px, 1fr); gap: 28px; align-items: start; }
+.col-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 3px solid var(--colh-border); box-shadow: var(--colh-shadow-x); font-weight: 800; font-size: 18px; margin-bottom: 16px; }
+.col-head .n { font: 700 12px var(--mono); border: 2px solid currentColor; padding: 0 6px; }
+.c-todo .col-head { background: var(--colh-todo-bg); color: var(--colh-todo-fg); }
+.c-prog .col-head { background: var(--colh-prog-bg); color: var(--colh-prog-fg); }
+.col-body { display: flex; flex-direction: column; gap: 16px; }
+
+.card { position: relative; background: var(--surface); border: 3px solid var(--card-border); border-left: var(--card-accent-w) solid var(--todo); box-shadow: 4px 4px 0 var(--hard); padding: 12px 14px; }
+.c-prog .card { border-left-color: var(--prog); }
+.card-top { display: flex; align-items: center; gap: 8px; }
+.pchip { white-space: nowrap; flex: none; font: 700 11px var(--mono); padding: 1px 6px; border: 2px solid var(--dc); color: var(--dc); background: color-mix(in srgb, var(--dc) 10%, var(--surface)); }
+.idchip { margin-left: auto; font: 800 12px var(--mono); color: var(--ink-3); }
+.star { color: var(--ink-3); font-size: 15px; }
+.card h4 { margin: 8px 0 4px; font-size: 16px; font-weight: 800; }
+.card .prompt { color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 2px dashed var(--border); padding-bottom: 8px; }
+.meta-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 12px var(--mono); color: var(--ink-3); }
+.rt { font: 700 10px var(--mono); padding: 2px 8px; border: 2px solid var(--rt-border); border-radius: 999px; background: var(--rt-claude-bg); color: var(--rt-fg); }
+.kebab { margin-left: auto; border: 0; background: transparent; padding: 0 6px; font-weight: 800; color: var(--ink-2); letter-spacing: 1px; }
+.kebab:hover, .kebab[aria-expanded="true"] { background: var(--work-tint-2); }
+.actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn { border: 2px solid var(--btn-border); background: var(--btn-bg); color: var(--btn-fg); box-shadow: var(--btn-shadow); padding: 4px 12px; font-weight: 800; font-size: 13px; }
+.btn.start { background: var(--btn-start-bg); color: var(--btn-start-fg); }
+.btn.queue { background: var(--btn-queue-bg); color: var(--btn-queue-fg); }
+.btn.del { margin-left: auto; color: #dc2626; padding: 4px 8px; }
+
+/* Work 줄 — 예약(점선) / 연결(실선) */
+.work-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.wtag { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px 2px 4px; font: 700 12px var(--sans); color: var(--work-text); background: var(--work-tint); border: 2px solid var(--work); cursor: pointer; }
+.wtag .wi { background: var(--work); color: var(--work-fg); font: 800 10px var(--mono); padding: 0 4px; }
+.wtag .wt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wtag.planned { border-style: dashed; background: var(--surface); }
+.wtag .state { font: 700 10px var(--mono); color: var(--ink-3); letter-spacing: .04em; white-space: nowrap; }
+.wtag:hover { background: var(--work-tint-2); }
+.warn-row { margin-top: 8px; padding: 4px 8px; font-size: 12px; color: var(--warn); background: var(--warn-surface); border: 2px dashed var(--warn); }
+.ann { position: absolute; right: -10px; top: -12px; background: var(--prog); color: #1A1A2E; font: 800 10px var(--mono); padding: 2px 6px; border: 2px solid #1A1A2E; }
+.ann.b { background: var(--work); color: var(--work-fg); border-color: var(--work-fg); }
+
+/* ── Work 피커 (카드 ⋯ / 태그 클릭 / 상세 드롭다운 공용) ── */
+.picker { position: absolute; z-index: 30; width: 340px; background: var(--surface); border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--hard); }
+.picker .ph { padding: 10px 12px 6px; font: 800 11px var(--mono); letter-spacing: .08em; color: var(--ink-3); text-transform: uppercase; }
+.picker input { width: calc(100% - 24px); margin: 0 12px 8px; padding: 6px 8px; border: 2px solid var(--frame); background: var(--sunken); color: var(--ink); font: 13px var(--sans); }
+.picker ul { list-style: none; margin: 0; padding: 0 0 6px; max-height: 260px; overflow: auto; }
+.picker li button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 0; background: transparent; text-align: left; font-size: 13px; }
+.picker li button:hover, .picker li button:focus-visible { background: var(--work-tint-2); outline: none; }
+.picker .chk { width: 14px; color: var(--work-text); font-weight: 800; }
+.picker .wn { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker .cnt { white-space: nowrap; margin-left: auto; font: 11px var(--mono); color: var(--ink-3); }
+.picker .sep { border-top: 2px dashed var(--border); margin: 4px 0; }
+.picker .new { color: var(--work-text); font-weight: 700; }
+.picker .rm { color: #dc2626; font-weight: 700; }
+.picker .foot { padding: 8px 12px; font-size: 12px; color: var(--ink-2); background: var(--sunken); border-top: 2px solid var(--border); }
+.menu { position: absolute; z-index: 30; min-width: 210px; background: var(--surface); border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--hard); padding: 4px 0; }
+.menu button { display: block; width: 100%; text-align: left; padding: 8px 14px; border: 0; background: transparent; font-weight: 600; }
+.menu button:hover { background: var(--work-tint-2); }
+.menu .sep { border-top: 2px dashed var(--border); margin: 4px 0; }
+
+/* ── 상세 다이얼로그 ─────────────────────────────────────────── */
+.detail-wrap { background: var(--scrim); padding: 28px; }
+.dialog { position: relative; max-width: 1100px; margin: 0 auto; background: var(--surface); border: 3px solid var(--frame); border-left: 8px solid var(--todo); box-shadow: 8px 8px 0 var(--hard); padding: 28px 40px 32px; }
+.dialog .dh { display: flex; align-items: center; gap: 12px; }
+.pill-todo { background: var(--todo); color: #fff; font: 800 12px var(--mono); padding: 4px 12px; border: 2px solid var(--frame); }
+.dialog h2 { font-size: 22px; margin: 14px 0 20px; }
+.meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.meta { position: relative; border: 2px solid var(--meta-border); background: var(--meta-bg); padding: 12px 16px; min-height: 70px; }
+.meta.plain { border-color: var(--meta-plain-border); background: var(--surface); }
+.meta .ml { font: 800 11px var(--mono); letter-spacing: .08em; color: var(--ink); text-transform: uppercase; }
+.meta .mv { margin-top: 6px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.meta .mv .caret { margin-left: auto; font-size: 10px; color: var(--ink-3); }
+.meta .ms { margin-top: 3px; font-size: 12px; color: var(--ink-3); }
+.meta.dir .mv { font: 600 14px var(--mono); }
+.row2 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+.meta.work { border-color: var(--work); background: var(--work-tint); cursor: pointer; }
+.meta.work.empty { border-style: dashed; background: var(--surface); }
+.meta.work .mv .wi { background: var(--work); color: var(--work-fg); font: 800 10px var(--mono); padding: 0 4px; }
+.meta.work.empty .mv { color: var(--ink-3); font-weight: 600; }
+.badge-state { font: 700 10px var(--mono); padding: 1px 6px; border: 2px dashed var(--work); color: var(--work-text); }
+.badge-state.linked { border-style: solid; }
+.dsec { margin-top: 26px; }
+.dsec h3 { font-size: 15px; margin: 0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.dsec h3 .tri { font-size: 10px; color: var(--ink-3); }
+.dsec p { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.dsec .body { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.prompt-box { margin-top: 22px; border: 2px solid var(--frame); border-left: 6px solid var(--todo); background: color-mix(in srgb, var(--todo) 6%, var(--surface)); padding: 14px 18px; font-size: 14px; }
+.sec-muted { opacity: .55; }
+
+/* ── 노트 ─────────────────────────────────────────────────────── */
+.notes { margin-top: 36px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.note { background: var(--surface); border: 3px solid var(--frame); box-shadow: 4px 4px 0 var(--hard); padding: 14px 18px; font-size: 13px; }
+.note h3 { margin: 0 0 8px; font-size: 15px; }
+.note ul { margin: 0; padding-left: 18px; }
+.note li { margin: 3px 0; }
+.note code { font: 12px var(--mono); background: var(--sunken); padding: 0 3px; }
+table.flow { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+table.flow th, table.flow td { border: 2px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; }
+table.flow th { background: var(--sunken); font-weight: 800; }
+.q { border-color: var(--prog) !important; }
+.q h3::before { content: '❓ '; }
+
+.toast { position: fixed; left: 24px; bottom: 24px; z-index: 60; display: flex; gap: 12px; align-items: center; background: var(--toast-bg); color: var(--toast-fg); border: 2px solid var(--hard); box-shadow: 4px 4px 0 var(--work); padding: 10px 14px; font-size: 13px; transform: translateY(160%); transition: transform .2s; visibility: hidden; max-width: 560px; }
+.toast.show { transform: none; visibility: visible; }
+.toast button { border: 2px solid currentColor; background: transparent; color: inherit; font-weight: 800; padding: 2px 10px; }
+
+@media (max-width: 900px) {
+  .board { grid-template-columns: 1fr; }
+  .meta-grid { grid-template-columns: 1fr 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+  .dialog { padding: 20px; }
+  .detail-wrap { padding: 12px; }
+  main { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <span><b>MOCKUP</b> 대기(TODO) 카드 Work 지정</span>
+  <span>화면:</span>
+  <div class="seg" id="viewSeg">
+    <button data-view="board">메인 보드</button>
+    <button data-view="detail">카드 상세</button>
+  </div>
+  <span>상세 배치:</span>
+  <div class="seg" id="variantSeg">
+    <button data-variant="A">A · 메타 카드 (추천)</button>
+    <button data-variant="B">B · 섹션</button>
+  </div>
+  <span>테마:</span>
+  <div class="seg" id="themeSeg">
+    <button data-theme-set="light">Light</button>
+    <button data-theme-set="dark">Dark</button>
+  </div>
+  <span class="hint">태그·⋯·WORK 칸을 눌러 지정 / 변경 / 해제 · ▶ 시작으로 예약 → 연결 전환</span>
+</div>
+
+<main>
+  <section class="view" id="boardView">
+    <div class="board" id="board"></div>
+  </section>
+  <section class="view" id="detailView" hidden>
+    <div class="detail-wrap"><div class="dialog" id="dialog"></div></div>
+  </section>
+
+  <div class="notes">
+    <div class="note">
+      <h3>핵심: "예약" 과 "연결" 두 상태</h3>
+      <ul>
+        <li>Work는 <b>세션</b>을 묶습니다. 대기 카드는 아직 세션이 없어 지금은 넣을 방법이 없습니다(드래그해도 "세션이 없는 카드는 Work에 넣을 수 없습니다").</li>
+        <li><b>예약</b> = 카드에 Work를 미리 적어 둠(<code>card.plannedWorkId</code>). 점선 태그 <span class="wtag planned" style="cursor:default"><span class="wi">W</span><span class="wt">SMS Whitelist 관리</span><span class="state">예약</span></span></li>
+        <li>▶ 시작으로 세션이 생기는 순간 서버가 그 세션을 Work에 <b>연결</b>하고 예약을 지웁니다 → 실선 태그 <span class="wtag" style="cursor:default"><span class="wi">W</span><span class="wt">SMS Whitelist 관리</span></span></li>
+        <li>이미 세션이 있는 대기 카드(피드백·resume)는 예약 없이 바로 <b>연결</b>합니다 — 지금 드래그·트레이가 하는 일과 같은 API.</li>
+        <li><code>Work 미배정 · 드래그해서 넣기</code> 안내는 <b>뺍니다</b>. Work가 없으면 줄 자체가 없고, 지정은 <code>⋯</code>에서.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>설정 · 표시 · 변경 · 해제</h3>
+      <table class="flow">
+        <tr><th></th><th>메인 보드 (대기 카드)</th><th>카드 상세</th></tr>
+        <tr><td><b>지정</b></td><td><code>⋯ → Work 지정…</code> → 피커<br />(드래그 → 하단 트레이도 그대로 가능)</td><td>A: <code>WORK</code> 칸 클릭 → 같은 피커<br />B: <code>Work ▸</code> 섹션의 피커</td></tr>
+        <tr><td><b>표시</b></td><td>메타 줄 아래 Work 태그<br />예약 = 점선 + <code>예약</code> / 연결 = 실선</td><td>제목 · 상태 배지(<code>예약 · 시작하면 연결</code> / <code>연결됨</code>)</td></tr>
+        <tr><td><b>변경</b></td><td>태그 클릭 또는 <code>⋯ → Work 변경…</code></td><td>같은 칸/섹션 → 다른 Work 선택</td></tr>
+        <tr><td><b>해제</b></td><td>피커 맨 아래 <code>⊘ Work 지정 해제</code></td><td>피커의 <code>⊘ Work 지정 해제</code></td></tr>
+        <tr><td><b>되돌리기</b></td><td colspan="2">모든 변경 뒤 기존 <code>WorkSessionNotice</code> + <code>되돌리기</code></td></tr>
+      </table>
+    </div>
+    <div class="note">
+      <h3>예외 규칙</h3>
+      <ul>
+        <li><b>예약한 Work가 시작 전에 완료·삭제·병합됨</b> → 병합이면 병합 대상으로 따라가고, 완료·삭제면 예약을 지우고 카드에 <span style="color:var(--warn)">⚠ 예약한 Work가 닫혀 연결하지 않았습니다</span> 한 줄 (다음 지정 때 사라짐).</li>
+        <li><b>큐로 직전 세션을 이어붙이는 카드</b>는 앞 카드의 세션을 쓰므로 Work도 앞 카드를 따릅니다 → 피커 대신 안내만: "앞 카드 세션을 이어 써서 그 Work를 따릅니다".</li>
+        <li><b>세션이 이미 다른 Work에 있는 카드</b>(피드백 등)에서 다른 Work를 고르면 = 세션 <b>이동</b> (기존 <code>moveSession</code>), 되돌리기 제공.</li>
+        <li>예약은 <b>Work 목록·Timeline에는 나오지 않습니다</b>(세션이 없으니까). Work 상세에 "예약된 대기 카드 N" 정도만 후속으로 검토.</li>
+        <li>카드를 지우면 예약도 같이 사라집니다.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>구현 범위 (확정 후)</h3>
+      <ul>
+        <li><code>src/core/types.ts</code>: <code>KanbanCard.plannedWorkId?</code>, 카드 PATCH 입력에 추가 (서버가 활성 Work인지 검증).</li>
+        <li>세션 연결 시점: 카드에 <code>sessionId</code>가 처음 기록되는 <b>한 곳</b>에서 <code>plannedWorkId</code> → <code>POST /api/works/:id/sessions</code> 후 비움. 수동 시작·예약 실행·큐 자동 실행이 모두 그 경로를 지나야 함 — fragile 파일(<code>event-handler.ts</code> 등) 대신 store/route 쪽 헬퍼 하나로.</li>
+        <li>Web: <code>BoardWorkPicker</code>(카드 ⋯·태그·상세 공용), <code>BoardCard</code> 태그 2상태, 트레이가 세션 없는 카드도 받아 "예약"으로, <code>CardDetailDialog</code> WORK 칸.</li>
+        <li>테스트: 예약 → 시작 → 연결 / 예약 Work 닫힘 / 이어붙이기 카드 / 되돌리기, e2e 1~2개.</li>
+      </ul>
+    </div>
+    <div class="note q">
+      <h3>정해 주실 것</h3>
+      <ul>
+        <li><b>상세 배치</b>: A(DIRECTORY 옆 <code>WORK</code> 칸, 런타임·모델처럼 드롭다운) vs B(<code>Queue After</code> 같은 접는 섹션). 추천 A — 늘 보여서 상태 확인이 한눈에.</li>
+        <li><b>태그 노출</b>: 지금처럼 <code>GROUP: WORKS</code>에서만 vs 모든 모드에서. 추천: 예약·연결 태그는 모든 모드에서 (지정한 걸 다른 모드에서 못 보면 헷갈림), 단 Work 없는 카드는 아무것도 안 보임.</li>
+        <li><b>NEW TASK 생성 창</b>에도 같은 <code>WORK</code> 칸을 넣을지 (추천: 넣음 — 만들 때 바로 지정).</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"><span id="toastMsg"></span><button id="undoBtn">되돌리기</button></div>
+
+<script>
+const DIRS = { 'agent-kanban': 'var(--d-ak)', 'mcp-server': 'var(--d-mcp)', 'sms': 'var(--d-sms)', 'zadar': 'var(--d-zadar)' };
+let works = [
+  { id: 'W-7f2a', title: 'Agent-kanban UI 개선 점검', dir: 'agent-kanban', sessions: 6 },
+  { id: 'W-31cd', title: 'ZEPETOFUL OSS·FC 배포 검증', dir: 'mcp-server', sessions: 3 },
+  { id: 'W-9b10', title: 'SMS Whitelist 관리', dir: 'sms', sessions: 3 },
+];
+// state: none | planned | linked  (linked = 이미 세션이 있는 카드)
+let cards = [
+  { id: '022X2xY6', title: 'SMS - AI report 넣자.', dir: 'sms', prompt: 'account recovery 로 들어오는 요청량 보고 이거 제한을 풀어…', age: '1h ago', session: null, planned: null, ann: '① Work 없음 — 줄 없음, ⋯로 지정' },
+  { id: '9lp-TXzF', title: 'ZEPETOFUL - Asset 2018 정리 다음 스텝 진행', dir: 'mcp-server', prompt: 'https://zepetoapp.slack.com/archives/CTDD14T89/p17…', age: '23h ago', session: null, planned: 'W-31cd', ann: '② 예약 (세션 없음)' },
+  { id: 'Fb7Kq0pa', title: 'Feedback #3: unread 토글 문구 다듬기', dir: 'agent-kanban', prompt: '토글 툴팁을 한국어로 줄여줘', age: '5m ago', session: 'b0933a', linked: 'W-7f2a', ann: '③ 세션 있음 → 바로 연결' },
+  { id: 'q9QzR1aa', title: 'Whitelist 관리 UI 회귀 테스트', dir: 'sms', prompt: '앞 카드 결과를 이어서 테스트 시나리오 실행', age: '2h ago', session: null, queuedContinue: true, ann: '④ 큐 이어붙이기 — 앞 카드 Work 따름' },
+  { id: 'Xc0Lw9Zd', title: 'clickhouse 쿼리 튜닝 2차', dir: 'zadar', prompt: 'p95 를 300ms 아래로', age: '3d ago', session: null, planned: null, warn: true, ann: '⑤ 예약 Work가 닫힘' },
+];
+let running = [
+  { id: 'Gm3Zt8Lu', title: 'SMS - PR Review', dir: 'sms', prompt: 'PR #212 리뷰', age: '실행 1분', session: 'bb4839f2', linked: 'W-9b10', justLinked: true, ann: '예약 → 시작 → 연결됨' },
+];
+const ui = { view: qs.get('view') || 'board', variant: qs.get('variant') || 'A', picker: null, menu: null, detailId: '9lp-TXzF' };
+let undo = null;
+
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const W = (id) => works.find((w) => w.id === id);
+const C = (id) => cards.find((c) => c.id === id) || running.find((c) => c.id === id);
+const pchip = (dir) => `<span class="pchip" style="--dc:${DIRS[dir]}">${esc(dir)}</span>`;
+const workOf = (c) => c.session ? c.linked : c.planned;
+
+function tagHtml(c) {
+  if (c.queuedContinue) return `<div class="work-row"><span class="wtag planned" style="cursor:default" title="큐 이어붙이기 카드는 앞 카드 세션을 이어 써서 그 Work를 따릅니다"><span class="wi">W</span><span class="wt">SMS Whitelist 관리</span><span class="state">앞 카드 따름</span></span></div>`;
+  if (c.warn) return `<div class="warn-row">⚠ 예약한 Work가 닫혀 연결하지 않았습니다</div>`;
+  const wid = workOf(c); if (!wid) return '';
+  const w = W(wid); const planned = !c.session;
+  return `<div class="work-row"><button class="wtag ${planned ? 'planned' : ''}" data-open-picker="${c.id}" title="${planned ? '예약 — 시작하면 이 Work에 세션이 연결됩니다 · 클릭해서 변경' : 'Work에 연결됨 · 클릭해서 변경'}"><span class="wi">W</span><span class="wt">${esc(w.title)}</span>${planned ? '<span class="state">예약</span>' : ''}</button></div>`;
+}
+
+function cardHtml(c, col) {
+  return `<article class="card" data-card="${c.id}">
+    ${c.ann ? `<span class="ann ${col === 'prog' ? 'b' : ''}">${esc(c.ann)}</span>` : ''}
+    <div class="card-top">${pchip(c.dir)}<span class="idchip">☆ #${c.id}</span></div>
+    <h4>${esc(c.title)}</h4>
+    <div class="prompt">${esc(c.prompt)}</div>
+    <div class="meta-row"><span class="rt">✳ CLAUDE</span><span>${esc(c.age)}</span>
+      <button class="kebab" data-open-menu="${c.id}" aria-expanded="${ui.menu === c.id}" title="카드 메뉴">⋯</button></div>
+    ${tagHtml(c)}
+    ${col === 'todo' ? `<div class="actions"><button class="btn start" data-start="${c.id}">▶ 시작</button><button class="btn queue">큐 연결</button><button class="btn del">✕</button></div>` : `<div class="actions"><button class="btn">✓ 실행 종료</button><button class="btn">다시 열기</button></div>`}
+    ${ui.menu === c.id ? menuHtml(c) : ''}
+    ${ui.picker && ui.picker.id === c.id && ui.picker.where === 'card' ? pickerHtml(c, 'top: 100%; left: 12px; margin-top: -6px') : ''}
+  </article>`;
+}
+
+function menuHtml(c) {
+  const wid = workOf(c);
+  const label = c.queuedContinue ? null : wid ? 'Work 변경…' : 'Work 지정…';
+  return `<div class="menu" style="top: 118px; right: 8px">
+    <button data-detail="${c.id}">카드 상세 열기</button>
+    ${label ? `<button data-open-picker="${c.id}">${label}</button>` : `<button disabled style="opacity:.5" title="앞 카드 세션을 이어 써서 그 Work를 따릅니다">Work 지정 — 앞 카드 따름</button>`}
+    ${wid && !c.queuedContinue ? `<button data-clear="${c.id}" style="color:#dc2626">⊘ Work 지정 해제</button>` : ''}
+    <div class="sep"></div>
+    <button>큐 연결…</button><button>예약 실행…</button>
+  </div>`;
+}
+
+function pickerHtml(c, style) {
+  const wid = workOf(c);
+  const planned = !c.session;
+  return `<div class="picker" style="${style}" data-picker>
+    <div class="ph">${planned ? 'Work 지정 (예약)' : 'Work로 이동'}</div>
+    <input placeholder="Work 검색" aria-label="Work 검색" />
+    <ul>
+      ${works.map((w) => `<li><button data-pick="${c.id}|${w.id}"><span class="chk">${w.id === wid ? '✓' : ''}</span>${pchip(w.dir)}<span class="wn">${esc(w.title)}</span><span class="cnt">${w.sessions}s</span></button></li>`).join('')}
+      <li class="sep"></li>
+      <li><button class="new" data-new="${c.id}"><span class="chk">＋</span>새 Work 만들기…</button></li>
+      ${wid ? `<li><button class="rm" data-clear="${c.id}"><span class="chk">⊘</span>Work 지정 해제</button></li>` : ''}
+    </ul>
+    <div class="foot">${planned ? '세션이 아직 없어 <b>예약</b>됩니다 — ▶ 시작하면 이 Work에 연결.' : '이 카드의 세션(#' + esc(c.session) + ')을 옮깁니다. 같은 세션의 다른 카드도 함께 따라갑니다.'}</div>
+  </div>`;
+}
+
+function renderBoard() {
+  $('#board').innerHTML = `
+    <div class="c-todo"><div class="col-head">대기 <span class="n">${cards.length}</span></div><div class="col-body">${cards.map((c) => cardHtml(c, 'todo')).join('')}</div></div>
+    <div class="c-prog"><div class="col-head">진행중 <span class="n">${running.length}</span></div><div class="col-body">${running.map((c) => cardHtml(c, 'prog')).join('')}</div></div>
+    <div></div>`;
+}
+
+function workMeta(c) {
+  const wid = workOf(c); const w = wid && W(wid); const planned = !c.session;
+  const open = ui.picker && ui.picker.id === c.id && ui.picker.where === 'detail';
+  return `<div class="meta work ${w ? '' : 'empty'}" data-open-picker-detail="${c.id}" role="button" tabindex="0">
+    <div class="ml">Work</div>
+    <div class="mv">${w ? `<span class="wi">W</span><span>${esc(w.title)}</span>` : '<span>Work 없음 — 눌러서 지정</span>'}<span class="caret">▾</span></div>
+    <div class="ms">${w ? (planned ? '<span class="badge-state">예약</span> 시작하면 이 Work에 세션 연결' : `<span class="badge-state linked">연결됨</span> 세션 #${esc(c.session)}`) : '세션이 생기기 전에도 미리 정해 둘 수 있습니다'}</div>
+    ${open ? pickerHtml(c, 'top: calc(100% + 6px); right: 0') : ''}
+  </div>`;
+}
+
+function renderDetail() {
+  const c = C(ui.detailId);
+  const wid = workOf(c); const w = wid && W(wid);
+  const variantB = ui.variant === 'B';
+  const openB = ui.picker && ui.picker.id === c.id && ui.picker.where === 'detail';
+  $('#dialog').innerHTML = `
+    <div class="dh"><span class="pill-todo">TODO</span><span style="margin-left:auto" class="idchip">☆ CARD #${c.id}</span><span style="font-size:22px;font-weight:800;margin-left:16px">✕</span></div>
+    <h2>${esc(c.title)}</h2>
+    <div class="meta-grid">
+      <div class="meta"><div class="ml">Runtime</div><div class="mv">Claude<span class="caret">▾</span></div></div>
+      <div class="meta plain"><div class="ml">Model</div><div class="mv">Default model<span class="caret">▾</span></div></div>
+      <div class="meta"><div class="ml">Permission</div><div class="mv">Accept edits<span class="caret">▾</span></div></div>
+      <div class="meta"><div class="ml">Skip permissions</div><div class="mv">☐ Dangerous</div></div>
+    </div>
+    ${variantB
+      ? `<div class="meta plain dir" style="margin-top:16px"><div class="ml">Directory</div><div class="mv">/Users/demo/workspace/${esc(c.dir)}</div></div>`
+      : `<div class="row2"><div class="meta plain dir"><div class="ml">Directory</div><div class="mv">/Users/demo/workspace/${esc(c.dir)}</div></div>${workMeta(c)}</div>`}
+    <div class="prompt-box">${esc(c.prompt)}</div>
+    ${variantB ? `<div class="dsec" style="position:relative">
+        <h3 data-open-picker-detail="${c.id}">Work <span class="tri">${openB ? '▼' : '▶'}</span> ${w ? `<span class="wtag ${c.session ? '' : 'planned'}" style="cursor:pointer"><span class="wi">W</span><span class="wt">${esc(w.title)}</span>${c.session ? '' : '<span class="state">예약</span>'}</span>` : '<span style="font-weight:500;color:var(--ink-3)">없음</span>'}</h3>
+        <p>이 카드가 시작되면 선택한 Work에 세션을 연결합니다.</p>
+        ${openB ? `<div style="position:relative;height:0">${pickerHtml(c, 'top: 8px; left: 0')}</div>` : ''}
+      </div>` : ''}
+    <div class="dsec sec-muted"><h3>Screenshots</h3></div>
+    <div class="dsec sec-muted"><h3>Command <span class="tri">▶</span></h3><p>필요할 때만 command를 선택해 실행 방식을 지정합니다.</p></div>
+    <div class="dsec sec-muted"><h3>Queue After <span class="tri">▶</span></h3><p>선택한 작업이 끝난 뒤 이 작업을 이어서 시작합니다.</p></div>
+    <div class="dsec sec-muted"><h3>Scheduled Dispatch <span class="tri">▶</span></h3><p>KST 기준으로 한 번만 자동 dispatch됩니다.</p></div>
+    <div style="margin-top:22px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span style="font:700 11px var(--mono);color:var(--ink-3)">목업 · 다른 카드 상세:</span>
+      ${cards.map((x) => `<button class="btn" data-detail="${x.id}" style="${x.id === c.id ? 'background:var(--work-tint-2)' : ''}">${esc(x.ann ? x.ann.split(' ')[0] : '')} ${esc(x.title.slice(0, 14))}…</button>`).join('')}
+    </div>`;
+}
+
+function render() {
+  document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('on', b.dataset.view === ui.view));
+  document.querySelectorAll('#variantSeg button').forEach((b) => b.classList.toggle('on', b.dataset.variant === ui.variant));
+  document.querySelectorAll('#themeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.themeSet === document.documentElement.dataset.theme));
+  $('#boardView').hidden = ui.view !== 'board';
+  $('#detailView').hidden = ui.view !== 'detail';
+  renderBoard(); renderDetail();
+}
+
+let toastTimer;
+function toast(msg, withUndo = true) {
+  $('#toastMsg').innerHTML = msg;
+  $('#undoBtn').style.display = withUndo ? '' : 'none';
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 6000);
+}
+function snapshot() { return JSON.stringify({ cards, running, works }); }
+function restore(s) { const v = JSON.parse(s); cards = v.cards; running = v.running; works = v.works; }
+
+function setWork(c, wid) {
+  const before = snapshot();
+  const prev = workOf(c);
+  if (c.session) c.linked = wid; else c.planned = wid;
+  c.warn = false;
+  undo = before;
+  const t = wid ? `‘${esc(W(wid).title)}’` : '없음';
+  const from = prev ? `‘${esc(W(prev).title)}’` : '없음';
+  toast(c.session ? `세션 #${esc(c.session)} : ${from} → ${t}` : (wid ? `‘${esc(c.title.slice(0, 18))}…’ 를 ${t}에 <b>예약</b>했습니다 — 시작하면 연결` : `Work 예약을 해제했습니다`));
+}
+
+document.addEventListener('click', (e) => {
+  const d = e.target.closest('[data-view],[data-variant],[data-theme-set],[data-open-menu],[data-open-picker],[data-open-picker-detail],[data-pick],[data-clear],[data-new],[data-start],[data-detail]');
+  const insidePopover = e.target.closest('[data-picker], .menu');
+  if (!d) { if (!insidePopover && (ui.picker || ui.menu)) { ui.picker = null; ui.menu = null; render(); } return; }
+  const ds = d.dataset;
+  if (ds.view) { ui.view = ds.view; ui.picker = null; return render(); }
+  if (ds.variant) { ui.variant = ds.variant; ui.view = 'detail'; ui.picker = null; return render(); }
+  if (ds.themeSet) { document.documentElement.dataset.theme = ds.themeSet; return render(); }
+  if (ds.openMenu) { ui.menu = ui.menu === ds.openMenu ? null : ds.openMenu; ui.picker = null; return render(); }
+  if (ds.openPicker) { ui.menu = null; ui.picker = { id: ds.openPicker, where: 'card' }; return render(); }
+  if (ds.openPickerDetail) { if (insidePopover) return; ui.picker = ui.picker ? null : { id: ds.openPickerDetail, where: 'detail' }; return render(); }
+  if (ds.detail) { ui.detailId = ds.detail; ui.view = 'detail'; ui.menu = null; ui.picker = null; return render(); }
+  if (ds.pick) { const [cid, wid] = ds.pick.split('|'); setWork(C(cid), wid); ui.picker = null; return render(); }
+  if (ds.clear) { setWork(C(ds.clear), null); ui.picker = null; ui.menu = null; return render(); }
+  if (ds.new) { const c = C(ds.new); const title = prompt('새 Work 이름', c.title.slice(0, 24)); if (!title) return; const w = { id: 'W-' + Math.random().toString(16).slice(2, 6), title, dir: c.dir, sessions: 0 }; works.unshift(w); setWork(c, w.id); ui.picker = null; return render(); }
+  if (ds.start) {
+    const c = C(ds.start); const before = snapshot();
+    cards = cards.filter((x) => x !== c);
+    c.session = Math.random().toString(16).slice(2, 10); c.age = '실행 0초';
+    if (c.planned) { c.linked = c.planned; c.planned = null; c.ann = '예약 → 시작 → 연결됨'; W(c.linked).sessions += 1; }
+    else c.ann = '';
+    running.unshift(c); undo = before;
+    toast(c.linked ? `세션 시작 — ‘${esc(W(c.linked).title)}’ Work에 연결했습니다` : '세션 시작 (Work 없음)', false);
+    return render();
+  }
+});
+$('#undoBtn').onclick = () => { if (!undo) return; restore(undo); undo = null; $('#toast').classList.remove('show'); render(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (ui.picker || ui.menu)) { ui.picker = null; ui.menu = null; render(); } });
+
+// ?open=picker|menu (스크린샷용)
+const o = qs.get('open');
+if (o === 'menu') ui.menu = '022X2xY6';
+if (o === 'picker') ui.picker = { id: '9lp-TXzF', where: ui.view === 'detail' ? 'detail' : 'card' };
+render();
+</script>
+</body>
+</html>

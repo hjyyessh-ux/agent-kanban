@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { uploadScreenshot } from "../../hooks/useKanbanApi";
-import { KanbanCard, CreateCardInput, QueueSessionMode, AgentRuntime, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode } from "../../../../src/core/types";
+import { KanbanCard, CreateCardInput, QueueSessionMode, AgentRuntime, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode, CreateWorkInput, Work } from "../../../../src/core/types";
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_SANDBOX,
@@ -22,6 +22,9 @@ import { SessionPickerPanel } from "./SessionPickerPanel";
 import { QueueSessionModePicker, QueueTargetList } from "./QueueSettingsPanel";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { CommandPicker } from "./CommandPicker";
+import { WorkPicker } from "../Works/WorkPicker";
+import { directoryAfterWorkPick } from "./work-directory";
+import { CARD_WORK_COPY } from "../../constants/copy";
 import { useDirectoryHistory } from "../../hooks/useDirectoryHistory";
 import { RuntimeModelFields } from "../shared/RuntimeModelFields";
 import {
@@ -33,6 +36,12 @@ import { useRuntimeModelSelection } from "../../hooks/useRuntimeModelSelection";
 
 interface CreateCardDialogProps {
   allCards: KanbanCard[];
+  /** Active Works — the optional WORK field reserves `plannedWorkId` on the new card. Omitted → no WORK field. */
+  works?: readonly Work[];
+  /** The Work field's `새 Work 만들기` — creates a Work named after the search text and picks it. */
+  onCreateWork?: (input: CreateWorkInput) => Promise<Work>;
+  /** Preselected Work (the board's `WORK:` filter) — also fills Directory from it. */
+  initialPlannedWorkId?: string;
   onClose: () => void;
   onCreate: (input: CreateCardInput) => Promise<KanbanCard>;
   onDispatch: (id: string) => Promise<void>;
@@ -83,6 +92,9 @@ export function deriveCreateLaunchUiState(
 
 export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   allCards,
+  works,
+  onCreateWork,
+  initialPlannedWorkId,
   onClose,
   onCreate,
   onDispatch,
@@ -92,7 +104,27 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
 }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectDir, setProjectDir] = useState("");
+  const initialWork = initialPlannedWorkId ? works?.find((work) => work.id === initialPlannedWorkId) : undefined;
+  const [plannedWorkId, setPlannedWorkId] = useState(initialWork?.id ?? "");
+  const [projectDir, setProjectDir] = useState(() => directoryAfterWorkPick("", null, initialWork));
+  // The Directory the last Work pick wrote — a later pick may replace it, a typed path it never touches.
+  const autoDirRef = useRef<string | null>(initialWork?.projectDir?.trim() || null);
+
+  // `work` is passed in rather than looked up: a Work created from the picker
+  // is not in `works` until the next render.
+  // Read through a ref: after `새 Work 만들기` this runs when the create resolves,
+  // and the Directory may have been edited meanwhile.
+  const projectDirRef = useRef(projectDir);
+  projectDirRef.current = projectDir;
+  const pickWork = (workId: string, work: Pick<Work, 'projectDir'> | undefined) => {
+    setPlannedWorkId(workId);
+    const currentDir = projectDirRef.current;
+    const nextDir = directoryAfterWorkPick(currentDir, autoDirRef.current, work);
+    if (nextDir !== currentDir) {
+      setProjectDir(nextDir);
+      autoDirRef.current = nextDir;
+    }
+  };
   const [model, setModel] = useState("");
   const [queueAfterId, setQueueAfterId] = useState("");
   const [queueSessionMode, setQueueSessionMode] = useState<QueueSessionMode>(
@@ -414,6 +446,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         command: command || undefined,
         arguments: commandArguments.trim() || undefined,
         resumeSessionId: resumeSessionId || undefined,
+        plannedWorkId: plannedWorkId || undefined,
         scheduledDispatch: mode === "schedule" && scheduleValidation.scheduledAtUtc
           ? { scheduledAt: scheduleValidation.scheduledAtUtc }
           : undefined,
@@ -541,6 +574,31 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               </span>
             )}
           </div>
+
+          {works && (
+            <div className="kv2-create-field">
+              <span className="kv2-create-label" id="create-card-work-label">{CARD_WORK_COPY.label}</span>
+              <WorkPicker
+                variant="input"
+                value={plannedWorkId}
+                works={works}
+                planned
+                ariaLabel={CARD_WORK_COPY.label}
+                boundarySelector=".kv2-dialog"
+                disabled={isSubmitting}
+                onChange={(next) => pickWork(next, works.find((candidate) => candidate.id === next))}
+                onCreateNew={onCreateWork
+                  ? (name) => {
+                    // The new Work takes the Directory typed so far; a failed create is on the Works alert.
+                    onCreateWork({ title: name, projectDir: projectDir.trim() || undefined })
+                      .then((work) => pickWork(work.id, work))
+                      .catch(() => undefined);
+                  }
+                  : undefined}
+              />
+              <span className="kv2-create-helper">{CARD_WORK_COPY.createHint}</span>
+            </div>
+          )}
 
           <div className="kv2-create-field">
             <label className="kv2-create-label" htmlFor="create-card-description-input">Prompt {promptRequired ? '*' : '(ignored)'}</label>
