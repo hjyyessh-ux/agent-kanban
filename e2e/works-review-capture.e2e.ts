@@ -52,7 +52,7 @@ function workCard(page: Page, title: string): Locator {
 
 async function expandResolved(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^완료·폐기 \d/ }).click();
-  await expect(page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '완료·폐기한 Work', exact: true })).toBeVisible();
 }
 
 /** A Work with two sessions of executed work, one still running, plus an unassigned session. */
@@ -124,7 +124,7 @@ test('capture: Works tab and Work detail in both themes', async ({ page, seedCar
   await shot(page, '02-works-tab-dark');
   await setTheme(page, 'light');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: WORK_TITLE });
   await expect(detail).toBeVisible();
   await shot(page, '03-work-detail-light');
@@ -147,7 +147,8 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   await openWorksTab(page);
 
   // The scope preview: how many cards this archives, and what it leaves alone.
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '완료…' }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: /상세 열기$/ }).click();
+  await page.locator('.work-detail-footer').getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   const confirm = page.getByRole('dialog', { name: '완료 확인', exact: true });
   await expect(confirm).toBeVisible();
   const commit = confirm.getByRole('button', { name: '✔ 완료 (일괄 archive)' });
@@ -164,7 +165,7 @@ test('capture: completion confirm, resolved layout, and reopen', async ({ page, 
   await expandResolved(page);
   await shot(page, '07-works-tab-after-complete');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: /상세 열기$/ }).click();
   const resolved = page.getByRole('dialog', { name: WORK_TITLE });
   await expect(resolved).toBeVisible();
   await shot(page, '08-resolved-detail-light');
@@ -224,7 +225,7 @@ test('capture: 390px mobile, and nothing overflows sideways', async ({ page, see
   await shot(page, '15-works-tab-mobile-390-dark');
   await setTheme(page, 'light');
 
-  await workCard(page, WORK_TITLE).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, WORK_TITLE).getByRole('button', { name: /상세 열기$/ }).click();
   await expect(page.getByRole('dialog', { name: WORK_TITLE })).toBeVisible();
   await shot(page, '16-work-detail-mobile-390');
   const detail = page.getByRole('dialog', { name: WORK_TITLE });

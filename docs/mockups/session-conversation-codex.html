@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Session conversation — Codex design review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Sans+3:wght@600;700;800&family=Source+Code+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<script>document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') === 'dark' ? 'dark' : 'light';</script>
+<style>
+/* Selected, verbatim token values from web/src/styles/kanban-v2.tokens.css.
+   Like works-on-board.html, this file embeds its tokens and needs no repo assets.
+   Brand stays invariant; only semantic tokens change in dark mode. */
+:root {
+  --kv2-status-todo-accent: #3b82f6; --kv2-status-in-progress-accent: #facc15;
+  --kv2-status-complete-accent: #ff3b6b; --kv2-status-done-accent: #22c55e;
+  --kv2-dir-6: #dd4b9c;
+  --kv2-app-bg: #FFF8E7; --kv2-frame: #1A1A2E; --kv2-surface: #FFFFFF;
+  --kv2-surface-raised: #FFFFFF; --kv2-surface-sunken: #f8fafc;
+  --kv2-surface-hover: #f3f4f6; --kv2-surface-active: #e0e7ff; --kv2-input-bg: #ffffff;
+  --kv2-code-bg: #f1f5f9; --kv2-text-primary: #1A1A2E;
+  --kv2-text-secondary: #536074; --kv2-text-muted: #627089; --kv2-text-link: #2563eb;
+  --kv2-text-inverse: #ffffff; --kv2-border: #D7DCE6; --kv2-border-strong: #1f2233;
+  --kv2-card-border-color: #000000; --kv2-focus-ring: #2563eb;
+  --kv2-shadow-color: rgba(31, 34, 51, .85); --kv2-shadow-hard-color: #000000;
+  --kv2-dialog-shadow-color: var(--kv2-border-strong);
+  --kv2-control-selected-bg: var(--kv2-frame); --kv2-control-selected-fg: #fffdf7;
+  --kv2-control-selected-border: var(--kv2-frame);
+  --kv2-btn-primary-bg: #1668e8; --kv2-btn-primary-fg: #fffdf7;
+  --kv2-prompt-accent-color: #1668e8;
+  --kv2-phase-prompt-bg: color-mix(in srgb, var(--kv2-prompt-accent-color) 9%, transparent);
+  --kv2-phase-prompt-accent: var(--kv2-prompt-accent-color);
+  --kv2-phase-result-bg: color-mix(in srgb, var(--kv2-status-complete-accent) 9%, transparent);
+  --kv2-phase-result-accent: var(--kv2-status-complete-accent);
+  --kv2-status-complete-badge-bg: var(--kv2-status-complete-accent);
+  --kv2-toolbar-view-active-bg: var(--kv2-status-in-progress-accent);
+  --kv2-toolbar-view-active-fg: var(--kv2-text-primary);
+  --kv2-info-surface-strong: #dbeafe; --kv2-info-border-soft: #bfdbfe; --kv2-info-border: #93c5fd;
+  --kv2-create-runtime-codex-bg: linear-gradient(135deg, var(--kv2-info-surface-strong) 0%, var(--kv2-info-border-soft) 52%, var(--kv2-info-border) 100%);
+  --kv2-create-runtime-codex-fg: #1e3a8a;
+  --kv2-dir-6-text: color-mix(in srgb, var(--kv2-dir-6) 44%, var(--kv2-text-primary));
+  --kv2-font-sans: 'Work Sans', system-ui, sans-serif;
+  --kv2-font-heading: 'Source Sans 3', 'Source Sans Pro', system-ui, sans-serif;
+  --kv2-font-mono: 'Source Code Pro', ui-monospace, monospace;
+  --kv2-font-scale: 1;
+  --kv2-text-caption: calc(11px * var(--kv2-font-scale)); --kv2-text-ui-sm: calc(12px * var(--kv2-font-scale));
+  --kv2-text-xs: calc(13px * var(--kv2-font-scale)); --kv2-text-sm: calc(14px * var(--kv2-font-scale));
+  --kv2-text-base: calc(15px * var(--kv2-font-scale)); --kv2-text-md: calc(16px * var(--kv2-font-scale));
+  --kv2-text-lg: calc(18px * var(--kv2-font-scale)); --kv2-text-xl: calc(20px * var(--kv2-font-scale));
+  --kv2-text-2xl: calc(24px * var(--kv2-font-scale)); --kv2-text-3xl: calc(28px * var(--kv2-font-scale));
+  --kv2-text-display: calc(40px * var(--kv2-font-scale));
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --kv2-app-bg: #1b1d20; --kv2-frame: #0e0e15; --kv2-surface: #272a2e;
+  --kv2-surface-raised: #2d3135; --kv2-surface-sunken: #202327;
+  --kv2-surface-hover: #30343a; --kv2-surface-active: #303a46; --kv2-input-bg: #23262a;
+  --kv2-code-bg: #22262a; --kv2-text-primary: #d4d7db;
+  --kv2-text-secondary: #a3a8ae; --kv2-text-muted: #979ea6; --kv2-text-link: #79a7dc;
+  --kv2-border: #34383d; --kv2-border-strong: #454a50; --kv2-card-border-color: #3c4146;
+  --kv2-focus-ring: #6f89ad; --kv2-shadow-color: rgba(8, 10, 12, .55);
+  --kv2-shadow-hard-color: #0d0f10; --kv2-dialog-shadow-color: #0d0f10;
+  --kv2-control-selected-bg: #303a46; --kv2-control-selected-fg: var(--kv2-text-primary);
+  --kv2-control-selected-border: #6f89ad; --kv2-btn-primary-bg: #3a4a5d;
+  --kv2-prompt-accent-color: #4f86c6;
+  --kv2-phase-prompt-bg: color-mix(in srgb, var(--kv2-status-todo-accent) 12%, var(--kv2-surface));
+  --kv2-phase-prompt-accent: var(--kv2-status-todo-accent);
+  --kv2-phase-result-bg: color-mix(in srgb, var(--kv2-status-complete-accent) 12%, var(--kv2-surface));
+  --kv2-status-complete-badge-bg: #533944;
+  --kv2-toolbar-view-active-bg: color-mix(in srgb, var(--kv2-status-in-progress-accent) 26%, var(--kv2-surface));
+  --kv2-create-runtime-codex-bg: #292d31; --kv2-create-runtime-codex-fg: #c2c6ca;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--kv2-app-bg); color: var(--kv2-text-primary); font: var(--kv2-text-sm)/1.6 var(--kv2-font-sans); }
+button, input, textarea, select { font: inherit; color: inherit; }
+button, summary, select { cursor: pointer; }
+button { touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .6; }
+:focus-visible { outline: 3px solid var(--kv2-focus-ring); outline-offset: 3px; }
+[hidden] { display: none !important; }
+a { color: var(--kv2-text-link); text-underline-offset: 3px; }
+h1, h2, h3, h4, p { margin: 0; }
+code, kbd, .mono { font-family: var(--kv2-font-mono); }
+code { background: var(--kv2-code-bg); padding: 2px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { background: var(--kv2-code-bg); padding: 12px; overflow-x: auto; font: var(--kv2-text-ui-sm)/1.65 var(--kv2-font-mono); border: 1px solid var(--kv2-border); }
+pre code { padding: 0; }
+.muted { color: var(--kv2-text-muted); }
+.eyebrow { font: 700 var(--kv2-text-ui-sm)/1.4 var(--kv2-font-mono); text-transform: uppercase; letter-spacing: .12em; }
+.kv2-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 12px; border: 2px solid var(--kv2-border-strong); border-radius: 2px; background: var(--kv2-surface); font-size: var(--kv2-text-xs); font-weight: 700; box-shadow: 2px 2px 0 var(--kv2-shadow-hard-color); white-space: nowrap; }
+.kv2-btn:hover:not(:disabled) { background: var(--kv2-surface-hover); }
+.kv2-btn:active:not(:disabled) { transform: translate(1px, 1px); box-shadow: none; }
+.kv2-btn--primary { background: var(--kv2-btn-primary-bg); color: var(--kv2-btn-primary-fg); }
+.kv2-btn--primary:hover:not(:disabled) { background: var(--kv2-btn-primary-bg); filter: brightness(1.08); }
+.kv2-btn--ghost { border: 1px solid var(--kv2-border); box-shadow: none; background: transparent; }
+.kv2-input, .kv2-textarea, .kv2-select { background: var(--kv2-input-bg); border: 1px solid var(--kv2-border-strong); border-radius: 3px; padding: 8px 10px; min-height: 36px; }
+.kv2-input::placeholder, .kv2-textarea::placeholder { color: var(--kv2-text-muted); opacity: 1; }
+.kv2-textarea { width: 100%; resize: vertical; min-height: 72px; max-height: 150px; }
+.site-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 32px; border-bottom: 2px solid var(--kv2-border-strong); background: var(--kv2-surface); }
+.brand { font-weight: 800; font-size: var(--kv2-text-lg); letter-spacing: -.04em; }
+.brand-mark { display: inline-block; width: 14px; height: 18px; border: 2px solid var(--kv2-border-strong); background: var(--kv2-status-in-progress-accent); box-shadow: 2px 2px 0 var(--kv2-shadow-hard-color); margin-right: 8px; vertical-align: middle; }
+.site-meta { display: flex; gap: 18px; align-items: center; }
+.site-meta .eyebrow { color: var(--kv2-text-secondary); }
+main { max-width: 1620px; margin: auto; padding: 36px 32px 64px; }
+.intro { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 32px; }
+.intro h1 { font: 800 var(--kv2-text-display)/1.2 var(--kv2-font-heading); letter-spacing: -.04em; margin: 10px 0 12px; }
+.intro p { color: var(--kv2-text-secondary); max-width: 640px; }
+.proposal-tag { background: var(--kv2-toolbar-view-active-bg); color: var(--kv2-toolbar-view-active-fg); border: 2px solid var(--kv2-border-strong); padding: 6px 10px; box-shadow: 3px 3px 0 var(--kv2-shadow-hard-color); font-weight: 800; white-space: nowrap; }
+.comparison { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 30px; align-items: start; }
+.comparison > section { min-width: 0; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 40px; margin-bottom: 12px; }
+.section-heading h2 { font: 800 var(--kv2-text-lg)/1.3 var(--kv2-font-heading); }
+.section-heading small { display: block; color: var(--kv2-text-secondary); font-size: var(--kv2-text-ui-sm); }
+.index { font: 600 var(--kv2-text-ui-sm)/1 var(--kv2-font-mono); margin-right: 8px; color: var(--kv2-text-muted); }
+.modal-frame { background: var(--kv2-surface); border: 2px solid var(--kv2-border-strong); border-radius: 2px; box-shadow: -5px 0 0 var(--kv2-status-complete-accent), 5px 5px 0 var(--kv2-dialog-shadow-color); height: 820px; display: flex; flex-direction: column; overflow: hidden; }
+:root[data-theme="dark"] .modal-frame { box-shadow: -3px 0 0 var(--kv2-status-complete-accent), 5px 5px 0 var(--kv2-dialog-shadow-color); }
+.session-head { padding: 18px 20px 12px; border-bottom: 1px solid var(--kv2-border); flex: none; }
+.context { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.project { padding: 1px 7px; border: 1px solid color-mix(in srgb, var(--kv2-dir-6) 60%, transparent); border-radius: 3px; background: color-mix(in srgb, var(--kv2-dir-6) 14%, var(--kv2-surface)); color: var(--kv2-dir-6-text); font-size: var(--kv2-text-ui-sm); font-weight: 700; }
+.runtime { padding: 1px 7px; border: 1px solid var(--kv2-border-strong); border-radius: 20px; background: var(--kv2-create-runtime-codex-bg); color: var(--kv2-create-runtime-codex-fg); font: 600 var(--kv2-text-ui-sm)/1.6 var(--kv2-font-mono); }
+.status { background: var(--kv2-status-complete-badge-bg); color: var(--kv2-text-primary); padding: 1px 7px; border-radius: 3px; font-size: var(--kv2-text-ui-sm); font-weight: 700; margin-left: auto; }
+.session-title { font: 800 var(--kv2-text-2xl)/1.3 var(--kv2-font-heading); letter-spacing: -.025em; margin: 10px 0 6px; }
+.session-meta { display: flex; gap: 8px 12px; flex-wrap: wrap; align-items: center; color: var(--kv2-text-muted); font-size: var(--kv2-text-ui-sm); }
+.id-copy { border: none; background: transparent; padding: 5px 0; color: var(--kv2-text-secondary); font: 600 var(--kv2-text-ui-sm)/1.5 var(--kv2-font-mono); min-height: 32px; }
+.id-copy:hover { color: var(--kv2-text-link); text-decoration: underline; }
+.toolbar { padding: 12px 20px; border-bottom: 2px solid var(--kv2-border-strong); display: flex; flex-direction: column; gap: 10px; background: var(--kv2-surface); }
+.toolbar-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 2px solid var(--kv2-border-strong); border-radius: 3px; overflow: hidden; }
+.seg button { border: 0; background: var(--kv2-surface); padding: 6px 12px; min-height: 32px; font-size: var(--kv2-text-xs); font-weight: 700; }
+.seg button + button { border-left: 1px solid var(--kv2-border-strong); }
+.seg button[aria-pressed="true"] { background: var(--kv2-control-selected-bg); color: var(--kv2-control-selected-fg); }
+.seg button:focus-visible { outline-offset: -4px; }
+.toolbar .bulk { margin-left: auto; }
+.search-wrap { flex: 1 1 200px; position: relative; }
+.search-wrap input { width: 100%; padding-right: 36px; }
+.search-wrap input::-webkit-search-cancel-button { display: none; }
+.search-clear { position: absolute; right: 3px; top: 3px; width: 30px; min-height: 30px; border: 0; background: var(--kv2-input-bg); }
+.jump-select { max-width: 220px; flex: 1 1 160px; font-size: var(--kv2-text-ui-sm); }
+.reading-state { display: flex; justify-content: space-between; gap: 8px; font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-muted); }
+.conversation-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; background: var(--kv2-surface-sunken); padding: 16px 18px; }
+.turn-list { display: flex; flex-direction: column; gap: 10px; }
+.turn { background: var(--kv2-surface); border: 1px solid var(--kv2-border); border-radius: 4px; scroll-margin: 12px; }
+.turn.latest { border-color: var(--kv2-border-strong); }
+.turn:target, .turn.is-jump { outline: 2px solid var(--kv2-focus-ring); outline-offset: 2px; }
+.turn-toggle { display: grid; width: 100%; grid-template-columns: 18px 1fr; gap: 8px; text-align: left; border: 0; padding: 13px 14px; background: transparent; border-radius: 3px; }
+.turn-toggle:hover { background: var(--kv2-surface-hover); }
+.chevron { color: var(--kv2-text-secondary); line-height: 24px; }
+.turn-topline { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-muted); }
+.turn-number { font: 700 var(--kv2-text-ui-sm)/1.5 var(--kv2-font-mono); color: var(--kv2-text-secondary); }
+.latest-tag { background: var(--kv2-surface-active); color: var(--kv2-text-primary); padding: 0 6px; border: 1px solid var(--kv2-border-strong); border-radius: 3px; font-size: var(--kv2-text-ui-sm); }
+.turn-time { margin-left: auto; }
+.turn-title { display: block; margin: 4px 0 2px; font-size: var(--kv2-text-base); font-weight: 700; line-height: 1.5; }
+.turn-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; color: var(--kv2-text-secondary); font-size: var(--kv2-text-xs); font-weight: 400; }
+.turn-body { border-top: 1px solid var(--kv2-border); padding: 12px 16px 16px; }
+.prompt { border-left: 3px solid var(--kv2-phase-prompt-accent); padding: 3px 0 3px 10px; margin-bottom: 16px; }
+.prompt summary { display: flex; align-items: center; min-height: 32px; gap: 10px; font-size: var(--kv2-text-xs); list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.prompt summary::before, .agents > summary::before { content: '▸'; color: var(--kv2-text-secondary); }
+.prompt[open] summary::before, .agents[open] > summary::before { content: '▾'; }
+.prompt-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--kv2-text-secondary); flex: 1; min-width: 0; }
+.prompt[open] .prompt-preview { display: none; }
+.prompt-copy { margin-top: 10px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--kv2-text-secondary); font-size: var(--kv2-text-sm); }
+.result { border-left: 3px solid var(--kv2-phase-result-accent); padding-left: 10px; }
+.result-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.part-label { font: 700 var(--kv2-text-ui-sm)/1.6 var(--kv2-font-mono); color: var(--kv2-text-secondary); }
+.result p { margin-bottom: 8px; font-weight: 600; }
+.result ul { padding-left: 20px; margin: 8px 0; font-size: var(--kv2-text-sm); }
+.result li + li { margin-top: 5px; }
+.result .kv2-btn { min-height: 32px; font-size: var(--kv2-text-ui-sm); padding: 3px 8px; }
+.agents { margin: 14px 0 0 13px; padding-top: 10px; border-top: 1px dashed var(--kv2-border); font-size: var(--kv2-text-xs); }
+.agents summary { min-height: 32px; display: flex; align-items: center; gap: 8px; list-style: none; color: var(--kv2-text-secondary); }
+.agent-row { border-left: 2px solid var(--kv2-border); margin: 8px 0; padding-left: 12px; }
+.agent-row p { margin-top: 5px; }
+.agent-row strong { font-family: var(--kv2-font-mono); }
+mark { background: var(--kv2-toolbar-view-active-bg); color: var(--kv2-toolbar-view-active-fg); padding: 1px 2px; }
+.empty { text-align: center; padding: 36px 12px; color: var(--kv2-text-secondary); }
+.empty p { margin: 8px 0 16px; }
+.feedback-dock { border-top: 2px solid var(--kv2-border-strong); background: var(--kv2-surface); padding: 10px 20px; flex: none; }
+.feedback-summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: var(--kv2-text-xs); }
+.feedback-summary p { color: var(--kv2-text-muted); font-size: var(--kv2-text-ui-sm); }
+.feedback-form { margin-top: 12px; }
+.feedback-form label { display: block; font-size: var(--kv2-text-xs); font-weight: 700; margin-bottom: 6px; }
+.form-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; }
+.form-actions small { font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-muted); }
+.caption { margin: 14px 0 0; color: var(--kv2-text-secondary); font-size: var(--kv2-text-xs); }
+.caption strong { color: var(--kv2-text-primary); }
+/* Before reproduces the existing structure, including its visual debts. */
+.before .session-head { border-bottom: 3px solid var(--kv2-frame); padding-right: 18px; }
+.before .session-title { font-size: var(--kv2-text-lg); }
+.before .session-meta { margin-top: 6px; }
+.old-nav { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+.old-chip { border: 1.5px solid var(--kv2-border-strong); background: var(--kv2-app-bg); border-radius: 20px; padding: 0 8px; font: 700 var(--kv2-text-ui-sm)/24px var(--kv2-font-mono); }
+.old-chip:first-of-type { background: var(--kv2-status-complete-accent); color: var(--kv2-text-inverse); }
+.old-scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 20px 18px 20px 30px; }
+.old-turn { border: 2px solid var(--kv2-border-strong); border-radius: 10px; background: color-mix(in srgb, var(--kv2-status-complete-accent) 7%, var(--kv2-surface)); margin: 0 0 22px 8px; position: relative; }
+.old-turn::before { content: ''; position: absolute; top: -22px; bottom: -24px; left: -20px; width: 2px; background: var(--kv2-status-complete-accent); }
+.old-turn-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; border-bottom: 2px solid var(--kv2-border-strong); background: color-mix(in srgb, var(--kv2-status-complete-accent) 12%, var(--kv2-surface)); }
+.old-turn-label { border-radius: 20px; padding: 4px 14px; font-size: var(--kv2-text-md); font-weight: 800; background: var(--kv2-status-complete-accent); color: var(--kv2-text-inverse); }
+.old-time { font: var(--kv2-text-ui-sm)/1.6 var(--kv2-font-mono); color: var(--kv2-text-secondary); }
+.old-phases { padding: 16px; }
+.old-phase-label { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-weight: 700; }
+.old-phase-label span { font-size: var(--kv2-text-ui-sm); font-weight: 400; color: var(--kv2-text-muted); }
+.old-phase { background: var(--kv2-phase-prompt-bg); border: 1px solid var(--kv2-border-strong); border-left: 6px solid var(--kv2-phase-prompt-accent); border-radius: 8px; padding: 14px 16px; margin-bottom: 16px; white-space: pre-wrap; font-size: var(--kv2-text-sm); }
+.old-phase.result-old { background: var(--kv2-phase-result-bg); border-left-color: var(--kv2-phase-result-accent); }
+.before .feedback-dock { border-top-width: 3px; padding: 14px 20px; }
+.before .feedback-dock label { display: block; margin-bottom: 8px; font-weight: 700; }
+.before .kv2-textarea { min-height: 90px; }
+.audit { margin-top: 42px; border-top: 2px solid var(--kv2-border-strong); padding-top: 24px; }
+.audit-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.audit h2 { font: 800 var(--kv2-text-2xl)/1.3 var(--kv2-font-heading); }
+.audit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.note { padding: 18px; background: var(--kv2-surface); border: 1px solid var(--kv2-border-strong); border-top: 3px solid var(--kv2-border-strong); }
+.note h3 { font-size: var(--kv2-text-base); margin: 7px 0; }
+.note p { color: var(--kv2-text-secondary); font-size: var(--kv2-text-xs); }
+.note code { font-size: var(--kv2-text-ui-sm); }
+.priority { font: 700 var(--kv2-text-ui-sm)/1.4 var(--kv2-font-mono); }
+.priority.p0 { background: var(--kv2-toolbar-view-active-bg); color: var(--kv2-toolbar-view-active-fg); padding: 2px 5px; }
+.annotation { margin-top: 20px; padding: 18px 20px; border: 1px dashed var(--kv2-border-strong); }
+.annotation h3 { font-size: var(--kv2-text-sm); margin-bottom: 8px; }
+.annotation ul { margin: 0; padding-left: 20px; color: var(--kv2-text-secondary); font-size: var(--kv2-text-xs); }
+.annotation li + li { margin-top: 5px; }
+.token-strip { display: flex; flex-wrap: wrap; gap: 16px; border-top: 1px solid var(--kv2-border); margin-top: 24px; padding-top: 16px; font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-secondary); }
+.swatch { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border: 1px solid var(--kv2-border-strong); }
+.demo-footer { margin-top: 20px; font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-muted); }
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 32px); width: max-content; background: var(--kv2-control-selected-bg); color: var(--kv2-control-selected-fg); padding: 10px 18px; border: 2px solid var(--kv2-control-selected-border); box-shadow: 3px 3px 0 var(--kv2-shadow-hard-color); z-index: 20; font-size: var(--kv2-text-xs); }
+#lightbox { border: 0; background: transparent; padding: 8px; width: min(900px, 100vw - 24px); max-width: none; max-height: calc(100dvh - 24px); color: var(--kv2-text-primary); overflow: visible; }
+#lightbox::backdrop { background: rgb(0 0 0 / .65); }
+#lightbox .modal-frame { height: min(880px, 100dvh - 48px); }
+.modal-close { display: none; margin-left: 0; min-width: 36px; }
+#lightbox .modal-close { display: inline-flex; }
+.mount-placeholder { padding: 40px; border: 2px dashed var(--kv2-border-strong); text-align: center; color: var(--kv2-text-secondary); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (min-width: 1550px) { .modal-frame { height: 870px; } }
+@media (max-width: 1100px) { .comparison { grid-template-columns: 1fr; gap: 28px; } .before { height: 480px; } .audit-grid { grid-template-columns: repeat(2, 1fr); } .intro h1 { font-size: var(--kv2-text-3xl); } }
+@media (max-width: 600px) {
+  main { padding: 24px 16px 40px; } .site-head { padding: 12px 16px; } .site-meta .eyebrow { display: none; }
+  .intro { display: block; } .proposal-tag { display: inline-block; margin-top: 16px; }
+  .comparison { gap: 24px; } .modal-frame { height: 830px; } .before { height: 420px; }
+  .session-head { padding: 14px 12px 10px; } .session-title { font-size: var(--kv2-text-xl); }
+  .toolbar { padding: 10px 12px; } .toolbar .bulk { margin-left: 0; } .toolbar-row { gap: 8px; }
+  .seg button { padding: 6px 10px; } .search-wrap { flex-basis: 100%; } .jump-select { max-width: none; }
+  .conversation-scroll { padding: 12px 10px; } .turn-toggle { padding: 12px 10px; } .turn-body { padding: 12px 10px; }
+  .turn-time { margin-left: 0; } .feedback-dock { padding: 10px 12px; } .feedback-summary { gap: 6px; }
+  .audit-grid { grid-template-columns: 1fr; } .section-heading .kv2-btn { padding: 6px 8px; }
+  #lightbox { width: 100%; max-height: 100dvh; margin: 0; padding: 0; } #lightbox .modal-frame { height: 100dvh; border-radius: 0; box-shadow: none; }
+  .kv2-btn, .seg button, .kv2-select, .id-copy { min-height: 40px; } .form-actions { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="site-head">
+  <div class="brand"><span class="brand-mark" aria-hidden="true"></span>agent-kanban <span class="muted">/ design notes</span></div>
+  <div class="site-meta"><span class="eyebrow">Session conversation · 01</span><button id="themeToggle" class="kv2-btn" aria-label="다크 테마" aria-pressed="false">◐ 다크 테마</button></div>
+</header>
+<main>
+  <div class="intro">
+    <div><div class="eyebrow muted">읽기 흐름 개선 제안 / Codex</div><h1>대화는 쌓여도,<br>최신 결과는 바로 보이게.</h1><p>결과를 읽고, 필요한 맥락만 펼치고, 같은 세션에서 이어가기.<br>정렬 하나에서 시작해 정보의 무게를 다시 맞춘 Session conversation.</p></div>
+    <div class="proposal-tag">최신순 기본 · Turn 번호 유지</div>
+  </div>
+  <div class="comparison">
+    <section aria-labelledby="beforeHeading">
+      <div class="section-heading"><div><h2 id="beforeHeading"><span class="index">01</span>Before <span class="muted">/ 현재 구조</span></h2><small>오래된순 · Prompt / Result 전체 펼침</small></div></div>
+      <div class="modal-frame before" aria-label="현재 모달 구조 재현, 비인터랙티브 예시">
+        <header class="session-head">
+          <div class="context"><span class="project">agent-kanban</span><span class="runtime">Codex</span><strong class="muted">6 turns</strong><span class="mono muted">SESSION #24b90f31</span><span class="mono muted">⏎ resume</span></div>
+          <h3 class="session-title">보드 세션 정렬과 읽기 흐름 개선</h3>
+          <div class="session-meta mono">2026-10-22 09:12 → 2026-10-22 10:24</div>
+          <div class="old-nav" aria-hidden="true"><span class="muted">Turn</span><span class="old-chip">1</span><span class="old-chip">2</span><span class="old-chip">3</span><span class="old-chip">4</span><span class="old-chip">5</span><span class="old-chip">6</span></div>
+        </header>
+        <div class="old-scroll" id="beforeTurns" tabindex="0" aria-label="현재 구조의 대화 예시, 스크롤 가능"></div>
+        <div class="feedback-dock"><label for="beforeFeedback">Feedback</label><textarea id="beforeFeedback" class="kv2-textarea" placeholder="이 작업에 대한 피드백을 입력하세요…" disabled></textarea><div class="form-actions"><small class="muted">현재 구조 재현</small><span class="kv2-btn" aria-hidden="true">이어서 실행</span></div></div>
+      </div>
+      <p class="caption"><strong>결과보다 큰 맥락.</strong> Turn 1의 긴 요청부터 시작합니다. 최신 Turn 6의 결과는 본문 아래로 밀립니다. 위 화면은 실제 구조를 축약한 재현입니다.</p>
+    </section>
+    <section aria-labelledby="afterHeading">
+      <div class="section-heading"><div><h2 id="afterHeading"><span class="index">02</span>After <span class="muted">/ 제안</span></h2><small>최신 결과 먼저 · 필요한 맥락만 펼치기</small></div><button class="kv2-btn" id="openModal" aria-haspopup="dialog" aria-controls="lightbox">모달로 열기 ↗</button></div>
+      <div id="afterMount">
+        <div class="modal-frame after" id="afterPanel" role="region" aria-labelledby="sessionTitle">
+          <header class="session-head">
+            <div class="context"><span class="project">agent-kanban</span><span class="runtime">Codex</span><span class="status">검토 대기</span><button class="kv2-btn kv2-btn--ghost modal-close" id="closeModal" aria-label="세션 대화 닫기">×</button></div>
+            <h3 class="session-title" id="sessionTitle">보드 세션 정렬과 읽기 흐름 개선</h3>
+            <div class="session-meta"><span>6 turns</span><span>10.22 · 09:12–10:24 KST</span><button class="id-copy" data-copy="session" title="전체 세션 ID 복사">SESSION #24b90f31 ⧉</button><button class="id-copy" data-copy="resume" title="세션 재개 명령 복사">⏎ resume</button></div>
+          </header>
+          <div class="toolbar">
+            <div class="toolbar-row"><div class="seg" role="group" aria-label="턴 정렬"><button id="sortNewest" aria-pressed="true">최신순 ↓</button><button id="sortOldest" aria-pressed="false">시간순 ↑</button></div><button id="jumpLatest" class="kv2-btn kv2-btn--ghost">최신 턴으로</button><button id="bulkToggle" class="kv2-btn kv2-btn--ghost bulk">모두 펼치기</button></div>
+            <div class="toolbar-row"><div class="search-wrap"><label for="sessionSearch" class="sr-only">세션 검색: Prompt, Result, 서브에이전트 포함</label><input class="kv2-input" type="search" id="sessionSearch" placeholder="세션 검색 · Prompt, Result, 서브에이전트" autocomplete="off" aria-describedby="searchCount"><button id="clearSearch" class="search-clear" aria-label="검색 지우기" hidden>×</button></div><label class="sr-only" for="jumpSelect">턴 바로가기</label><select id="jumpSelect" class="kv2-select jump-select"></select></div>
+            <div class="reading-state"><span id="orderLabel">최신 → 처음 · 6 → 1</span><span id="searchCount" role="status" aria-live="polite">6개 턴 · 최신 결과 펼침</span></div>
+          </div>
+          <div class="conversation-scroll" id="conversationScroll" tabindex="0" aria-label="세션 대화, 스크롤 가능">
+            <div class="turn-list" id="turnList"></div>
+            <div class="empty" id="emptyState" hidden><strong>일치하는 턴이 없습니다.</strong><p>Prompt, Result, 서브에이전트 본문에서 찾습니다.</p><button class="kv2-btn" id="resetSearch">검색 지우기</button></div>
+          </div>
+          <div class="feedback-dock">
+            <div class="feedback-summary"><div><strong>이 세션에서 이어가기</strong><p>대상: 최신 완료 카드 · Turn 6</p></div><button class="kv2-btn" id="feedbackToggle" aria-expanded="false" aria-controls="feedbackForm">피드백 쓰기 ↗</button></div>
+            <form class="feedback-form" id="feedbackForm" hidden><label for="feedbackText">Turn 6에 보낼 피드백</label><textarea class="kv2-textarea" id="feedbackText" placeholder="예: 시간순으로 볼 때도 턴 번호를 그대로 유지해줘." required></textarea><div class="form-actions"><button type="button" class="kv2-btn kv2-btn--ghost" id="feedbackCancel">접기</button><small>실제 전송 없는 데모</small><button type="submit" class="kv2-btn kv2-btn--primary" id="feedbackSubmit" disabled>이어서 실행 · 데모</button></div></form>
+          </div>
+        </div>
+      </div>
+      <div id="mountPlaceholder" class="mount-placeholder" hidden>세션 대화를 모달에서 보는 중입니다.</div>
+      <p class="caption"><strong>직접 눌러보세요.</strong> 정렬, 턴 펼침, 검색, 바로가기, 결과 복사, 피드백 초안이 동작합니다. <code>모달로 열기</code>에서 Tab 이동·Esc 닫기도 확인할 수 있습니다.</p>
+    </section>
+  </div>
+  <section class="audit" aria-labelledby="auditHeading">
+    <div class="audit-header"><h2 id="auditHeading">무엇을, 왜 바꿨나</h2><span class="muted">실제 컴포넌트와 kv2 스타일 기준 · 우선순위순</span></div>
+    <div class="audit-grid">
+      <article class="note"><span class="priority p0">P0 / 읽기 순서</span><h3>가장 자주 찾는 결과가 가장 멀다</h3><p><code>compareOldestCardFirst</code>로 고정 정렬하고 첫 턴부터 엽니다. 기본을 <strong>6 → 1</strong>로 바꾸고 시간순도 제공합니다. 번호는 생성 순서대로 유지하며 최신 표시와 피드백 대상은 정렬에서 독립시킵니다.</p></article>
+      <article class="note"><span class="priority p0">P0 / 정보 위계</span><h3>번호보다 작업 내용이 먼저</h3><p>큰 Turn pill·중첩 테두리·반복되는 날짜가 경쟁합니다. 작은 번호 → 카드 제목 → 결과 첫 줄 순으로 재배치합니다. 최신 결과만 펼치고 Prompt는 한 줄 미리보기로 접습니다. 서브에이전트의 기존 기본 접힘은 유지합니다.</p></article>
+      <article class="note"><span class="priority">P1 / 색과 대비</span><h3>분홍은 넓은 면보다 작은 신호로</h3><p>기존 분홍 Turn 라벨의 흰 글자는 약 <strong>3.45:1</strong>로 일반 텍스트 AA 4.5:1에 못 미칩니다. 제안은 테마별 잉크를 사용하고 분홍은 검토 대기 배지와 Result의 가는 선에 둡니다. 최신은 중립 라벨로 구분합니다.</p></article>
+      <article class="note"><span class="priority">P1 / 탐색과 회수</span><h3>숫자만으로는 돌아갈 곳을 모른다</h3><p>기존 숫자 칩은 제목을 hover tooltip에만 담습니다. 제목이 보이는 턴 바로가기와 항상 접근 가능한 최신 턴 이동을 제공합니다. 본문 검색은 일치한 턴만 표시하고 숨겨진 Prompt·서브에이전트도 펼칩니다. 전체 결과를 복사해 다른 작업에 재사용할 수 있습니다.</p></article>
+      <article class="note"><span class="priority">P1 / 키보드·접근성</span><h3>탭처럼 보이지만 탭이 아닌 탐색</h3><p>기존 칩은 <code>tablist/tab</code>이지만 연결된 <code>tabpanel</code>과 방향키 이동이 없습니다. 실제 역할에 맞는 버튼·select로 바꿉니다. 반복되는 show/hide에는 턴별 접근성 이름을 주고, 포커스 링·검색 결과 알림·줄어든 모션을 지원합니다.</p></article>
+      <article class="note"><span class="priority">P2 / 후속 작업</span><h3>상시 입력창 대신 명확한 이어쓰기</h3><p>큰 피드백 dock이 읽기 영역을 줄이고, 어느 턴에 붙는지 말하지 않습니다. 기본은 작은 이어쓰기 바, 클릭하면 초안을 펼칩니다. 과거 Turn 2를 읽어도 대상은 최신 완료 Turn 6임을 표시합니다. 정렬·검색을 바꿔도 초안은 유지합니다.</p></article>
+    </div>
+    <div class="annotation"><h3>인터랙션과 구현 경계</h3><ul>
+      <li><strong>최신순 초기 상태:</strong> Turn 6 Result만 노출합니다. 모두 펼치기는 턴 본문을 열고, Prompt·서브에이전트의 개별 접힘은 유지합니다. 모두 접기는 턴을 닫습니다.</li>
+      <li><strong>정렬:</strong> 생성 순서로 번호를 붙인 뒤 표시 순서만 뒤집습니다. 정렬 변경 시 목록 맨 위로 이동하며, 펼침과 초안은 유지합니다. 실제 카드 식별자는 그대로입니다.</li>
+      <li><strong>검색:</strong> 대소문자를 구분하지 않는 문자열 검색입니다. 결과 수는 일치한 턴 수입니다. 제목·원문 첫 줄을 사용하므로 별도 AI 요약은 필요 없습니다. 검색 해제 시 기존 펼침 상태로 돌아갑니다.</li>
+      <li><strong>최신 턴으로:</strong> 검색 중이면 필터를 해제한 뒤 Turn 6을 펼치고 이동합니다. 선택한 정렬은 유지합니다. 결과 복사는 화면 요약이 아닌 전체 Result를 복사합니다.</li>
+      <li><strong>실제 앱 적용 시:</strong> 기존 <code>DialogSkeleton</code>·<code>IdChip</code>·<code>ResumeCopyButton</code>·<code>CardMarkdown</code>을 재사용합니다. 기존 포커스 트랩과 Esc는 유지하고 세션 제목을 dialog의 접근성 이름에 연결합니다. 현재는 title prop이 없어 이름이 “Dialog”입니다.</li>
+      <li><strong>목업 범위:</strong> 같은 6개 턴으로 비교한 정적 HTML입니다. 실제 API·세션 실행·파일 첨부는 연결하지 않습니다. 확대 보기만 브라우저 기본 dialog로 접근성을 시연합니다.</li>
+    </ul></div>
+    <div class="token-strip" aria-label="프로젝트 상태색 범례"><span><i class="swatch" style="background:var(--kv2-status-todo-accent)"></i>대기 #3b82f6</span><span><i class="swatch" style="background:var(--kv2-status-in-progress-accent)"></i>진행중 #facc15</span><span><i class="swatch" style="background:var(--kv2-status-complete-accent)"></i>검토 대기 #ff3b6b</span><span><i class="swatch" style="background:var(--kv2-status-done-accent)"></i>완료 #22c55e</span><span>브랜드색 불변 · Light: hard shadow · Dark: graphite surface</span></div>
+    <p class="demo-footer">Source: SessionConversationModal.tsx · conversation.css · card-detail.css · panels.css · kanban-v2.tokens.css · docs/design-system.md<br>정확한 토큰 기반 탐색용 목업이며 현재 화면의 픽셀 단위 복제는 아닙니다. 전체 빌드 없이 이 HTML만 열어 확인할 수 있습니다. <a href="?theme=dark">Dark 링크</a> · <a href="?theme=light">Light 링크</a></p>
+  </section>
+</main>
+<dialog id="lightbox" aria-labelledby="sessionTitle"></dialog>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<noscript>이 목업의 턴 예시와 인터랙션을 보려면 JavaScript를 활성화하세요.</noscript>
+<script>
+'use strict';
+const turns = [
+  { n: 1, title: '세션 대화의 현재 구조 조사', start: '09:12', end: '09:18', duration: '6m 12s',
+    prompt: 'Session conversation 모달의 현재 구조를 조사해줘.\n\n보드에서 세션 그룹을 클릭했을 때 사용자가 어떤 순서로 대화를 읽는지 확인해줘. Prompt와 Result의 기본 펼침 상태, 서브에이전트 연결 방식, 하단 피드백의 대상도 함께 파악해줘.\n\n확인할 파일:\n• SessionConversationModal.tsx\n• kv2/conversation.css, panels.css\n• docs/design-system.md\n\n디자인 시스템의 색과 모달 계약은 유지해야 해. 우선 현재 동작을 간결하게 정리해줘.',
+    result: ['현재 모달은 오래된 턴부터 표시하고 Prompt·Result를 모두 펼칩니다.', '상위 카드만 턴으로 묶으며, 자식 서브에이전트는 부모 안에서 기본 접힘입니다.', '하단 Feedback는 보고 있는 턴과 무관하게 최신 complete 상위 카드에 붙습니다.'], agents: [] },
+  { n: 2, title: '정렬 기준과 턴 번호 확정', start: '09:23', end: '09:28', duration: '4m 38s',
+    prompt: '최신 턴을 기본으로 보여줘. 과거부터 읽는 시간순도 남기고, 표시 순서가 바뀌어도 Turn 번호는 유지해줘.',
+    result: ['생성 순서의 Turn 번호와 화면 정렬을 분리하는 방향으로 정리했습니다.', 'createdAt → updatedAt → card id의 기존 비교 순서를 유지합니다.', '예: 최신순은 6, 5, 4… / 시간순은 1, 2, 3… 입니다. 최신 라벨은 항상 Turn 6에 붙습니다.'], code: 'chronological = topLevelCards.sort(compareOldestCardFirst)\nnumbered = chronological.map((card, i) => ({ card, n: i + 1 }))\nvisible = newestFirst ? [...numbered].reverse() : numbered', agents: [] },
+  { n: 3, title: 'Prompt와 Result의 시각적 무게 조정', start: '09:34', end: '09:41', duration: '7m 03s',
+    prompt: 'Prompt가 너무 커서 결과가 묻혀. kv2 스타일을 유지하면서 덜 투박하게 보여줘. Light / Dark 둘 다 고려해줘.',
+    result: ['최신 Result에 집중하고 이전 턴은 제목과 결과 첫 줄만 보이게 제안했습니다.', 'Prompt는 한 줄 미리보기에서 펼칩니다. 본문은 중립 surface, 파랑·분홍은 가는 phase 선으로 남깁니다.', 'complete 분홍은 검토 대기 상태입니다. 최신 여부와 오류를 나타내는 색으로 겸용하지 않습니다.'], agents: [{ name: 'designer', instruction: '본문 위계와 상태색 사용을 검토해줘.', response: '중립적인 최신 라벨과 텍스트 상태명을 병용합니다. 작은 흰 글자를 분홍 원색 위에 놓지 않습니다.' }] },
+  { n: 4, title: '긴 세션에서 필요한 내용 찾기', start: '09:48', end: '09:55', duration: '6m 44s',
+    prompt: '숫자 칩만으로는 어느 턴인지 모르겠어. 검색하고 바로 이동할 수 있게 해줘. 결과도 복사하고 싶어.',
+    result: ['검색과 제목이 포함된 턴 바로가기를 추가했습니다.', 'Prompt·Result·서브에이전트 본문까지 찾으며, 일치한 원문을 강조합니다.', '검색 중 최신 턴으로 이동하면 검색을 지우고 최신 결과를 펼칩니다. 결과 복사는 전체 Result 텍스트를 사용합니다.'], agents: [{ name: 'explorer', instruction: 'searchIndex에 포함할 텍스트를 정리해줘.', response: 'card.title, description, result와 child의 instruction, response를 포함합니다. 숨긴 내용의 검색 결과도 펼쳐야 합니다.' }] },
+  { n: 5, title: '키보드 탐색과 피드백 대상 확인', start: '10:02', end: '10:10', duration: '8m 09s',
+    prompt: '키보드로도 읽을 수 있어야 해. 예전 턴을 읽고 있을 때 피드백을 어디에 보내는지도 명확하게 해줘.',
+    result: ['정렬·턴 펼침·검색은 키보드로 조작하고 피드백 대상은 Turn 6으로 명시합니다.', '각 펼침 버튼에 턴 이름과 aria-expanded / aria-controls를 연결합니다.', '피드백 초안은 정렬과 검색을 바꿔도 유지합니다. 기존 DialogSkeleton의 포커스 트랩과 Esc 닫기는 유지합니다.'], agents: [] },
+  { n: 6, title: '최신 결과부터 읽는 모달 제안 완료', start: '10:18', end: '10:24', duration: '5m 42s',
+    prompt: '좋아. 최신순을 기본으로 하고, 이전 턴은 접어줘. 검색·결과 복사·피드백 흐름까지 한 화면에서 확인할 수 있게 정리해줘.',
+    result: ['최신 결과를 바로 읽고, 필요한 맥락만 펼치는 흐름으로 정리했습니다.', '최신순 6 → 1을 기본으로, 시간순 1 → 6 전환도 제공합니다. Turn 번호는 바뀌지 않습니다.', '최신 Result만 먼저 펼칩니다. Prompt는 미리보기로, 이전 턴은 제목과 결과 첫 줄로 남깁니다.', '세션 검색·최신 턴 이동·결과 복사와 작은 피드백 바를 함께 제공합니다.'], agents: [{ name: 'reviewer', instruction: '정렬 변경 시 피드백 연결과 최신 표시가 유지되는지 검토해줘.', response: '피드백은 표시 인덱스가 아니라 최신 complete 상위 카드 ID를 기준으로 연결합니다. latest와 unread는 다른 상태이므로 같은 색 신호를 쓰지 않습니다.' }] }
+];
+const $ = (id) => document.getElementById(id);
+const sessionId = '24b90f31-8714-4ced-9bf4-6d1c55ae2d05';
+const state = { order: 'newest', query: '', expanded: new Set([6]), prompts: new Set(), agents: new Set() };
+const esc = (value) => String(value).replace(/[&<>"']/g, (char) => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
+const lower = (value) => value.toLocaleLowerCase('ko');
+const textFor = (turn) => [turn.title, turn.prompt, ...turn.result, turn.code || '', ...turn.agents.flatMap((a) => [a.name, a.instruction, a.response])].join('\n');
+function marked(value) {
+  const query = state.query.trim();
+  if (!query) return esc(value);
+  const text = String(value), source = lower(text), needle = lower(query);
+  let output = '', offset = 0, at;
+  while ((at = source.indexOf(needle, offset)) !== -1) {
+    output += esc(text.slice(offset, at)) + '<mark>' + esc(text.slice(at, at + query.length)) + '</mark>';
+    offset = at + query.length;
+  }
+  return output + esc(text.slice(offset));
+}
+function notify(message) {
+  $('toast').textContent = message; $('toast').hidden = false;
+  clearTimeout(notify.timer); notify.timer = setTimeout(() => { $('toast').hidden = true; }, 3800);
+}
+function render() {
+  const query = lower(state.query.trim());
+  const visible = turns.filter((t) => !query || lower(textFor(t)).includes(query));
+  if (state.order === 'newest') visible.reverse();
+  $('sortNewest').setAttribute('aria-pressed', state.order === 'newest');
+  $('sortOldest').setAttribute('aria-pressed', state.order === 'oldest');
+  $('orderLabel').textContent = state.order === 'newest' ? '최신 → 처음 · 6 → 1' : '처음 → 최신 · 1 → 6';
+  $('searchCount').textContent = query ? `${visible.length} / 6개 턴 일치` : '6개 턴 · 최신 Turn 6';
+  $('clearSearch').hidden = !state.query;
+  $('emptyState').hidden = visible.length !== 0;
+  const allOpen = visible.length > 0 && visible.every((t) => state.expanded.has(t.n));
+  $('bulkToggle').textContent = query ? '검색 결과 펼침' : allOpen ? '모두 접기' : '모두 펼치기';
+  $('bulkToggle').disabled = !!query || !visible.length;
+  $('jumpSelect').innerHTML = '<option value="">턴 바로가기 · 제목으로 찾기</option>' + visible.map((t) => `<option value="${t.n}">${t.n}${t.n === 6 ? ' · 최신' : ''} · ${esc(t.title)}</option>`).join('');
+  $('jumpSelect').disabled = !visible.length;
+  $('turnList').innerHTML = visible.map((t) => {
+    const open = !!query || state.expanded.has(t.n);
+    const promptOpen = state.prompts.has(t.n) || (!!query && lower(t.prompt).includes(query));
+    const agentsOpen = state.agents.has(t.n) || (!!query && t.agents.some((a) => lower([a.name, a.instruction, a.response].join('\n')).includes(query)));
+    return `<article class="turn ${t.n === 6 ? 'latest' : ''}" id="turn-${t.n}" data-turn="${t.n}">
+      <h4><button class="turn-toggle" data-toggle="${t.n}" aria-expanded="${open}" aria-controls="body-${t.n}" aria-label="Turn ${t.n}: ${esc(t.title)}${query ? ', 검색 중 펼침 고정' : ''}" ${query ? 'aria-disabled="true"' : ''}>
+        <span class="chevron" aria-hidden="true">${open ? '▾' : '▸'}</span><span><span class="turn-topline"><span class="turn-number">Turn ${t.n}</span>${t.n === 6 ? '<span class="latest-tag">최신</span>' : ''}<span class="turn-time">${t.start}–${t.end} · ${t.duration}</span></span><span class="turn-title">${marked(t.title)}</span>${!open ? `<span class="turn-preview">${marked(t.result[0])}</span>` : ''}</span>
+      </button></h4>
+      <div class="turn-body" id="body-${t.n}" ${open ? '' : 'hidden'}>
+        <details class="prompt" data-prompt="${t.n}" ${promptOpen ? 'open' : ''}><summary aria-label="Turn ${t.n} Prompt"><strong class="part-label">Prompt</strong><span class="prompt-preview">${marked(t.prompt.split('\n')[0])}</span></summary><p class="prompt-copy">${marked(t.prompt)}</p></details>
+        <section class="result" aria-labelledby="result-label-${t.n}"><div class="result-head"><span class="part-label" id="result-label-${t.n}">Result</span><button class="kv2-btn kv2-btn--ghost" data-copy="result" data-n="${t.n}" aria-label="Turn ${t.n} 전체 결과 복사">⧉ 결과 복사</button></div><p>${marked(t.result[0])}</p><ul>${t.result.slice(1).map((line) => `<li>${marked(line)}</li>`).join('')}</ul>${t.code ? `<pre><code>${marked(t.code)}</code></pre>` : ''}</section>
+        ${t.agents.length ? `<details class="agents" data-agents="${t.n}" ${agentsOpen ? 'open' : ''}><summary aria-label="Turn ${t.n} 서브에이전트 ${t.agents.length}명"><strong>서브에이전트 ${t.agents.length}</strong><span>· ${t.agents.map((a) => marked(a.name)).join(', ')}</span></summary>${t.agents.map((a) => `<div class="agent-row"><strong>${marked(a.name)}</strong><p><span class="part-label">지시</span> ${marked(a.instruction)}</p><p><span class="part-label">응답</span> ${marked(a.response)}</p></div>`).join('')}</details>` : ''}
+      </div></article>`;
+  }).join('');
+  // Native disclosure state persists across sorting/filtering; search opens matches temporarily.
+  document.querySelectorAll('[data-prompt], [data-agents]').forEach((detail) => {
+    const n = Number(detail.dataset.prompt || detail.dataset.agents);
+    const saved = detail.hasAttribute('data-prompt') ? state.prompts : state.agents;
+    let lastOpen = detail.open;
+    detail.addEventListener('toggle', () => {
+      if (detail.open === lastOpen) return;
+      lastOpen = detail.open;
+      if (state.query.trim() || !detail.isConnected) return;
+      detail.open ? saved.add(n) : saved.delete(n);
+    });
+  });
+}
+function reorder(order) {
+  state.order = order; render(); $('conversationScroll').scrollTop = 0;
+  notify(order === 'newest' ? '최신순 · Turn 6 → 1' : '시간순 · Turn 1 → 6');
+}
+function jump(n) {
+  state.expanded.add(n); render();
+  const target = $(`turn-${n}`), button = target?.querySelector('.turn-toggle');
+  if (!target) return;
+  const scroller = $('conversationScroll');
+  const offset = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 12;
+  scroller.scrollTo({ top: offset, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  button.focus({ preventScroll: true }); target.classList.add('is-jump');
+  setTimeout(() => target.classList.remove('is-jump'), 1800);
+}
+function clearSearch(focus = false) {
+  state.query = ''; $('sessionSearch').value = ''; render();
+  if (focus) $('sessionSearch').focus();
+}
+$('sortNewest').onclick = () => reorder('newest');
+$('sortOldest').onclick = () => reorder('oldest');
+$('bulkToggle').onclick = () => {
+  const allOpen = turns.every((t) => state.expanded.has(t.n));
+  state.expanded = allOpen ? new Set() : new Set(turns.map((t) => t.n));
+  render(); $('conversationScroll').scrollTop = 0;
+  notify(allOpen ? '모든 턴을 접었습니다.' : '모든 턴 본문을 펼쳤습니다. Prompt는 개별로 펼칠 수 있습니다.');
+};
+$('sessionSearch').oninput = (event) => { state.query = event.target.value; render(); $('conversationScroll').scrollTop = 0; };
+$('clearSearch').onclick = () => clearSearch(true);
+$('resetSearch').onclick = () => clearSearch(true);
+$('sessionSearch').onkeydown = (event) => { if (event.key === 'Escape' && state.query) { event.preventDefault(); event.stopPropagation(); clearSearch(true); } };
+$('jumpLatest').onclick = () => { const filtered = !!state.query; clearSearch(); jump(6); if (filtered) notify('검색을 지우고 최신 Turn 6으로 이동했습니다.'); };
+$('jumpSelect').onchange = (event) => { if (event.target.value) jump(Number(event.target.value)); };
+document.addEventListener('click', async (event) => {
+  const toggle = event.target.closest('[data-toggle]');
+  if (toggle && !state.query.trim()) {
+    const n = Number(toggle.dataset.toggle), top = $('conversationScroll').scrollTop;
+    state.expanded.has(n) ? state.expanded.delete(n) : state.expanded.add(n);
+    render(); $('conversationScroll').scrollTop = top;
+    document.querySelector(`[data-toggle="${n}"]`).focus({ preventScroll: true });
+  }
+  const copy = event.target.closest('[data-copy]');
+  if (!copy) return;
+  const t = turns.find((turn) => turn.n === Number(copy.dataset.n));
+  const text = copy.dataset.copy === 'session' ? sessionId : copy.dataset.copy === 'resume' ? `codex resume ${sessionId}` : [...t.result, ...(t.code ? [t.code] : [])].join('\n\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    notify(copy.dataset.copy === 'result' ? `Turn ${t.n} 전체 결과를 복사했습니다.` : copy.dataset.copy === 'session' ? '전체 세션 ID를 복사했습니다.' : '세션 재개 명령을 복사했습니다.');
+  } catch { notify('이 환경에서는 클립보드에 접근할 수 없습니다. 본문을 선택해 복사해주세요.'); }
+});
+function feedback(open) {
+  $('feedbackForm').hidden = !open; $('feedbackToggle').setAttribute('aria-expanded', open);
+  $('feedbackToggle').textContent = open ? '접기 ▴' : '피드백 쓰기 ↗';
+  (open ? $('feedbackText') : $('feedbackToggle')).focus();
+}
+$('feedbackToggle').onclick = () => feedback($('feedbackForm').hidden);
+$('feedbackCancel').onclick = () => feedback(false);
+$('feedbackText').oninput = () => { $('feedbackSubmit').disabled = !$('feedbackText').value.trim(); };
+$('feedbackForm').onsubmit = (event) => { event.preventDefault(); if ($('feedbackText').value.trim()) notify('데모: 최신 Turn 6에 이어 실행하는 동작입니다. 실제 전송 없이 초안을 유지합니다.'); };
+function syncTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  $('themeToggle').setAttribute('aria-pressed', dark);
+  $('themeToggle').textContent = dark ? '◐ 다크 테마 · 켜짐' : '◐ 다크 테마 · 꺼짐';
+}
+$('themeToggle').onclick = () => {
+  document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  const url = new URL(location.href); url.searchParams.set('theme', document.documentElement.dataset.theme);
+  try { history.replaceState(null, '', url); } catch { /* Sandboxed file previews can reject URL updates; theme still works. */ }
+  syncTheme();
+};
+$('openModal').onclick = () => {
+  $('mountPlaceholder').hidden = false; $('lightbox').append($('afterPanel'));
+  $('lightbox').showModal(); $('sortNewest').focus();
+};
+$('closeModal').onclick = () => $('lightbox').close();
+$('lightbox').addEventListener('close', () => { $('afterMount').append($('afterPanel')); $('mountPlaceholder').hidden = true; $('openModal').focus(); });
+$('beforeTurns').innerHTML = turns.map((t) => `<div class="old-turn"><div class="old-turn-head"><span class="old-turn-label">Turn ${t.n}</span><span class="old-time">Started 2026-10-22 ${t.start}<br>Completed 2026-10-22 ${t.end} · ${t.duration}</span></div><div class="old-phases"><div class="old-phase-label">Prompt <span>hide ▴</span></div><div class="old-phase">${esc(t.prompt)}</div><div class="old-phase-label">Result <span>hide ▴</span></div><div class="old-phase result-old">${esc(t.result.join('\n\n'))}${t.code ? '\n\n' + esc(t.code) : ''}</div>${t.agents.length ? '<div class="muted">Subagents (' + t.agents.length + ') · show ▾</div>' : ''}</div></div>`).join('');
+render(); syncTheme();
+</script>
+</body>
+</html>

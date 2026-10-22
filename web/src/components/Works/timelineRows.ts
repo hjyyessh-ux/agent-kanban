@@ -339,6 +339,47 @@ export function buildStripRows(works: Work[], range: TimelineRange, now: Date): 
   return rows.filter((row): row is TimelineWorkRow => row.kind === 'work' && row.bar !== null);
 }
 
+/**
+ * Rows for one Work's own timeline (the Work detail's 세션 흐름): **that Work's
+ * plan bar and its sessions, always expanded, nothing else.** The same grid as
+ * the Board view — the detail reuses it rather than drawing a second chart — so
+ * the only difference is the input: other Works and every session not linked
+ * to this one are dropped before the rows are built, and the directory header
+ * goes (a Work spanning repos would otherwise sit under one arbitrary dir; each
+ * session row already carries its own project colour and name).
+ */
+export function buildWorkScopeRows(
+  work: Work,
+  sessions: TimelineSessionSpan[],
+  range: TimelineRange,
+  now: Date,
+): Array<TimelineWorkRow | TimelineSessionRow> {
+  const linked = new Set(work.sessionLinks.map((link) => link.sessionId));
+  const rows = buildTimelineRows({
+    sessions: sessions.filter((session) => linked.has(session.sessionId)),
+    works: [work],
+    range,
+    now,
+  });
+  return rows.filter((row): row is TimelineWorkRow | TimelineSessionRow => row.kind !== 'dir');
+}
+
+/**
+ * Search hits painted onto the grid (the Work detail's session search). Rows of
+ * sessions outside `sessionIds` dim; day cells holding a card in `cardIds` get a
+ * ring. `null` = no search, nothing dims.
+ */
+export interface TimelineHighlight {
+  sessionIds: ReadonlySet<string>;
+  cardIds: ReadonlySet<string>;
+  /**
+   * When the most recent hit ran (epoch ms). The grid scrolls there if no hit
+   * is in view — its cells only exist for the fetched window, so it cannot
+   * find an off-screen hit by itself.
+   */
+  latestAt?: number;
+}
+
 function push<T>(map: Map<string, T[]>, key: string, value: T): void {
   const bucket = map.get(key);
   if (bucket) bucket.push(value);

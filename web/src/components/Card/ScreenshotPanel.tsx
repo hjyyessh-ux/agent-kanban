@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback } from "react";
 import { Screenshot } from "../../../../src/core/types";
 import { getScreenshotUrl, uploadScreenshot, deleteScreenshot } from "../../hooks/useKanbanApi";
+import { ImageLightbox } from "../shared/ImageLightbox";
 
 interface ScreenshotPanelProps {
   cardId: string;
@@ -174,16 +175,7 @@ export const ScreenshotPanel: React.FC<ScreenshotPanelProps> = ({
       </div>
 
       {lightboxImg && (
-        <div className="kv2-screenshot-lightbox" onClick={() => setLightboxImg(null)} aria-hidden="true">
-          <img src={lightboxImg} alt="Screenshot preview" className="kv2-screenshot-lightbox-img" />
-          <button
-            type="button"
-            className="kv2-screenshot-lightbox-close"
-            onClick={() => setLightboxImg(null)}
-          >
-            ×
-          </button>
-        </div>
+        <ImageLightbox src={lightboxImg} alt="Screenshot preview" onClose={() => setLightboxImg(null)} />
       )}
     </>
   );

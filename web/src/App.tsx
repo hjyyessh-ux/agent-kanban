@@ -15,7 +15,7 @@ import { SettingsView } from './components/Settings/SettingsView';
 import { WorksView } from './components/Works/WorksView';
 import { TimelineView } from './components/Works/TimelineView';
 import { BulkAssignModal } from './components/Works/BulkAssignModal';
-import { WorkDetailDialog, type WorkDetailIntent } from './components/Works/WorkDetailDialog';
+import { WorkDetailDialog, type WorkDetailIntent, type WorkSessionFocus } from './components/Works/WorkDetailDialog';
 import type { BoardWorkMutations } from './components/Board/board-work-actions';
 import { WorkSessionNotice, type WorkSessionNoticeState } from './components/Works/WorkSessionNotice';
 import type { WorkAssignUndoActions } from './components/Works/workAssignNotice';
@@ -209,7 +209,12 @@ export default function App() {
    * and the board poll must not treat "not on the board" as "gone".
    */
   const [selectedCardArchived, setSelectedCardArchived] = useState(false);
-  const [selectedSession, setSelectedSession] = useState<{ key: string; status: 'complete' | 'done' } | null>(null);
+  const [selectedSession, setSelectedSession] = useState<{
+    key: string;
+    status: 'complete' | 'done';
+    /** Set when opened from a Works detail search result: prefill + scroll target. */
+    focus?: WorkSessionFocus;
+  } | null>(null);
   /**
    * Cards for a session whose conversation was opened from outside the board —
    * a completed Work's session, or a Timeline rail older than the board. Keyed
@@ -253,6 +258,20 @@ export default function App() {
       : cards.filter((card) => card.status === selectedSession.status);
     return groupCompleteCardsBySession(source).find((group) => group.key === selectedSession.key) ?? null;
   }, [cards, selectedSession, archivedSessionCards]);
+
+  // 아직 끝나지 않은 turn — 같은 세션의 todo/in_progress 카드, 그리고 sessionId가
+  // 붙기 전(디스패치 전후)의 이 세션 카드에 대한 피드백 카드. 모달이 이를 대기/실행 중
+  // turn으로 이어붙여, 피드백을 보내고 창을 연 채로 진행을 지켜볼 수 있다.
+  const selectedSessionLiveCards = useMemo(() => {
+    if (!selectedSessionGroup) return [];
+    const turnIds = new Set(selectedSessionGroup.cards.map((card) => card.id));
+    return cards.filter((card) =>
+      (card.status === 'todo' || card.status === 'in_progress')
+      && !turnIds.has(card.id)
+      && (card.sessionId
+        ? `session:${card.sessionId}` === selectedSessionGroup.key
+        : card.feedbackForCardId !== undefined && turnIds.has(card.feedbackForCardId)));
+  }, [cards, selectedSessionGroup]);
 
   // 세션이 사라지면(전부 archive/이동 등) 모달을 닫는다. 명시적으로 archive에서
   // 가져온 세션은 보드에 없는 것이 정상이므로 위 memo가 그 목록을 계속 쓴다.
@@ -471,7 +490,7 @@ export default function App() {
    * is fetched with the archive included and handed to the modal as its own
    * group. Only a session with no cards anywhere is reported as a failure.
    */
-  const handleOpenWorkSession = (sessionId: string) => {
+  const handleOpenWorkSession = (sessionId: string, focus?: WorkSessionFocus) => {
     const key = `session:${sessionId}`;
     void fetchSessionCards(sessionId)
       .then((fetched) => {
@@ -488,6 +507,7 @@ export default function App() {
         setSelectedSession({
           key,
           status: fetched.some((card) => card.status === 'done') ? 'done' : 'complete',
+          focus,
         });
       })
       .catch((e: unknown) => {
@@ -795,7 +815,7 @@ export default function App() {
             ignoredSessions={works.ignoredSessions}
             onRestoreIgnoredSession={works.restoreIgnoredSession}
             assignNotice={workAssignNotice}
-            onCompleteWork={works.completeWork}
+            cards={cards}
             onRefresh={works.refreshWorks}
             onClearError={works.clearError}
             onOpenSession={handleOpenWorkSession}
@@ -960,6 +980,26 @@ export default function App() {
           })}
           onUpdateNotes={works.updateWorkNotes}
           onOpenSession={handleOpenWorkSession}
+          renderTimeline={(highlight) => (
+            <TimelineView
+              variant="work"
+              works={[openWork]}
+              highlight={highlight}
+              loading={works.loading}
+              // The dialog shows its own error line; the shared Works alert
+              // covers the rest.
+              error={null}
+              onOpenWork={() => {}}
+              onUpdateWorkDates={works.updateWorkDates}
+              onRefresh={works.refreshWorks}
+              onClearError={works.clearError}
+              onOpenCard={(cardId) => {
+                void handleOpenCardById(cardId);
+              }}
+              onOpenSession={handleOpenWorkSession}
+              onNotify={setWorkSessionNotice}
+            />
+          )}
           assignableSessions={works.inbox}
           onAddSession={session => works.linkSessionToWork(openWork.id, session).then(() => {})}
           onUpdateDates={works.updateWorkDates}
@@ -992,8 +1032,15 @@ export default function App() {
           from inside the conversation.) */}
       {selectedSession && selectedSessionGroup && (
         <SessionConversationModal
+          key={`${selectedSession.key}:${selectedSession.focus?.cardId ?? ''}:${selectedSession.focus?.query ?? ''}`}
           group={selectedSessionGroup}
+          liveCards={selectedSessionLiveCards}
           status={selectedSession.status}
+          initialQuery={selectedSession.focus?.query}
+          focusCardId={selectedSession.focus?.cardId}
+          onStartTurn={dispatchCard}
+          onEditTurn={(cardId, description) => updateCard(cardId, { description })}
+          onTurnScreenshotsChanged={() => { void refreshCards(); }}
           onClose={() => {
             setSelectedSession(null);
             setArchivedSessionCards(null);

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Work 상세 — 디렉토리·날짜 영역 정리안</title>
+<style>
+  :root {
+    --bg: #1f2126; --surface: #262930; --sunken: #1b1d22; --hover: #2e323a;
+    --border: #3a3f48; --border-strong: #5a616d;
+    --text: #e8e9ec; --text-2: #a9adb6; --text-3: #7d828c;
+    --blue-ink: #9cc3ff; --green: #2f9e5f; --green-ink: #7fd8a3; --amber-ink: #f3c27a; --pink-ink: #ff9cb8;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #16181c; color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", sans-serif; }
+  .page { max-width: 1240px; margin: 0 auto; padding: 28px 28px 80px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .lede { color: var(--text-2); margin: 0 0 22px; }
+  h2 { font-size: 17px; margin: 40px 0 6px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
+  .sub { color: var(--text-2); font-size: 13px; margin: 0 0 12px; }
+  .pick { font-size: 11.5px; font-weight: 800; color: var(--green-ink); border: 1px solid #2f7a4d; border-radius: 999px; padding: 1px 9px; }
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .cap { font-size: 12px; color: var(--text-3); margin: 0 0 6px; font-weight: 700; letter-spacing: .04em; }
+  .dlg { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; }
+  .body { padding: 14px 22px; display: flex; flex-direction: column; gap: 14px; }
+  .h { font-weight: 800; font-size: 13.5px; display: flex; gap: 8px; align-items: center; }
+  .muted { color: var(--text-3); font-size: 12.5px; }
+  .sess { border: 1px solid var(--border); border-left: 4px solid #c25a7a; border-radius: 6px; padding: 8px 12px; background: var(--sunken); display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+  .proj { font-size: 11.5px; font-weight: 700; color: #f19bb6; border: 1px solid #6b3446; background: #2c2027; border-radius: 5px; padding: 0 7px; }
+  .tile-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--sunken); }
+  .tile.wide { border-left: 4px solid #c25a7a; }
+  .tl { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--text-2); text-transform: uppercase; }
+  .input { margin-top: 6px; border: 1px solid var(--border-strong); border-radius: 5px; padding: 5px 9px; font-size: 13px; background: var(--bg); }
+  .mono { font-family: var(--mono); }
+  .note { border-left: 3px solid var(--green); background: #1f3328; color: var(--green-ink); padding: 8px 12px; font-size: 12.5px; border-radius: 0 6px 6px 0; }
+  .foot { display: flex; gap: 8px; align-items: center; padding: 12px 22px; border-top: 1px solid var(--border); background: var(--sunken); }
+  .foot .sp { flex: 1; }
+  .btn { white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .btn.danger { color: var(--pink-ink); }
+  .btn.ok { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.ghost { border-color: transparent; background: none; color: var(--blue-ink); }
+  .btn.small { padding: 2px 8px; font-size: 12px; }
+  .foot-hint { font-size: 12px; color: var(--text-3); }
+  .hl { outline: 2px dashed var(--amber-ink); outline-offset: 4px; border-radius: 6px; }
+  .tag-del { font-size: 11px; color: var(--pink-ink); font-weight: 800; }
+
+  /* option 1: collapsed properties */
+  .props { border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+  .props-head { display: flex; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; user-select: none; }
+  .props-head:hover { background: var(--hover); }
+  .caret { color: var(--text-3); transition: transform .12s; width: 12px; }
+  .props.open .caret { transform: rotate(90deg); }
+  .props-sum { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-2); flex-wrap: wrap; }
+  .props-sum b { color: var(--text); }
+  .props-body { display: none; padding: 0 12px 12px; }
+  .props.open .props-body { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+
+  /* option 2: inline edit in the facts line */
+  .facts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
+  .edit { border-bottom: 1px dashed var(--text-3); cursor: pointer; padding: 0 2px; border-radius: 3px; }
+  .edit:hover { background: var(--hover); color: var(--text); }
+  .pop { position: relative; display: inline-block; }
+  .pop .card { position: absolute; top: 24px; left: 0; z-index: 3; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 10px 30px #0008; padding: 10px; width: 250px; }
+  .title { font-size: 19px; font-weight: 800; margin: 0 0 6px; }
+
+  /* compressed (option 3) */
+  .strip3 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
+  .strip3 .tile { padding: 7px 10px; }
+  .strip3 .input { margin-top: 3px; padding: 3px 8px; }
+
+  .addline { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--text-3); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-2); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Work 상세 — 아래쪽 "디렉토리·날짜" 영역 정리안</h1>
+  <p class="lede">지금 상세 맨 아래에 남아 있는 <code>DIRECTORY / START / PLANNED END / LAST ACTIVITY</code> 칸을 어떻게 할지 세 가지 안입니다.
+  이 칸들은 <b>디렉토리와 예정일을 바꾸는 유일한 곳</b>이라 그냥 지울 수는 없고, 모양을 바꾸는 문제입니다.
+  ①안은 직접 눌러서 펼쳐 볼 수 있습니다. 노란 점선은 바뀌는 부분입니다.</p>
+
+  <!-- ═════ 지금 ═════ -->
+  <h2>지금 (현재 구현)</h2>
+  <p class="sub">세션 목록 아래에 빈 <code>세션 추가</code> 영역, 큰 칸 4개, 초록 안내 상자가 차례로 쌓여 아래쪽이 무겁습니다.</p>
+  <div class="dlg">
+    <div class="body">
+      <div class="sess"><span class="proj">zadar</span><b>ovpn 을 설정하고싶은데 어떻게 …</b><span class="muted">10/22 · 카드 16</span></div>
+      <div><div class="h">세션 추가</div><div class="muted">이 목표로 진행한 미배정 세션을 연결하세요.</div><div class="muted" style="padding:8px 14px">연결할 미배정 세션이 없습니다.</div></div>
+      <div class="tile wide"><div class="tl">Directory</div><div class="mono" style="margin-top:4px;font-weight:700">/Users/user/workspace/zadar</div></div>
+      <div class="tile-row">
+        <div class="tile"><div class="tl">Start</div><div class="input">2026. 10. 22.</div></div>
+        <div class="tile"><div class="tl">Planned end</div><div class="input" style="color:var(--text-3)">연도. 월. 일.</div></div>
+        <div class="tile"><div class="tl">Last activity</div><div class="input">10. 22. 오후 04:03</div></div>
+      </div>
+      <div class="note">완료하면 연결된 카드가 보관됩니다. 이후 Wiki 디렉토리와 생성된 문서를 확인할 수 있습니다.</div>
+    </div>
+    <div class="foot"><button class="btn danger">폐기…</button><button class="btn danger">삭제…</button><span class="sp"></span><button class="btn">⇉ 다른 Work에 병합…</button><span class="sp"></span><button class="btn ok">✔ 완료 (일괄 archive)</button></div>
+  </div>
+
+  <!-- ═════ ① 접기 ═════ -->
+  <h2>① 접힌 "속성" 한 줄 <span class="pick">추천</span></h2>
+  <p class="sub">평소에는 한 줄 요약만 보이고, 누르면 지금의 편집 칸이 펼쳐집니다. 편집 기능은 그대로이고, 자주 안 쓰는 설정이 내용 사이에서 자리를 차지하지 않습니다. <code>LAST ACTIVITY</code>는 제목 아래 사실 줄과 겹치므로 뺍니다.</p>
+  <div class="grid2">
+    <div>
+      <p class="cap">접힌 상태 (기본)</p>
+      <div class="dlg">
+        <div class="body">
+          <div class="sess"><span class="proj">zadar</span><b>ovpn 을 설정하고싶은데 어떻게 …</b><span class="muted">10/22 · 카드 16</span></div>
+          <div class="addline hl">＋ 세션 연결 <span>· 연결할 미배정 세션 없음</span></div>
+          <div class="props hl" id="p1"><div class="props-head" onclick="p1.classList.toggle('open')"><span class="caret">▸</span><b style="font-size:12.5px">속성</b><span class="props-sum"><span class="proj">zadar</span>· 시작 <b>10/22</b> · 예정 <b style="color:var(--text-3)">없음</b></span><span style="flex:1"></span><span class="muted">편집</span></div>
+            <div class="props-body">
+              <div class="tile wide"><div class="tl">Directory</div><div class="input mono">/Users/user/workspace/zadar</div></div>
+              <div class="tile"><div class="tl">Start</div><div class="input">2026. 10. 22.</div></div>
+              <div class="tile"><div class="tl">Planned end</div><div class="input" style="color:var(--text-3)">연도. 월. 일.</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot hl"><button class="btn danger">폐기…</button><button class="btn danger">삭제…</button><button class="btn">⇉ 병합…</button><span class="sp"></span><span class="foot-hint">완료하면 카드 16장을 보관하고 Wiki 문서를 만듭니다</span><button class="btn ok">✔ 완료 (일괄 archive)</button></div>
+      </div>
+    </div>
+    <div>
+      <p class="cap">펼친 상태 (속성 줄을 눌렀을 때)</p>
+      <div class="dlg">
+        <div class="body">
+          <div class="sess"><span class="proj">zadar</span><b>ovpn 을 설정하고싶은데 어떻게 …</b><span class="muted">10/22 · 카드 16</span></div>
+          <div class="addline">＋ 세션 연결 <span>· 연결할 미배정 세션 없음</span></div>
+          <div class="props open"><div class="props-head"><span class="caret">▸</span><b style="font-size:12.5px">속성</b><span class="props-sum"><span class="proj">zadar</span>· 시작 <b>10/22</b> · 예정 <b style="color:var(--text-3)">없음</b></span><span style="flex:1"></span><span class="muted">접기</span></div>
+            <div class="props-body">
+              <div class="tile wide"><div class="tl">Directory</div><div class="input mono">/Users/user/workspace/zadar</div></div>
+              <div class="tile"><div class="tl">Start</div><div class="input">2026. 10. 22.</div></div>
+              <div class="tile"><div class="tl">Planned end</div><div class="input" style="color:var(--text-3)">연도. 월. 일.</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><button class="btn danger">폐기…</button><button class="btn danger">삭제…</button><button class="btn">⇉ 병합…</button><span class="sp"></span><span class="foot-hint">완료하면 카드 16장을 보관하고 Wiki 문서를 만듭니다</span><button class="btn ok">✔ 완료 (일괄 archive)</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════ ② 인라인 ═════ -->
+  <h2>② 제목 아래 사실 줄에서 바로 편집</h2>
+  <p class="sub">아래쪽 칸을 아예 없앱니다. 제목 아래 <code>zadar · 시작 10/22 · 예정 없음</code>의 각 값이 점선 밑줄 버튼이 되고, 누르면 그 자리에 작은 편집 창이 뜹니다. 가장 깔끔하지만, 편집할 수 있다는 게 덜 드러납니다.</p>
+  <div class="dlg">
+    <div class="body">
+      <div>
+        <p class="title">Zadar - 배포하고 적용하기</p>
+        <div class="facts hl">
+          <span class="pop"><span class="proj edit">zadar ✎</span></span>
+          · 시작 <span class="pop"><span class="edit">10/22</span>
+            <span class="card"><div class="tl">Start</div><div class="input">2026. 10. 22.</div><div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end"><button class="btn small ghost">취소</button><button class="btn small">저장</button></div></span>
+          </span>
+          · 예정 <span class="edit" style="color:var(--text-3)">없음 ＋</span>
+          · 최근 활동 10. 22. 오후 04:03
+        </div>
+      </div>
+      <div style="height:78px"></div>
+      <div class="muted">… KPI · 세션 흐름 · 요약 · 메모 · 연결된 세션 …</div>
+      <div class="addline">＋ 세션 연결 <span>· 연결할 미배정 세션 없음</span></div>
+      <div class="tag-del">↳ 아래쪽 DIRECTORY / START / PLANNED END / LAST ACTIVITY 칸 없음</div>
+    </div>
+    <div class="foot"><button class="btn danger">폐기…</button><button class="btn danger">삭제…</button><button class="btn">⇉ 병합…</button><span class="sp"></span><span class="foot-hint">완료하면 카드 16장을 보관하고 Wiki 문서를 만듭니다</span><button class="btn ok">✔ 완료 (일괄 archive)</button></div>
+  </div>
+
+  <!-- ═════ ③ 압축 ═════ -->
+  <h2>③ 그대로 두되 한 줄로 압축</h2>
+  <p class="sub">지금 칸을 유지하고 크기만 줄입니다. <code>LAST ACTIVITY</code>를 빼고, 디렉토리·시작·예정을 한 줄에 넣습니다. 바뀌는 게 가장 적지만, 여전히 항상 보입니다.</p>
+  <div class="dlg">
+    <div class="body">
+      <div class="sess"><span class="proj">zadar</span><b>ovpn 을 설정하고싶은데 어떻게 …</b><span class="muted">10/22 · 카드 16</span></div>
+      <div class="addline">＋ 세션 연결 <span>· 연결할 미배정 세션 없음</span></div>
+      <div class="strip3 hl">
+        <div class="tile wide"><div class="tl">Directory</div><div class="input mono">/Users/user/workspace/zadar</div></div>
+        <div class="tile"><div class="tl">Start</div><div class="input">2026. 10. 22.</div></div>
+        <div class="tile"><div class="tl">Planned end</div><div class="input" style="color:var(--text-3)">연도. 월. 일.</div></div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn danger">폐기…</button><button class="btn danger">삭제…</button><button class="btn">⇉ 병합…</button><span class="sp"></span><span class="foot-hint">완료하면 카드 16장을 보관하고 Wiki 문서를 만듭니다</span><button class="btn ok">✔ 완료 (일괄 archive)</button></div>
+  </div>
+
+  <h2>세 안 모두에 공통으로 들어가는 정리</h2>
+  <table>
+    <tr><th style="width:220px">항목</th><th>지금</th><th>바뀐 뒤</th></tr>
+    <tr><td><code>세션 추가</code> 영역</td><td>미배정 세션이 0개여도 제목·설명·"없습니다" 3줄을 차지</td><td><code>＋ 세션 연결</code> 한 줄. 미배정이 있을 때만 누르면 선택 목록이 펼쳐짐</td></tr>
+    <tr><td>초록 안내 상자</td><td>"완료하면 연결된 카드가 보관됩니다…" 상자가 본문 끝에 따로 있음</td><td>완료 버튼 바로 옆 작은 글씨 — "완료하면 카드 N장을 보관하고 Wiki 문서를 만듭니다"</td></tr>
+    <tr><td><code>LAST ACTIVITY</code> 칸</td><td>읽기 전용 칸</td><td>제거 (제목 아래 사실 줄에 이미 있음)</td></tr>
+  </table>
+</div>
+</body>
+</html>

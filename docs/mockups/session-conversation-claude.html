@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Mockup — Session 대화 모달 개선 (Claude 안)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600;700&display=swap" rel="stylesheet" />
+<script>
+  if (new URLSearchParams(location.search).get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+</script>
+<style>
+/* ── 토큰: kanban-v2.tokens.css 실값 ─────────────────────────────── */
+:root {
+  --todo: #3b82f6; --prog: #facc15; --complete: #ff3b6b; --done: #22c55e;
+  --sans: 'Work Sans', system-ui, sans-serif; --mono: 'Source Code Pro', ui-monospace, monospace;
+  --app-bg: #FFF8E7; --frame: #1A1A2E; --surface: #fff; --raised: #fff; --sunken: #f8fafc; --hover: #f3f4f6;
+  --ink: #1A1A2E; --ink-2: #536074; --ink-3: #627089;
+  --border: #D7DCE6; --border-strong: #1f2233; --hard: #000;
+  --accent: var(--complete);
+  --prompt-bg: color-mix(in srgb, var(--todo) 9%, transparent);
+  --result-bg: color-mix(in srgb, var(--complete) 9%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --shadow: 4px 4px 0 var(--hard); --shadow-sm: 2px 2px 0 var(--hard);
+  --rt-claude-bg: #f7d9cd; --mark: #fde68a;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --app-bg: #1b1d20; --frame: #0e0e15; --surface: #272a2e; --raised: #2d3135; --sunken: #202327; --hover: #30343a;
+  --ink: #d4d7db; --ink-2: #a3a8ae; --ink-3: #979ea6;
+  --border: #34383d; --border-strong: #454a50; --hard: #0d0f10;
+  --prompt-bg: color-mix(in srgb, var(--todo) 12%, var(--surface));
+  --result-bg: color-mix(in srgb, var(--complete) 12%, var(--surface));
+  --shadow: 3px 3px 0 var(--hard); --shadow-sm: 1px 1px 0 var(--hard);
+  --rt-claude-bg: #2d3135; --mark: color-mix(in srgb, #facc15 35%, transparent);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--sans); background: var(--app-bg); color: var(--ink); font-size: 14px; }
+code, .mono { font-family: var(--mono); }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* 목업 상단 바 */
+.mock-bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 12px; align-items: center; padding: 10px 20px; background: var(--frame); color: #fff; }
+.mock-bar h1 { font-size: 15px; margin: 0; font-weight: 800; }
+.mock-bar .sp { flex: 1; }
+.mock-bar button { background: transparent; color: #fff; border: 1.5px solid #fff6; border-radius: 4px; padding: 4px 10px; font-weight: 700; font-size: 12px; }
+.mock-bar a { color: #fff; font-size: 12px; }
+.page { max-width: 1560px; margin: 0 auto; padding: 24px 20px 80px; }
+.section-title { font-weight: 800; font-size: 18px; margin: 28px 0 10px; display: flex; gap: 10px; align-items: center; }
+.tag { font-size: 11px; font-weight: 800; padding: 2px 8px; border: 1.5px solid var(--border-strong); border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; }
+.tag--before { background: var(--sunken); }
+.tag--after { background: var(--done); color: #111827; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+@media (max-width: 1200px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ── 공용 다이얼로그 셸 ─────────────────────────────────────────── */
+.dlg { position: relative; height: 820px; display: flex; flex-direction: column; background: var(--surface);
+  border: 3px solid var(--frame); border-radius: 2px; box-shadow: -8px 0 0 var(--accent), var(--shadow); overflow: hidden; }
+:root[data-theme="dark"] .dlg { border-color: var(--border-strong); }
+.x { position: absolute; top: 8px; right: 10px; border: 0; background: none; font-size: 20px; font-weight: 800; color: var(--ink); z-index: 3; }
+
+.chip-proj { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 3px; border: 1.5px solid #dd4b9c; color: #b0347b; background: color-mix(in srgb, #dd4b9c 14%, var(--surface)); }
+:root[data-theme="dark"] .chip-proj { color: #f08cc4; }
+.rt { font-size: 11px; font-weight: 800; padding: 1px 8px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--rt-claude-bg); text-transform: uppercase; }
+.idchip { font-family: var(--mono); font-size: 11px; color: var(--ink-2); }
+.idchip b { color: var(--ink); }
+.resume { font-family: var(--mono); font-size: 11px; border: 1.5px solid var(--border); border-radius: 3px; padding: 2px 8px; background: var(--surface); }
+
+/* ── BEFORE (현재 구조 재현) ─────────────────────────────────────── */
+.b-head { padding: 16px 44px 14px 20px; border-bottom: 3px solid var(--frame); display: flex; flex-direction: column; gap: 6px; }
+:root[data-theme="dark"] .b-head { border-color: var(--border-strong); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.b-title { font-size: 18px; font-weight: 800; margin: 0; }
+.b-range { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.b-chips { display: flex; gap: 6px; align-items: center; overflow: hidden; }
+.b-chips span { font-size: 10px; font-weight: 800; color: var(--ink-3); letter-spacing: .05em; margin-right: 4px; }
+.b-chip { min-width: 26px; height: 24px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--app-bg); font-family: var(--mono); font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 6px; }
+.b-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.b-scroll { flex: 1; overflow: auto; padding: 20px 22px 22px 40px; }
+.b-turn { border: 2px solid var(--border-strong); border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, transparent); margin-bottom: 22px; }
+.b-turn-h { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--accent-soft); border-bottom: 2px solid var(--border-strong); }
+.b-pill { background: var(--accent); color: #fff; font-weight: 800; font-size: 15px; padding: 4px 14px; border-radius: 999px; }
+.b-meta { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--ink-2); display: flex; gap: 14px; }
+.b-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.b-lbl { font-weight: 800; font-size: 13px; }
+.b-lbl small { font-weight: 600; color: var(--ink-3); margin-left: 8px; }
+.b-phase { border-radius: 8px; padding: 14px 16px; border-left: 6px solid var(--todo); background: var(--prompt-bg); line-height: 1.6; font-size: 13px; }
+.b-phase.res { border-left-color: var(--complete); background: var(--result-bg); }
+.b-phase h3 { margin: 0 0 8px; font-size: 17px; }
+.b-dock { border-top: 3px solid var(--frame); padding: 14px 20px; }
+:root[data-theme="dark"] .b-dock { border-color: var(--border-strong); }
+.b-dock textarea { width: 100%; height: 96px; resize: none; background: var(--sunken); border: 1.5px solid var(--border); color: var(--ink); padding: 10px; font: inherit; font-size: 13px; }
+.b-dock .row { justify-content: flex-end; margin-top: 10px; }
+.btn { border: 2px solid var(--border-strong); background: var(--surface); padding: 6px 14px; font-weight: 800; font-size: 12px; text-transform: uppercase; box-shadow: var(--shadow-sm); border-radius: 3px; }
+.btn--primary { background: var(--accent); color: #fff; border-color: var(--border-strong); }
+.anno { position: absolute; z-index: 4; background: #dc2626; color: #fff; font-weight: 800; font-size: 11px; width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; box-shadow: var(--shadow-sm); }
+
+/* ── AFTER ──────────────────────────────────────────────────────── */
+.a-head { padding: 14px 44px 10px 20px; border-bottom: 3px solid var(--frame); display: flex; flex-direction: column; gap: 8px; background: var(--surface); }
+:root[data-theme="dark"] .a-head { border-color: var(--border-strong); }
+.a-title { margin: 0; font-size: 20px; font-weight: 800; line-height: 1.25; }
+.a-sub { display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+.a-sub .stat b { color: var(--ink); font-family: var(--mono); }
+.dot { width: 4px; height: 4px; border-radius: 99px; background: var(--ink-3); }
+
+.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1.5px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 4px 10px; font-size: 12px; font-weight: 700; font-family: var(--mono); color: var(--ink-2); }
+.seg button + button { border-left: 1.5px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--frame); color: #fff; }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.search { flex: 1; min-width: 160px; display: flex; align-items: center; gap: 6px; border: 1.5px solid var(--border); border-radius: 4px; padding: 3px 8px; background: var(--sunken); }
+.search:focus-within { border-color: var(--border-strong); }
+.search input { border: 0; outline: 0; background: none; color: var(--ink); font: inherit; font-size: 12px; flex: 1; }
+.search .cnt { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--ink-2); background: var(--surface); }
+
+.a-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr; }
+.a-main.no-outline { grid-template-columns: 0 1fr; }
+/* 좌측 아웃라인: 숫자 칩 → turn 목록(요약 1줄 + 소요시간 바) */
+.outline { border-right: 1.5px solid var(--border); overflow: auto; background: var(--sunken); padding: 8px 6px; }
+.no-outline .outline { display: none; }
+.ol-item { display: grid; grid-template-columns: 30px 1fr; gap: 2px 6px; width: 100%; text-align: left; border: 1.5px solid transparent; background: none; padding: 6px; border-radius: 4px; }
+.ol-item:hover { background: var(--hover); }
+.ol-item.on { border-color: var(--border-strong); background: var(--surface); box-shadow: var(--shadow-sm); }
+.ol-n { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--ink-2); grid-row: span 2; }
+.ol-item.on .ol-n { color: var(--accent); }
+.ol-t { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-bar { height: 3px; border-radius: 9px; background: var(--border); position: relative; }
+.ol-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 9px; background: var(--ink-3); }
+.ol-item.match .ol-t { background: var(--mark); }
+.ol-item.dim { opacity: .4; }
+
+.a-scroll { overflow: auto; padding: 16px 18px 24px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+/* turn 카드: 면은 중립, 강조는 좌측 4px 액센트 + 라벨에만 */
+.t { border: 1.5px solid var(--border); border-radius: 8px; background: var(--surface); position: relative; }
+.t::before { content: ''; position: absolute; left: -1.5px; top: -1.5px; bottom: -1.5px; width: 4px; border-radius: 8px 0 0 8px; background: var(--border); }
+.t.latest { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.t.latest::before { background: var(--accent); }
+.t.hit::before { background: #f59e0b; }
+.t.hidden { display: none; }
+.t-h { display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 14px; cursor: pointer; user-select: none; }
+.t-n { font-family: var(--mono); font-weight: 700; font-size: 12px; color: var(--ink-2); min-width: 30px; }
+.t.latest .t-n { color: var(--accent); }
+.t-latest { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; background: var(--accent); color: #fff; }
+.t-sum { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+.t-dur { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: var(--sunken); border: 1px solid var(--border); }
+.t-caret { width: 16px; color: var(--ink-3); transition: transform .15s; }
+.t.open .t-caret { transform: rotate(90deg); }
+.t-b { display: none; padding: 0 12px 12px 14px; flex-direction: column; gap: 10px; }
+.t.open .t-b { display: flex; }
+.ph { border-radius: 6px; position: relative; }
+.ph-h { display: flex; align-items: center; gap: 8px; padding: 6px 10px 0; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.ph-h .lbl-p { color: var(--todo); }
+.ph-h .lbl-r { color: var(--accent); }
+:root:not([data-theme="dark"]) .ph-h .lbl-p { color: #1d4ed8; }
+:root:not([data-theme="dark"]) .ph-h .lbl-r { color: #be123c; }
+.ph-h .acts { margin-left: auto; display: flex; gap: 4px; }
+.ph-h .acts button { border: 1px solid var(--border); background: var(--surface); border-radius: 3px; font-size: 11px; font-weight: 600; padding: 1px 7px; text-transform: none; letter-spacing: 0; color: var(--ink-2); }
+.ph-h .acts button:hover { border-color: var(--border-strong); color: var(--ink); }
+.ph--p { background: var(--prompt-bg); box-shadow: inset 3px 0 0 var(--todo); }
+.ph--r { background: var(--result-bg); box-shadow: inset 3px 0 0 var(--accent); }
+.ph-c { padding: 6px 12px 10px; font-size: 13px; line-height: 1.6; }
+.ph-c p { margin: 0 0 6px; }
+.ph-c ul { margin: 0 0 6px; padding-left: 18px; }
+.ph-c code { font-size: 12px; background: var(--sunken); border: 1px solid var(--border); padding: 0 4px; border-radius: 3px; }
+/* Prompt는 3줄 프리뷰 + 페이드, 펼치면 전체 */
+.ph--p.clamp .ph-c { max-height: 4.8em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
+mark { background: var(--mark); color: inherit; border-radius: 2px; }
+.subs { font-size: 12px; color: var(--ink-2); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.subs .sa { font-family: var(--mono); border: 1px dashed var(--border-strong); border-radius: 3px; padding: 1px 6px; }
+
+.jump { position: absolute; right: 22px; bottom: 76px; z-index: 3; border: 2px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow-sm); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 800; display: none; }
+.jump.show { display: block; }
+
+/* 피드백 독: 1줄로 접혀 있다가 포커스 시 확장, 대상 turn 명시 */
+.a-dock { border-top: 3px solid var(--frame); padding: 10px 16px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+:root[data-theme="dark"] .a-dock { border-color: var(--border-strong); }
+.a-dock .target { font-size: 11px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+.a-dock .target b { font-family: var(--mono); color: var(--accent); }
+.a-dock .in { display: flex; gap: 8px; align-items: flex-end; }
+.a-dock textarea { flex: 1; resize: none; height: 36px; transition: height .15s; background: var(--sunken); border: 1.5px solid var(--border); border-radius: 4px; color: var(--ink); padding: 8px 10px; font: inherit; font-size: 13px; }
+.a-dock textarea:focus { height: 110px; outline: 0; border-color: var(--border-strong); }
+.a-dock .btns { display: flex; gap: 6px; }
+
+/* 리라이트 노트 */
+.notes { margin-top: 28px; display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.note { background: var(--surface); border: 2px solid var(--border-strong); box-shadow: var(--shadow-sm); border-radius: 4px; padding: 12px 14px; font-size: 13px; line-height: 1.55; }
+.note h4 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.note .pri { font-family: var(--mono); font-size: 11px; padding: 0 6px; border-radius: 3px; color: #111827; }
+.p0 { background: var(--complete); color: #fff !important; } .p1 { background: var(--prog); } .p2 { background: var(--border); }
+.note p { margin: 0; color: var(--ink-2); }
+.shortcut { margin-top: 16px; font-size: 12px; color: var(--ink-2); display: flex; gap: 14px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <h1>Session 대화 모달 — Claude 개선안</h1>
+  <span style="font-size:12px;opacity:.75">kv2 토큰 실값 · 라이트/다크 · After 패널은 실제 동작</span>
+  <span class="sp"></span>
+  <a href="session-conversation-codex.html">Codex 안 보기 →</a>
+  <button id="themeBtn" type="button">🌓 테마</button>
+</div>
+
+<div class="page">
+  <div class="grid2">
+    <!-- ───────────── BEFORE ───────────── -->
+    <div>
+      <div class="section-title"><span class="tag tag--before">Before</span> 현재 — 오래된순 고정, 전부 펼침</div>
+      <div class="dlg">
+        <button class="x" type="button">✕</button>
+        <span class="anno" style="top:96px;left:30px">1</span>
+        <span class="anno" style="top:196px;left:96px">2</span>
+        <span class="anno" style="top:290px;left:26px">3</span>
+        <span class="anno" style="bottom:150px;left:26px">4</span>
+        <div class="b-head">
+          <div class="row"><span class="chip-proj">agent-kanban</span><span class="rt">✳ Claude</span><b style="font-size:13px;color:var(--ink-2)">16 turns</b>
+            <span style="margin-left:auto" class="idchip">SESSION <b>#1bcf537c</b></span><span class="resume">⏎ resume</span></div>
+          <h2 class="b-title">5/5 Works 묶기 — 목업 일치 검증 · 전체 테스트 · 보고서</h2>
+          <div class="b-range">2026-10-22 09:51 → 2026-10-22 09:51</div>
+          <div class="b-chips"><span>TURN</span>
+            <i class="b-chip on">1</i><i class="b-chip">2</i><i class="b-chip">3</i><i class="b-chip">4</i><i class="b-chip">5</i><i class="b-chip">6</i><i class="b-chip">7</i><i class="b-chip">8</i><i class="b-chip">9</i><i class="b-chip">10</i><i class="b-chip">11</i><i class="b-chip">12</i><i class="b-chip">13</i><i class="b-chip">14</i><i class="b-chip">15</i><i class="b-chip">16</i>
+          </div>
+        </div>
+        <div class="b-scroll">
+          <div class="b-turn">
+            <div class="b-turn-h"><span class="b-pill">Turn 1</span><div class="b-meta"><span>Started 2026-10-21 13:47</span><span>Completed 2026-10-21 14:17</span><b>30m 8s</b></div></div>
+            <div class="b-body">
+              <div class="b-lbl">Prompt <small>hide ▴</small></div>
+              <div class="b-phase">
+                <h3>메인 보드 Works 묶기 — 5/5: 목업 일치 검증 · 전체 테스트 · 보고서</h3>
+                <p>앞선 4장의 카드(1/5~4/5)가 기능을 구현했다. 각 카드의 결과는 큐 체인을 따라 확인: 이 카드의 <code>queuedAfterCardId</code> 부터 …</p>
+                <h3>공통 규칙 (반드시 준수)</h3>
+                <p>저장소: /Users/…/agent-kanban · 현재 브랜치에서 작업. git commit / push / branch 전환 / stash / reset 금지. …</p>
+                <p>칸반 데몬(포트 24680)을 재시작·종료하지 말 것 — 이 카드를 실행 중인 주체다. …</p>
+                <p>스펙 = 승인된 목업 docs/mockups/works-on-board.html 의 B안(기본 선택). …</p>
+                <p>먼저 읽기: CLAUDE.md, docs/design-system.md, docs/works.md …</p>
+              </div>
+              <div class="b-lbl">Result <small>hide ▴</small></div>
+              <div class="b-phase res"><p>(스크롤해야 보임 …)</p></div>
+            </div>
+          </div>
+          <div class="b-turn"><div class="b-turn-h"><span class="b-pill">Turn 2</span><div class="b-meta"><span>Started 2026-10-21 14:20</span><b>12m 2s</b></div></div><div class="b-body"><div class="b-phase"><p>…</p></div></div></div>
+        </div>
+        <div class="b-dock">
+          <b style="font-size:13px">Feedback</b>
+          <textarea placeholder="Describe what needs additional work… (@로 세션·Work·문서를 참조할 수 있고, 스크린샷은 붙여넣기로 첨부합니다)"></textarea>
+          <div class="row"><button class="btn" type="button">Create feedback</button><button class="btn" type="button">Create &amp; start</button></div>
+        </div>
+      </div>
+      <ol style="font-size:13px;line-height:1.7;color:var(--ink-2);padding-left:20px;margin-top:14px">
+        <li><b>칩은 번호뿐</b> — 16개 숫자 중 어디가 무슨 작업인지 알 수 없음. 시간순이라 최신이 맨 오른쪽/맨 아래.</li>
+        <li><b>Turn 라벨이 제목보다 강함</b> — 핑크 pill + 핑크 워시 헤더 + 핑크 카드 배경이 반복. "완료 상태색"이 장식으로 소모됨.</li>
+        <li><b>Prompt가 화면을 다 먹음</b> — 사용자가 보려는 Result는 접혀 있지 않은 긴 Prompt 아래로 밀림.</li>
+        <li><b>Feedback 독이 상시 ~25% 높이</b> — 읽는 동안에도 공간 점유, 어느 turn에 붙는지 표시 없음.</li>
+      </ol>
+    </div>
+
+    <!-- ───────────── AFTER ───────────── -->
+    <div>
+      <div class="section-title"><span class="tag tag--after">After</span> 제안 — 최신순 기본 · 아웃라인 · Result 우선</div>
+      <div class="dlg" id="after">
+        <button class="x" type="button">✕</button>
+        <header class="a-head">
+          <div class="row"><span class="chip-proj">agent-kanban</span><span class="rt">✳ Claude</span>
+            <span style="margin-left:auto" class="idchip">SESSION <b>#1bcf537c</b></span><span class="resume">⏎ resume</span></div>
+          <h2 class="a-title">5/5 Works 묶기 — 목업 일치 검증 · 전체 테스트 · 보고서</h2>
+          <div class="a-sub">
+            <span class="stat"><b id="statTurns">6</b> turns</span><span class="dot"></span>
+            <span class="stat">총 <b>1h 52m</b></span><span class="dot"></span>
+            <span class="stat mono">10-21 13:47 → 10-22 09:51</span><span class="dot"></span>
+            <span class="stat">subagent <b>4</b></span>
+          </div>
+          <div class="toolbar">
+            <div class="seg" role="group" aria-label="정렬">
+              <button type="button" data-order="newest" aria-pressed="true">↓ 최신순</button>
+              <button type="button" data-order="oldest" aria-pressed="false">↑ 오래된순</button>
+            </div>
+            <div class="seg" role="group" aria-label="펼침">
+              <button type="button" data-expand="smart" aria-pressed="true">최근 2개</button>
+              <button type="button" data-expand="all" aria-pressed="false">모두 펼침</button>
+              <button type="button" data-expand="none" aria-pressed="false">모두 접기</button>
+            </div>
+            <label class="search">🔍<input id="q" placeholder="세션 내 검색 (prompt·result)" /><span class="cnt" id="qcnt"></span><kbd>/</kbd></label>
+            <button type="button" class="seg" id="olBtn" style="padding:4px 8px;font-size:12px;font-weight:700;background:var(--surface)" aria-pressed="true">☰ 목차</button>
+          </div>
+        </header>
+        <div class="a-main" id="amain">
+          <nav class="outline" id="outline" aria-label="Turn 목차"></nav>
+          <div class="a-scroll" id="scroll"></div>
+        </div>
+        <button class="jump" id="jump" type="button">↑ 최신 turn으로</button>
+        <div class="a-dock">
+          <div class="target">피드백 대상 → <b>Turn 6</b> (latest · complete) 에 이어붙임 · <kbd>⌘</kbd><kbd>↵</kbd> 전송</div>
+          <div class="in">
+            <textarea placeholder="추가 작업 요청… (@ 참조, 스크린샷 붙여넣기)"></textarea>
+            <div class="btns"><button class="btn" type="button">Feedback</button><button class="btn btn--primary" type="button">Feedback &amp; start</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="shortcut"><span><kbd>j</kbd>/<kbd>k</kbd> 다음/이전 turn</span><span><kbd>o</kbd> 정렬 전환</span><span><kbd>/</kbd> 검색</span><span><kbd>e</kbd> 현재 turn 펼침/접기</span><span><kbd>c</kbd> 현재 Result 복사</span></div>
+    </div>
+  </div>
+
+  <div class="section-title">변경 포인트 · 근거 (design critique 기반)</div>
+  <div class="notes">
+    <div class="note"><h4><span class="pri p0">P0</span>최신순 기본 + 정렬 토글</h4><p>최신 turn이 맨 위. Turn 번호는 시간순 그대로(T6 = 최신) 유지해 정렬을 바꿔도 "몇 번째"가 흔들리지 않음. 선택은 localStorage 기억. <b>— 실제 코드에 이미 반영.</b></p></div>
+    <div class="note"><h4><span class="pri p0">P0</span>Result 우선, Prompt는 3줄 프리뷰</h4><p>사용자가 모달을 여는 목적은 "결과 확인"이다. 긴 지시문은 페이드 프리뷰로 줄이고 클릭 시 전체. 이전 turn은 헤더 1줄(요약·소요시간)로 접힘 → 16 turn도 한 화면에 개요.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>숫자 칩 → 좌측 목차(outline)</h4><p>번호만 있던 칩을 "T번호 · 카드 제목 · 소요시간 바"로. 어떤 turn이 오래 걸렸는지, 어디로 갈지 바로 판단. 좁은 폭에선 ☰로 숨김.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>핑크는 "신호"에만</h4><p>turn 카드 면을 중립(surface)으로 되돌리고, complete 핑크는 최신 turn의 좌측 바 · LATEST 태그 · 다이얼로그 스트라이프에만. 제목(20px/800)이 turn 라벨(12px mono)보다 확실히 위.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>세션 내 검색</h4><p>prompt/result 전문 검색, 매칭 turn만 남기고 하이라이트 + 목차에도 표시. "그때 그 에러 어느 turn이었지"를 스크롤 없이.</p></div>
+    <div class="note"><h4><span class="pri p2">P2</span>Result 액션 · 키보드</h4><p>Result 복사 / Markdown 복사 / 카드 열기. j/k·o·/·e·c 단축키. 스크롤이 내려가면 "↑ 최신 turn으로" 플로팅 버튼.</p></div>
+    <div class="note"><h4><span class="pri p2">P2</span>피드백 독 축소 + 대상 명시</h4><p>평소 1줄, 포커스 시 확장 → 읽기 공간 +~90px. 어느 turn(카드)에 이어붙는지 명시해 오해 방지. ⌘↵ 전송.</p></div>
+    <div class="note"><h4><span class="pri p2">P2</span>헤더 요약 통계</h4><p>"2026-10-22 09:51 → 09:51"처럼 의미 없던 범위를 실제 첫/마지막 turn 기준으로, 총 소요 · subagent 수를 한 줄에.</p></div>
+  </div>
+</div>
+
+<script>
+const TURNS = [
+  { n: 1, title: '5/5 Works 묶기 — 목업 일치 검증 · 전체 테스트', started: '10-21 13:47', dur: '30m 8s', min: 30, subs: ['explore', 'verifier'],
+    prompt: '<p><b>메인 보드 Works 묶기 — 5/5: 목업 일치 검증 · 전체 테스트 · 보고서.</b> 앞선 4장의 카드(1/5~4/5)가 기능을 구현했다. 각 카드의 결과는 큐 체인을 따라 확인: <code>queuedAfterCardId</code> 부터 거슬러 올라가며 읽기.</p><p>공통 규칙: git commit / push / branch 전환 금지. 칸반 데몬(24680) 재시작 금지. 스펙 = <code>docs/mockups/works-on-board.html</code> B안.</p><p>먼저 읽기: CLAUDE.md, docs/design-system.md, docs/works.md …</p>',
+    result: '<p>검증 완료. 1600×1000 뷰포트에서 목업 B안과 실제 보드를 나란히 비교했고 차이 3건을 수정했습니다.</p><ul><li><code>BoardWorkContainer</code> 헤더 간격 8→6px</li><li>다크 테마 Work 탭 대비 4.2→4.8:1</li><li>빈 Work 그룹 placeholder 문구</li></ul><p><code>bun test</code> 1,284 pass / 0 fail · <code>bun run test:e2e</code> 62 pass.</p>' },
+  { n: 2, title: 'e2e review 셀렉터 깨짐 수정', started: '10-21 14:20', dur: '12m 2s', min: 12, subs: [],
+    prompt: '<p>e2e <code>review.e2e.ts</code> 가 셀렉터 변경으로 3건 실패. 원인 찾아서 고쳐줘.</p>',
+    result: '<p><code>getByRole(\'button\', { name: \'Archive\' })</code> 가 아이콘 버튼으로 바뀌면서 접근성 이름이 사라진 게 원인. <code>aria-label</code> 추가로 해결, 3건 모두 통과.</p>' },
+  { n: 3, title: 'Timeline 스트립 리사이즈', started: '10-21 15:02', dur: '41m 30s', min: 41, subs: ['designer'],
+    prompt: '<p>Works 타임라인 스트립 높이를 드래그로 조절할 수 있게 해줘. 값은 기억.</p>',
+    result: '<p>스트립 하단에 리사이즈 핸들 추가, <code>localStorage</code> 키 <code>kanban-timeline-strip-height</code> 로 저장. 최소 120px / 최대 60vh.</p>' },
+  { n: 4, title: '디렉토리 히스토리 Clear 제거', started: '10-21 16:10', dur: '6m 41s', min: 7, subs: [],
+    prompt: '<p>DirectoryPicker 의 Clear 버튼 쓸 일이 없네. 빼줘.</p>',
+    result: '<p>Clear 버튼과 <code>clearHistory</code> 핸들러 제거. <code>useDirectoryHistory</code> 의 해당 API도 함께 삭제, 관련 테스트 갱신.</p>' },
+  { n: 5, title: 'PR 본문 정리', started: '10-22 09:20', dur: '9m 15s', min: 9, subs: ['writer'],
+    prompt: '<p>지금까지 변경 묶어서 PR 본문 초안 써줘. 커밋은 하지 마.</p>',
+    result: '<p>PR 본문 초안을 작성했습니다 — 요약 / 변경 파일 / 테스트 결과 / 스크린샷 체크리스트. 커밋·푸시는 하지 않았습니다.</p>' },
+  { n: 6, title: '세션 모달 최신순 정렬 + UI 점검', started: '10-22 09:51', dur: '13m 4s', min: 13, subs: [],
+    prompt: '<p>Session 을 누르면 지금까지의 Turn 을 볼 수 있는데, 이거 역순으로 — 최신이 맨 위로 올라오게 정렬 버튼 넣어줄래? 기본을 역순으로.</p>',
+    result: '<p><code>SessionConversationModal</code> 에 최신순/오래된순 토글 추가(기본 최신순, <code>localStorage</code> 기억). Turn 번호는 시간순 유지, scrollspy·칩 순서도 표시 순서를 따름. 테스트 2건 추가.</p>' },
+];
+const LATEST = TURNS.length;
+const MAX_MIN = Math.max(...TURNS.map(t => t.min));
+const state = { order: localStorage.getItem('mock-turn-order') || 'newest', expand: 'smart', q: '', outline: true, open: new Set(), active: LATEST };
+
+const scroll = document.getElementById('scroll');
+const outline = document.getElementById('outline');
+
+function hl(html, q) {
+  if (!q) return html;
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return html.replace(/>([^<]+)</g, (m, txt) => '>' + txt.replace(re, '<mark>$1</mark>') + '<');
+}
+function plain(html) { return html.replace(/<[^>]+>/g, ' '); }
+function ordered() { const a = [...TURNS]; return state.order === 'newest' ? a.reverse() : a; }
+function resetOpen() {
+  state.open = new Set(state.expand === 'all' ? TURNS.map(t => t.n) : state.expand === 'none' ? [] : [LATEST, LATEST - 1]);
+}
+
+function render() {
+  const q = state.q.trim().toLowerCase();
+  let hits = 0;
+  scroll.innerHTML = ordered().map(t => {
+    const match = !q || (plain(t.prompt) + plain(t.result) + t.title).toLowerCase().includes(q);
+    if (match && q) hits++;
+    const open = state.open.has(t.n) || (q && match);
+    const latest = t.n === LATEST;
+    return `<article class="t ${latest ? 'latest' : ''} ${open ? 'open' : ''} ${!match ? 'hidden' : ''} ${q && match ? 'hit' : ''}" data-n="${t.n}">
+      <div class="t-h" data-toggle="${t.n}">
+        <span class="t-caret">▸</span><span class="t-n">T${t.n}</span>
+        ${latest ? '<span class="t-latest">latest</span>' : ''}
+        <span class="t-sum">${hl(' ' + t.title, q).trim()}</span>
+        <span class="t-meta">${t.started}</span><span class="t-dur">${t.dur}</span>
+      </div>
+      <div class="t-b">
+        <section class="ph ph--r"><div class="ph-h"><span class="lbl-r">Result</span><span class="acts"><button type="button" data-copy="${t.n}">⧉ 복사</button><button type="button">MD</button><button type="button">카드 열기 ↗</button></span></div><div class="ph-c">${hl(t.result, q)}</div></section>
+        <section class="ph ph--p clamp" data-prompt="${t.n}"><div class="ph-h"><span class="lbl-p">Prompt</span><span class="acts"><button type="button" data-clamp="${t.n}">전체 보기 ▾</button></span></div><div class="ph-c">${hl(t.prompt, q)}</div></section>
+        ${t.subs.length ? `<div class="subs">Subagents · ${t.subs.map(s => `<span class="sa">${s}</span>`).join('')} <span style="color:var(--ink-3)">(클릭 시 펼침)</span></div>` : ''}
+      </div></article>`;
+  }).join('');
+  outline.innerHTML = ordered().map(t => {
+    const match = !q || (plain(t.prompt) + plain(t.result) + t.title).toLowerCase().includes(q);
+    return `<button type="button" class="ol-item ${t.n === state.active ? 'on' : ''} ${q && match ? 'match' : ''} ${q && !match ? 'dim' : ''}" data-go="${t.n}" title="${t.title}">
+      <span class="ol-n">T${t.n}</span><span class="ol-t">${t.title}</span><span class="ol-bar"><i style="width:${Math.round(t.min / MAX_MIN * 100)}%"></i></span></button>`;
+  }).join('');
+  document.getElementById('qcnt').textContent = q ? `${hits}/${TURNS.length}` : '';
+  document.querySelectorAll('[data-order]').forEach(b => b.setAttribute('aria-pressed', b.dataset.order === state.order));
+  document.querySelectorAll('[data-expand]').forEach(b => b.setAttribute('aria-pressed', b.dataset.expand === state.expand));
+  document.getElementById('amain').classList.toggle('no-outline', !state.outline);
+  document.getElementById('jump').textContent = state.order === 'newest' ? '↑ 최신 turn으로' : '↓ 최신 turn으로';
+}
+
+function go(n) {
+  state.active = n; render();
+  scroll.querySelector(`[data-n="${n}"]`)?.scrollIntoView({ block: 'start' });
+}
+
+document.getElementById('after').addEventListener('click', e => {
+  const t = e.target.closest('button, .t-h');
+  if (!t) return;
+  if (t.dataset.order) { state.order = t.dataset.order; localStorage.setItem('mock-turn-order', state.order); state.active = LATEST; render(); scroll.scrollTop = 0; }
+  else if (t.dataset.expand) { state.expand = t.dataset.expand; resetOpen(); render(); }
+  else if (t.dataset.toggle) { const n = +t.dataset.toggle; state.open.has(n) ? state.open.delete(n) : state.open.add(n); state.active = n; render(); }
+  else if (t.dataset.go) go(+t.dataset.go);
+  else if (t.dataset.clamp) { const p = scroll.querySelector(`[data-prompt="${t.dataset.clamp}"]`); const c = p.classList.toggle('clamp'); t.textContent = c ? '전체 보기 ▾' : '접기 ▴'; }
+  else if (t.dataset.copy) { t.textContent = '✓ 복사됨'; setTimeout(() => (t.textContent = '⧉ 복사'), 1200); }
+  else if (t.id === 'olBtn') { state.outline = !state.outline; t.setAttribute('aria-pressed', state.outline); render(); }
+  else if (t.id === 'jump') { go(LATEST); }
+});
+document.getElementById('q').addEventListener('input', e => { state.q = e.target.value; render(); });
+scroll.addEventListener('scroll', () => {
+  const latestEl = scroll.querySelector(`[data-n="${LATEST}"]`);
+  const off = latestEl ? Math.abs(latestEl.offsetTop - scroll.scrollTop) > scroll.clientHeight : false;
+  document.getElementById('jump').classList.toggle('show', off);
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea')) { if (e.key === 'Escape') e.target.blur(); return; }
+  const seq = ordered().map(t => t.n);
+  const i = seq.indexOf(state.active);
+  if (e.key === 'j') go(seq[Math.min(i + 1, seq.length - 1)]);
+  else if (e.key === 'k') go(seq[Math.max(i - 1, 0)]);
+  else if (e.key === 'o') document.querySelector(`[data-order="${state.order === 'newest' ? 'oldest' : 'newest'}"]`).click();
+  else if (e.key === '/') { e.preventDefault(); document.getElementById('q').focus(); }
+  else if (e.key === 'e') { state.open.has(state.active) ? state.open.delete(state.active) : state.open.add(state.active); render(); }
+  else return;
+});
+document.getElementById('themeBtn').addEventListener('click', () => {
+  const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark';
+});
+resetOpen(); render();
+</script>
+</body>
+</html>

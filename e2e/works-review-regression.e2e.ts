@@ -25,11 +25,14 @@ for (const width of [1440, 390]) {
     expect(triageBox!.width).toBeCloseTo(layoutBox!.width, 0);
     expect(worksBox!.width).toBeCloseTo(layoutBox!.width, 0);
     expect(worksBox!.y).toBeGreaterThanOrEqual(triageBox!.y + triageBox!.height);
-    await expect(page.locator('.works-card')).toContainText('카드 1');
+    await expect(page.locator('.works-card')).toContainText('카드 완료');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`works-${width}.png`), fullPage: true });
     await title.click();
     const detail = page.getByRole('dialog', { name: work.title, exact: true });
+    // Directory and dates sit behind the folded 속성 line.
+    await expect(detail.getByLabel('Start', { exact: true })).toHaveCount(0);
+    await detail.getByRole('button', { name: /^속성/ }).click();
     await expect(detail.getByLabel('Start', { exact: true })).toBeVisible();
     await expect(detail.getByLabel('Planned end', { exact: true })).toBeVisible();
     await expect(detail.getByRole('button', { name: /Directory/ })).toBeVisible();
@@ -37,6 +40,7 @@ for (const width of [1440, 390]) {
       Boolean(element.compareDocumentPosition(element.parentElement!.querySelector('.work-summary')!) & Node.DOCUMENT_POSITION_FOLLOWING),
     )).toBe(true);
     await expect(detail.getByRole('button', { name: /^(활동·타임라인|결과|개요|관리)$/ })).toHaveCount(0);
+    await detail.getByRole('button', { name: /^세션 연결/ }).click();
     await expect(detail.getByLabel('연결할 세션')).toBeVisible();
     await expect(detail.getByRole('button', { name: '폐기…', exact: true })).toBeVisible();
     await expect(detail.getByRole('button', { name: '삭제…', exact: true })).toBeVisible();
@@ -78,6 +82,7 @@ test('the visible session picker adds sessions and conversation includes archive
   await page.getByRole('tab', { name: 'Works' }).click();
   await page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true }).click();
   const detail = page.getByRole('dialog', { name: work.title, exact: true });
+  await detail.getByRole('button', { name: /^세션 연결/ }).click();
   await expect(detail.getByLabel('연결할 세션')).toBeVisible();
   await detail.getByLabel('연결할 세션').selectOption('additional-review');
   await detail.getByRole('button', { name: '이 Work에 연결' }).click();
@@ -145,7 +150,8 @@ test('a partial archive failure stays visible instead of closing as a success', 
   });
   await page.goto('/');
   await page.getByRole('tab', { name: 'Works' }).click();
-  await page.locator('.works-card').getByRole('button', { name: '완료…', exact: true }).click();
+  await page.locator('.works-card').getByRole('button', { name: /상세 열기$/ }).click();
+  await page.locator('.work-detail-footer').getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   const confirm = page.getByRole('dialog', { name: '완료 확인', exact: true });
   await confirm.getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   await expect(confirm).toBeVisible();

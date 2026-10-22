@@ -1,18 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KanbanCard } from '../../../../src/core/types';
+import { splitFeedbackHeader } from '../../../../src/core/mention-search';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { FeedbackPanel } from '../Card/FeedbackPanel';
 import { CardMarkdown } from '../Card/CardMarkdown';
+import { PhaseAside, PhaseBody, ProgressSteps } from '../Card/CardPhases';
+import { splitCardResult } from '../Card/card-result';
 import { ExecutionTypeBadge } from './BoardCardSections';
+import { BoardCardTimeMeta } from './BoardCard';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
 import { dirAccentClass } from '../../utils/project-color';
-import { IdChip, ResumeCopyButton } from '../shared/IdChip';
+import { getScreenshotUrl } from '../../hooks/useKanbanApi';
+import { useCardProgress } from '../../hooks/useCardProgress';
+import { useCopyFeedback } from '../../hooks/useCopyFeedback';
+import { COPIED_LABEL, IdChip, ResumeCopyButton } from '../shared/IdChip';
+import { ImageLightbox } from '../shared/ImageLightbox';
+import { formatDuration, resolveRunDurationMs } from '../../utils/format-duration';
+import { applyTextHighlight, clearTextHighlight } from '../../utils/text-highlight';
+import { previewLine } from '../../utils/text-preview';
 import type { CompleteSessionGroup } from './BoardCompleteSessionView';
 import { groupCardsByParent, type CardWithChildren } from './board-utils';
+import { SessionTurnEditor } from './SessionTurnEditor';
 
 interface SessionConversationModalProps {
   group: CompleteSessionGroup;
+  /**
+   * 이 세션의 아직 끝나지 않은 카드(todo/in_progress) — 대기/실행 중 turn으로
+   * 뒤에 이어붙는다. `group`은 complete/done 카드만 담고 있다.
+   */
+  liveCards?: KanbanCard[];
   status: 'complete' | 'done';
   onClose: () => void;
   onCreateFeedback: (
@@ -21,6 +38,63 @@ interface SessionConversationModalProps {
     shouldDispatch: boolean,
     screenshots?: File[],
   ) => Promise<void>;
+  /**
+   * Open with the search box already filled — a Works detail search result
+   * lands here with the same query highlighted. Read once, on mount.
+   */
+  initialQuery?: string;
+  /** Open with this turn unfolded and scrolled into view. Read once, on mount. */
+  focusCardId?: string;
+  /** 대기 중 turn의 `▶ 지금 실행` — 피드백을 실행 없이 만들어 둔 뒤 나중에 시작한다. */
+  onStartTurn?: (cardId: string) => Promise<void>;
+  /**
+   * 대기 중(todo) turn의 Prompt를 고친다(description 전체, 피드백 헤더 포함).
+   * 생략하면 `✎ 편집`을 숨긴다. 이미지는 screenshots API로 바로 올라가고,
+   * 끝나면 `onTurnScreenshotsChanged`로 보드를 다시 읽게 한다.
+   */
+  onEditTurn?: (cardId: string, description: string) => Promise<void>;
+  onTurnScreenshotsChanged?: () => void;
+}
+
+// ── 보기 설정: 모두 localStorage에 남아 다음에 열 때도 같은 모양으로 열린다 ──
+const TURN_ORDER_STORAGE_KEY = 'kanban-session-turn-order';
+const EXPAND_MODE_STORAGE_KEY = 'kanban-session-turn-expand';
+const OUTLINE_STORAGE_KEY = 'kanban-session-outline-collapsed';
+const DOCK_HEIGHT_STORAGE_KEY = 'kanban-session-feedback-dock-height';
+
+type TurnOrder = 'newest' | 'oldest';
+/** recent = 최근 RECENT_OPEN_COUNT개만 펼침(기본) / all / none */
+export type ExpandMode = 'recent' | 'all' | 'none';
+export const RECENT_OPEN_COUNT = 2;
+
+const DOCK_MIN_HEIGHT = 140;
+const DOCK_MAX_RATIO = 0.75;
+const DOCK_KEY_STEP = 24;
+const NO_LIVE_CARDS: KanbanCard[] = [];
+const FEEDBACK_TITLE_PATTERN = /^Feedback(?:\s*#\d+)?:/;
+/** `::highlight(session-search)` 이름 — conversation.css와 짝 */
+const SEARCH_HIGHLIGHT = 'session-search';
+
+function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  if (typeof localStorage === 'undefined') return fallback;
+  const value = localStorage.getItem(key);
+  return allowed.find((option) => option === value) ?? fallback;
+}
+
+function writeStored(key: string, value: string | null): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // quota — the in-memory state still applies for this session
+  }
+}
+
+function readDockHeight(): number | null {
+  if (typeof localStorage === 'undefined') return null;
+  const value = Number(localStorage.getItem(DOCK_HEIGHT_STORAGE_KEY));
+  return Number.isFinite(value) && value >= DOCK_MIN_HEIGHT ? value : null;
 }
 
 function formatTimestamp(iso: string | undefined): string {
@@ -33,29 +107,24 @@ function formatTimestamp(iso: string | undefined): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function formatShortTimestamp(iso: string | undefined): string {
+  const full = formatTimestamp(iso);
+  return full === '-' ? full : full.slice(5);
+}
+
 function getTimestampMs(value: string | undefined): number {
   if (!value) return 0;
   const time = new Date(value).getTime();
   return Number.isNaN(time) ? 0 : time;
 }
 
-function formatDuration(card: KanbanCard): string | null {
-  const explicit = card.durationMs;
-  const derived =
-    card.startedAt && card.completedAt
-      ? getTimestampMs(card.completedAt) - getTimestampMs(card.startedAt)
-      : 0;
-  const ms = explicit && explicit > 0 ? explicit : derived;
-  if (!ms || ms <= 0) return null;
+function cardDurationMs(card: KanbanCard): number {
+  return Math.max(0, resolveRunDurationMs(card) ?? 0);
+}
 
-  const totalSeconds = Math.round(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
+/** 0이면 표시하지 않는다(아직 끝나지 않은 turn). */
+function formatDurationMs(ms: number): string | null {
+  return ms > 0 ? formatDuration(ms) : null;
 }
 
 function compareOldestCardFirst(a: KanbanCard, b: KanbanCard): number {
@@ -66,6 +135,54 @@ function compareOldestCardFirst(a: KanbanCard, b: KanbanCard): number {
   if (updatedDiff !== 0) return updatedDiff;
 
   return a.id.localeCompare(b.id);
+}
+
+/**
+ * 세션의 top-level turn을 과거→최신 순으로. index + 1이 화면의 T# 번호다 —
+ * Works 상세의 세션 검색도 이 함수로 번호를 매겨, 결과의 T3이 모달의 T3과 같다.
+ */
+export function orderSessionTurns(cards: KanbanCard[]): CardWithChildren[] {
+  return groupCardsByParent(cards).sort(compareOldestCardFirst);
+}
+
+// 접힌 turn 미리보기 한 줄 — Works 목록의 "최근 결과"도 같은 규칙을 쓰므로 utils로 옮겼다.
+export { previewLine };
+
+/**
+ * turn에 보여줄 제목. 피드백 turn의 카드 제목은 `Feedback #4: <세션 제목>` 패턴이라
+ * 목차에서 전부 똑같아 보인다 — 실제 요청은 피드백 헤더 아래 본문 첫 줄이므로 그걸 쓴다.
+ */
+export function turnTitle(card: Pick<KanbanCard, 'title' | 'description'>): string {
+  const { header, body } = splitFeedbackHeader(card.description ?? '');
+  if (header || FEEDBACK_TITLE_PATTERN.test(card.title ?? '')) {
+    const line = previewLine(body);
+    if (line) return line;
+  }
+  return card.title || '(untitled)';
+}
+
+/** 세션 내 검색 — 제목·프롬프트·결과·subagent 지시/응답까지 대소문자 무시 부분 일치. */
+export function turnMatchesQuery(card: CardWithChildren, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const haystacks = [card.title, card.description, card.result];
+  for (const child of card.childCards ?? []) haystacks.push(child.description, child.result);
+  return haystacks.some((text) => text?.toLowerCase().includes(needle));
+}
+
+/** 이 turn이 펼쳐져 있는가. 검색에 걸린 turn은 항상 펼친다. */
+export function isTurnOpen(
+  turnNumber: number,
+  turnCount: number,
+  mode: ExpandMode,
+  override: boolean | undefined,
+  searchHit: boolean,
+): boolean {
+  if (searchHit) return true;
+  if (override !== undefined) return override;
+  if (mode === 'all') return true;
+  if (mode === 'none') return false;
+  return turnNumber > turnCount - RECENT_OPEN_COUNT;
 }
 
 // 한 subagent(자식 카드)를 렌더한다: 메인이 내린 지시(description) +
@@ -93,12 +210,12 @@ const SubagentTurn: React.FC<{ child: KanbanCard }> = ({ child }) => {
       {!collapsed && (
         <div className="session-conversation-subagent-body">
           <div className="session-conversation-subagent-part">
-            <span className="session-conversation-partLabel">지시 (main → {speaker})</span>
+            <span className="session-conversation-partLabel" data-highlight-skip>지시 (main → {speaker})</span>
             {instruction ? <CardMarkdown text={instruction} /> : <p>(no instruction)</p>}
           </div>
           {response && (
             <div className="session-conversation-subagent-part">
-              <span className="session-conversation-partLabel">응답 ({speaker})</span>
+              <span className="session-conversation-partLabel" data-highlight-skip>응답 ({speaker})</span>
               <CardMarkdown text={response} />
             </div>
           )}
@@ -123,149 +240,402 @@ const SubagentTurn: React.FC<{ child: KanbanCard }> = ({ child }) => {
   );
 };
 
+/**
+ * 실행 중 turn의 진행 — 카드 상세와 같은 run 단계 타임라인(3초 폴링)과 progressSummary.
+ * 실행 중이고 펼친 turn에서만 마운트되므로 닫힌/끝난 turn은 폴링하지 않는다.
+ */
+const TurnLiveProgress: React.FC<{ card: KanbanCard }> = ({ card }) => {
+  const progress = useCardProgress(card.id, true);
+  const [allSteps, setAllSteps] = useState(false);
+  const summary = card.progressSummary?.trim();
+  const hasSteps = Boolean(progress && progress.steps.length > 0);
+
+  return (
+    <section className="session-conversation-part session-conversation-part--progress">
+      <div className="session-conversation-partHead" data-highlight-skip>
+        <span className="session-conversation-partName">Progress</span>
+        {hasSteps && (
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+            onClick={() => setAllSteps((value) => !value)}
+          >
+            {allSteps ? '최근 단계만 ▴' : '전체 단계 ▾'}
+          </button>
+        )}
+      </div>
+      <div className="session-conversation-progress">
+        {summary && <CardMarkdown text={summary} />}
+        {progress && hasSteps ? (
+          <ProgressSteps progress={progress} live collapsed={!allSteps} />
+        ) : (
+          !summary && <p className="session-conversation-noResult">진행 단계를 기다리는 중…</p>
+        )}
+      </div>
+    </section>
+  );
+};
+
 interface SessionConversationTurnProps {
   card: CardWithChildren;
   turnNumber: number;
   isLatest: boolean;
+  open: boolean;
+  /** 검색에 걸린 turn — 접힌 Prompt도 펼쳐서 하이라이트가 보이게 한다. */
+  searchHit: boolean;
+  onToggle: () => void;
+  onPreviewImage: (url: string) => void;
+  /** 대기 중(todo) turn을 지금 실행한다 — 생략하면 실행 버튼을 숨긴다. */
+  onStartTurn?: (cardId: string) => Promise<void>;
+  /**
+   * 대기 중(todo) turn의 Prompt를 고친다(description 전체, 피드백 헤더 포함).
+   * 생략하면 `✎ 편집`을 숨긴다. 이미지는 screenshots API로 바로 올라가고,
+   * 끝나면 `onTurnScreenshotsChanged`로 보드를 다시 읽게 한다.
+   */
+  onEditTurn?: (cardId: string, description: string) => Promise<void>;
+  onTurnScreenshotsChanged?: () => void;
 }
 
 const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   card,
   turnNumber,
   isLatest,
+  open,
+  searchHit,
+  onToggle,
+  onPreviewImage,
+  onStartTurn,
+  onEditTurn,
+  onTurnScreenshotsChanged,
 }) => {
-  const [promptCollapsed, setPromptCollapsed] = useState(false);
-  const [resultCollapsed, setResultCollapsed] = useState(false);
-  const duration = formatDuration(card);
-  const prompt = card.description?.trim();
-  const result = card.result?.trim();
-  const subagents = card.childCards
-    ? [...card.childCards].sort(compareOldestCardFirst)
-    : [];
+  const [editing, setEditing] = useState(false);
+  const [promptClamped, setPromptCollapsed] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const promptCollapsed = promptClamped && !searchHit;
+  const [earlierOpen, setEarlierOpen] = useState(false);
+  const [headerOpen, setHeaderOpen] = useState(false);
+  const { copied, copy } = useCopyFeedback(card.id);
+  const duration = formatDurationMs(cardDurationMs(card));
+  const { earlier, final } = splitCardResult(card);
+  const result = final.trim();
+  const { header: feedbackHeader, body: promptBody } = splitFeedbackHeader(card.description ?? '');
+  const prompt = promptBody.trim();
+  const preview = previewLine(result) || previewLine(prompt);
+  const subagents = card.childCards ? [...card.childCards].sort(compareOldestCardFirst) : [];
+  const screenshots = card.screenshots ?? [];
+  const isRunning = card.status === 'in_progress';
+  const isQueued = card.status === 'todo';
+  // 시작된 순간 편집기는 닫힌다 — 실행 중인 프롬프트를 고칠 수는 없다.
+  const canEdit = isQueued && Boolean(onEditTurn);
+  const isEditing = editing && canEdit;
+  const bodyId = `session-turn-body-${card.id}`;
 
   return (
     <article
       data-turn={turnNumber}
-      className={`kv2-complete-session-turn${isLatest ? ' kv2-complete-session-turn--current' : ''}`}
+      className={`session-conversation-turn${isLatest ? ' is-latest' : ''}${open ? ' is-open' : ''}`}
     >
-      <span className="kv2-complete-session-turn-node" aria-hidden="true" />
-      <div className="kv2-complete-session-turn-body">
-        <div className="kv2-complete-session-turn-header">
-          <span className="session-conversation-turnLabel">Turn {turnNumber}</span>
-          {isLatest && <span className="session-conversation-turnLatestTag">latest</span>}
-          <div className="session-conversation-turnMeta">
-            <span>Started {formatTimestamp(card.startedAt ?? card.createdAt)}</span>
-            {card.completedAt && <span>Completed {formatTimestamp(card.completedAt)}</span>}
-            {duration && <span className="session-conversation-turnDuration">{duration}</span>}
-          </div>
-        </div>
+      <button
+        type="button"
+        className="session-conversation-turnHead"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={bodyId}
+      >
+        <span className="session-conversation-turnCaret" aria-hidden="true">▸</span>
+        <span className="session-conversation-turnNo" data-highlight-skip>T{turnNumber}</span>
+        {isLatest && <span className="session-conversation-turnLatestTag" data-highlight-skip>latest</span>}
+        {isRunning && <span className="session-conversation-turnRunning" data-highlight-skip>실행 중</span>}
+        {isQueued && <span className="session-conversation-turnRunning is-queued" data-highlight-skip>대기 중</span>}
+        <span className="session-conversation-turnTitle" title={card.title}>{turnTitle(card)}</span>
+        <span className="session-conversation-turnTime" data-highlight-skip>{formatShortTimestamp(card.startedAt ?? card.createdAt)}</span>
+        {isRunning ? (
+          <span className="session-conversation-turnDuration" data-highlight-skip>
+            <BoardCardTimeMeta
+              vm={{
+                status: card.status,
+                createdAt: card.createdAt,
+                updatedAt: card.updatedAt,
+                startedAt: card.startedAt,
+                completedAt: card.completedAt,
+                durationMs: card.durationMs,
+              }}
+            />
+          </span>
+        ) : (
+          duration && <span className="session-conversation-turnDuration" data-highlight-skip>{duration}</span>
+        )}
+      </button>
 
-        {/* CardDetailDialog의 phase 비주얼(.kv2-phase--prompt 파란 / --result 핑크) 직접 재사용 */}
-        <div className="kv2-phase-stack session-conversation-phaseStack">
-          <div className="kv2-phase-card-wrapper">
-            <div className="kv2-phase-header kv2-phase-header--outer">
-              <div>
-                <span>Prompt</span>
-              </div>
-              <div className="kv2-phase-header-actions">
+      {!open && preview && <p className="session-conversation-turnPreview">{preview}</p>}
+
+      {open && (
+        <div id={bodyId} className="session-conversation-turnBody">
+          {/* 대화 순서 그대로: 요청(Prompt) → 결과(Result). 긴 Prompt는 클램프로 줄인다. */}
+          <section className="session-conversation-part session-conversation-part--prompt">
+            <div className="session-conversation-partHead" data-highlight-skip>
+              <span className="session-conversation-partName">Prompt</span>
+              {canEdit && !isEditing && (
                 <button
                   type="button"
-                  className="kv2-phase-action"
-                  onClick={() => setPromptCollapsed((value) => !value)}
-                  aria-expanded={!promptCollapsed}
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+                  onClick={() => setEditing(true)}
                 >
-                  {promptCollapsed ? 'show ▾' : 'hide ▴'}
+                  ✎ 편집
+                </button>
+              )}
+              {!promptClamped && !isEditing && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+                  onClick={() => setPromptCollapsed(true)}
+                >
+                  접기 ▴
+                </button>
+              )}
+            </div>
+            {feedbackHeader && (
+              <PhaseAside
+                text={feedbackHeader}
+                showLabel="Show feedback header ▾"
+                hideLabel="Hide feedback header ▴"
+                open={headerOpen}
+                onToggle={() => setHeaderOpen((value) => !value)}
+              />
+            )}
+            {isEditing && onEditTurn ? (
+              <SessionTurnEditor
+                card={card}
+                header={feedbackHeader}
+                body={prompt}
+                onSave={onEditTurn}
+                onScreenshotsChanged={() => onTurnScreenshotsChanged?.()}
+                onPreviewImage={onPreviewImage}
+                onClose={() => setEditing(false)}
+              />
+            ) : (
+              <PhaseBody collapsed={promptCollapsed} onExpand={() => setPromptCollapsed(false)}>
+                {prompt ? <CardMarkdown text={prompt} /> : <p>(no prompt)</p>}
+              </PhaseBody>
+            )}
+          </section>
+
+          {isRunning && <TurnLiveProgress card={card} />}
+
+          {result ? (
+            <section className="session-conversation-part session-conversation-part--result">
+              <div className="session-conversation-partHead" data-highlight-skip>
+                <span className="session-conversation-partName">Result</span>
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+                  onClick={() => copy(result)}
+                >
+                  {copied ? COPIED_LABEL : '⧉ 복사'}
                 </button>
               </div>
-            </div>
-            <section className="kv2-phase kv2-phase--prompt">
-              <div
-                className={`kv2-phase-content kv2-phase-content--markdown ${
-                  promptCollapsed ? 'kv2-phase-content--collapsed' : 'kv2-phase-content--expanded'
-                }`}
-              >
-                {prompt ? <CardMarkdown text={prompt} /> : <p>(no prompt)</p>}
+              {earlier && (
+                <PhaseAside
+                  text={earlier}
+                  showLabel="Show earlier output ▾"
+                  hideLabel="Hide earlier output ▴"
+                  open={earlierOpen}
+                  onToggle={() => setEarlierOpen((value) => !value)}
+                />
+              )}
+              <div className="kv2-phase-content kv2-phase-content--markdown">
+                <CardMarkdown text={result} />
               </div>
             </section>
-          </div>
-
-          {result && (
-            <div className="kv2-phase-card-wrapper">
-              <div className="kv2-phase-header kv2-phase-header--outer">
-                <div>
-                  <span>Result</span>
-                </div>
-                <div className="kv2-phase-header-actions">
-                  <button
-                    type="button"
-                    className="kv2-phase-action"
-                    onClick={() => setResultCollapsed((value) => !value)}
-                    aria-expanded={!resultCollapsed}
-                  >
-                    {resultCollapsed ? 'show ▾' : 'hide ▴'}
-                  </button>
-                </div>
-              </div>
-              <section className="kv2-phase kv2-phase--result">
-                <div
-                  className={`kv2-phase-content kv2-phase-content--markdown ${
-                    resultCollapsed ? 'kv2-phase-content--collapsed' : 'kv2-phase-content--expanded'
-                  }`}
+          ) : (
+            <div className="session-conversation-noResultRow">
+              <p className="session-conversation-noResult">
+                {isRunning ? '실행 중 — 아직 결과가 없습니다.' : isQueued ? '대기 중 — 아직 시작하지 않았습니다.' : '결과가 없습니다.'}
+              </p>
+              {/* `Create Feedback`(실행 안 함)으로 만든 turn을 나중에 이 자리에서 시작한다. */}
+              {isQueued && onStartTurn && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--small kv2-btn--success session-conversation-startTurn"
+                  data-highlight-skip
+                  disabled={starting}
+                  onClick={() => {
+                    setStarting(true);
+                    setStartError(null);
+                    onStartTurn(card.id)
+                      .catch((e: unknown) => setStartError(e instanceof Error ? e.message : '실행하지 못했습니다'))
+                      .finally(() => setStarting(false));
+                  }}
                 >
-                  <CardMarkdown text={result} />
-                </div>
-              </section>
+                  {starting ? '시작 중…' : '▶ 지금 실행'}
+                </button>
+              )}
+              {startError && <p className="session-conversation-startError" role="alert">⚠ {startError}</p>}
+            </div>
+          )}
+
+          {screenshots.length > 0 && !isEditing && (
+            <div className="session-conversation-shots" aria-label={`Screenshots (${screenshots.length})`}>
+              {screenshots.map((shot) => (
+                <button
+                  key={shot.id}
+                  type="button"
+                  className="session-conversation-shot"
+                  onClick={() => onPreviewImage(getScreenshotUrl(shot.filename))}
+                  title={shot.originalName || shot.filename}
+                >
+                  <img src={getScreenshotUrl(shot.filename)} alt={shot.originalName || shot.filename} />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {subagents.length > 0 && (
+            <div className="session-conversation-subagents">
+              <div className="session-conversation-subagents-label">
+                Subagents ({subagents.length})
+              </div>
+              {subagents.map((child) => (
+                <SubagentTurn key={child.id} child={child} />
+              ))}
             </div>
           )}
         </div>
-
-        {subagents.length > 0 && (
-          <div className="session-conversation-subagents">
-            <div className="session-conversation-subagents-label">
-              Subagents ({subagents.length})
-            </div>
-            {subagents.map((child) => (
-              <SubagentTurn key={child.id} child={child} />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
     </article>
   );
 };
 
 export const SessionConversationModal: React.FC<SessionConversationModalProps> = ({
   group,
+  liveCards = NO_LIVE_CARDS,
   status,
   onClose,
   onCreateFeedback,
+  initialQuery,
+  focusCardId,
+  onStartTurn,
+  onEditTurn,
+  onTurnScreenshotsChanged,
 }) => {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-  const [activeTurn, setActiveTurn] = useState(1);
+  const [turnOrder, setTurnOrder] = useState<TurnOrder>(() =>
+    readStored(TURN_ORDER_STORAGE_KEY, ['newest', 'oldest'] as const, 'newest'),
+  );
+  const [expandMode, setExpandMode] = useState<ExpandMode>(() =>
+    readStored(EXPAND_MODE_STORAGE_KEY, ['recent', 'all', 'none'] as const, 'recent'),
+  );
+  // 개별 turn을 손으로 펼치고 접은 기록. 펼침 모드를 바꾸면 초기화된다.
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>(
+    () => (focusCardId ? { [focusCardId]: true } : {}),
+  );
+  const [outlineCollapsed, setOutlineCollapsed] = useState(
+    () => readStored(OUTLINE_STORAGE_KEY, ['1', '0'] as const, '0') === '1',
+  );
+  const [query, setQuery] = useState(initialQuery ?? '');
+  const [dockHeight, setDockHeight] = useState<number | null>(readDockHeight);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const newestFirst = turnOrder === 'newest';
   const scrollRef = useRef<HTMLDivElement>(null);
-  const navRef = useRef<HTMLDivElement>(null);
+  const outlineRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
   // group.cards는 최신순(index 0 = 최신)이며 subagent 자식 카드도 섞여 있다.
-  // groupCardsByParent로 자식을 부모 턴의 childCards로 접어 넣어 top-level 턴만 남기고
-  // (유령 턴 제거), 대화는 과거→최신(위→아래)으로 고정 렌더링한다.
+  // liveCards(대기/실행 중)도 합친다 — 생성 시각순이라 자연히 마지막 turn이 된다.
+  // groupCardsByParent로 자식을 부모 턴의 childCards로 접어 넣어 top-level 턴만 남긴다
+  // (유령 턴 제거). Turn 번호는 항상 과거→최신 기준(1 = 첫 턴)이고, 표시 순서만
+  // turnOrder로 뒤집는다 — 기본은 최신순(최신 turn이 맨 위).
   const orderedTurns = useMemo(
-    () => groupCardsByParent(group.cards).sort(compareOldestCardFirst),
-    [group.cards],
+    () => orderSessionTurns(liveCards.length > 0 ? [...group.cards, ...liveCards] : group.cards),
+    [group.cards, liveCards],
   );
 
   const turnCount = orderedTurns.length;
+  const trimmedQuery = query.trim();
+  const showOutline = turnCount > 1 && !outlineCollapsed;
+  const showOutlineRail = turnCount > 1 && outlineCollapsed;
+  const displayTurns = useMemo(
+    () =>
+      orderedTurns
+        .map((card, index) => ({
+          card,
+          turnNumber: index + 1,
+          hit: trimmedQuery ? turnMatchesQuery(card, trimmedQuery) : false,
+        }))
+        .filter((turn) => !trimmedQuery || turn.hit)
+        .sort((a, b) => (newestFirst ? b.turnNumber - a.turnNumber : a.turnNumber - b.turnNumber)),
+    [orderedTurns, newestFirst, trimmedQuery],
+  );
+  const visibleKey = displayTurns.map((turn) => turn.turnNumber).join(',');
 
-  // 칩 클릭 → 해당 turn으로 스크롤. 헤더는 스크롤 컨테이너 바깥이라 오프셋 보정 불필요.
+  const stats = useMemo(() => {
+    const totalMs = orderedTurns.reduce((sum, card) => sum + cardDurationMs(card), 0);
+    const subagentCount = orderedTurns.reduce((sum, card) => sum + (card.childCards?.length ?? 0), 0);
+    const first = orderedTurns[0];
+    const last = orderedTurns[turnCount - 1];
+    return {
+      total: formatDurationMs(totalMs),
+      subagentCount,
+      from: first ? first.startedAt ?? first.createdAt : group.startedAt,
+      to: last ? last.completedAt ?? last.updatedAt : group.lastUpdatedAt,
+    };
+  }, [orderedTurns, turnCount, group.startedAt, group.lastUpdatedAt]);
+
+  // 처음 보이는 turn(맨 위)을 활성으로 시작한다.
+  const [activeTurn, setActiveTurn] = useState(() => (newestFirst ? turnCount : 1));
+
+  // 목차/레일 점프 직후엔 scrollspy가 활성 turn을 덮어쓰지 않게 잠근다 — 사용자가 직접 스크롤하면 풀린다.
+  const jumpLockRef = useRef(false);
+
   const scrollToTurn = useCallback((n: number) => {
     const root = scrollRef.current;
-    if (!root) return;
-    const el = root.querySelector<HTMLElement>(`[data-turn="${n}"]`);
-    if (!el) return;
+    const el = root?.querySelector<HTMLElement>(`[data-turn="${n}"]`);
+    if (!root || !el) return;
+    jumpLockRef.current = true;
     setActiveTurn(n);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const top = root.scrollTop + el.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
+    root.scrollTo({ top, behavior: 'smooth' });
   }, []);
 
-  // 스크롤 위치에 따라 현재 turn을 추적(scrollspy) — 화면 중앙 밴드를 지나는 turn을 활성화.
+  // 검색 결과에서 열렸으면 그 turn으로 바로 이동한다(한 번만). 레이아웃이 잡힌 뒤에
+  // 스크롤해야 하므로 다음 프레임으로 미룬다.
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (focusedRef.current || !focusCardId) return;
+    const index = orderedTurns.findIndex((card) => card.id === focusCardId);
+    if (index < 0) return;
+    // 표시가 끝난 프레임에서만 완료로 친다 — 그 전에 turn 목록이 다시 계산되면
+    // (보드 poll) cleanup이 프레임을 취소하고 다음 실행이 다시 시도한다.
+    const frame = requestAnimationFrame(() => {
+      focusedRef.current = true;
+      scrollToTurn(index + 1);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusCardId, orderedTurns, scrollToTurn]);
+
+  const changeOrder = useCallback((next: TurnOrder) => {
+    setTurnOrder(next);
+    writeStored(TURN_ORDER_STORAGE_KEY, next);
+    setActiveTurn(next === 'newest' ? turnCount : 1);
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [turnCount]);
+
+  const changeExpandMode = useCallback((next: ExpandMode) => {
+    setExpandMode(next);
+    setOpenOverrides({});
+    writeStored(EXPAND_MODE_STORAGE_KEY, next);
+  }, []);
+
+  const toggleOutline = useCallback(() => {
+    setOutlineCollapsed((value) => {
+      writeStored(OUTLINE_STORAGE_KEY, value ? '0' : '1');
+      return !value;
+    });
+  }, []);
+
+  // 스크롤 위치에 따라 현재 turn을 추적(scrollspy) — 화면 상단 30% 밴드에서 가장 위의 turn을 활성화.
+  // (목차/레일에서 점프하면 그 turn이 맨 위에 오므로 클릭한 항목이 그대로 활성으로 남는다.)
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || turnCount <= 1) return;
@@ -280,21 +650,55 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
           if (entry.isIntersecting) visible.add(n);
           else visible.delete(n);
         }
-        if (visible.size > 0) setActiveTurn(Math.min(...visible));
+        // 화면상 가장 위에 있는 turn — 최신순이면 번호가 가장 큰 쪽이다.
+        if (jumpLockRef.current || visible.size === 0) return;
+        setActiveTurn(newestFirst ? Math.max(...visible) : Math.min(...visible));
       },
-      { root, rootMargin: '-45% 0px -45% 0px', threshold: 0 },
+      { root, rootMargin: '0px 0px -70% 0px', threshold: 0 },
     );
     turnEls.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, [turnCount]);
+    const unlock = () => {
+      jumpLockRef.current = false;
+    };
+    const userScrollEvents = ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const;
+    userScrollEvents.forEach((type) => root.addEventListener(type, unlock, { passive: true }));
+    return () => {
+      observer.disconnect();
+      userScrollEvents.forEach((type) => root.removeEventListener(type, unlock));
+    };
+  }, [turnCount, newestFirst, visibleKey]);
 
-  // 활성 칩이 항상 strip 안에 보이도록 가로 스크롤(세로는 건드리지 않음).
+  // 검색어 하이라이트 — 본문(마크다운 포함)과 목차 제목 모두. 렌더된 DOM이 바뀌면
+  // (turn 펼침, earlier output 열기, 폴링 갱신) 다시 칠한다.
   useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    const chip = nav.querySelector<HTMLElement>(`[data-turn-chip="${activeTurn}"]`);
-    chip?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [activeTurn]);
+    const roots = () => [scrollRef.current, outlineRef.current];
+    if (!trimmedQuery) {
+      clearTextHighlight(SEARCH_HIGHLIGHT);
+      return;
+    }
+    let frame = 0;
+    const paint = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => applyTextHighlight(SEARCH_HIGHLIGHT, roots(), trimmedQuery));
+    };
+    paint();
+    const observer = new MutationObserver(paint);
+    for (const root of roots()) {
+      if (root) observer.observe(root, { childList: true, subtree: true, characterData: true });
+    }
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [trimmedQuery, showOutline]);
+
+  useEffect(() => () => clearTextHighlight(SEARCH_HIGHLIGHT), []);
+
+  // 활성 항목이 목차 안에 보이도록(목차만 스크롤, 본문은 건드리지 않음).
+  useEffect(() => {
+    const item = outlineRef.current?.querySelector<HTMLElement>(`[data-outline-turn="${activeTurn}"]`);
+    item?.scrollIntoView({ block: 'nearest' });
+  }, [activeTurn, outlineCollapsed]);
 
   // 피드백 attach 대상: 세션의 마지막(가장 최신) complete top-level 카드.
   // group.cards가 최신순이므로 첫 매칭이 곧 최신 complete top-level 카드다.
@@ -302,6 +706,21 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     () => group.cards.find((card) => card.status === 'complete' && !card.parentCardId),
     [group.cards],
   );
+  const feedbackTargetTurn = feedbackTarget
+    ? orderedTurns.findIndex((card) => card.id === feedbackTarget.id) + 1
+    : 0;
+
+  // ── 피드백 독 높이: 위 경계선을 끌어 조절, 더블클릭이면 기본 높이로 ──
+  const dockDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const clampDock = useCallback((height: number) => {
+    const bodyHeight = bodyRef.current?.parentElement?.clientHeight ?? window.innerHeight;
+    return Math.round(Math.min(bodyHeight * DOCK_MAX_RATIO, Math.max(DOCK_MIN_HEIGHT, height)));
+  }, []);
+  const commitDock = useCallback((height: number | null) => {
+    setDockHeight(height);
+    writeStored(DOCK_HEIGHT_STORAGE_KEY, height === null ? null : String(height));
+  }, []);
+  const currentDockHeight = (handle: HTMLElement) => handle.parentElement?.offsetHeight ?? DOCK_MIN_HEIGHT;
 
   const resumeCommand = group.sessionId
     ? buildResumeCommand(group.agentRuntime, group.sessionId, group.projectDir)
@@ -312,7 +731,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
       onClose={onClose}
       className={`session-conversation-dialog session-conversation-dialog--${status}`}
       persistSizeKey="session-conversation-dialog"
-      defaultSize={{ width: 860, height: 880 }}
+      defaultSize={{ width: 1040, height: 880 }}
     >
       <header className="session-conversation-stickyHeader">
         <div className="session-conversation-stickyTopRow">
@@ -329,7 +748,6 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
             executionKind={group.executionKind}
             scriptName={group.scriptName}
           />
-          <span className="session-conversation-turnCount">{orderedTurns.length} turns</span>
           {group.sessionId && (
             <span className="session-conversation-ids">
               <IdChip id={group.sessionId} kind="session" showKind />
@@ -338,66 +756,217 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
           )}
         </div>
         <h2 className="session-conversation-stickyTitle">{group.title}</h2>
-        <div className="session-conversation-stickyMeta">
+        <div className="session-conversation-stats">
+          <span><b>{turnCount}</b> turns</span>
+          {stats.total && <span>총 <b>{stats.total}</b></span>}
           <span className="session-conversation-stickyRange">
-            {formatTimestamp(group.startedAt)} → {formatTimestamp(group.lastUpdatedAt)}
+            {formatTimestamp(stats.from)} → {formatTimestamp(stats.to)}
           </span>
+          {stats.subagentCount > 0 && <span>subagent <b>{stats.subagentCount}</b></span>}
         </div>
         {turnCount > 1 && (
-          <div
-            ref={navRef}
-            className="session-conversation-turnNav"
-            role="tablist"
-            aria-label="Jump to turn"
-          >
-            <span className="session-conversation-turnNavLabel">Turn</span>
-            {orderedTurns.map((card, index) => {
-              const n = index + 1;
-              const isActive = n === activeTurn;
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  role="tab"
-                  data-turn-chip={n}
-                  aria-selected={isActive}
-                  aria-current={isActive ? 'true' : undefined}
-                  className={`session-conversation-turnNavChip${isActive ? ' is-active' : ''}`}
-                  title={`Turn ${n}${card.title ? ` — ${card.title}` : ''}`}
-                  onClick={() => scrollToTurn(n)}
-                >
-                  {n}
-                </button>
-              );
-            })}
+          <div className="session-conversation-toolbar">
+            <div className="session-conversation-seg" role="group" aria-label="정렬">
+              <button type="button" aria-pressed={newestFirst} onClick={() => changeOrder('newest')}>
+                ↓ 최신순
+              </button>
+              <button type="button" aria-pressed={!newestFirst} onClick={() => changeOrder('oldest')}>
+                ↑ 오래된순
+              </button>
+            </div>
+            <div className="session-conversation-seg" role="group" aria-label="펼침">
+              <button type="button" aria-pressed={expandMode === 'recent'} onClick={() => changeExpandMode('recent')}>
+                최근 {RECENT_OPEN_COUNT}개
+              </button>
+              <button type="button" aria-pressed={expandMode === 'all'} onClick={() => changeExpandMode('all')}>
+                모두 펼침
+              </button>
+              <button type="button" aria-pressed={expandMode === 'none'} onClick={() => changeExpandMode('none')}>
+                모두 접기
+              </button>
+            </div>
+            <label className="session-conversation-search">
+              <span aria-hidden="true">🔍</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="세션 내 검색 (prompt·result)"
+                aria-label="세션 내 검색"
+              />
+              {trimmedQuery && (
+                <span className="session-conversation-searchCount" aria-live="polite">
+                  {displayTurns.length}/{turnCount}
+                </span>
+              )}
+            </label>
+            <button
+              type="button"
+              className="kv2-btn kv2-btn--small session-conversation-toolBtn"
+              onClick={() => scrollToTurn(turnCount)}
+            >
+              최신 turn으로
+            </button>
           </div>
         )}
       </header>
 
-      <div ref={scrollRef} className="session-conversation-scroll">
-        <div className="kv2-complete-session-timeline session-conversation-timeline">
-          {orderedTurns.map((card, index) => (
-            <SessionConversationTurn
-              key={card.id}
-              card={card}
-              turnNumber={index + 1}
-              isLatest={index === orderedTurns.length - 1}
-            />
-          ))}
+      <div
+        ref={bodyRef}
+        className={`session-conversation-body${showOutline ? ' has-outline' : ''}${showOutlineRail ? ' has-outline-rail' : ''}`}
+      >
+        {showOutlineRail && (
+          // 접힌 목차: » 로 다시 열고, 그 아래 T# 만 남겨 접힌 상태에서도 바로 이동한다.
+          <nav ref={outlineRef} className="session-conversation-outlineRail" aria-label="Turn 목차 (접힘)" data-highlight-skip>
+            <button
+              type="button"
+              className="session-conversation-outlineToggle"
+              onClick={toggleOutline}
+              aria-expanded={false}
+              aria-controls="session-conversation-outline"
+              aria-label="목차 열기"
+              title="목차 열기"
+            >
+              »
+            </button>
+            {displayTurns.map(({ card, turnNumber }) => (
+              <button
+                key={card.id}
+                type="button"
+                data-outline-turn={turnNumber}
+                aria-current={turnNumber === activeTurn ? 'true' : undefined}
+                className={`session-conversation-railItem${turnNumber === activeTurn ? ' is-active' : ''}${turnNumber === turnCount ? ' is-latest' : ''}`}
+                title={turnTitle(card)}
+                onClick={() => scrollToTurn(turnNumber)}
+              >
+                T{turnNumber}
+              </button>
+            ))}
+          </nav>
+        )}
+        {showOutline && (
+          <nav
+            ref={outlineRef}
+            id="session-conversation-outline"
+            className="session-conversation-outline"
+            aria-label="Turn 목차"
+          >
+            <div className="session-conversation-outlineHead" data-highlight-skip>
+              <span>Turns <b>{trimmedQuery ? `${displayTurns.length}/${turnCount}` : turnCount}</b></span>
+              <button
+                type="button"
+                className="session-conversation-outlineToggle"
+                onClick={toggleOutline}
+                aria-expanded
+                aria-controls="session-conversation-outline"
+                aria-label="목차 닫기"
+                title="목차 닫기"
+              >
+                «
+              </button>
+            </div>
+            {displayTurns.map(({ card, turnNumber }) => {
+              const isActive = turnNumber === activeTurn;
+              const duration = formatDurationMs(cardDurationMs(card));
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  data-outline-turn={turnNumber}
+                  aria-current={isActive ? 'true' : undefined}
+                  className={`session-conversation-outlineItem${isActive ? ' is-active' : ''}${turnNumber === turnCount ? ' is-latest' : ''}`}
+                  title={`${turnTitle(card)}\n${card.title}`}
+                  onClick={() => scrollToTurn(turnNumber)}
+                >
+                  <span className="session-conversation-outlineNo" data-highlight-skip>T{turnNumber}</span>
+                  <span className="session-conversation-outlineTitle">{turnTitle(card)}</span>
+                  <span className="session-conversation-outlineMeta" data-highlight-skip>
+                    {formatShortTimestamp(card.startedAt ?? card.createdAt)}
+                    {duration && ` · ${duration}`}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
+        <div ref={scrollRef} className="session-conversation-scroll">
+          <div className="session-conversation-turns">
+            {displayTurns.map(({ card, turnNumber, hit }) => (
+              <SessionConversationTurn
+                key={card.id}
+                card={card}
+                turnNumber={turnNumber}
+                isLatest={turnNumber === turnCount}
+                open={isTurnOpen(turnNumber, turnCount, expandMode, openOverrides[card.id], hit)}
+                searchHit={hit}
+                onStartTurn={onStartTurn}
+                onEditTurn={onEditTurn}
+                onTurnScreenshotsChanged={onTurnScreenshotsChanged}
+                onToggle={() =>
+                  setOpenOverrides((prev) => ({
+                    ...prev,
+                    [card.id]: !isTurnOpen(turnNumber, turnCount, expandMode, prev[card.id], hit),
+                  }))
+                }
+                onPreviewImage={setPreviewUrl}
+              />
+            ))}
+            {trimmedQuery && displayTurns.length === 0 && (
+              <p className="session-conversation-empty">"{trimmedQuery}"와 일치하는 turn이 없습니다.</p>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="session-conversation-feedbackDock">
+      <div
+        className="session-conversation-feedbackDock"
+        style={dockHeight === null ? undefined : { height: dockHeight }}
+      >
+        <div
+          className="session-conversation-dockHandle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="피드백 영역 높이 조절 (더블클릭하면 기본 높이)"
+          tabIndex={0}
+          onPointerDown={(event) => {
+            event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            dockDragRef.current = { startY: event.clientY, startHeight: currentDockHeight(event.currentTarget) };
+          }}
+          onPointerMove={(event) => {
+            const drag = dockDragRef.current;
+            if (!drag) return;
+            setDockHeight(clampDock(drag.startHeight + drag.startY - event.clientY));
+          }}
+          onPointerUp={(event) => {
+            if (!dockDragRef.current) return;
+            dockDragRef.current = null;
+            commitDock(clampDock(currentDockHeight(event.currentTarget)));
+          }}
+          onPointerCancel={() => {
+            dockDragRef.current = null;
+          }}
+          onDoubleClick={() => commitDock(null)}
+          onKeyDown={(event) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+            event.preventDefault();
+            const delta = event.key === 'ArrowUp' ? DOCK_KEY_STEP : -DOCK_KEY_STEP;
+            commitDock(clampDock(currentDockHeight(event.currentTarget) + delta));
+          }}
+        />
         {feedbackTarget ? (
           <FeedbackPanel
             cardId={feedbackTarget.id}
             isSubmittingFeedback={isSubmittingFeedback}
             setIsSubmittingFeedback={setIsSubmittingFeedback}
             onCreateFeedback={onCreateFeedback}
-            onClose={onClose}
             projectDir={feedbackTarget.projectDir ?? group.projectDir}
             // 지금 읽고 있는 바로 그 세션이다 — 자기 참조는 후보에서 막는다.
             excludeSessionIds={group.sessionId ? [group.sessionId] : undefined}
+            // 세션 단위 초안: 새 turn이 끝나 대상 카드가 바뀌어도 쓰던 내용은 남는다.
+            draftKey={group.sessionId ? `session:${group.sessionId}` : undefined}
+            targetLabel={feedbackTargetTurn > 0 ? `→ T${feedbackTargetTurn}에 이어붙임` : undefined}
           />
         ) : (
           <p className="session-conversation-feedbackDisabled">
@@ -405,6 +974,8 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
           </p>
         )}
       </div>
+
+      {previewUrl && <ImageLightbox src={previewUrl} alt="Screenshot preview" onClose={() => setPreviewUrl(null)} />}
     </DialogSkeleton>
   );
 };

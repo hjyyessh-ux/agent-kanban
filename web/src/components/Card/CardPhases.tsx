@@ -60,7 +60,7 @@ const STEP_KIND_LABELS: Record<string, string> = {
 // shows only three steps (the most recent three while live, so the current
 // activity is visible); expanded shows the summary chips and every step. Steps
 // carrying a `body` (edit diff, full command, …) expand inline on click.
-const ProgressSteps: React.FC<{
+export const ProgressSteps: React.FC<{
   progress: CardRunProgress;
   live: boolean;
   collapsed: boolean;
@@ -196,7 +196,7 @@ const RunMetaGroup: React.FC<RunMetaGroupProps> = ({
 // A clamped phase body only signals "there is more" when something is actually
 // cut off. The fade used to ride on the collapsed class, so a short prompt faded
 // too and the fade stopped meaning anything.
-const PhaseBody: React.FC<{
+export const PhaseBody: React.FC<{
   collapsed: boolean;
   onExpand: () => void;
   children: React.ReactNode;
@@ -230,7 +230,7 @@ const PhaseBody: React.FC<{
         {children}
       </div>
       {isClipped && (
-        <button type="button" className="kv2-phase-more" onClick={onExpand}>
+        <button type="button" className="kv2-phase-more" onClick={onExpand} data-highlight-skip>
           Show more ▾
         </button>
       )}
@@ -240,7 +240,7 @@ const PhaseBody: React.FC<{
 
 // Secondary text a phase keeps but does not lead with: the interim output before a
 // result, the generated header above a feedback prompt.
-const PhaseAside: React.FC<{
+export const PhaseAside: React.FC<{
   text: string;
   showLabel: string;
   hideLabel: string;
@@ -251,6 +251,7 @@ const PhaseAside: React.FC<{
     <button
       type="button"
       className="kv2-phase-aside-toggle"
+      data-highlight-skip
       onClick={onToggle}
       aria-expanded={open}
     >

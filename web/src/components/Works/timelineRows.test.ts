@@ -10,6 +10,7 @@ import {
   DIR_NONE_KEY,
   buildStripRows,
   buildTimelineRows,
+  buildWorkScopeRows,
   dayCells,
   filterTimelineRows,
   filterTimelineSessions,
@@ -553,5 +554,30 @@ describe('buildStripRows', () => {
 
   test('is empty when nothing is active', () => {
     expect(buildStripRows([work({ id: 'w-done', status: 'done', resolvedAt: localIso(2) })], RANGE, NOW)).toEqual([]);
+  });
+});
+
+describe('buildWorkScopeRows', () => {
+  test('one Work bar + only its own sessions, expanded, across directories, no dir header', () => {
+    const scoped = work({ id: 'w-a', projectDir: '/w/ingestion', sessionIds: ['s-ing', 's-mcp'] });
+    const rows = buildWorkScopeRows(
+      scoped,
+      [
+        span({ sessionId: 's-ing', projectDir: '/w/ingestion' }),
+        span({ sessionId: 's-mcp', projectDir: '/w/mcp-server', startedAt: localIso(2), endedAt: localIso(2, 10) }),
+        // Another Work's session and a loose one never appear.
+        span({ sessionId: 's-other', projectDir: '/w/ingestion' }),
+        span({ sessionId: 's-loose', projectDir: '/w/agent-kanban' }),
+      ],
+      RANGE,
+      NOW,
+    );
+    expect(kinds(rows)).toEqual(['work:w-a', 'session:s-ing', 'session:s-mcp']);
+    expect(rows[0]!.kind === 'work' && rows[0]!.collapsed).toBe(false);
+  });
+
+  test('keeps the Work row with its bar even before any session ran', () => {
+    const rows = buildWorkScopeRows(work({ id: 'w-new', sessionIds: ['s-1'] }), [], RANGE, NOW);
+    expect(kinds(rows)).toEqual(['work:w-new']);
   });
 });

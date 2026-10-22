@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Works — v2 (Codex 목록 + Claude 상세 + 기존 Timeline 재사용)</title>
+<style>
+  :root {
+    --bg: #1f2126; --surface: #262930; --sunken: #1b1d22; --hover: #2e323a;
+    --border: #3a3f48; --border-strong: #5a616d;
+    --text: #e8e9ec; --text-2: #a9adb6; --text-3: #7d828c;
+    --blue: #3d7fd6; --blue-ink: #9cc3ff; --green: #2f9e5f; --green-ink: #7fd8a3;
+    --amber: #d08a2b; --amber-ink: #f3c27a; --pink: #c9416b; --pink-ink: #ff9cb8;
+    --violet: #7b4fc9; --today: #e5484d; --mark: #b8962a;
+    --p-agent: #c25a7a; --p-ingest: #3c9a8f; --p-mcp: #7b5fd0;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #16181c; color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", sans-serif; }
+  .page { max-width: 1360px; margin: 0 auto; padding: 28px 28px 80px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  .lede { color: var(--text-2); margin: 0 0 20px; }
+  .toc { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 28px; }
+  .toc a { color: var(--text); text-decoration: none; border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; background: var(--surface); font-size: 13px; }
+  h2.sec { font-size: 18px; margin: 44px 0 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sec-sub { color: var(--text-2); margin: 0 0 14px; font-size: 13px; }
+  .frame { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .note { margin-top: 10px; font-size: 12.5px; color: var(--text-2); }
+  .note b { color: var(--text); }
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; border: 1px solid var(--border); color: var(--text-2); white-space: nowrap; }
+  .btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .btn:hover { background: var(--hover); }
+  .btn[disabled] { opacity: .38; cursor: not-allowed; }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.ghost { border-color: transparent; background: none; color: var(--blue-ink); }
+  .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 999px; overflow: hidden; }
+  .seg button { border: 0; background: none; color: var(--text-2); padding: 4px 12px; font-weight: 700; font-size: 12.5px; cursor: pointer; }
+  .seg button.on { background: var(--hover); color: var(--text); }
+  .proj { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px 1px 6px; border-radius: 5px; font-size: 11.5px; font-weight: 700; border: 1px solid; white-space: nowrap; }
+  .proj::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .proj small { font-family: var(--mono); font-weight: 600; opacity: .8; }
+  .p-agent { color: #f19bb6; border-color: #6b3446; background: #2c2027; }
+  .p-ingest { color: #84d6cc; border-color: #2f5f59; background: #1d2a29; }
+  .p-mcp { color: #bba7ff; border-color: #4c3f7d; background: #24213a; }
+  .badge-run { color: var(--blue-ink); border-color: #2f5689; background: #1d2a3d; }
+  .badge-run::before { content: "●"; font-size: 9px; animation: blink 1.4s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .badge-warn { color: var(--amber-ink); border-color: #6b4c1f; background: #2e2618; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 12.5px; color: var(--text-2); }
+
+  /* ─── Works tab header ─── */
+  .works-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .works-head h3 { margin: 0; font-size: 13px; letter-spacing: .08em; }
+
+  /* ─── Timeline (existing TimelineView look) ─── */
+  .tl { border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); overflow: hidden; }
+  .tl-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tl-bar .range { font-weight: 800; font-size: 13.5px; }
+  .tl-bar .spacer { flex: 1; }
+  .tl-bound { font-size: 11.5px; color: var(--amber-ink); display: none; }
+  .tl-bound.on { display: inline; }
+  .tl-grid { display: grid; grid-template-columns: 230px 1fr; }
+  .tl-label { border-right: 1px solid var(--border); background: var(--surface); }
+  .tl-scroll { overflow-x: auto; scrollbar-width: thin; }
+  .tl-days { display: grid; grid-auto-flow: column; grid-auto-columns: 64px; }
+  .tl-cell { height: 38px; border-right: 1px solid #2c3038; border-bottom: 1px solid #2c3038; position: relative; }
+  .tl-cell.we { background: repeating-linear-gradient(135deg, transparent 0 6px, #ffffff07 6px 7px); }
+  .tl-cell.today::after { content: ""; position: absolute; top: 0; bottom: -1px; left: 50%; width: 2px; background: var(--today); z-index: 2; }
+  .tl-cell.pre { background: repeating-linear-gradient(135deg, #00000040 0 4px, #00000020 4px 8px); }
+  .tl-dayhead { height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10.5px; color: var(--text-3); border-right: 1px solid #2c3038; border-bottom: 1px solid var(--border-strong); }
+  .tl-dayhead b { font-size: 12.5px; color: var(--text-2); }
+  .tl-dayhead.today b { background: var(--today); color: #fff; border-radius: 999px; padding: 0 7px; }
+  .tl-dayhead.start b { color: var(--amber-ink); }
+  .tl-lh { height: 44px; display: flex; align-items: end; padding: 0 12px 6px; font-size: 12px; font-weight: 800; color: var(--text-2); border-bottom: 1px solid var(--border-strong); }
+  .tl-lrow { height: 38px; display: flex; flex-direction: column; justify-content: center; padding: 0 12px; border-bottom: 1px solid #2c3038; overflow: hidden; }
+  .tl-lrow .t { font-weight: 800; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tl-lrow .s { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+  .tl-lrow.session { padding-left: 26px; border-left: 3px solid transparent; }
+  .tl-lrow.session .t { font-weight: 700; }
+  .tl-workbar { position: absolute; top: 7px; height: 24px; border-radius: 4px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; z-index: 1; white-space: nowrap; overflow: hidden; box-shadow: inset 0 -2px 0 #0003; }
+  .tl-workbar.done { background: var(--green); }
+  .tl-workbar small { font-size: 10px; background: #ffffff33; border-radius: 999px; padding: 0 6px; }
+  .chip { position: absolute; top: 7px; left: 3px; right: 3px; height: 24px; border-radius: 4px; border: 1px solid #2f7a4d; border-left: 4px solid var(--green); background: #1f3328; color: var(--text); font-size: 11.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; padding: 0 5px; overflow: hidden; white-space: nowrap; z-index: 1; cursor: pointer; }
+  .chip i { font-style: normal; font-size: 10px; background: var(--green); color: #fff; border-radius: 999px; padding: 0 5px; }
+  .chip.run { border-color: #2f5689; border-left-color: var(--blue); background: #1d2a3d; }
+  .chip.run i { background: var(--blue); }
+  .chip.hit { outline: 2px solid var(--mark); outline-offset: 1px; }
+  .dim { opacity: .28; transition: opacity .15s; }
+
+  /* ─── 미배정 ─── */
+  .inbox { margin-top: 14px; border: 1px solid #6b4c1f; border-radius: 8px; background: #2a2419; }
+  .inbox-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #4a3a1e; }
+  .inbox-head b { font-size: 14px; }
+  .inbox-head .hint { color: var(--amber-ink); font-size: 12px; }
+  .inbox-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; padding: 9px 14px; border-bottom: 1px solid #3a2f1c; }
+  .inbox-row:last-child { border-bottom: 0; }
+  .inbox-row .meta { font-size: 12px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+  .inbox-row .sug { font-size: 12px; color: var(--text-2); }
+  .hidden-note { margin-top: 14px; padding: 10px 14px; border: 1px dashed var(--border); border-radius: 8px; color: var(--text-3); font-size: 12.5px; display: none; }
+
+  /* ─── Work list (Codex base) ─── */
+  .wl { margin-top: 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+  .wl-tools { display: flex; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); align-items: center; }
+  .input { flex: 1; background: var(--sunken); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); padding: 6px 10px; font-size: 13px; }
+  select.input { flex: none; width: 150px; }
+  .wl-group { padding: 8px 14px 4px; font-size: 11px; font-weight: 800; letter-spacing: .06em; color: var(--text-3); text-transform: uppercase; display: flex; gap: 6px; align-items: center; }
+  .work { display: grid; grid-template-columns: 1fr 210px; gap: 6px 18px; padding: 12px 14px 12px 18px; border-top: 1px solid #2c3038; border-left: 3px solid transparent; cursor: pointer; }
+  .work:hover { background: var(--hover); }
+  .work.running { border-left-color: var(--blue); }
+  .work .title { font-weight: 800; font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .work .projs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .work .line { font-size: 13px; color: var(--text-2); display: flex; gap: 8px; align-items: baseline; }
+  .src { flex: none; font-size: 10.5px; font-weight: 800; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-3); }
+  .src.ai { color: #c9b3ff; border-color: #4c3f7d; }
+  .src.memo { color: var(--amber-ink); border-color: #6b4c1f; }
+  .src.last { color: var(--green-ink); border-color: #2f7a4d; }
+  .line.empty { color: var(--text-3); font-style: italic; }
+  .right { grid-row: 1 / span 3; grid-column: 2; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+  .progress { height: 6px; border-radius: 999px; background: #353a44; overflow: hidden; display: flex; }
+  .progress span { display: block; height: 100%; }
+  .right .nums { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-2); }
+  .right .flag { font-size: 11.5px; text-align: right; }
+
+  /* ─── Summary explainer ─── */
+  .sum-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sum-table th, .sum-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .sum-table th { color: var(--text-2); font-size: 12px; }
+
+  /* ─── Work detail (Claude base) ─── */
+  .dlg { max-width: 1120px; margin: 0 auto; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 20px 60px #0008; overflow: hidden; }
+  .dlg-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .dlg-head h3 { margin: 0 0 8px; font-size: 20px; display: flex; gap: 8px; align-items: center; }
+  .dlg-head .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--text-2); }
+  .dlg-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; max-height: none; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .kpi { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--sunken); }
+  .kpi b { font-size: 20px; font-family: var(--mono); }
+  .kpi div { font-size: 12px; color: var(--text-2); }
+  .kpi.ok { border-color: #2f7a4d; }
+  .sec-h { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .sec-h h4 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+  .sec-h .spacer { flex: 1; }
+  .reuse-tag { font-size: 11px; color: var(--green-ink); border: 1px dashed #2f7a4d; border-radius: 4px; padding: 0 6px; }
+  .dlg-foot { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--sunken); }
+  .dlg-foot .spacer { flex: 1; }
+
+  /* search results — Obsidian style */
+  .search-wrap { display: grid; grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--sunken); }
+  .search-bar { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .search-bar .count { font-size: 12px; color: var(--text-2); white-space: nowrap; font-family: var(--mono); }
+  .res-group { border-bottom: 1px solid var(--border); }
+  .res-group:last-child { border-bottom: 0; }
+  .res-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; }
+  .res-head:hover { background: var(--hover); }
+  .res-head .caret { color: var(--text-3); width: 12px; transition: transform .12s; }
+  .res-group.open .res-head .caret { transform: rotate(90deg); }
+  .res-head .t { font-weight: 800; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .res-head .n { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+  .res-items { display: none; padding: 0 12px 8px 32px; }
+  .res-group.open .res-items { display: block; }
+  .res-item { display: grid; grid-template-columns: 40px 1fr; gap: 10px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); margin-top: 6px; cursor: pointer; }
+  .res-item:hover { border-color: var(--border-strong); background: var(--hover); }
+  .res-item .tn { font-family: var(--mono); font-weight: 800; color: var(--text-2); }
+  .res-item .where { font-size: 10.5px; font-weight: 800; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+  .res-item .snip { font-size: 13px; color: var(--text); }
+  mark { background: #b8962a66; color: inherit; border-radius: 2px; padding: 0 1px; box-shadow: 0 0 0 1px #b8962a; }
+  .tn-chips { display: flex; gap: 4px; }
+  .tn-chip { font-family: var(--mono); font-size: 11px; font-weight: 800; padding: 0 5px; border-radius: 4px; border: 1px solid var(--mark); color: #f2d27a; }
+  .empty-res { padding: 14px 12px; color: var(--text-3); font-size: 13px; }
+
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: #0d0f12; border: 1px solid var(--border-strong); color: var(--text); padding: 10px 16px; border-radius: 8px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .2s; z-index: 50; max-width: 720px; }
+  .toast.on { opacity: 1; transform: translateX(-50%); }
+
+  /* compare */
+  .cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .cmp .card { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: var(--surface); }
+  .cmp .card.pick { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .cmp h5 { margin: 0 0 8px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .cmp ul { margin: 0; padding-left: 18px; color: var(--text-2); font-size: 13px; }
+  .cmp li { margin: 3px 0; }
+  .mini { margin-top: 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--sunken); padding: 8px; font-size: 12px; }
+  .mini .r { padding: 3px 6px; border-radius: 4px; display: flex; gap: 6px; align-items: center; }
+  .mini .r.sel { background: var(--hover); }
+  .impl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .impl td, .impl th { border-bottom: 1px solid var(--border); padding: 7px 10px; text-align: left; vertical-align: top; }
+  .impl th { color: var(--text-2); }
+  code { font-family: var(--mono); font-size: 12px; background: #ffffff10; padding: 0 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Works — v2 목업</h1>
+  <p class="lede">Works 탭은 Codex 목록 기반, Work 상세는 Claude 안 기반입니다. 세션 흐름은 새로 만들지 않고 <b>기존 Timeline을 그대로 재사용</b>해 해당 Work 데이터만 보여주며, 세션 검색은 Codex 안을 가져왔습니다.<br>
+  예시 Work 하나에 <span class="proj p-agent">agent-kanban</span> <span class="proj p-ingest">ingestion</span> <span class="proj p-mcp">mcp-server</span> 세 프로젝트가 묶여 있다고 가정했습니다.</p>
+  <nav class="toc">
+    <a href="#tab">① Works 탭</a>
+    <a href="#summary">② 목록의 요약 한 줄이란?</a>
+    <a href="#detail">③ Work 상세 — 세션 흐름 · 세션 검색</a>
+    <a href="#search">④ 검색 결과 UI: Obsidian vs ClickUp</a>
+    <a href="#impl">⑤ 구현 메모 · 날짜 하한 체크 결과</a>
+  </nav>
+
+  <!-- ═══════════ ① Works 탭 ═══════════ -->
+  <h2 class="sec" id="tab">① Works 탭</h2>
+  <p class="sec-sub">위에서부터 <b>타임라인 → 미배정(있을 때만) → Work 목록</b> 순서입니다. 목록에서는 지금 실행 중인 카드가 있는 Work를 맨 위로 올리고, 한 Work에 묶인 프로젝트를 모두 나열합니다.</p>
+
+  <div class="toggle-row">미리보기:
+    <div class="seg" id="inboxSeg"><button class="on" data-v="has">미배정 2개 있음</button><button data-v="none">미배정 0개</button></div>
+  </div>
+
+  <div class="frame">
+    <div class="works-head">
+      <h3>WORKS</h3>
+      <div class="seg"><button class="on">진행 중 4</button><button>완료·폐기 61</button></div>
+    </div>
+
+    <!-- Timeline strip — existing component, unchanged look -->
+    <div class="tl" id="stripTl">
+      <div class="tl-bar">
+        <span>🎯 <b>진행 중 타임라인</b></span><span class="pill">4</span>
+        <button class="btn" id="stripPrev">◀ 7일</button>
+        <span class="range" id="stripRange"></span>
+        <button class="btn" id="stripNext">7일 ▶</button>
+        <button class="btn" id="stripToday">오늘</button>
+        <span class="tl-bound" id="stripBound">← 가장 이른 Work 시작일(9/30)보다 앞으로는 이동하지 않습니다</span>
+        <span class="spacer"></span>
+        <button class="btn">전체 타임라인 ↗</button>
+        <button class="btn">접기 ▴</button>
+      </div>
+      <div class="tl-grid">
+        <div class="tl-label" id="stripLabels"></div>
+        <div class="tl-scroll" id="stripScroll"><div id="stripDays"></div></div>
+      </div>
+    </div>
+    <p class="note">지금 쓰는 <code>TimelineView variant="strip"</code> 그대로입니다. 바뀐 점은 하나뿐입니다. 가장 이른 진행 중 Work의 시작일보다 왼쪽으로는 스크롤도 <code>◀ 7일</code>도 넘어가지 않습니다. <b>◀ 7일을 몇 번 눌러 보세요.</b></p>
+
+    <!-- 미배정 -->
+    <div class="inbox" id="inbox">
+      <div class="inbox-head">📥 <b>미배정 2</b><span class="hint">· 최근 활동순 · 드래그하면 여러 개 선택</span><span style="flex:1"></span><button class="btn">⚡ 순서대로 배정</button><button class="btn">⋯</button></div>
+      <div class="inbox-row">
+        <input type="checkbox">
+        <div><b>재시도 큐 처리량 비교</b>
+          <div class="meta"><span class="proj p-ingest">ingestion</span>Claude · 카드 4 · 1시간 전 <span class="sug">↳ 이어서 실행한 Work: <b>이벤트 수집 지연 원인 진단</b></span></div></div>
+        <div style="display:flex;gap:6px"><button class="btn">이 Work에 연결</button><button class="btn ghost">다른 Work…</button><button class="btn ghost">폐기</button></div>
+      </div>
+      <div class="inbox-row">
+        <input type="checkbox">
+        <div><b>토큰 갱신 시나리오 확인</b>
+          <div class="meta"><span class="proj p-mcp">mcp-server</span>Codex · 카드 2 · 3시간 전 <span class="sug">같은 프로젝트 · 대상 선택 필요</span></div></div>
+        <div style="display:flex;gap:6px"><button class="btn">Work 선택…</button><button class="btn ghost">새 Work…</button><button class="btn ghost">폐기</button></div>
+      </div>
+    </div>
+    <div class="hidden-note" id="inboxHidden">미배정 세션이 0개면 이 영역을 통째로 렌더하지 않습니다. 빈 상자도 "0" 헤더도 없이 타임라인 바로 아래에 Work 목록이 붙습니다. (이 점선 안내는 목업 설명용이라 실제 화면에는 없습니다.) 폐기한 세션 복원은 Works 헤더의 <code>⋯</code> 메뉴로 옮깁니다.</div>
+
+    <!-- Work list -->
+    <div class="wl">
+      <div class="wl-tools">
+        <input class="input" placeholder="Work 검색 (제목·프로젝트·메모·요약)">
+        <select class="input"><option>전체 프로젝트</option><option>agent-kanban</option><option>ingestion</option><option>mcp-server</option></select>
+        <select class="input"><option>실행 중 먼저</option><option>최근 활동</option><option>시작일</option></select>
+      </div>
+
+      <div class="wl-group"><span class="pill badge-run">실행 중</span> 지금 카드가 돌고 있는 Work</div>
+      <div class="work running">
+        <div class="title">이벤트 수집 지연 원인 진단 <span class="pill badge-run">실행 중 1</span></div>
+        <div class="projs"><span class="proj p-ingest">ingestion <small>3</small></span><span class="proj p-mcp">mcp-server <small>2</small></span><span class="proj p-agent">agent-kanban <small>1</small></span><span style="font-size:12px;color:var(--text-3)">세션 6 · 시작 10/16 · 방금</span></div>
+        <div class="line"><span class="src ai">요약</span>재시도 큐 병목을 확인했고, 처리량 변경안 리뷰가 남았습니다.</div>
+        <div class="right">
+          <div class="progress"><span style="width:58%;background:var(--green)"></span><span style="width:8%;background:var(--blue)"></span></div>
+          <div class="nums"><span>7 / 12 카드 완료</span><span>실행 1</span></div>
+        </div>
+      </div>
+      <div class="work running">
+        <div class="title">Agent-kanban - UI 개선 #4 <span class="pill badge-run">실행 중 1</span></div>
+        <div class="projs"><span class="proj p-agent">agent-kanban <small>1</small></span><span style="font-size:12px;color:var(--text-3)">세션 1 · 시작 10/22 · 1분 전</span></div>
+        <div class="line"><span class="src last">최근 결과</span>T7 · 피드백 turn 제목을 요청 첫 줄로 바꾸고 목차를 2줄로 표시했습니다.</div>
+        <div class="right">
+          <div class="progress"><span style="width:86%;background:var(--green)"></span><span style="width:14%;background:var(--blue)"></span></div>
+          <div class="nums"><span>6 / 7 카드 완료</span><span>실행 1</span></div>
+        </div>
+      </div>
+
+      <div class="wl-group">진행 중 · 최근 활동순</div>
+      <div class="work">
+        <div class="title">MCP 인증 토큰 갱신 정리 <span class="pill badge-warn">7일간 활동 없음</span></div>
+        <div class="projs"><span class="proj p-mcp">mcp-server <small>2</small></span><span class="proj p-agent">agent-kanban <small>1</small></span><span style="font-size:12px;color:var(--text-3)">세션 3 · 시작 10/9 · 7일 전</span></div>
+        <div class="line"><span class="src memo">메모</span>만료 토큰 재현은 끝. refresh 경합은 락 순서부터 다시 볼 것.</div>
+        <div class="right">
+          <div class="progress"><span style="width:75%;background:var(--green)"></span></div>
+          <div class="nums"><span>6 / 8 카드 완료</span><span></span></div>
+          <div class="flag" style="color:var(--amber-ink)">예정 10/20 · 2일 초과</div>
+        </div>
+      </div>
+      <div class="work">
+        <div class="title">Zadar - 고도화 #1</div>
+        <div class="projs"><span class="proj" style="color:#e6c46a;border-color:#6b5a26;background:#2b2718">zadar <small>4</small></span><span style="font-size:12px;color:var(--text-3)">세션 4 · 시작 9/30 · 2일 전</span></div>
+        <div class="line empty"><span class="src">—</span>요약·메모가 없습니다. <a href="#summary" style="color:var(--blue-ink);font-style:normal">요약 생성</a></div>
+        <div class="right">
+          <div class="progress"><span style="width:100%;background:var(--green)"></span></div>
+          <div class="nums"><span>94 / 94 카드 완료</span><span></span></div>
+          <div class="flag" style="color:var(--green-ink)">결과 확인 후 완료 가능</div>
+        </div>
+      </div>
+    </div>
+    <p class="note">• <b>정렬:</b> "실행 중 먼저"가 기본입니다. 실행 중인 카드가 있는 Work는 파란 왼쪽 띠를 달고 위 그룹으로 올라가고, 나머지는 최근 활동순입니다.<br>
+    • <b>프로젝트:</b> <code>Work.projectDir</code> 하나 대신, 연결된 세션들(<code>sessionLinks[].projectDir</code>)의 프로젝트를 세션 수가 많은 순서로 모두 나열합니다.<br>
+    • <b>"완료… / 상세" 버튼:</b> 없앴습니다. 행을 누르면 상세가 열리고, 완료는 상세 다이얼로그 아래쪽에서 합니다.</p>
+  </div>
+
+  <!-- ═══════════ ② Summary 한 줄 ═══════════ -->
+  <h2 class="sec" id="summary">② 목록의 요약 한 줄이란?</h2>
+  <p class="sec-sub">Codex 목업의 "재시도 큐 병목을 확인했습니다. 처리량 변경안을 리뷰할 차례입니다"는 임의로 지어낸 메모가 아닙니다. <b><code>Work.summary.lines[0]</code></b>, 즉 Work 상세에서 <code>요약 생성</code>을 눌러야 LLM이 만드는 3~5줄 요약의 첫 줄을 예시 값으로 넣은 것입니다. 실제로는 대부분의 Work에 요약이 없어서 빈 줄이 됩니다. 그래서 아래 순서로 채우고, 어디서 온 문장인지 꼬리표를 붙입니다.</p>
+  <div class="frame">
+    <table class="sum-table">
+      <tr><th style="width:60px">순서</th><th style="width:110px">꼬리표</th><th>출처</th><th>예</th></tr>
+      <tr><td>1</td><td><span class="src ai">요약</span></td><td><code>summary.lines[0]</code> — LLM 요약. 사람이 <code>요약 생성</code>을 눌렀을 때만 생깁니다</td><td>재시도 큐 병목을 확인했고, 처리량 변경안 리뷰가 남았습니다.</td></tr>
+      <tr><td>2</td><td><span class="src memo">메모</span></td><td><code>notes</code>의 첫 줄 — 사람이 직접 쓴 글. LLM이 덮어쓰지 않습니다</td><td>만료 토큰 재현은 끝. refresh 경합은 락 순서부터 다시 볼 것.</td></tr>
+      <tr><td>3</td><td><span class="src last">최근 결과</span></td><td>가장 최근에 끝난 turn 결과의 첫 줄 (세션 모달의 접힌 turn 미리보기와 같은 <code>previewLine</code>). 따로 생성하지 않아도 항상 있습니다</td><td>T7 · 피드백 turn 제목을 요청 첫 줄로 바꾸고…</td></tr>
+      <tr><td>4</td><td><span class="src">—</span></td><td>셋 다 없음 (카드가 아직 실행 전). 흐린 글씨와 <code>요약 생성</code> 링크</td><td style="color:var(--text-3);font-style:italic">요약·메모가 없습니다. 요약 생성</td></tr>
+    </table>
+    <p class="note">요약 순서를 메모보다 앞에 둔 이유: 요약은 사람이 일부러 만든 것이라 최신 상태를 가장 잘 요약합니다. 다만 요약이 메모보다 오래됐으면(<code>summary.generatedAt</code> &lt; Work의 마지막 활동) 메모를 먼저 보여주는 안도 있습니다. 둘 중 무엇으로 할지 정해 주세요.</p>
+  </div>
+
+  <!-- ═══════════ ③ Work 상세 ═══════════ -->
+  <h2 class="sec" id="detail">③ Work 상세 — 세션 흐름(기존 Timeline) · 세션 검색</h2>
+  <p class="sec-sub">Claude 안의 구조(사실 칩 → KPI → 세션 흐름 → 요약/메모 → 연결된 세션 → 아래쪽 완료 버튼)를 유지합니다. Claude 안의 칸칸 미니 간트는 버리고, 그 자리에 <b>Board 타임라인의 Work 행 + 펼친 세션 행</b>을 그대로 넣었습니다.</p>
+
+  <div class="dlg">
+    <div class="dlg-head">
+      <div class="row" style="justify-content:space-between;margin-bottom:6px"><span class="pill badge-run">진행 중 · 7일째</span><span style="font-family:var(--mono);color:var(--text-3)">WORK #7mQ9x2Kp</span></div>
+      <h3>이벤트 수집 지연 원인 진단 <span style="color:var(--text-3);font-size:14px">✎</span></h3>
+      <div class="row"><span class="proj p-ingest">ingestion <small>3</small></span><span class="proj p-mcp">mcp-server <small>2</small></span><span class="proj p-agent">agent-kanban <small>1</small></span><span>· 시작 10/16 · 예정 10/24 · 최근 활동 방금</span></div>
+    </div>
+    <div class="dlg-body">
+      <div class="kpis">
+        <div class="kpi"><b>6</b><div>세션 (프로젝트 3)</div></div>
+        <div class="kpi"><b>7</b><div>끝난 카드 / 12</div></div>
+        <div class="kpi"><b>1</b><div>실행 중</div></div>
+        <div class="kpi"><b>4</b><div>남은 카드</div></div>
+      </div>
+
+      <section>
+        <div class="sec-h"><h4>세션 흐름</h4><span class="reuse-tag">기존 TimelineView 재사용 · 이 Work만</span><span class="spacer"></span><span style="font-size:12px;color:var(--text-3)">칩을 누르면 해당 카드 / 세션이 열립니다</span></div>
+        <div class="tl" id="detailTl">
+          <div class="tl-bar">
+            <button class="btn" id="dPrev">◀ 7일</button>
+            <span class="range" id="dRange"></span>
+            <button class="btn" id="dNext">7일 ▶</button>
+            <button class="btn" id="dToday">오늘</button>
+            <span class="tl-bound" id="dBound">← Work 시작일(10/16) 이전은 없습니다</span>
+            <span class="spacer"></span>
+            <label style="font-size:12px;color:var(--text-2)"><input type="checkbox"> 서브에이전트</label>
+          </div>
+          <div class="tl-grid">
+            <div class="tl-label" id="dLabels"></div>
+            <div class="tl-scroll" id="dScroll"><div id="dDays"></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sec-h"><h4>요약</h4><span class="spacer"></span><button class="btn ghost">↻ 다시 생성</button></div>
+        <div style="font-size:13.5px;color:var(--text-2);padding:2px 0 0 2px">재시도 큐 병목을 확인했고, 처리량 변경안 리뷰가 남았습니다. · consumer lag는 파티션 3개에 몰려 있음 · MCP ingest timeout 30s → 60s 조정 완료</div>
+      </section>
+
+      <section>
+        <div class="sec-h"><h4>연결된 세션 6</h4><span class="spacer"></span><button class="btn ghost">+ 세션 연결</button></div>
+        <div class="search-wrap">
+          <div class="search-bar">
+            <span>🔍</span>
+            <input class="input" id="q" placeholder="이 Work의 세션·카드 검색 (제목·프롬프트·결과)" value="재시도">
+            <span class="count" id="qCount"></span>
+          </div>
+          <div id="results"></div>
+        </div>
+        <p class="note">검색어를 입력하면 ① 아래에 <b>세션별로 묶인 결과</b>(Obsidian 방식)가 펼쳐지고, ② 위 세션 흐름에서는 <b>걸린 칩에 테두리</b>가 생기고 나머지는 흐려집니다. 결과 줄이나 칩을 누르면 세션 모달이 <b>그 turn으로 이동해 같은 검색어가 하이라이트된 채</b> 열립니다(이번 PR의 모달 검색 하이라이트 재사용). 검색어를 지우면 평소 세션 목록으로 돌아갑니다.</p>
+      </section>
+    </div>
+    <div class="dlg-foot"><button class="btn">관리 ▴</button><span class="spacer"></span><span style="font-size:12px;color:var(--text-2)">완료하면 카드 12장을 보관하고 Wiki 문서를 만듭니다</span><button class="btn primary">✓ 완료</button></div>
+  </div>
+
+  <!-- ═══════════ ④ 검색 비교 ═══════════ -->
+  <h2 class="sec" id="search">④ 검색 결과 UI — Obsidian vs ClickUp</h2>
+  <div class="cmp">
+    <div class="card pick">
+      <h5>Obsidian 방식 <span class="pill" style="color:var(--green-ink);border-color:#2f7a4d">권장 · Work 상세</span></h5>
+      <ul>
+        <li>결과를 <b>문서(=세션) 단위로 묶고</b> 매칭 수를 보여 준 뒤, 펼치면 본문 조각에 하이라이트</li>
+        <li>Work → 세션 → 카드(turn)라는 실제 계층과 맞음. "어느 세션의 몇 번째 turn"인지 바로 보임</li>
+        <li>조각을 읽고 들어갈지 판단할 수 있음. 세션 모달 하이라이트로 자연스럽게 이어짐</li>
+        <li>단점: 결과가 많으면 길어짐 → 세션 그룹마다 기본 3줄 + "n개 더"</li>
+      </ul>
+      <div class="mini">
+        <div class="r">▾ <b>재시도 큐 처리량 측정</b><span style="margin-left:auto;color:var(--text-3)">3</span></div>
+        <div class="r sel" style="padding-left:20px">T2 · …<mark>재시도</mark> 큐 consumer가 초당 120건에서…</div>
+        <div class="r">▸ <b>retry backoff 설정 검토</b><span style="margin-left:auto;color:var(--text-3)">1</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h5>ClickUp 방식 <span class="pill">나중에 · 전역 검색용</span></h5>
+      <ul>
+        <li>평평한 한 줄 목록 + 종류 아이콘 + 위치("in Tasks (SP)") + 시간. 키보드로 고르고 Enter</li>
+        <li>"이름을 아는 것을 빨리 찾아 여는" 데 강함 → 앱 전체 빠른 이동(⌘K)에 적합</li>
+        <li>본문 조각이 없어 "어떤 내용이 걸렸는지"를 알 수 없음 → 한 Work 안에서 내용을 찾을 때는 약함</li>
+        <li>단축키를 안 쓰신다고 해서 지금은 우선순위가 낮음</li>
+      </ul>
+      <div class="mini">
+        <div class="r sel">◉ [ingestion] 재시도 큐 처리량 측정 <span style="margin-left:auto;color:var(--text-3)">in Work · 6d</span></div>
+        <div class="r">◉ [mcp-server] retry backoff 설정 검토 <span style="margin-left:auto;color:var(--text-3)">in Work · 2d</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="note"><b>결론:</b> Work 상세 안 검색은 <b>Obsidian 방식(세션별 묶음 + 조각 하이라이트)</b>으로 하고, 결과 줄 오른쪽에 <b>T# 칩</b>을 달아 말씀하신 "카드 번호를 누르면 하이라이트된 곳으로 이동"도 함께 넣었습니다. ClickUp 방식은 Works·Board 전체를 가로지르는 전역 검색을 만들 때 다시 검토하면 됩니다.</p>
+
+  <!-- ═══════════ ⑤ 구현 메모 ═══════════ -->
+  <h2 class="sec" id="impl">⑤ 구현 메모 · 날짜 하한 체크 결과</h2>
+  <div class="frame">
+    <p style="margin:0 0 10px"><b>날짜 하한(최초 Work 시작일 이전으로 스크롤 금지): 지금은 없습니다.</b> <code>timelineModel.ts</code>의 <code>bufferEdgeToExtend</code>는 화면이 왼쪽 끝 7일 안에 들어오면 무조건 <code>'start'</code>를 돌려주고, <code>extendBuffer</code>는 하한 없이 28일씩 과거를 붙입니다. 그래서 Works 탭 strip과 Board 타임라인 모두 끝없이 왼쪽으로 갑니다. 구현할 때 넣겠습니다.</p>
+    <table class="impl">
+      <tr><th style="width:240px">변경</th><th>내용</th></tr>
+      <tr><td>날짜 하한 <code>earliest</code></td><td><code>TimelineView</code>에 <code>earliest?: Date</code>를 추가합니다. <code>bufferEdgeToExtend</code>/<code>extendBuffer</code>는 <code>buffer.start ≤ earliest</code>이면 과거로 늘리지 않고, <code>◀ 7일</code>은 그 지점에서 비활성 + 안내를 띄웁니다. strip은 진행 중 Work들의 <code>min(startedAt)</code>, Work 상세는 그 Work의 <code>startedAt</code>을 씁니다. Board 전체 타임라인은 지금처럼 하한 없음(옵션).</td></tr>
+      <tr><td>세션 흐름 = <code>TimelineView</code> 재사용</td><td>새 <code>variant="work"</code>(또는 <code>workId</code> prop): 그 Work의 바 1줄 + <code>sessionLinks</code>의 세션 행만, 항상 펼친 상태로 보여 줍니다. 미배정·다른 Work·프로젝트 그룹 행은 렌더하지 않습니다. 세션 행 라벨에 프로젝트 칩을 붙입니다(여러 프로젝트가 섞이므로). 데이터는 기존 <code>GET /api/timeline</code> 응답을 그 세션 ID들로 거르기만 합니다.</td></tr>
+      <tr><td>목록 정렬 "실행 중 먼저"</td><td>Work에 연결된 세션 중 <code>in_progress</code> 카드가 있으면 상단 그룹으로 올립니다. 보드 카드로 계산할 수 있어 API 변경은 없습니다.</td></tr>
+      <tr><td>다중 프로젝트 칩</td><td><code>sessionLinks[].projectDir</code>를 세어 개수가 많은 순서로 나열합니다. 기존 <code>dirAccentClass</code> 색을 그대로 씁니다.</td></tr>
+      <tr><td>요약 한 줄 대체 순서</td><td>요약 → 메모 → 최근 결과(<code>previewLine</code>) → 빈 상태(②).</td></tr>
+      <tr><td>미배정 숨김</td><td>미배정 개수가 0이면 섹션 자체를 렌더하지 않습니다. 폐기 세션 복원 진입점은 Works 헤더의 <code>⋯</code>로 옮깁니다.</td></tr>
+      <tr><td>세션 검색</td><td>보드에 있는 카드 + 보관된 카드에서 제목·프롬프트·결과를 클라이언트에서 검색합니다(보관 카드는 상세를 열 때 한 번 조회). 결과를 누르면 <code>SessionConversationModal</code>에 초기 검색어와 turn을 넘깁니다(prop 추가).</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DOW = ['일','월','화','수','목','금','토'];
+const TODAY = new Date(2026, 9, 22);
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const md = d => `${d.getMonth() + 1}/${d.getDate()}`;
+const diff = (a, b) => Math.round((b - a) / 86400000);
+const toast = (msg) => { const t = document.getElementById('toast'); t.innerHTML = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600); };
+
+/* Generic timeline renderer that mimics TimelineView, with an `earliest` lower bound. */
+function makeTimeline({ prefix, rows, earliest, days = 14, startAt, onChip, after }) {
+  const labels = document.getElementById(prefix + 'Labels');
+  const daysEl = document.getElementById(prefix + 'Days');
+  const range = document.getElementById(prefix + 'Range');
+  const bound = document.getElementById(prefix + 'Bound');
+  const prev = document.getElementById(prefix + 'Prev');
+  let start = startAt;
+  function render() {
+    if (start < earliest) start = new Date(earliest);
+    const atBound = diff(earliest, start) <= 0;
+    prev.disabled = atBound;
+    bound.classList.toggle('on', atBound);
+    range.textContent = `2026년 ${md(start)} – ${md(addDays(start, days - 1))}`;
+    labels.innerHTML = `<div class="tl-lh">${prefix === 'strip' ? 'Work' : 'Work · 세션'}</div>` + rows.map(r =>
+      `<div class="tl-lrow ${r.kind}" data-row="${r.id}" ${r.kind === 'session' ? `style="border-left-color:${r.color}"` : ''}><span class="t">${r.title}</span><span class="s">${r.sub}</span></div>`).join('');
+    const cols = [];
+    for (let i = 0; i < days; i++) {
+      const d = addDays(start, i);
+      const we = d.getDay() === 0 || d.getDay() === 6;
+      const isToday = diff(d, TODAY) === 0;
+      const isStart = diff(d, earliest) === 0;
+      let col = `<div><div class="tl-dayhead ${isToday ? 'today' : ''} ${isStart ? 'start' : ''}"><span>${DOW[d.getDay()]}</span><b>${md(d)}</b></div>`;
+      for (const r of rows) {
+        let inner = '';
+        if (r.bar) {
+          const bs = r.bar.from, be = r.bar.to || TODAY;
+          if (diff(bs, d) === 0 || (i === 0 && bs < d && be >= d)) {
+            const span = Math.min(diff(d, be) + 1, days - i);
+            inner = `<div class="tl-workbar ${r.bar.done ? 'done' : ''}" style="left:3px;width:${span * 64 - 6}px">${r.title}<span><small>세션 ${r.bar.sessions}</small> ${r.bar.done ? '✔ 완료' : '› 진행중'}</span></div>`;
+          }
+        }
+        if (r.chips) {
+          const c = r.chips.find(c => diff(c.day, d) === 0);
+          if (c) inner = `<div class="chip ${c.run ? 'run' : ''}" data-row="${r.id}" data-turns="${c.turns.join(',')}" title="${c.title}"><i>${c.turns.length}</i>${c.title}</div>`;
+        }
+        col += `<div class="tl-cell ${we ? 'we' : ''} ${isToday ? 'today' : ''}" data-row="${r.id}">${inner}</div>`;
+      }
+      cols.push(col + '</div>');
+    }
+    daysEl.className = 'tl-days';
+    daysEl.innerHTML = cols.join('');
+    daysEl.querySelectorAll('.chip').forEach(ch => ch.addEventListener('click', () => onChip && onChip(ch)));
+    if (after) after();
+  }
+  prev.addEventListener('click', () => { start = addDays(start, -7); render(); });
+  document.getElementById(prefix + 'Next').addEventListener('click', () => { start = addDays(start, 7); render(); });
+  document.getElementById(prefix + 'Today').addEventListener('click', () => { start = addDays(TODAY, -days + 4); render(); });
+  render();
+  return { render };
+}
+
+/* ① strip: active Works only, earliest = min(startedAt) = 9/30 */
+makeTimeline({
+  prefix: 'strip', days: 16, earliest: new Date(2026, 8, 30), startAt: new Date(2026, 9, 10),
+  rows: [
+    { id: 'w1', kind: '', title: '이벤트 수집 지연 원인 진단', sub: '세션 6 · 3 프로젝트', bar: { from: new Date(2026, 9, 16), sessions: 6 } },
+    { id: 'w2', kind: '', title: 'Agent-kanban - UI 개선 #4', sub: '세션 1', bar: { from: new Date(2026, 9, 22), sessions: 1 } },
+    { id: 'w3', kind: '', title: 'MCP 인증 토큰 갱신 정리', sub: '세션 3 · 2 프로젝트', bar: { from: new Date(2026, 9, 9), sessions: 3 } },
+    { id: 'w4', kind: '', title: 'Zadar - 고도화 #1', sub: '세션 4', bar: { from: new Date(2026, 8, 30), sessions: 4 } },
+  ],
+});
+
+/* ③ detail: one Work bar + its sessions, earliest = Work.startedAt = 10/16 */
+const SESSIONS = [
+  { id: 's1', proj: 'ingestion', cls: 'p-ingest', color: '#3c9a8f', title: '재시도 큐 처리량 측정', runtime: 'Claude',
+    cards: [
+      { t: 1, day: 16, where: 'Prompt', text: '재시도 큐 consumer 처리량을 파티션별로 측정해줘' },
+      { t: 2, day: 16, where: 'Result', text: '재시도 큐 consumer가 초당 120건에서 포화됩니다. 파티션 3·7·11에 적체가 몰려 있습니다.' },
+      { t: 3, day: 17, where: 'Result', text: '재시도 간격이 고정 1s라 재시도 폭주가 생깁니다. 지수 backoff 적용 시 처리량 2.1배.' },
+    ] },
+  { id: 's2', proj: 'ingestion', cls: 'p-ingest', color: '#3c9a8f', title: 'consumer lag 원인 분석', runtime: 'Codex',
+    cards: [
+      { t: 1, day: 17, where: 'Result', text: 'lag는 파티션 3개에 집중. 리밸런싱 직후 커밋 지연이 원인.' },
+      { t: 2, day: 18, where: 'Result', text: 'auto commit 간격을 5s → 1s로 낮추면 lag 피크가 40% 감소.' },
+      { t: 3, day: 19, where: 'Result', text: '변경 후 24시간 관측: lag p95 18s → 6s.' },
+    ] },
+  { id: 's3', proj: 'mcp-server', cls: 'p-mcp', color: '#7b5fd0', title: 'MCP ingest 엔드포인트 timeout 조정', runtime: 'Claude',
+    cards: [
+      { t: 1, day: 19, where: 'Prompt', text: 'ingest 호출이 30s timeout에 걸려 재시도로 이어지는지 확인' },
+      { t: 2, day: 19, where: 'Result', text: 'timeout 후 클라이언트가 재시도를 보내 중복 적재가 생깁니다. 30s → 60s로 조정.' },
+    ] },
+  { id: 's4', proj: 'mcp-server', cls: 'p-mcp', color: '#7b5fd0', title: 'retry backoff 설정 검토', runtime: 'Claude',
+    cards: [ { t: 1, day: 20, where: 'Result', text: 'MCP 클라이언트 재시도 정책을 지수 backoff(최대 5회)로 통일했습니다.' } ] },
+  { id: 's5', proj: 'agent-kanban', cls: 'p-agent', color: '#c25a7a', title: '수집 지연 대시보드 카드', runtime: 'Claude',
+    cards: [ { t: 1, day: 21, where: 'Result', text: 'Works 상세에 lag 그래프 링크를 붙였습니다.' } ] },
+  { id: 's6', proj: 'ingestion', cls: 'p-ingest', color: '#3c9a8f', title: '처리량 변경안 리뷰', runtime: 'Claude', running: true,
+    cards: [ { t: 1, day: 22, where: 'Prompt', text: '재시도 큐 처리량 변경안 PR을 리뷰해줘' } ] },
+];
+const detailRows = [
+  { id: 'w', kind: '', title: '이벤트 수집 지연 원인 진단', sub: '세션 6 · 3 프로젝트', bar: { from: new Date(2026, 9, 16), sessions: 6 } },
+  ...SESSIONS.map(s => {
+    const byDay = {};
+    s.cards.forEach(c => (byDay[c.day] ||= []).push(c));
+    return {
+      id: s.id, kind: 'session', color: s.color, title: s.title,
+      sub: `<span class="proj ${s.cls}" style="font-size:10px;padding:0 5px">${s.proj}</span>카드 ${s.cards.length}`,
+      chips: Object.entries(byDay).map(([day, cs]) => ({ day: new Date(2026, 9, +day), turns: cs.map(c => c.t), title: cs[cs.length - 1].text.slice(0, 18), run: s.running })),
+    };
+  }),
+];
+
+let query = '재시도';
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function hl(text, q) {
+  if (!q) return esc(text);
+  const i = text.toLowerCase().indexOf(q.toLowerCase());
+  const from = Math.max(0, i - 24);
+  const clip = (from > 0 ? '…' : '') + text.slice(from);
+  return esc(clip).split(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')).map((p, k) => k % 2 ? `<mark>${p}</mark>` : p).join('');
+}
+function matches() {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return SESSIONS.map(s => ({ s, hits: s.cards.filter(c => c.text.toLowerCase().includes(q) || s.title.toLowerCase().includes(q)) })).filter(g => g.hits.length);
+}
+function openTurn(sid, t) {
+  const s = SESSIONS.find(x => x.id === sid);
+  toast(`세션 모달 열기 → <b>${esc(s.title)}</b> · <b>T${t}</b>로 스크롤 · 검색어 <mark>${esc(query || '—')}</mark> 하이라이트`);
+}
+function renderResults() {
+  const box = document.getElementById('results');
+  const groups = matches();
+  const total = groups.reduce((n, g) => n + g.hits.length, 0);
+  document.getElementById('qCount').textContent = query.trim() ? `${total}개 · 세션 ${groups.length}` : '';
+  if (!query.trim()) {
+    box.innerHTML = SESSIONS.map(s => `<div class="res-group"><div class="res-head" data-open="${s.id}"><span class="caret"></span><span class="proj ${s.cls}">${s.proj}</span><span class="t">${esc(s.title)}</span>${s.running ? '<span class="pill badge-run">실행 중</span>' : ''}<span class="n">${s.runtime} · 카드 ${s.cards.length} ›</span></div></div>`).join('');
+    box.querySelectorAll('[data-open]').forEach(h => h.addEventListener('click', () => openTurn(h.dataset.open, SESSIONS.find(s => s.id === h.dataset.open).cards.length)));
+    return;
+  }
+  if (!groups.length) { box.innerHTML = `<div class="empty-res">"${esc(query)}"와 일치하는 세션·카드가 없습니다.</div>`; return; }
+  box.innerHTML = groups.map(({ s, hits }) => `
+    <div class="res-group open">
+      <div class="res-head"><span class="caret">▸</span><span class="proj ${s.cls}">${s.proj}</span><span class="t">${hl(s.title, query)}</span>
+        <span class="tn-chips">${hits.map(c => `<span class="tn-chip" data-s="${s.id}" data-t="${c.t}">T${c.t}</span>`).join('')}</span><span class="n">${hits.length}</span></div>
+      <div class="res-items">${hits.map(c => `<div class="res-item" data-s="${s.id}" data-t="${c.t}"><span class="tn">T${c.t}<div class="where">${c.where}</div></span><span class="snip">${hl(c.text, query)}</span></div>`).join('')}</div>
+    </div>`).join('');
+  box.querySelectorAll('.res-head').forEach(h => h.addEventListener('click', e => { if (!e.target.closest('.tn-chip')) h.parentElement.classList.toggle('open'); }));
+  box.querySelectorAll('[data-t]').forEach(el => el.addEventListener('click', e => { e.stopPropagation(); openTurn(el.dataset.s, +el.dataset.t); }));
+}
+function afterRender() {
+  const groups = matches();
+  const hitSessions = new Map(groups.map(g => [g.s.id, new Set(g.hits.map(c => c.t))]));
+  const active = query.trim().length > 0;
+  document.querySelectorAll('#detailTl [data-row]').forEach(el => {
+    const id = el.dataset.row;
+    if (id === 'w') return;
+    el.classList.toggle('dim', active && !hitSessions.has(id));
+  });
+  document.querySelectorAll('#detailTl .chip').forEach(ch => {
+    const turns = ch.dataset.turns.split(',').map(Number);
+    const set = hitSessions.get(ch.dataset.row);
+    ch.classList.toggle('hit', active && !!set && turns.some(t => set.has(t)));
+  });
+}
+const detail = makeTimeline({
+  prefix: 'd', days: 12, earliest: new Date(2026, 9, 16), startAt: new Date(2026, 9, 16), rows: detailRows,
+  onChip: ch => openTurn(ch.dataset.row, +ch.dataset.turns.split(',')[0]),
+  after: () => afterRender(),
+});
+const qEl = document.getElementById('q');
+qEl.addEventListener('input', () => { query = qEl.value; renderResults(); afterRender(); });
+renderResults(); afterRender();
+
+/* 미배정 toggle */
+document.querySelectorAll('#inboxSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#inboxSeg button').forEach(x => x.classList.toggle('on', x === b));
+  const has = b.dataset.v === 'has';
+  document.getElementById('inbox').style.display = has ? '' : 'none';
+  document.getElementById('inboxHidden').style.display = has ? 'none' : 'block';
+}));
+</script>
+</body>
+</html>

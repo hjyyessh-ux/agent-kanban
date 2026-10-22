@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Mockup — Works UI/UX 개선 (Claude 안)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600;700&display=swap" rel="stylesheet" />
+<script>
+  if (new URLSearchParams(location.search).get('theme') === 'dark') document.documentElement.dataset.theme = 'dark';
+</script>
+<style>
+/* ── 토큰: kanban-v2.tokens.css 실값 ─────────────────────────────── */
+:root {
+  --todo: #3b82f6; --prog: #facc15; --complete: #ff3b6b; --done: #22c55e;
+  --work: #2f6cb6; --work-done: #3b8a5c; --work-fg: #f9fafb;
+  --warn: #d97706; --warn-border: #fcd34d; --warn-bg: #fffbeb; --warn-ink: #92400e;
+  --danger: #dc2626;
+  --sans: 'Work Sans', system-ui, sans-serif; --mono: 'Source Code Pro', ui-monospace, monospace;
+  --app-bg: #FFF8E7; --frame: #1A1A2E; --surface: #fff; --sunken: #f8fafc; --hover: #f3f4f6;
+  --ink: #1A1A2E; --ink-2: #536074; --ink-3: #627089;
+  --border: #D7DCE6; --border-strong: #1f2233; --hard: #000;
+  --work-tint: color-mix(in srgb, var(--work) 7%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 14%, var(--surface));
+  --shadow: 4px 4px 0 var(--hard); --shadow-sm: 2px 2px 0 var(--hard);
+  --rt-claude-bg: #f7d9cd; --rt-codex-bg: #dbe6ff;
+  --d1: #dd4b9c; --d2: #787fed; --d3: #357718; --d4: #a7361b; --d5: #107a93;
+  --heat-0: var(--sunken); --heat-1: color-mix(in srgb, var(--work) 25%, var(--surface)); --heat-2: color-mix(in srgb, var(--work) 55%, var(--surface)); --heat-3: var(--work);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --work: #3d7fd0; --work-done: #3f9a6a; --work-fg: #f4f6f8;
+  --warn-bg: color-mix(in srgb, #d97706 14%, #272a2e); --warn-ink: #fbbf24; --warn-border: color-mix(in srgb, #d97706 55%, #272a2e);
+  --app-bg: #1b1d20; --frame: #0e0e15; --surface: #272a2e; --sunken: #202327; --hover: #30343a;
+  --ink: #d4d7db; --ink-2: #a3a8ae; --ink-3: #979ea6;
+  --border: #34383d; --border-strong: #454a50; --hard: #0d0f10;
+  --shadow: 3px 3px 0 var(--hard); --shadow-sm: 1px 1px 0 var(--hard);
+  --rt-claude-bg: #2d3135; --rt-codex-bg: #2d3135;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--sans); background: var(--app-bg); color: var(--ink); font-size: 14px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.mono { font-family: var(--mono); }
+
+.mock-bar { position: sticky; top: 0; z-index: 50; display: flex; gap: 12px; align-items: center; padding: 10px 20px; background: var(--frame); color: #fff; }
+.mock-bar h1 { font-size: 15px; margin: 0; font-weight: 800; }
+.mock-bar .sp { flex: 1; }
+.mock-bar button, .mock-bar a { background: transparent; color: #fff; border: 1.5px solid #fff6; border-radius: 4px; padding: 4px 10px; font-weight: 700; font-size: 12px; text-decoration: none; }
+.mock-bar nav { display: flex; gap: 6px; }
+.mock-bar nav a[aria-current="true"] { background: #fff; color: var(--frame); }
+.page { max-width: 1600px; margin: 0 auto; padding: 20px 20px 80px; }
+.section-title { font-weight: 800; font-size: 20px; margin: 30px 0 4px; }
+.section-sub { color: var(--ink-2); font-size: 13px; margin: 0 0 14px; }
+.tag { font-size: 11px; font-weight: 800; padding: 2px 8px; border: 1.5px solid var(--border-strong); border-radius: 3px; text-transform: uppercase; letter-spacing: .04em; }
+.tag--before { background: var(--sunken); } .tag--after { background: var(--done); color: #111827; }
+.col-h { display: flex; gap: 8px; align-items: center; font-weight: 800; margin-bottom: 8px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 1250px) { .grid2 { grid-template-columns: 1fr; } }
+.issues { font-size: 13px; line-height: 1.65; color: var(--ink-2); padding-left: 20px; margin: 12px 0 0; }
+.issues b { color: var(--ink); }
+.anno { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 99px; background: var(--danger); color: #fff; font-size: 10px; font-weight: 800; vertical-align: middle; margin-right: 4px; }
+.frame { background: var(--app-bg); border: 2px dashed var(--border); border-radius: 6px; padding: 14px; }
+
+/* 공용 칩 */
+.proj { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 3px; border: 1.5px solid var(--c); color: color-mix(in srgb, var(--c) 75%, var(--ink)); background: color-mix(in srgb, var(--c) 12%, var(--surface)); white-space: nowrap; }
+.rt { font-size: 10px; font-weight: 800; padding: 0 7px; border-radius: 999px; border: 1.5px solid var(--border-strong); background: var(--rt-claude-bg); text-transform: uppercase; }
+.chip-warn { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-border); white-space: nowrap; }
+.chip-run { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: color-mix(in srgb, var(--prog) 25%, var(--surface)); border: 1px solid color-mix(in srgb, var(--prog) 70%, var(--border-strong)); white-space: nowrap; }
+.chip-run::before { content: '●'; margin-right: 3px; color: #ca8a04; animation: pulse 1.4s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.btn { border: 2px solid var(--border-strong); background: var(--surface); padding: 5px 12px; font-weight: 800; font-size: 12px; box-shadow: var(--shadow-sm); border-radius: 3px; white-space: nowrap; }
+.btn--ghost { border-color: transparent; box-shadow: none; background: transparent; }
+.btn--ok { background: var(--done); color: #111827; }
+.btn--sm { padding: 2px 8px; font-size: 11px; }
+kbd { font-family: var(--mono); font-size: 10px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; color: var(--ink-2); background: var(--surface); }
+
+/* ── BEFORE: Works 탭 ───────────────────────────────────────── */
+.bw-head { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 12px; margin-bottom: 10px; }
+.bw-seg { display: inline-flex; border: 2px solid var(--border-strong); border-radius: 999px; overflow: hidden; font-size: 11px; }
+.bw-seg span { padding: 2px 10px; } .bw-seg span:first-child { background: var(--frame); color: #fff; }
+.bw-box { border: 3px solid var(--border-strong); background: var(--surface); box-shadow: var(--shadow); margin-bottom: 14px; }
+.bw-box-h { padding: 8px 12px; border-bottom: 2px solid var(--border-strong); font-size: 12px; font-weight: 800; display: flex; gap: 8px; align-items: center; }
+.bw-tl { height: 110px; background: repeating-linear-gradient(90deg, var(--surface) 0 38px, var(--border) 38px 39px); position: relative; }
+.bw-tl i { position: absolute; height: 12px; background: var(--work); border-radius: 2px; }
+.bw-inbox { background: color-mix(in srgb, var(--warn) 12%, var(--surface)); }
+.bw-empty { padding: 12px; font-size: 12px; color: var(--ink-3); }
+.bw-filter { display: grid; grid-template-columns: 1fr 140px 110px; gap: 8px; margin-bottom: 12px; }
+.bw-filter div { border: 1.5px solid var(--border); background: var(--surface); padding: 6px 8px; font-size: 11px; color: var(--ink-3); }
+.bw-card { border: 3px solid var(--border-strong); border-left: 7px solid var(--work); background: var(--surface); box-shadow: var(--shadow); padding: 10px 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+.bw-card.over { border-left-color: var(--warn); border-color: var(--warn); }
+.bw-card .t { font-weight: 800; font-size: 13px; }
+.bw-card .m { font-size: 11px; color: var(--ink-3); display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+.bw-card .acts { margin-left: auto; display: flex; gap: 6px; }
+
+/* ── AFTER: Works 탭 ───────────────────────────────────────── */
+.aw { background: var(--surface); border: 3px solid var(--border-strong); box-shadow: var(--shadow); }
+.aw-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 2px solid var(--border-strong); flex-wrap: wrap; }
+.aw-top h2 { margin: 0; font-size: 16px; font-weight: 800; }
+.seg { display: inline-flex; border: 1.5px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 3px 10px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.seg button + button { border-left: 1.5px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--frame); color: #fff; }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.search { flex: 1; min-width: 180px; display: flex; gap: 6px; align-items: center; border: 1.5px solid var(--border); border-radius: 4px; padding: 3px 8px; background: var(--sunken); }
+.search:focus-within { border-color: var(--border-strong); }
+.search input { border: 0; outline: 0; background: none; flex: 1; font-size: 12px; }
+.aw select { border: 1.5px solid var(--border); background: var(--surface); border-radius: 4px; padding: 3px 6px; font-size: 12px; }
+.inbox-line { display: flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 12px; color: var(--ink-2); border-bottom: 1.5px solid var(--border); background: var(--sunken); }
+.inbox-line b { color: var(--ink); }
+.inbox-line .ok { color: var(--done); font-weight: 800; }
+/* 공용 날짜 축: 목록 = 타임라인 */
+.axis, .wrow { display: grid; grid-template-columns: minmax(0, 1fr) 238px 132px; align-items: center; gap: 12px; }
+.axis { padding: 6px 14px 4px; font-size: 10px; color: var(--ink-3); font-family: var(--mono); border-bottom: 1.5px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.axis .days { display: grid; grid-template-columns: repeat(14, 1fr); text-align: center; }
+.axis .days span.today { color: var(--complete); font-weight: 700; }
+.grp { padding: 8px 14px 4px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+.grp .n { font-family: var(--mono); background: var(--sunken); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; }
+.grp--attn { color: var(--warn-ink); }
+.wrow { padding: 8px 14px; border-top: 1px solid var(--border); position: relative; cursor: pointer; }
+.wrow:hover, .wrow.focus { background: var(--hover); }
+.wrow.focus { box-shadow: inset 3px 0 0 var(--work); }
+.wrow.over { box-shadow: inset 3px 0 0 var(--warn); }
+.wrow .main { min-width: 0; }
+.wrow .l1 { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.wrow .title { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wrow .l2 { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.wrow .l2 .none { color: var(--ink-3); font-style: italic; }
+.heat { display: grid; grid-template-columns: repeat(14, 1fr); gap: 2px; height: 18px; }
+.heat i { border-radius: 2px; background: var(--heat-0); border: 1px solid var(--border); }
+.heat i.h1 { background: var(--heat-1); border-color: transparent; } .heat i.h2 { background: var(--heat-2); border-color: transparent; } .heat i.h3 { background: var(--heat-3); border-color: transparent; }
+.heat i.plan-end { box-shadow: inset -2px 0 0 var(--warn); }
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; font-size: 11px; color: var(--ink-2); }
+.side .counts { font-family: var(--mono); }
+.prog { width: 100%; height: 4px; background: var(--sunken); border: 1px solid var(--border); border-radius: 9px; overflow: hidden; display: flex; }
+.prog i { background: var(--done); } .prog i.run { background: var(--prog); }
+.hover-acts { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: none; gap: 4px; padding-left: 8px; background: var(--hover); }
+.wrow:hover .hover-acts, .wrow.focus .hover-acts { display: flex; }
+.aw-foot { padding: 8px 14px; font-size: 11px; color: var(--ink-3); display: flex; gap: 14px; flex-wrap: wrap; border-top: 1.5px solid var(--border); }
+
+/* ── 상세 다이얼로그 ──────────────────────────────────────── */
+.dlg { background: var(--surface); border: 3px solid var(--border-strong); box-shadow: -8px 0 0 var(--work), var(--shadow); border-radius: 2px; position: relative; }
+.dlg-x { position: absolute; top: 10px; right: 12px; background: none; border: 0; font-size: 18px; font-weight: 800; }
+/* before */
+.bd { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; font-size: 12px; }
+.bd .pill { align-self: flex-start; border: 1.5px solid var(--todo); color: var(--todo); padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 700; }
+.bd h3 { margin: 0; font-size: 18px; }
+.bd .stats { color: var(--ink-2); font-size: 11px; display: flex; gap: 10px; }
+.bd .box { border: 1.5px solid var(--border); padding: 10px 12px; border-radius: 3px; }
+.bd .box.dir { border-left: 4px solid var(--d4); }
+.bd .lbl { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 4px; }
+.bd .dates { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.bd .in { border: 1.5px solid var(--border); padding: 5px 8px; color: var(--ink-3); font-family: var(--mono); font-size: 11px; }
+.bd .sum { background: var(--sunken); border-left: 3px solid var(--border); padding: 10px 12px; color: var(--ink-2); }
+.bd .srow { border: 1.5px solid var(--border); border-left: 4px solid var(--border-strong); padding: 7px 10px; display: flex; align-items: center; gap: 8px; }
+.bd .srow .tt { font-weight: 700; } .bd .srow .mm { display: flex; gap: 6px; align-items: center; color: var(--ink-3); font-size: 10px; margin-top: 3px; }
+.bd .info { background: color-mix(in srgb, var(--done) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--done) 45%, var(--surface)); color: color-mix(in srgb, var(--done) 60%, var(--ink)); padding: 8px 10px; }
+.bd .foot { display: flex; gap: 8px; align-items: center; border-top: 2px solid var(--border-strong); padding-top: 12px; }
+.bd .del { background: #f87185; color: #111827; }
+.bd .warnbtn { color: var(--danger); }
+/* after */
+.ad-h { padding: 16px 22px 12px; border-bottom: 2px solid var(--border-strong); display: flex; flex-direction: column; gap: 8px; }
+.ad-title { margin: 0; font-size: 20px; font-weight: 800; display: flex; gap: 8px; align-items: center; }
+.ad-title .edit { font-size: 12px; color: var(--ink-3); border: 1px dashed var(--border); border-radius: 3px; padding: 0 5px; font-weight: 600; }
+.ad-title:hover .edit { color: var(--ink); border-color: var(--border-strong); }
+.facts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--ink-2); }
+.fact { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--border); border-radius: 3px; padding: 1px 7px; background: var(--sunken); }
+.fact b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
+.fact.add { border-style: dashed; background: none; cursor: pointer; }
+.fact.status { border-color: var(--work); color: var(--work); background: var(--work-tint); font-weight: 700; }
+.ad-body { padding: 14px 22px; display: flex; flex-direction: column; gap: 16px; max-height: 640px; overflow: auto; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.kpi { border: 1.5px solid var(--border); border-radius: 4px; padding: 8px 10px; }
+.kpi .v { font-size: 20px; font-weight: 800; font-family: var(--mono); }
+.kpi .k { font-size: 11px; color: var(--ink-2); }
+.kpi.hl { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.h4 { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+.h4 .sp { flex: 1; }
+.lanes { border: 1.5px solid var(--border); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+.lane { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; font-size: 11px; }
+.lane .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-2); }
+.lane .track { position: relative; height: 12px; background: repeating-linear-gradient(90deg, transparent 0 calc(100%/7 - 1px), var(--border) calc(100%/7 - 1px) calc(100%/7)); }
+.lane .track i { position: absolute; top: 2px; bottom: 2px; border-radius: 2px; background: var(--work); }
+.lane .track i.dot { width: 6px; }
+.lane-axis { display: grid; grid-template-columns: 150px repeat(7, 1fr); gap: 0 8px; font-size: 10px; color: var(--ink-3); font-family: var(--mono); }
+.sum-empty { border: 1.5px dashed var(--border); border-radius: 4px; padding: 12px; display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.memo { border: 1.5px solid var(--border); border-radius: 4px; padding: 8px 10px; font-size: 12px; color: var(--ink-3); background: var(--sunken); }
+.srow2 { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 4px; cursor: pointer; }
+.srow2 + .srow2 { margin-top: 6px; }
+.srow2:hover { border-color: var(--border-strong); }
+.srow2 .st { width: 8px; height: 8px; border-radius: 99px; background: var(--done); }
+.srow2 .st.run { background: var(--prog); }
+.srow2 .tt { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow2 .last { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.srow2 .last b { color: var(--ink-3); font-weight: 600; font-family: var(--mono); font-size: 10px; margin-right: 4px; }
+.srow2 .rt2 { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+.srow2 .cont { display: none; }
+.srow2:hover .cont { display: inline-block; }
+.ad-foot { display: flex; gap: 8px; align-items: center; padding: 12px 22px; border-top: 2px solid var(--border-strong); position: relative; }
+.ad-foot .hint { font-size: 11px; color: var(--ink-3); margin-left: auto; text-align: right; }
+.menu { position: absolute; bottom: 52px; left: 22px; background: var(--surface); border: 2px solid var(--border-strong); box-shadow: var(--shadow); min-width: 220px; display: none; z-index: 5; }
+.menu.open { display: block; }
+.menu button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 12px; font-size: 12px; }
+.menu button:hover { background: var(--hover); }
+.menu button small { display: block; color: var(--ink-3); font-size: 11px; }
+.menu .danger { color: var(--danger); font-weight: 700; border-top: 1px solid var(--border); }
+
+.notes { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+.note { background: var(--surface); border: 2px solid var(--border-strong); box-shadow: var(--shadow-sm); border-radius: 4px; padding: 12px 14px; font-size: 13px; line-height: 1.55; }
+.note h4 { margin: 0 0 6px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.note p { margin: 0; color: var(--ink-2); }
+.pri { font-family: var(--mono); font-size: 11px; padding: 0 6px; border-radius: 3px; color: #111827; }
+.p0 { background: var(--complete); } .p1 { background: var(--prog); } .p2 { background: var(--border); }
+.exists { font-size: 10px; font-weight: 800; padding: 0 5px; border: 1px solid var(--border-strong); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <h1>Works — Claude 개선안</h1>
+  <span style="font-size:12px;opacity:.75">kv2 토큰 실값 · After 패널은 실제 동작</span>
+  <span class="sp"></span>
+  <nav><a href="#tab" aria-current="true">① Works 탭</a><a href="#detail">② Work 상세</a><a href="#why">③ 근거</a></nav>
+  <a href="works-ux-codex.html">Codex 안 →</a>
+  <button id="themeBtn" type="button">🌓 테마</button>
+</div>
+
+<div class="page">
+  <!-- ═══════════════ ① Works 탭 ═══════════════ -->
+  <h2 class="section-title" id="tab">① Works 탭</h2>
+  <p class="section-sub">질문은 "지금 손봐야 할 Work가 뭐지?"인데, 현재 화면은 12개 Work를 똑같은 무게로 나열하고 그 위에 타임라인·Inbox·섹션 헤더가 3겹으로 쌓여 있다.</p>
+  <div class="grid2">
+    <div>
+      <div class="col-h"><span class="tag tag--before">Before</span> 현재</div>
+      <div class="frame">
+        <div class="bw-head">WORKS <span class="bw-seg"><span>진행 중 12</span><span>완료·폐기 60</span></span></div>
+        <div class="bw-box"><div class="bw-box-h"><span class="anno">1</span>🎯 진행 중 타임라인 12 · ◀ 7일 · 10/3 – 10/23 · 7일 ▶ · 오늘</div>
+          <div class="bw-tl"><i style="left:62%;width:30%;top:14px"></i><i style="left:89%;width:3%;top:34px"></i><i style="left:86%;width:6%;top:54px"></i><i style="left:2%;width:90%;top:94px"></i></div></div>
+        <div class="bw-box bw-inbox"><div class="bw-box-h"><span class="anno">2</span>📥 미배정 0 · 최근 활동순 · 드래그하면 여러 개 선택 <span style="margin-left:auto;opacity:.5">⚡ 순서대로 배정</span></div><div class="bw-empty">미배정 세션이 없습니다. 폐기한 세션은 위 ⋯ 메뉴에서 복원할 수 있습니다.</div></div>
+        <div class="bw-box"><div class="bw-box-h"><span class="anno">3</span>🎯 진행 중인 작업 <span style="border:1px solid var(--border);padding:0 4px">전체 12개</span></div></div>
+        <div class="bw-filter"><div>Work 검색 (제목·디렉토리·메모·Summary)</div><div>디렉토리 · 전체 ▾</div><div>정렬 · 최근 활동 ▾</div></div>
+        <div class="bw-card"><div><div class="t">Agent-kanban - UI 개선#4</div><div class="m">세션 1 (기타 1) 시작 10/22 카드 2 · 진행 1 · 완료 1 최근 활동 방금 전</div></div><div class="acts"><span class="anno">4</span><button class="btn btn--sm">완료…</button><button class="btn btn--sm">상세</button></div></div>
+        <div class="bw-card"><div><div class="t">Zadar - 배포하고 적용하기</div><div class="m"><span class="proj" style="--c:var(--d1)">zadar</span>세션 1 (기타 1) 시작 10/22 카드 9 · 진행 0 · 완료 9 최근 활동 5분 전</div></div><div class="acts"><button class="btn btn--sm">완료…</button><button class="btn btn--sm">상세</button></div></div>
+        <div class="bw-card"><div><div class="t">Agent-kanban - UI 개선 #3</div><div class="m"><span class="proj" style="--c:var(--d4)">agent-kanban</span>세션 5 (기타 5) 시작 10/21 카드 25 · 진행 0 · 완료 25 최근 활동 16분 전</div></div><div class="acts"><button class="btn btn--sm">완료…</button><button class="btn btn--sm">상세</button></div></div>
+        <div class="bw-card"><div><div class="t">Zadar - 고도화 #1</div><div class="m"><span class="proj" style="--c:var(--d1)">zadar</span>세션 40 (개발 40) 시작 10/12 카드 94 · 진행 0 · 완료 94 최근 활동 2일 전</div></div><div class="acts"><button class="btn btn--sm">완료…</button><button class="btn btn--sm">상세</button></div></div>
+        <div class="bw-card over"><div><div class="t">mcp-server cloudflare cache 개선</div><div class="m"><span class="proj" style="--c:var(--d2)">mcp-server</span>세션 4 시작 8/27 <span class="chip-warn">예정 48일 초과</span> 카드 17 · 진행 0 · 완료 17 <span style="color:var(--warn)">⚠ 48일간 활동 없음</span></div></div><div class="acts"><span class="anno">5</span><button class="btn btn--sm">완료…</button><button class="btn btn--sm">상세</button></div></div>
+        <div style="text-align:center;color:var(--ink-3);font-size:11px">… 7개 더 (같은 높이·같은 파란 스트라이프)</div>
+      </div>
+      <ol class="issues">
+        <li><b>타임라인 strip이 첫 화면의 1/4</b>을 차지하지만 12개 중 5행만 보이고, 막대 대부분이 오른쪽 끝 2~3칸에 몰려 정보량이 적다.</li>
+        <li><b>미배정 0인데도 노란 박스 + 비활성 버튼</b>이 그대로 자리를 차지한다. 비어 있음은 한 줄이면 충분.</li>
+        <li><b>헤더가 3번</b> (WORKS / 진행 중 타임라인 / 진행 중인 작업) — 검색·필터는 그 아래 또 한 줄.</li>
+        <li><b>모든 행에 `완료…` `상세`</b> — 행 클릭이 이미 상세를 여는데 `상세`가 중복, 파괴적 성격의 `완료…`가 12번 반복. 파란 스트라이프도 모든 행이 같아서 정보가 0.</li>
+        <li><b>정작 신호(예정 초과·무활동)는 목록 맨 아래</b>에 묻혀 있다 (최근 활동순이라). "진행 0 · 완료 25" 같은 숫자는 대부분 의미 없는 0.</li>
+      </ol>
+    </div>
+
+    <div>
+      <div class="col-h"><span class="tag tag--after">After</span> 제안 — 주의 필요 우선 · 목록 = 타임라인</div>
+      <div class="aw" id="aw">
+        <div class="aw-top">
+          <h2>Works</h2>
+          <div class="seg" role="group"><button type="button" aria-pressed="true">진행 중 12</button><button type="button" aria-pressed="false">완료·폐기 60</button></div>
+          <label class="search">🔍<input id="wq" placeholder="제목·디렉토리·메모·Summary" /><kbd>/</kbd></label>
+          <select id="wdir"><option value="">모든 디렉토리</option><option>agent-kanban</option><option>zadar</option><option>mcp-server</option><option>sms</option></select>
+          <div class="seg" role="group" aria-label="묶기"><button type="button" data-group="attn" aria-pressed="true">상태별</button><button type="button" data-group="dir" aria-pressed="false">디렉토리별</button></div>
+          <button type="button" class="btn btn--sm">⚙</button>
+        </div>
+        <div class="inbox-line">📥 미배정 <b>0</b> <span class="ok">✓ 모두 정리됨</span> <span style="margin-left:auto">폐기한 세션 7 ›</span></div>
+        <div class="axis"><span>Work · 최근 결과</span><span class="days" id="days"></span><span style="text-align:right">카드 진행</span></div>
+        <div id="wlist"></div>
+        <div class="aw-foot"><span><kbd>j</kbd>/<kbd>k</kbd> 이동</span><span><kbd>↵</kbd> 상세</span><span><kbd>c</kbd> 완료…</span><span><kbd>/</kbd> 검색</span><span>막대 = 하루 카드 활동량 · 주황 경계 = 예정 종료일</span><span style="margin-left:auto">전체 타임라인 ↗</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ② Work 상세 ═══════════════ -->
+  <h2 class="section-title" id="detail">② Work 상세 다이얼로그</h2>
+  <p class="section-sub">입력 폼처럼 보이는 상단(디렉토리 박스 + 날짜 입력 3칸)이 첫 화면의 1/3을 차지하고, 정작 "이 Work가 어디까지 왔나"는 숫자 한 줄뿐. 푸터에선 가장 위험한 `삭제…`가 가장 진한 색.</p>
+  <div class="grid2">
+    <div>
+      <div class="col-h"><span class="tag tag--before">Before</span> 현재 (스크린샷 재현)</div>
+      <div class="dlg"><button class="dlg-x" type="button">✕</button>
+        <div class="bd">
+          <span class="pill">진행 중 · 1일째</span>
+          <h3>Agent-kanban - UI 개선 #3</h3>
+          <div class="stats"><span>세션 5</span><span>카드 25</span><span>진행 0</span><span>완료 25</span><span>최근 활동 10. 22. 오전 09:51</span></div>
+          <div class="box dir"><div class="lbl"><span class="anno">1</span>Directory</div><span class="mono">/Users/user/workspace/agent-kanban</span></div>
+          <div class="dates">
+            <div class="box"><div class="lbl">Start</div><div class="in">2026. 10. 21. 📅</div></div>
+            <div class="box"><div class="lbl">Planned end</div><div class="in">연도. 월. 일. 📅</div></div>
+            <div class="box"><div class="lbl">Last activity</div><div class="in">10. 22. 오전 09:51</div></div>
+          </div>
+          <div style="display:flex;align-items:center"><b><span class="anno">2</span>Summary</b><button class="btn btn--sm" style="margin-left:auto">📝 요약 생성</button></div>
+          <div class="sum">연결된 세션에서 한 일과 남은 일을 요약할 수 있습니다. 대화와 실행 기록은 아래 세션에서 확인하세요.</div>
+          <div><b>메모 ▸</b><div style="color:var(--ink-3);margin-top:4px">다음에 볼 것, 막힌 지점, 결정 사항. Summary와 달리 자동으로 덮어쓰이지 않습니다.</div></div>
+          <b><span class="anno">3</span>연결된 세션 5</b>
+          <div class="srow"><div><div class="tt">5/5 Works 묶기 — 목업 일치 검증 · 전체 테스트 · 보고서</div><div class="mm"><span class="proj" style="--c:var(--d4)">agent-kanban</span><span class="rt">✳ Claude</span>10/21 · 카드 16</div></div><span class="mono" style="margin-left:auto;color:var(--ink-3)">#1bcf537c</span><button class="btn btn--sm">⋯</button>›</div>
+          <div class="srow"><div><div class="tt">3/5 Works 묶기 — Work 컨테이너 렌더링 (B안)</div><div class="mm"><span class="proj" style="--c:var(--d4)">agent-kanban</span><span class="rt">✳ Claude</span>10/21 · 카드 2</div></div><span class="mono" style="margin-left:auto;color:var(--ink-3)">#3cbbcb9d</span><button class="btn btn--sm">⋯</button>›</div>
+          <div style="color:var(--ink-3)">… 3개 더</div>
+          <div><b>세션 추가</b><div style="color:var(--ink-3)">이 목표로 진행한 미배정 세션을 연결하세요.<br>연결할 미배정 세션이 없습니다.</div></div>
+          <div class="info"><span class="anno">4</span>완료하면 연결된 카드가 보관됩니다. 이후 Wiki 디렉토리와 생성된 문서를 확인할 수 있습니다.</div>
+          <div class="foot"><span class="anno">5</span><button class="btn btn--sm warnbtn">폐기…</button><button class="btn btn--sm del">삭제…</button><button class="btn btn--sm" style="margin:0 auto">⇉ 다른 Work에 병합…</button><button class="btn btn--sm btn--ok">✔ 완료 (일괄 archive)</button></div>
+        </div>
+      </div>
+      <ol class="issues">
+        <li><b>디렉토리 박스 + 날짜 입력 3칸</b> — 편집할 일이 드문 값이 폼 필드 모양으로 가장 비싼 자리를 차지. 빈 `연도. 월. 일.`은 깨진 것처럼 보임.</li>
+        <li><b>Summary가 비어 있을 때 설명문만</b> 회색 박스로 — 다음 행동(요약 생성)이 오른쪽 구석.</li>
+        <li><b>세션 행이 제목뿐</b> — 각 세션이 무엇으로 끝났는지(마지막 결과)를 알려면 하나씩 열어야 한다. 시간 흐름도 안 보임.</li>
+        <li><b>초록 안내 배너</b>가 항상 떠 있어 완료 버튼과 같은 색으로 경쟁, "세션 추가" 빈 상태도 3줄.</li>
+        <li><b>`삭제…`가 핑크 채움</b>으로 푸터에서 가장 눈에 띈다 — 가장 드물고 가장 위험한 동작이 가장 강조됨.</li>
+      </ol>
+    </div>
+
+    <div>
+      <div class="col-h"><span class="tag tag--after">After</span> 제안 — 사실은 칩으로, 진행은 그림으로, 위험은 메뉴로</div>
+      <div class="dlg"><button class="dlg-x" type="button">✕</button>
+        <div class="ad-h">
+          <h3 class="ad-title" title="클릭해서 제목 편집 (기존 기능을 드러냄)">Agent-kanban - UI 개선 #3 <span class="edit">✎</span></h3>
+          <div class="facts">
+            <span class="fact status">● 진행 중 · 2일째</span>
+            <span class="proj" style="--c:var(--d4)" title="/Users/user/workspace/agent-kanban — 클릭하면 DirectoryPicker">agent-kanban</span>
+            <span class="fact">시작 <b>10/21</b></span>
+            <span class="fact add" title="Planned end 설정">＋ 예정일</span>
+            <span class="fact">최근 활동 <b>16분 전</b></span>
+            <span class="mono" style="margin-left:auto;font-size:11px;color:var(--ink-3)">WORK #5rPbnhpK</span>
+          </div>
+        </div>
+        <div class="ad-body">
+          <div class="kpis">
+            <div class="kpi"><div class="v">5</div><div class="k">세션</div></div>
+            <div class="kpi"><div class="v">25</div><div class="k">끝난 카드</div></div>
+            <div class="kpi"><div class="v">0</div><div class="k">남은 카드</div></div>
+            <div class="kpi hl"><div class="v" style="color:var(--done)">✓</div><div class="k">완료 가능 — 실행 중 없음</div></div>
+          </div>
+          <div>
+            <div class="h4">세션 흐름 <span class="sp"></span><span style="text-transform:none;font-weight:600;letter-spacing:0">최근 7일</span></div>
+            <div class="lanes">
+              <div class="lane-axis"><span></span><span>10/16</span><span>17</span><span>18</span><span>19</span><span>20</span><span>21</span><span>22</span></div>
+              <div class="lane"><span class="nm">5/5 목업 일치 검증</span><span class="track"><i style="left:71%;width:29%"></i></span></div>
+              <div class="lane"><span class="nm">3/5 Work 컨테이너</span><span class="track"><i style="left:76%;width:8%"></i></span></div>
+              <div class="lane"><span class="nm">1/5 토큰·툴바 통일</span><span class="track"><i style="left:73%;width:6%"></i></span></div>
+              <div class="lane"><span class="nm">Works 로 묶기 기능</span><span class="track"><i style="left:71%;width:12%"></i></span></div>
+              <div class="lane"><span class="nm">Session test</span><span class="track"><i class="dot" style="left:80%"></i></span></div>
+            </div>
+          </div>
+          <div>
+            <div class="h4">Summary</div>
+            <div class="sum-empty"><span style="font-size:20px">📝</span><span style="flex:1">아직 요약이 없습니다. 세션 5개 · 카드 25장으로 <b>한 일 / 남은 일</b>을 정리합니다.</span><button class="btn btn--sm">요약 생성</button></div>
+          </div>
+          <div>
+            <div class="h4">메모</div>
+            <div class="memo" contenteditable="true">+ 다음에 볼 것, 막힌 지점, 결정 사항 (자동으로 덮어쓰이지 않음)</div>
+          </div>
+          <div>
+            <div class="h4">연결된 세션 5 <span class="sp"></span><button class="btn btn--sm btn--ghost" style="text-transform:none;letter-spacing:0">＋ 세션 연결</button></div>
+            <div class="srow2"><span class="st"></span><div style="min-width:0"><div class="tt">5/5 Works 묶기 — 목업 일치 검증 · 전체 테스트 · 보고서</div><div class="last"><b>T16 결과</b>bun test 1,284 pass · e2e 62 pass · 목업 대비 차이 3건 수정</div></div><div class="rt2"><button class="btn btn--sm cont">↩ 이어서</button><span class="rt">✳ Claude</span>16턴 · 1h 12m ›</div></div>
+            <div class="srow2"><span class="st"></span><div style="min-width:0"><div class="tt">3/5 Works 묶기 — Work 컨테이너 렌더링 (B안)</div><div class="last"><b>T2 결과</b>BoardWorkContainer 추가, 세션 그룹을 Work 단위로 감쌈</div></div><div class="rt2"><button class="btn btn--sm cont">↩ 이어서</button><span class="rt">✳ Claude</span>2턴 · 34m ›</div></div>
+            <div class="srow2"><span class="st"></span><div style="min-width:0"><div class="tt">1/5 Works 묶기 — 토큰 · 툴바 통일 · GROUP 3-way</div><div class="last"><b>T2 결과</b>toolbar 토큰 6종 추가, Group by Card/Session/Works</div></div><div class="rt2"><button class="btn btn--sm cont">↩ 이어서</button><span class="rt">✳ Claude</span>2턴 · 28m ›</div></div>
+            <div style="font-size:12px;color:var(--ink-3);margin-top:6px">… 2개 더 · 정렬: 최근 활동순</div>
+          </div>
+        </div>
+        <div class="ad-foot">
+          <button class="btn btn--sm" id="mgBtn" type="button">관리 ▾</button>
+          <div class="menu" id="mg">
+            <button type="button">⇉ 다른 Work에 병합…<small>세션을 옮기고 이 Work는 병합됨으로</small></button>
+            <button type="button">폐기…<small>Work만 닫힘 · 카드는 보드에 남음</small></button>
+            <button type="button" class="danger">삭제…<small>레코드 제거 · 되돌릴 수 없음</small></button>
+          </div>
+          <span class="hint">완료하면 카드 25장이 보관되고 Wiki 문서가 생성됩니다</span>
+          <button class="btn btn--ok" type="button">✔ 완료</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════ ③ 근거 ═══════════════ -->
+  <h2 class="section-title" id="why">③ 변경 포인트 · 근거 (design critique)</h2>
+  <div class="notes">
+    <div class="note"><h4><span class="pri p0">P0</span>목록을 "주의 필요" 우선으로 묶기</h4><p>예정 초과·N일 무활동·실행 중 Work를 맨 위 그룹으로. 지금은 이 신호가 최근 활동순 정렬 때문에 항상 맨 아래로 가라앉는다. "디렉토리별" 묶기도 토글로.</p></div>
+    <div class="note"><h4><span class="pri p0">P0</span>목록 = 타임라인 (strip 통합)</h4><p>별도 strip(첫 화면 1/4) 대신 각 행에 14일 활동 히트맵을 공통 날짜축에 맞춰 붙인다. 12개 전부가 한 화면에 들어오고 "언제 움직였나"를 행에서 바로 읽는다. 날짜 드래그 편집은 "전체 타임라인 ↗"에 남긴다.</p></div>
+    <div class="note"><h4><span class="pri p0">P0</span>행 액션 정리 · 행 높이 절반</h4><p>`상세` 버튼 제거(행 클릭 = 상세), `완료…`는 hover/포커스 시에만 + 키보드 `c`. 모든 행이 같던 파란 스트라이프는 "주의 필요" 행에만 주황으로. 행 높이 ~80px → ~48px.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>행 2줄째 = 최근 결과 / Summary</h4><p>숫자 나열(진행 0 · 완료 25) 대신 Summary 첫 줄, 없으면 마지막 카드 결과 한 줄. 숫자는 오른쪽 진행 바로. <span class="exists">기존</span> Summary 한 줄 표시는 이미 있으나 대부분 비어 있어 안 보임.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>빈 상태는 한 줄</h4><p>미배정 0이면 노란 박스 대신 "📥 미배정 0 ✓ 모두 정리됨" 한 줄. 세션이 들어오면 지금처럼 펼친다.</p></div>
+    <div class="note"><h4><span class="pri p0">P0</span>상세: 폼 → 사실 칩</h4><p>디렉토리 박스·날짜 입력 3칸을 한 줄 칩(`agent-kanban` · 시작 10/21 · ＋ 예정일 · 최근 활동)으로. 클릭하면 기존 편집기(DirectoryPicker, date input)가 열린다. 첫 화면 ~170px 회수.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>상세: 진행을 그림으로</h4><p>KPI 4칸(세션·끝난 카드·남은 카드·완료 가능 여부)과 세션 흐름 레인(어느 세션이 언제 돌았나). "완료해도 되나?"에 숫자 해석 없이 답한다.</p></div>
+    <div class="note"><h4><span class="pri p1">P1</span>세션 행에 마지막 결과 + ↩ 이어서</h4><p>세션별 마지막 turn 결과 한 줄 → 열지 않고 상태 파악. hover 시 `↩ 이어서`(그 세션에 피드백 카드 생성)로 Work 화면에서 바로 다음 작업.</p></div>
+    <div class="note"><h4><span class="pri p0">P0</span>상세: 위험 동작 위계</h4><p>폐기·삭제·병합을 `관리 ▾` 메뉴로, 삭제는 메뉴 맨 아래 빨간 글자 + 설명. 푸터에서 눈에 띄는 건 `✔ 완료` 하나. 초록 안내 배너는 버튼 옆 한 줄 힌트로.</p></div>
+    <div class="note"><h4><span class="pri p2">P2</span>숨은 기능 드러내기</h4><p><span class="exists">기존</span> 제목 클릭 편집에 ✎ 어포던스, <span class="exists">기존</span> 완료 미리보기 숫자를 버튼 옆 힌트로 상시 노출. 기능 추가 없이 발견성만 올린다.</p></div>
+  </div>
+</div>
+
+<script>
+const TODAY_IDX = 13;
+const DAYS = Array.from({ length: 14 }, (_, i) => 9 + i); // 10/9 ~ 10/22
+const WORKS = [
+  { t: 'mcp-server cloudflare cache 개선', d: 'mcp-server', c: '--d2', heat: [0,0,0,0,0,0,0,0,0,0,0,0,0,0], done: 17, run: 0, total: 17, last: 'Cache-Control 헤더 정규화 PR 머지 대기', flags: ['over:예정 48일 초과', 'stale:48일 무활동'], planEnd: null },
+  { t: 'ZEPETOFUL - Alert proxy 개선', d: 'mcp-server', c: '--d2', heat: [0,0,0,0,0,0,1,0,0,0,0,0,0,0], done: 2, run: 0, total: 2, last: null, flags: ['stale:7일 무활동'] },
+  { t: 'Agent-kanban - UI 개선#4', d: 'agent-kanban', c: '--d4', heat: [0,0,0,0,0,0,0,0,0,0,0,0,0,3], done: 1, run: 1, total: 2, last: '세션 모달 최신순 토글 + 목업 2종 비교', flags: ['run'] },
+  { t: 'Zadar - 배포하고 적용하기', d: 'zadar', c: '--d1', heat: [0,0,0,0,0,0,0,0,0,0,0,0,0,3], done: 9, run: 0, total: 9, last: 'helm template 검증 통과, 적용은 승인 대기', flags: [] },
+  { t: 'Agent-kanban - UI 개선 #3', d: 'agent-kanban', c: '--d4', heat: [0,0,0,0,0,0,0,0,0,0,0,0,3,2], done: 25, run: 0, total: 25, last: 'Works 묶기 5/5 — 테스트 1,284 pass · 보고서 작성', flags: [] },
+  { t: 'ZEPETOFUL - asset save rollback', d: 'mcp-server', c: '--d2', heat: [0,0,0,0,0,0,0,0,0,0,0,0,1,0], done: 2, run: 0, total: 2, last: '롤백 시 version 필드 누락 원인 확인', flags: [] },
+  { t: 'Zepetoful - Reset 기능', d: 'mcp-server', c: '--d2', heat: [0,0,0,0,0,2,3,1,0,0,2,3,1,0], done: 40, run: 0, total: 40, last: null, flags: [] },
+  { t: 'SMS - Whitelist 관리', d: 'sms', c: '--d3', heat: [0,0,0,0,0,0,0,2,3,0,1,2,1,0], done: 28, run: 0, total: 28, last: 'whitelist CRUD API + 감사 로그', flags: [] },
+  { t: 'ZEPETOFUL - Asset 2018 스튜디오 다음 스텝', d: 'mcp-server', c: '--d2', heat: [0,1,0,0,0,0,0,0,0,0,0,0,1,0], done: 9, run: 0, total: 9, last: null, flags: [] },
+  { t: 'zdd-zetta2 - Review', d: 'zdd-zetta2', c: '--d5', heat: [0,0,0,0,0,0,0,0,0,0,1,0,0,0], done: 1, run: 0, total: 1, last: 'person merge 레이스 리뷰 코멘트 3건', flags: [] },
+  { t: 'GHES 마이그레이션', d: 'ghes_migration', c: '--d2', heat: [1,0,0,0,0,0,0,0,0,2,1,0,0,0], done: 16, run: 0, total: 16, last: 'org 12개 중 9개 이전 완료', flags: [] },
+  { t: 'Zadar - 고도화 #1', d: 'zadar', c: '--d1', heat: [0,0,0,3,3,2,1,3,3,2,3,1,0,0], done: 94, run: 0, total: 94, last: 'catalog draft 후보 병합 로직 정리', flags: [] },
+];
+const state = { q: '', dir: '', group: 'attn', focus: 0 };
+const wlist = document.getElementById('wlist');
+document.getElementById('days').innerHTML = DAYS.map((d, i) => `<span class="${i === TODAY_IDX ? 'today' : ''}">${i % 2 === 1 || i === TODAY_IDX ? d : ''}</span>`).join('');
+
+function attention(w) { return w.flags.length > 0; }
+function rowHtml(w, idx) {
+  const flags = w.flags.map(f => f === 'run' ? '<span class="chip-run">실행 중</span>' : `<span class="chip-warn">${f.split(':')[1]}</span>`).join('');
+  const over = w.flags.some(f => f.startsWith('over') || f.startsWith('stale'));
+  const pct = Math.round(w.done / w.total * 100), runPct = Math.round(w.run / w.total * 100);
+  return `<div class="wrow ${over ? 'over' : ''} ${idx === state.focus ? 'focus' : ''}" data-i="${idx}" tabindex="-1">
+    <div class="main"><div class="l1"><span class="title">${w.t}</span><span class="proj" style="--c:var(${w.c})">${w.d}</span>${flags}</div>
+      <div class="l2">${w.last ? w.last : '<span class="none">결과 요약 없음 — 상세에서 요약 생성</span>'}</div></div>
+    <div class="heat">${w.heat.map(h => `<i class="${h ? 'h' + h : ''}"></i>`).join('')}</div>
+    <div class="side"><span class="counts">${w.done}/${w.total}${w.run ? ` · ${w.run} 실행` : ''}</span><span class="prog"><i style="width:${pct - runPct}%"></i><i class="run" style="width:${runPct}%"></i></span></div>
+    <div class="hover-acts"><button type="button" class="btn btn--sm btn--ok">✔ 완료…</button></div>
+  </div>`;
+}
+function render() {
+  const q = state.q.toLowerCase();
+  const items = WORKS.map((w, i) => ({ w, i })).filter(({ w }) => (!q || (w.t + w.d + (w.last || '')).toLowerCase().includes(q)) && (!state.dir || w.d === state.dir));
+  let groups;
+  if (state.group === 'attn') {
+    groups = [['⚠ 주의 필요', items.filter(x => attention(x.w)), 'grp--attn'], ['최근 활동', items.filter(x => !attention(x.w)), '']];
+  } else {
+    const by = {}; items.forEach(x => (by[x.w.d] ||= []).push(x));
+    groups = Object.entries(by).map(([k, v]) => [k, v, '']);
+  }
+  wlist.innerHTML = groups.filter(g => g[1].length).map(([label, xs, cls]) =>
+    `<div class="grp ${cls}">${label} <span class="n">${xs.length}</span></div>` + xs.map(x => rowHtml(x.w, x.i)).join('')).join('')
+    || '<div style="padding:16px 14px;color:var(--ink-3);font-size:12px">검색·필터 조건에 맞는 Work가 없습니다</div>';
+  document.querySelectorAll('[data-group]').forEach(b => b.setAttribute('aria-pressed', b.dataset.group === state.group));
+}
+document.getElementById('wq').addEventListener('input', e => { state.q = e.target.value; render(); });
+document.getElementById('wdir').addEventListener('change', e => { state.dir = e.target.value; render(); });
+document.getElementById('aw').addEventListener('click', e => {
+  const g = e.target.closest('[data-group]'); if (g) { state.group = g.dataset.group; render(); return; }
+  const r = e.target.closest('.wrow'); if (r) { state.focus = +r.dataset.i; render(); }
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, [contenteditable]')) return;
+  const order = [...wlist.querySelectorAll('.wrow')].map(r => +r.dataset.i);
+  const pos = order.indexOf(state.focus);
+  if (e.key === 'j') { state.focus = order[Math.min(pos + 1, order.length - 1)]; render(); }
+  else if (e.key === 'k') { state.focus = order[Math.max(pos - 1, 0)]; render(); }
+  else if (e.key === '/') { e.preventDefault(); document.getElementById('wq').focus(); }
+});
+document.getElementById('mgBtn').addEventListener('click', () => document.getElementById('mg').classList.toggle('open'));
+document.getElementById('themeBtn').addEventListener('click', () => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; });
+render();
+</script>
+</body>
+</html>

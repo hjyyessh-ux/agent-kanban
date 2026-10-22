@@ -3385,10 +3385,14 @@
 
 /* A session header inside a Work is ~40px narrower than a bare column, and
    its right group (● N · ★ N · #id · ⋯) never shrank — so the project chip
-   collapsed to two letters (`ag`). Inside a Work the chip keeps a readable
-   floor and the session id chip gives way first (click still copies it). */
+   collapsed to two letters (`ag`). Inside a Work the chip does not shrink —
+   it is as wide as its name, capped so a long name still truncates — and the
+   session id chip gives way first (click still copies it). A `min-width`
+   floor did the same for long names but padded a short one (`zadar`) out to
+   9ch of empty space on its right. */
 .kv2-work .kv2-complete-session-top .kv2-project-chip {
-  min-width: min(9ch, 45%);
+  flex: 0 0 auto;
+  max-width: max(9ch, 60%);
 }
 
 .kv2-work .kv2-complete-session-top-meta {
