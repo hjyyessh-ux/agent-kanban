@@ -12,7 +12,7 @@ for (const width of [1440, 390]) {
     for (let i = 0; i < 30; i++) await seedCard({ title: `미배정 세션 ${i}`, description: 'Works review fixture', sessionId: `layout-inbox-${i}` });
     await page.goto('/');
     await page.getByRole('tab', { name: 'Works' }).click();
-    const title = page.getByRole('button', { name: work.title, exact: true });
+    const title = page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true });
     await expect(page.locator('.works-inbox')).toBeInViewport();
     await expect(page.locator('.works-navigation button')).toHaveText(['진행 중 1', '완료·폐기 0']);
     await expect(page.locator('.works-inbox-row-group')).toHaveCount(30);
@@ -52,7 +52,7 @@ test('Work detail refreshes card activity while it remains open', async ({ page,
   await apiAddWorkSession(work.id, { sessionId: 'polling-session' });
   await page.goto('/');
   await page.getByRole('tab', { name: 'Works' }).click();
-  await page.getByRole('button', { name: work.title, exact: true }).click();
+  await page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true }).click();
   const detail = page.getByRole('dialog', { name: work.title, exact: true });
   await expect(detail.getByLabel('작업 현황')).toContainText('카드 1');
   await apiUpdateCard(first.id, { status: 'complete', result: '첫 번째 결과' });
@@ -76,7 +76,7 @@ test('the visible session picker adds sessions and conversation includes archive
   await seedCard({ title: '추가 리뷰', description: 'Works review fixture', sessionId: 'additional-review' });
   await page.goto('/');
   await page.getByRole('tab', { name: 'Works' }).click();
-  await page.getByRole('button', { name: work.title, exact: true }).click();
+  await page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true }).click();
   const detail = page.getByRole('dialog', { name: work.title, exact: true });
   await expect(detail.getByLabel('연결할 세션')).toBeVisible();
   await detail.getByLabel('연결할 세션').selectOption('additional-review');
@@ -101,7 +101,7 @@ test('bulk archiving reveals the Wiki directory and generated documents update i
   } }));
   await page.goto('/');
   await page.getByRole('tab', { name: 'Works' }).click();
-  await page.getByRole('button', { name: work.title, exact: true }).click();
+  await page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true }).click();
   const detail = page.getByRole('dialog', { name: work.title, exact: true });
   await expect(detail.getByLabel('보관된 Work의 Wiki')).toHaveCount(0);
   await expect(detail.getByRole('button', { name: '결과', exact: true })).toHaveCount(0);
@@ -109,7 +109,7 @@ test('bulk archiving reveals the Wiki directory and generated documents update i
   await page.getByRole('dialog', { name: '완료 확인', exact: true }).getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   await expect(detail).toHaveCount(0);
   await page.getByRole('button', { name: /^완료·폐기 \d/ }).click();
-  await page.getByRole('button', { name: work.title, exact: true }).click();
+  await page.getByRole('button', { name: `${work.title} 상세 열기`, exact: true }).click();
   const wiki = detail.getByLabel('보관된 Work의 Wiki');
   await expect(wiki).toContainText('/tmp/works-review-vault');
   await expect(wiki).toContainText('Wiki 문서 생성 대기 중');

@@ -36,18 +36,8 @@ export function useDirectoryHistory() {
     });
   }, []);
 
-  const clearDirHistory = useCallback(() => {
-    setDirHistory([]);
-    try {
-      localStorage.removeItem(DIR_HISTORY_KEY);
-    } catch {
-      return;
-    }
-  }, []);
-
   return {
     dirHistory,
     saveDirToHistory,
-    clearDirHistory,
   };
 }

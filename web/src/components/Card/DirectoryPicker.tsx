@@ -35,7 +35,7 @@ export const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
   autoFocus = false,
   variant = "create",
 }) => {
-  const { dirHistory, saveDirToHistory, clearDirHistory } = useDirectoryHistory();
+  const { dirHistory, saveDirToHistory } = useDirectoryHistory();
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -132,11 +132,6 @@ export const DirectoryPicker: React.FC<DirectoryPickerProps> = ({
         <div className="kv2-directory-popover">
           <div className="kv2-directory-popover-head">
             <span>Recent directories</span>
-            {hasHistory && (
-              <button type="button" className="kv2-directory-clear" onClick={clearDirHistory}>
-                Clear
-              </button>
-            )}
           </div>
 
           {filteredHistory.length > 0 ? (

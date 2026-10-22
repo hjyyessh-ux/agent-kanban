@@ -266,10 +266,18 @@
 }
 
 /* Capped height: the strip is a glance above the Inbox, not the full grid.
-   The day header stays pinned while the rows scroll under it. */
+   The day header stays pinned while the rows scroll under it. The bottom-right
+   grip resizes height only; once dragged, the inline height (persisted by
+   TimelineView) replaces the cap. */
 .timeline--strip .tl-scroll {
   max-height: 240px;
+  min-height: 120px;
   overflow-y: auto;
+  resize: vertical;
+}
+
+.timeline--strip .tl-scroll[style*="height"] {
+  max-height: none;
 }
 
 .timeline--strip .tl-month {
