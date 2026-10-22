@@ -482,7 +482,7 @@
   --kv2-favorite-pill-bg: color-mix(in srgb, var(--kv2-favorite-icon-active) 12%, var(--kv2-surface));
   --kv2-favorite-pill-border: color-mix(in srgb, var(--kv2-favorite-icon-active) 60%, transparent);
   /* Drop hints sit *over* content mid-drag (never in flow); near-opaque surface. */
-  --kv2-work-drop-overlay: color-mix(in srgb, var(--kv2-surface) 94%, transparent);
+  --kv2-work-drop-over-face: var(--kv2-work-tint-2);
   --kv2-directory-accent-bg: var(--kv2-info-surface-strong);
   --kv2-directory-toggle-bg: var(--kv2-warn-surface);
   --kv2-directory-icon-fill: var(--kv2-status-in-progress-accent);
@@ -908,7 +908,7 @@
   --kv2-session-tab-fg: var(--kv2-text-primary);
   --kv2-favorite-pill-fg: var(--kv2-favorite-icon-active);
   --kv2-favorite-pill-bg: color-mix(in srgb, var(--kv2-favorite-icon-active) 12%, var(--kv2-surface));
-  --kv2-work-drop-overlay: color-mix(in srgb, var(--kv2-surface) 94%, transparent);
+  --kv2-work-drop-over-face: var(--kv2-work-tint-2);
   --kv2-directory-accent-bg: #30343a;
   --kv2-directory-toggle-bg: #30343a;
   --kv2-directory-icon-fill: #a3a8ae;

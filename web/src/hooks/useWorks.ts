@@ -106,6 +106,8 @@ export interface UseWorksResult {
   /** Unassigned, non-ignored sessions — polled continuously for the tab badge. */
   inbox: WorkInboxSession[];
   inboxCount: number;
+  /** Create an empty Work (no session yet) — the Work picker's `새 Work 만들기` for a reservation. */
+  createWork: (input: CreateWorkInput) => Promise<Work>;
   /** Create a new Work seeded from an Inbox session, then link that session. */
   createWorkFromSession: (
     session: WorkInboxSession,
@@ -673,6 +675,7 @@ export function useWorks(active: boolean): UseWorksResult {
     error: resource.error,
     inbox,
     inboxCount: inbox.length,
+    createWork: createEntry,
     createWorkFromSession,
     linkSessionToWork,
     assignSessionsToWork,

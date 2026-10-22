@@ -283,6 +283,10 @@ export function WorkDetailDialog({
           // cards at all" are different answers. The server stamps the second.
           cardsMissingAt: link.cardsMissingAt,
           startedAt,
+          // A link made without one (API / older triage) borrows the session's
+          // card directory, so the row still leads with its project chip.
+          projectDir: link.projectDir
+            ?? workCards.find((c) => c.sessionId === link.sessionId && c.projectDir)?.projectDir,
         };
       }),
     [links, detailBySession, cards, workCards],
@@ -942,10 +946,11 @@ export function WorkDetailDialog({
             <p className="works-empty">연결된 세션이 없습니다.</p>
           ) : (
             <div className="work-session-list">
-              {sessionRows.map(({ link, title, agentRuntime, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt }) => (
+              {sessionRows.map(({ link, title, agentRuntime, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt, projectDir }) => (
                 <div
                   className={[
                     'work-session-item',
+                    'work-session-item--open',
                     // The role tints the whole row (background + left edge), not
                     // just the chip: a list of 개발 / 리뷰 / 디버그 rows should
                     // read as bands at a glance.
@@ -953,6 +958,17 @@ export function WorkDetailDialog({
                     cardsMissingAt ? 'work-session-item--missing' : '',
                   ].filter(Boolean).join(' ')}
                   key={link.sessionId}
+                  role="button"
+                  tabIndex={0}
+                  title="눌러서 대화 보기"
+                  onClick={() => onOpenSession(link.sessionId)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onOpenSession(link.sessionId);
+                    }
+                  }}
                 >
                   {link.role && (
                     <span className={`kv2-badge works-role works-role--${link.role}`}>
@@ -960,22 +976,32 @@ export function WorkDetailDialog({
                     </span>
                   )}
                   <div className="work-session-body">
-                    <div className="work-session-title">{title}</div>
+                    <div className="work-session-head">
+                      <div className="work-session-title">{title}</div>
+                      {/* Copying the id must not open the conversation. */}
+                      <span className="work-session-id" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                        <IdChip id={link.sessionId} kind="session" />
+                      </span>
+                    </div>
                     <div className="work-session-meta">
-                      {/* The board's own chip, not a Works-local one: a session
-                          row and a card row have to read as the same runtime at
-                          a glance. Leading, before the date, because it is the
-                          only non-textual key in the line. */}
+                      {/* Project first and in its board colour — in a Work that
+                          spans repos it is what tells two rows apart. Then the
+                          board's own runtime chip, then date and count. */}
+                      {projectDir && (
+                        <span
+                          className={`works-dir-chip kv2-project-chip work-session-project ${dirAccentClass(projectDir)}`.trim()}
+                          title={projectDir}
+                        >
+                          {projectDirLabel(projectDir)}
+                        </span>
+                      )}
                       {agentRuntime && <RuntimeBadge runtime={agentRuntime} />}
                       <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
                         {formatShortDate(startedAt ?? link.linkedAt)}
                         {startedAt ? '' : ' 연결'}
                       </span>
-                      {link.projectDir ? ` · ${projectDirLabel(link.projectDir)}` : ''}
                       {` · 카드 ${sessionCardCount}`}
                       {archived ? ' · 보관됨' : ''}
-                      {` · `}
-                      <IdChip id={link.sessionId} kind="session" />
                     </div>
                     {cardsMissingAt && (
                       <div className="work-session-missing">
@@ -984,25 +1010,23 @@ export function WorkDetailDialog({
                       </div>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    className="kv2-btn kv2-btn--small kv2-btn--outline"
-                    onClick={() => onOpenSession(link.sessionId)}
-                  >
-                    대화
-                  </button>
                   {sessionActions && (
-                    <WorkSessionMenu
-                      role={link.role}
-                      disabled={busy}
-                      onMove={() => setMoveLink(link)}
-                      onSetRole={(role) => handleSetRole(link, role)}
-                      // The unlink rejects through the shared Works error alert;
-                      // swallowing here keeps that from becoming an unhandled
-                      // rejection (same contract as `handleSetRole`).
-                      onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
-                    />
+                    // The menu (and its portal items, which bubble through the
+                    // React tree) must not also open the conversation.
+                    <span className="work-session-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                      <WorkSessionMenu
+                        role={link.role}
+                        disabled={busy}
+                        onMove={() => setMoveLink(link)}
+                        onSetRole={(role) => handleSetRole(link, role)}
+                        // The unlink rejects through the shared Works error alert;
+                        // swallowing here keeps that from becoming an unhandled
+                        // rejection (same contract as `handleSetRole`).
+                        onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
+                      />
+                    </span>
                   )}
+                  <span className="work-session-go" aria-hidden="true">›</span>
                 </div>
               ))}
             </div>

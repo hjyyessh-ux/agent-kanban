@@ -6,7 +6,7 @@ import type { KanbanCard, Work } from '../../../../src/core/types';
 import { DEFAULT_BOARD_FILTERS } from './board-filters';
 import { sortCardsForColumn } from './board-utils';
 import { groupCompleteCardsBySession } from './BoardCompleteSessionView';
-import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY, COLUMN_MENU_COPY, STATUS_LABELS } from '../../constants/copy';
+import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY, COLUMN_MENU_COPY, STATUS_LABELS, WORK_PICKER_COPY } from '../../constants/copy';
 
 let cardSeq = 1;
 
@@ -726,7 +726,7 @@ describe('BoardScreen', () => {
     expect(flat).not.toContain('kv2-complete-session-group--complete');
   });
 
-  test('works mode draws Work containers, then the UNASSIGNED divider and the loose session groups', () => {
+  test('works mode draws the UNASSIGNED divider and loose session groups first, then Work containers', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a', 'session-b'])];
     const cards = [
       makeCard({ id: 'a-1', title: 'Turn A', status: 'complete', sessionId: 'session-a', completedAt: '2026-04-17T12:00:00.000Z' }),
@@ -742,29 +742,34 @@ describe('BoardScreen', () => {
     const workAt = complete.indexOf('data-work-id="W1"');
     const dividerAt = complete.indexOf(BOARD_WORKS_COPY.unassignedHeading);
     const looseAt = complete.indexOf('Loose turn');
-    expect(workAt).toBeGreaterThan(-1);
-    expect(dividerAt).toBeGreaterThan(workAt);
+    expect(dividerAt).toBeGreaterThan(-1);
     expect(looseAt).toBeGreaterThan(dividerAt);
+    expect(workAt).toBeGreaterThan(looseAt);
     expect(complete).toContain('<span class="kv2-works-unassigned-count">1</span>');
-    // Both Work sessions sit inside the container, not under the divider.
-    expect(complete.indexOf('Turn A')).toBeLessThan(dividerAt);
-    expect(complete.indexOf('Turn B')).toBeLessThan(dividerAt);
+    // Both Work sessions sit inside the container, below the unassigned zone.
+    expect(complete.indexOf('Turn A')).toBeGreaterThan(workAt);
+    expect(complete.indexOf('Turn B')).toBeGreaterThan(workAt);
 
     const done = html.slice(html.indexOf('kv2-column" data-status="done"'));
     expect(done).not.toContain('kv2-column-work-count');
     expect(done).toContain('Done turn');
-    expect(done).not.toContain(BOARD_WORKS_COPY.unassignedEmpty);
+    expect(done).toContain('<span class="kv2-works-unassigned-count">1</span>');
   });
 
-  test('works mode shows an empty UNASSIGNED zone when every session has a Work', () => {
+  test('works mode hides the UNASSIGNED zone when every session has a Work — the Works move up', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a'])];
     const cards = [makeCard({ id: 'a-1', status: 'complete', sessionId: 'session-a' })];
     const html = renderToStaticMarkup(<BoardScreen {...baseProps} groupMode="works" works={works} cards={cards} />);
-    expect(html).toContain('<span class="kv2-works-unassigned-count">0</span>');
-    expect(html).toContain(BOARD_WORKS_COPY.unassignedEmpty);
+    const complete = html.slice(html.indexOf('kv2-column" data-status="complete"'), html.indexOf('kv2-column" data-status="done"'));
+    expect(complete).not.toContain(BOARD_WORKS_COPY.unassignedHeading);
+    expect(complete).toContain('data-work-id="W1"');
+    // A works-mode column with nothing at all reads like any other empty column.
+    const done = html.slice(html.indexOf('kv2-column" data-status="done"'));
+    expect(done).not.toContain(BOARD_WORKS_COPY.unassignedHeading);
+    expect(done).toContain('<div class="kv2-empty">No cards</div>');
   });
 
-  test('works mode tags todo / in-progress cards with their Work or the unassigned hint', () => {
+  test('works mode tags todo / in-progress cards with their Work via BoardCardWorkField', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a'])];
     const cards = [
       makeCard({ id: 'todo-in', status: 'todo', sessionId: 'session-a' }),
@@ -774,15 +779,17 @@ describe('BoardScreen', () => {
       <BoardScreen {...baseProps} groupMode="works" works={works} onWorkOpen={mock(() => undefined)} cards={cards} />,
     );
     expect(html).toContain('data-card-id="todo-in" data-work-id="W1" data-work-status="todo"');
-    expect(html).toContain('<span class="kv2-card-work-tag-title">Board polish</span>');
-    expect(html).toContain(BOARD_WORKS_COPY.unassignedTag);
+    expect(html).toContain('kv2-card-work-field is-set');
+    expect(html).toContain('<span class="kv2-work-picker-label">Board polish</span>');
+    expect(html).toContain(`<span class="kv2-work-picker-label">${WORK_PICKER_COPY.none}</span>`);
 
+    // `BoardCardWorkField` is not gated to `GROUP: WORKS` — every mode shows it once Works have loaded.
     const session = renderToStaticMarkup(<BoardScreen {...baseProps} groupMode="session" works={works} cards={cards} />);
-    expect(session).not.toContain('kv2-card-work-row');
+    expect(session).toContain('kv2-card-work-field');
     expect(session).not.toContain('kv2-work"');
   });
 
-  test('with workMutations, session headers and flat cards become drag sources with ⋯ → Work로 이동', () => {
+  test('with workMutations, session headers and flat cards become drag sources and session groups get the Work field', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a'])];
     const cards = [
       makeCard({ id: 'a-1', title: 'Turn A', status: 'complete', sessionId: 'session-a' }),
@@ -795,18 +802,21 @@ describe('BoardScreen', () => {
       createWithSession: mock(async () => works[0]),
       moveToNewWork: mock(async () => ({ from: null, to: works[0] })),
       deleteWork: mock(async () => {}),
+      createWork: mock(async () => works[0]),
       notify: mock(() => undefined),
     };
     const html = renderToStaticMarkup(
       <BoardScreen {...baseProps} groupMode="works" works={works} workMutations={mutations} cards={cards} />,
     );
     expect(html).toMatch(/class="kv2-complete-session-header"[^>]*draggable="true"/);
-    expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.moveMenuLabel('Turn A')}"`);
-    expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.moveMenuLabel('Running')}"`);
+    // The session group carries the same Work field as a card, showing its linked Work.
+    expect(html).toContain('kv2-complete-session-work-row');
+    expect(html).not.toContain('kv2-work-move-menu');
     expect(html).toMatch(/class="kv2-card[^"]*" data-id="prog-1" draggable="true"/);
 
     const without = renderToStaticMarkup(<BoardScreen {...baseProps} groupMode="works" works={works} cards={cards} />);
-    expect(without).not.toContain('kv2-work-move-menu');
+    // No mutations → no session-group Work field (nothing could run the change).
+    expect(without).not.toContain('kv2-complete-session-work-row');
     expect(without).toMatch(/class="kv2-card[^"]*" data-id="prog-1" draggable="false"/);
   });
 

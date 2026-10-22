@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup — Works UX 정리 (before / after)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+/* ── 테마 토큰: works-on-board.html 과 같은 값 (kanban-v2.tokens.css 기반) ── */
+:root {
+  --todo: #3b82f6; --prog: #facc15; --complete: #ff3b6b; --done: #22c55e;
+  --d-ak: #dd4b9c; --d-mcp: #787fed; --d-sms: #357718; --d-zadar: #a7361b;
+  --fav-active: #f59e0b;
+  --sans: 'Work Sans', system-ui, sans-serif; --mono: 'Source Code Pro', ui-monospace, monospace;
+  --app-bg: #FFF8E7; --surface: #fff; --sunken: #f8fafc; --hover: #fffdf5;
+  --ink: #1A1A2E; --ink-2: #536074; --ink-3: #627089;
+  --border: #D7DCE6; --frame: #1f2233; --card-border: #1f2233; --hard: #000;
+  --card-accent-w: 6px;
+  --warn: #b45309; --warn-surface: color-mix(in srgb, #f59e0b 12%, #fff);
+  --colh-border: #1f2233; --colh-shadow-x: 4px 4px 0 #000;
+  --colh-todo-bg: var(--todo); --colh-todo-fg: #fff;
+  --colh-prog-bg: var(--prog); --colh-prog-fg: #1A1A2E;
+  --rt-claude-bg: #f7d9cd; --rt-border: #1f2233; --rt-fg: #1A1A2E;
+  --btn-bg: #fff; --btn-border: #1f2233; --btn-fg: #1A1A2E; --btn-shadow: 2px 2px 0 #000;
+  --btn-start-bg: var(--todo); --btn-start-fg: #fff;
+  --btn-queue-bg: var(--prog); --btn-queue-fg: #1A1A2E;
+  --meta-border: #f3c58b; --meta-bg: #fffaf2; --meta-plain-border: #D7DCE6;
+  --work: #2f6cb6; --work-fg: #f9fafb; --work-text: #2f6cb6;
+  --work-tint: color-mix(in srgb, var(--work) 7%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 14%, var(--surface));
+  --mock-bar-bg: #1f2233; --toast-bg: #1f2233; --toast-fg: #fff;
+  --scrim: rgba(26,26,46,.35);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --app-bg: #1b1d20; --surface: #272a2e; --sunken: #202327; --hover: #30343a;
+  --ink: #d4d7db; --ink-2: #a3a8ae; --ink-3: #979ea6;
+  --border: #34383d; --frame: #454a50; --card-border: #3c4146; --hard: #0d0f10;
+  --card-accent-w: 4px;
+  --warn: #e0b46a; --warn-surface: color-mix(in srgb, #f59e0b 14%, #272a2e);
+  --colh-border: #3a3f44; --colh-shadow-x: 3px 3px 0 #0d0f10;
+  --colh-todo-bg: color-mix(in srgb, var(--todo) 24%, #25282c); --colh-todo-fg: var(--ink);
+  --colh-prog-bg: color-mix(in srgb, var(--prog) 22%, #25282c); --colh-prog-fg: var(--ink);
+  --rt-claude-bg: #2d3135; --rt-border: #484e54; --rt-fg: #c2c6ca;
+  --btn-bg: #2d3135; --btn-border: #4a5056; --btn-fg: #cfd3d7; --btn-shadow: 2px 2px 0 #0d0f10;
+  --btn-start-bg: color-mix(in srgb, var(--todo) 30%, #2d3135); --btn-start-fg: var(--ink);
+  --btn-queue-bg: color-mix(in srgb, var(--prog) 22%, #2d3135); --btn-queue-fg: var(--ink);
+  --meta-border: #6b5638; --meta-bg: #2b2a27; --meta-plain-border: #3c4146;
+  --work: #3d7fd0; --work-fg: #f4f6f8;
+  --work-text: color-mix(in srgb, #3d7fd0 62%, #d4d7db);
+  --work-tint: color-mix(in srgb, var(--work) 11%, var(--surface));
+  --work-tint-2: color-mix(in srgb, var(--work) 20%, var(--surface));
+  --mock-bar-bg: #0e0e15; --toast-bg: #30343a; --toast-fg: #d4d7db;
+  --scrim: rgba(0,0,0,.5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--app-bg); color: var(--ink); font: 14px/1.45 var(--sans); }
+button { font: inherit; color: inherit; cursor: pointer; }
+code { font: 12px var(--mono); background: var(--sunken); padding: 0 4px; border: 1px solid var(--border); }
+
+/* ── 목업 바 · 목차 ── */
+.mock-bar { position: sticky; top: 0; z-index: 40; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 10px 24px; background: var(--mock-bar-bg); color: #fff; font-size: 13px; }
+.mock-bar b { color: var(--prog); letter-spacing: .04em; }
+.mock-bar a { color: #fff; font-weight: 700; text-decoration: none; border-bottom: 2px solid transparent; }
+.mock-bar a:hover { border-bottom-color: var(--prog); }
+.seg { display: inline-flex; border: 2px solid #fff; margin-left: auto; }
+.seg button { border: 0; background: transparent; color: #fff; padding: 4px 10px; font-weight: 700; font-size: 12px; }
+.seg button + button { border-left: 2px solid #fff; }
+.seg button.on { background: var(--prog); color: #1A1A2E; }
+main { padding: 28px 24px 80px; max-width: 1480px; margin: 0 auto; }
+
+/* ── 섹션: 문제 → before | after → 구현 메모 ── */
+.case { margin-bottom: 64px; scroll-margin-top: 64px; }
+.case > h2 { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; font-size: 22px; }
+.case > h2 .no { font: 800 13px var(--mono); background: var(--ink); color: var(--app-bg); padding: 2px 8px; }
+.case > .lead { margin: 0 0 18px; color: var(--ink-2); max-width: 980px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.pane { position: relative; border: 3px solid var(--frame); background: var(--app-bg); box-shadow: 4px 4px 0 var(--hard); }
+.pane > .tag { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 3px solid var(--frame); font: 800 12px var(--mono); letter-spacing: .08em; }
+.pane.before > .tag { background: color-mix(in srgb, var(--complete) 18%, var(--surface)); }
+.pane.after > .tag { background: color-mix(in srgb, var(--done) 22%, var(--surface)); }
+.pane > .stage { padding: 22px 20px 24px; position: relative; }
+.pane > .why { margin: 0; padding: 12px 16px 14px 34px; border-top: 2px dashed var(--border); background: var(--surface); font-size: 13px; }
+.pane > .why li { margin: 3px 0; }
+.pane.before .why li::marker { content: '✗  '; color: var(--complete); font-weight: 800; }
+.pane.after .why li::marker { content: '✓  '; color: var(--done); font-weight: 800; }
+.impl { margin-top: 16px; background: var(--surface); border: 2px solid var(--border); padding: 10px 16px; font-size: 13px; }
+.impl b { font: 800 11px var(--mono); letter-spacing: .08em; color: var(--ink-3); margin-right: 6px; }
+.impl ul { margin: 6px 0 0; padding-left: 18px; }
+.impl li { margin: 2px 0; }
+
+/* 주석 핀 */
+.pin { position: absolute; z-index: 5; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--complete); color: #fff; font: 800 11px var(--mono); border: 2px solid var(--hard); }
+.after .pin { background: var(--done); color: #08310f; }
+
+/* ── 공용 원자 ── */
+.pchip { white-space: nowrap; flex: none; font: 700 11px var(--mono); padding: 1px 6px; border: 2px solid var(--dc); color: var(--dc); background: color-mix(in srgb, var(--dc) 10%, var(--surface)); }
+.pchip.hero { font-size: 12px; padding: 2px 8px; }
+.idchip { font: 800 12px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.rt { font: 700 10px var(--mono); padding: 2px 8px; border: 2px solid var(--rt-border); border-radius: 999px; background: var(--rt-claude-bg); color: var(--rt-fg); white-space: nowrap; }
+.btn { border: 2px solid var(--btn-border); background: var(--btn-bg); color: var(--btn-fg); box-shadow: var(--btn-shadow); padding: 3px 12px; font-weight: 800; font-size: 12px; white-space: nowrap; }
+.btn.done { background: var(--done); color: #fff; }
+.btn.start { background: var(--btn-start-bg); color: var(--btn-start-fg); }
+.btn.queue { background: var(--btn-queue-bg); color: var(--btn-queue-fg); }
+.btn.del { margin-left: auto; color: #dc2626; padding: 3px 8px; }
+.toggle { border: 2px solid var(--btn-border); background: var(--btn-bg); color: var(--btn-fg); box-shadow: var(--btn-shadow); padding: 2px 10px; font: 800 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.kebab { border: 0; background: transparent; padding: 0 6px; font-weight: 800; color: var(--ink-2); letter-spacing: 1px; }
+.kebab.hot { background: var(--work-tint-2); outline: 2px solid var(--work); }
+.unread { font: 800 11px var(--mono); background: #e5484d; color: #fff; padding: 0 5px; border: 2px solid var(--hard); white-space: nowrap; }
+.muted { color: var(--ink-3); }
+.mono { font-family: var(--mono); font-size: 12px; }
+
+/* Work 필드 — 보드 카드/세션 공용 pill (예약=점선, 연결=실선, 없음=회색 점선) */
+.wfield { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 8px 2px 4px; font: 700 12px var(--sans); border: 2px dashed var(--border); color: var(--ink-3); background: var(--surface); cursor: pointer; }
+.wfield .wi { font: 800 10px var(--mono); padding: 0 4px; background: var(--border); color: var(--ink-2); }
+.wfield.set { border: 2px solid var(--work); color: var(--work-text); background: var(--work-tint); }
+.wfield.set .wi { background: var(--work); color: var(--work-fg); }
+.wfield.planned { border-style: dashed; background: var(--surface); }
+.wfield .wt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wfield .st { font: 700 10px var(--mono); color: var(--ink-3); }
+.wfield .car { font-size: 9px; }
+.wfield.hot { outline: 3px solid var(--prog); outline-offset: 2px; }
+
+/* 피커 / 메뉴 */
+.picker { position: absolute; z-index: 20; width: 300px; background: var(--surface); border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--hard); }
+.picker input { width: calc(100% - 20px); margin: 10px; padding: 5px 8px; border: 2px solid var(--frame); background: var(--sunken); color: var(--ink); font: 13px var(--sans); }
+.picker ul, .menu ul { list-style: none; margin: 0; padding: 0 0 6px; }
+.picker li, .menu li { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; }
+.picker li.on { background: var(--work-tint-2); }
+.picker li .chk { width: 12px; color: var(--work-text); font-weight: 800; }
+.picker li .cnt { margin-left: auto; font: 11px var(--mono); color: var(--ink-3); }
+.picker .sep, .menu .sep { border-top: 2px dashed var(--border); margin: 4px 0; }
+.picker .new { color: var(--work-text); font-weight: 700; }
+.picker .rm { color: #dc2626; font-weight: 700; }
+.menu { position: absolute; z-index: 20; min-width: 250px; background: var(--surface); border: 3px solid var(--frame); box-shadow: 6px 6px 0 var(--hard); padding: 4px 0; }
+.menu li { font-weight: 600; }
+.menu li.long { color: var(--ink-2); }
+
+/* ── ① 카드 상세 · NEW TASK ── */
+.dialog { position: relative; background: var(--surface); border: 3px solid var(--frame); border-left: 8px solid var(--todo); box-shadow: 6px 6px 0 var(--hard); padding: 18px 20px 20px; }
+.dialog .dh { display: flex; align-items: center; gap: 10px; }
+.pill-todo { background: var(--todo); color: #fff; font: 800 11px var(--mono); padding: 3px 10px; border: 2px solid var(--frame); }
+.dialog h3 { margin: 10px 0 14px; font-size: 17px; }
+.mgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.row2 { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 10px; }
+.row1 { margin-top: 10px; }
+.meta { position: relative; border: 2px solid var(--meta-plain-border); background: var(--surface); padding: 9px 12px; min-height: 58px; }
+.meta.rt-tile { border-color: var(--meta-border); background: var(--meta-bg); }
+.meta .ml { font: 800 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.meta .mv { margin-top: 4px; font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.meta .mv .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta .mv .caret { margin-left: auto; font-size: 9px; color: var(--ink-3); }
+.meta .ms { margin-top: 2px; font-size: 11px; color: var(--ink-3); }
+.meta.dir .mv { font: 600 13px var(--mono); }
+.meta.wtile { border-color: var(--work); background: var(--work-tint); cursor: pointer; }
+.meta.wtile.planned { border-style: dashed; }
+.meta.wtile .wi { background: var(--work); color: var(--work-fg); font: 800 10px var(--mono); padding: 0 4px; flex: none; }
+.state-b { font: 700 10px var(--mono); padding: 0 5px; border: 2px dashed var(--work); color: var(--work-text); white-space: nowrap; flex: none; }
+.lonely { width: 33%; }
+
+.form { margin-top: 18px; padding-top: 14px; border-top: 2px dashed var(--border); }
+.form .flabel { font-weight: 800; font-size: 13px; margin: 10px 0 5px; display: flex; align-items: baseline; gap: 8px; }
+.form .flabel .opt { font: 600 11px var(--mono); color: var(--ink-3); }
+.finput { display: flex; align-items: stretch; height: 38px; border: 2px solid var(--frame); background: var(--surface); box-shadow: 3px 3px 0 var(--hard); }
+.finput .ico { width: 38px; display: grid; place-items: center; border-right: 2px solid var(--frame); background: color-mix(in srgb, var(--todo) 12%, var(--surface)); font-size: 13px; }
+.finput .ico.w { background: var(--work); color: var(--work-fg); font: 800 11px var(--mono); }
+.finput .val { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 10px; font: 600 13px var(--mono); min-width: 0; }
+.finput .val.sans { font-family: var(--sans); font-weight: 700; }
+.finput .val .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.finput .val .ph { color: var(--ink-3); font-weight: 500; }
+.finput .dd { width: 36px; display: grid; place-items: center; border-left: 2px solid var(--frame); background: color-mix(in srgb, var(--prog) 30%, var(--surface)); font-size: 10px; }
+.fhint { margin-top: 4px; font-size: 11px; color: var(--ink-3); }
+.bare { display: flex; align-items: center; font-weight: 700; font-size: 13px; padding: 2px 0; }
+.bare .caret { margin-left: auto; font-size: 9px; color: var(--ink-3); }
+.f2 { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+
+/* ── ② 보드 카드 · 세션 그룹 ── */
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.colh { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 3px solid var(--colh-border); box-shadow: var(--colh-shadow-x); font-weight: 800; font-size: 14px; margin-bottom: 12px; }
+.colh.todo { background: var(--colh-todo-bg); color: var(--colh-todo-fg); }
+.colh.cmp { background: var(--complete); color: #fff; }
+.zone-h { font: 800 10px var(--mono); letter-spacing: .08em; color: var(--ink-3); display: flex; align-items: center; gap: 6px; margin: 2px 0 10px; }
+.zone-h::after { content: ''; flex: 1; border-top: 2px dashed var(--ink-3); }
+.bcard, .sgroup { position: relative; background: var(--surface); border: 3px solid var(--card-border); box-shadow: 4px 4px 0 var(--hard); padding: 10px 12px; }
+.bcard { border-left: var(--card-accent-w) solid var(--todo); }
+.sgroup { border-left: var(--card-accent-w) solid var(--complete); margin-top: 16px; }
+.sgroup .stab { position: absolute; left: -6px; top: -19px; font: 800 9px var(--mono); letter-spacing: .1em; background: var(--ink); color: var(--app-bg); padding: 2px 8px; }
+.top { display: flex; align-items: center; gap: 6px; }
+.top .r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.bcard h4, .sgroup h4 { margin: 6px 0 2px; font-size: 14px; font-weight: 800; }
+.pr { color: var(--ink-2); font-size: 12px; border-bottom: 2px dashed var(--border); padding-bottom: 6px; }
+.mrow { display: flex; align-items: center; gap: 8px; margin-top: 6px; font: 11px var(--mono); color: var(--ink-3); }
+.wrow { margin-top: 6px; }
+.arow { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.arow .r { margin-left: auto; display: flex; gap: 6px; }
+
+/* ── ③ Work 상세 세션 행 ── */
+.wd { background: var(--surface); border: 3px solid var(--frame); border-left: 8px solid var(--work); box-shadow: 6px 6px 0 var(--hard); padding: 16px 18px 18px; }
+.wd .wdh { display: flex; align-items: center; gap: 10px; }
+.wd .badge { font: 800 11px var(--mono); padding: 2px 8px; border: 2px solid var(--work); color: var(--work-text); background: var(--work-tint); }
+.wd h3 { margin: 8px 0 12px; font-size: 16px; }
+.wd .lh { font-weight: 800; font-size: 13px; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.wd .lh .n { font: 800 11px var(--mono); border: 2px solid var(--work); color: var(--work-text); padding: 0 5px; }
+.srow { position: relative; display: flex; align-items: center; gap: 10px; border: 2px solid var(--border); background: var(--sunken); padding: 9px 12px; margin-top: 8px; }
+.srow .body { flex: 1; min-width: 0; }
+.srow .tt { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .mm { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 11px var(--mono); color: var(--ink-3); flex-wrap: wrap; }
+.srow.click { cursor: pointer; background: var(--surface); }
+.srow.click:hover, .srow.click.hover { border-color: var(--work); background: var(--work-tint); }
+.srow .go { font: 800 14px var(--mono); color: var(--ink-3); }
+.srow.click.hover .go { color: var(--work-text); }
+.srow .top { margin-bottom: 3px; gap: 10px; }
+.srow .top .tt { min-width: 0; }
+.srow .mm .pchip { margin-right: 2px; }
+
+/* ── ④ Work 컨테이너 ── */
+.work { position: relative; margin-top: 34px; border: 3px solid var(--work); background: var(--work-tint); box-shadow: 4px 4px 0 var(--hard), 7px 7px 0 var(--work); padding: 10px 12px; }
+.work .wtab { position: absolute; left: -3px; top: -21px; font: 800 9px var(--mono); letter-spacing: .1em; background: var(--work); color: var(--work-fg); padding: 2px 8px; }
+.work .wh { display: flex; align-items: center; gap: 8px; }
+.work .wh .chev { font-size: 10px; color: var(--work-text); border: 0; background: transparent; padding: 0 2px; }
+.work .wh .title { font-weight: 800; font-size: 14px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.work .wm { display: flex; align-items: center; gap: 8px; margin-top: 6px; font: 11px var(--mono); color: var(--ink-3); }
+.work .wm .r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.work .wfoot { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 2px dashed color-mix(in srgb, var(--work) 40%, transparent); }
+.work .wfoot .r { margin-left: auto; }
+.work .inner { margin-top: 10px; padding: 8px 10px; background: var(--surface); border: 2px solid var(--card-border); border-left: 4px solid var(--complete); font-size: 12px; }
+.work .inner b { font-size: 13px; }
+
+@media (max-width: 1100px) { .pair { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="mock-bar">
+  <span><b>MOCKUP</b> Works UX 정리 — before / after</span>
+  <a href="#c1">① Work 필드 위치</a>
+  <a href="#c2">② Work 지정 방식 통일</a>
+  <a href="#c3">③ Work 상세 세션 행</a>
+  <a href="#c4">④ Work 접기 버튼</a>
+  <div class="seg" id="themeSeg">
+    <button data-theme-set="light" class="on">Light</button>
+    <button data-theme-set="dark">Dark</button>
+  </div>
+</div>
+
+<main>
+
+<!-- ───────────────────────── ① ───────────────────────── -->
+<section class="case" id="c1">
+  <h2><span class="no">①</span> 카드 상세 · NEW TASK의 Work 필드 위치와 모양</h2>
+  <p class="lead">목업 A안은 <b>DIRECTORY 옆 칸</b>이었는데, 구현은 상세에서 WORK가 DIRECTORY 아래 줄에 혼자 놓였고, NEW TASK에서는 테두리 없는 글자 + 오른쪽 끝 ▾ 로 그려져 입력칸처럼 보이지 않습니다.</p>
+  <div class="pair">
+    <div class="pane before">
+      <div class="tag">BEFORE — 지금</div>
+      <div class="stage">
+        <div class="dialog">
+          <div class="dh"><span class="pill-todo">TODO</span><span class="idchip" style="margin-left:auto">CARD #bfQ6-2Sk</span></div>
+          <h3>SMS Whitelist 관리 UI 회귀 테스트</h3>
+          <div class="mgrid">
+            <div class="meta rt-tile"><div class="ml">Runtime</div><div class="mv">Claude <span class="caret">▾</span></div></div>
+            <div class="meta"><div class="ml">Model</div><div class="mv">Default <span class="caret">▾</span></div></div>
+            <div class="meta"><div class="ml">Permission</div><div class="mv">plan <span class="caret">▾</span></div></div>
+          </div>
+          <div class="row1"><div class="meta dir"><div class="ml">Directory</div><div class="mv">/Users/user/workspace/sms</div></div></div>
+          <div class="row1"><div class="meta wtile planned lonely"><div class="ml">Work</div><div class="mv"><span class="t">Zepetoful - Reset 기능</span><span class="caret">▾</span></div><div class="ms">예약 · 세션 시작 시 연결</div></div></div>
+          <span class="pin" style="left:6px;top:206px">1</span>
+
+          <div class="form">
+            <div class="muted mono" style="margin-bottom:4px">NEW TASK 다이얼로그</div>
+            <div class="flabel">Directory</div>
+            <div class="finput"><span class="ico">🗀</span><span class="val">/Users/user/workspace/…</span><span class="dd">▾</span></div>
+            <div class="fhint">Recent directories are saved in this browser after use.</div>
+            <div class="flabel">Work</div>
+            <div class="bare">Zepetoful - Reset 기능 <span class="caret">▾</span></div>
+            <div class="fhint">예약 · 세션 시작 시 연결</div>
+            <span class="pin" style="right:8px;bottom:56px">2</span>
+          </div>
+        </div>
+      </div>
+      <ul class="why">
+        <li>1 — WORK가 DIRECTORY 아래 줄에 1/3 폭으로 혼자 있어 빈 공간이 생기고, 목업(A안: DIRECTORY 옆)과 다름</li>
+        <li>2 — NEW TASK의 Work는 테두리·배경이 없어 클릭 가능한 칸으로 안 보이고, ▾가 화면 오른쪽 끝에 떨어져 있음</li>
+        <li>"예약" 상태가 작은 회색 글씨로만 표시돼 잘 안 보임</li>
+      </ul>
+    </div>
+
+    <div class="pane after">
+      <div class="tag">AFTER — 제안</div>
+      <div class="stage">
+        <div class="dialog">
+          <div class="dh"><span class="pill-todo">TODO</span><span class="idchip" style="margin-left:auto">CARD #bfQ6-2Sk</span></div>
+          <h3>SMS Whitelist 관리 UI 회귀 테스트</h3>
+          <div class="mgrid">
+            <div class="meta rt-tile"><div class="ml">Runtime</div><div class="mv">Claude <span class="caret">▾</span></div></div>
+            <div class="meta"><div class="ml">Model</div><div class="mv">Default <span class="caret">▾</span></div></div>
+            <div class="meta"><div class="ml">Permission</div><div class="mv">plan <span class="caret">▾</span></div></div>
+          </div>
+          <div class="row2">
+            <div class="meta dir"><div class="ml">Directory</div><div class="mv"><span class="t">/Users/user/workspace/sms</span></div></div>
+            <div class="meta wtile planned"><div class="ml">Work</div><div class="mv"><span class="wi">W</span><span class="t">Zepetoful - Reset 기능</span><span class="state-b">예약</span><span class="caret">▾</span></div></div>
+          </div>
+          <span class="pin" style="right:2px;top:186px">1</span>
+
+          <div class="form">
+            <div class="muted mono" style="margin-bottom:4px">NEW TASK 다이얼로그</div>
+            <div class="f2">
+              <div>
+                <div class="flabel">Directory</div>
+                <div class="finput"><span class="ico">🗀</span><span class="val">/Users/user/workspace/…</span><span class="dd">▾</span></div>
+              </div>
+              <div>
+                <div class="flabel">Work <span class="opt">선택</span></div>
+                <div class="finput"><span class="ico w">W</span><span class="val sans"><span class="t">Zepetoful - Reset 기능</span><span class="state-b">예약</span></span><span class="dd">▾</span></div>
+              </div>
+            </div>
+            <div class="fhint">Work를 고르면 세션이 시작될 때 그 Work에 자동으로 연결됩니다.</div>
+            <span class="pin" style="right:2px;bottom:62px">2</span>
+          </div>
+        </div>
+      </div>
+      <ul class="why">
+        <li>1 — 상세: DIRECTORY 2 : WORK 1 한 줄 (목업 A안 그대로). 빈 칸 없음</li>
+        <li>2 — NEW TASK: Directory 입력칸과 같은 모양(아이콘 칸 · 값 · ▾ 버튼)으로 같은 줄에 배치</li>
+        <li>"예약"은 회색 문장 대신 값 옆 점선 배지 — 보드 카드의 <code>· 예약</code> 표시와 같은 말</li>
+      </ul>
+    </div>
+  </div>
+  <div class="impl"><b>구현 메모</b>
+    <ul>
+      <li><code>CardMetaPanel.tsx</code>: Directory 타일과 WORK 타일을 하나의 2:1 grid 행으로 묶기. Directory 편집 중(<code>DirectoryPicker</code>)일 때도 같은 행 유지</li>
+      <li><code>CreateCardDialog.tsx</code>: WORK를 Directory와 같은 행으로 올리고, <code>MetaSelect</code> 트리거를 <code>DirectoryPicker</code>와 같은 입력칸 스타일로 감싸기. 힌트 문장 → <code>예약</code> 배지</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────────────────── ② ───────────────────────── -->
+<section class="case" id="c2">
+  <h2><span class="no">②</span> TODO 카드와 미배정 세션의 Work 지정 방식 통일</h2>
+  <p class="lead">TODO 카드는 카드 아래 <code>Work 없음 ▾</code> 칸을 누르면 되는데, 미배정 세션은 <code>⋯</code> 메뉴 안에 숨은 <code>→ Work 이름</code> 목록을 찾아야 합니다. 같은 일을 하는 데 방법이 두 가지입니다.</p>
+  <div class="pair">
+    <div class="pane before">
+      <div class="tag">BEFORE — 지금</div>
+      <div class="stage">
+        <div class="cols">
+          <div>
+            <div class="colh todo">대기 <span class="mono">1</span></div>
+            <div class="bcard">
+              <div class="top"><span class="pchip" style="--dc:var(--d-sms)">sms</span><span class="r"><span class="idchip">#bfQ6-2Sk</span></span></div>
+              <h4>SMS Whitelist 회귀 테스트</h4>
+              <div class="pr">테스트 카드 2</div>
+              <div class="mrow"><span class="rt">CLAUDE</span>5m ago</div>
+              <div class="wrow"><span class="wfield hot"><span class="wi">W</span><span class="wt">Work 없음</span><span class="car">▾</span></span></div>
+              <div class="arow"><button class="btn start">▶ 시작</button><button class="btn queue">큐 연결</button><button class="btn del">✕</button></div>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:10px">TODO 카드: 카드 위 칸을 바로 누름</div>
+          </div>
+          <div>
+            <div class="colh cmp">검토 대기 <span class="mono">72</span></div>
+            <div class="zone-h">UNASSIGNED SESSIONS 1</div>
+            <div class="sgroup">
+              <span class="stab">SESSION</span>
+              <div class="top"><span class="pchip" style="--dc:var(--d-ak)">agent-kanban</span><span class="r"><span class="unread">● 1</span><span class="idchip">#4dc382dd</span><button class="kebab hot">⋯</button></span></div>
+              <h4>Session test</h4>
+              <div class="mrow"><span class="rt">CLAUDE</span>1 card</div>
+              <div class="arow"><button class="toggle">hide</button><span class="r"><button class="btn done">✓ 완료</button></span></div>
+              <div class="menu" style="right:-14px;top:34px">
+                <ul>
+                  <li class="long">→ ZEPETOFUL - Asset 2018 스튜디오…</li>
+                  <li class="long">→ zdd-zetta2 - Review</li>
+                  <li class="long">→ GHES 마이그레이션</li>
+                  <li class="long">→ Zadar - 고도화 #1</li>
+                  <li class="long">→ ZEPETOFUL - Alert proxy 개선</li>
+                  <li class="sep"></li>
+                  <li>＋ 새 Work 만들어 넣기…</li>
+                </ul>
+              </div>
+            </div>
+            <div class="muted" style="font-size:12px;margin-top:210px">세션: <code>⋯</code> → 목록에서 고름</div>
+          </div>
+        </div>
+      </div>
+      <ul class="why">
+        <li>같은 "Work 지정"인데 카드는 칸, 세션은 <code>⋯</code> 메뉴 — 위치도 모양도 다름</li>
+        <li>세션은 지금 어느 Work인지(없음인지) 화면에 안 보임. 메뉴를 열어야 앎</li>
+        <li><code>⋯</code> 메뉴는 Work 목록이 길어질수록 같이 길어지고 검색이 없음</li>
+      </ul>
+    </div>
+
+    <div class="pane after">
+      <div class="tag">AFTER — 제안</div>
+      <div class="stage">
+        <div class="cols">
+          <div>
+            <div class="colh todo">대기 <span class="mono">1</span></div>
+            <div class="bcard">
+              <div class="top"><span class="pchip" style="--dc:var(--d-sms)">sms</span><span class="r"><span class="idchip">#bfQ6-2Sk</span></span></div>
+              <h4>SMS Whitelist 회귀 테스트</h4>
+              <div class="pr">테스트 카드 2</div>
+              <div class="mrow"><span class="rt">CLAUDE</span>5m ago</div>
+              <div class="wrow"><span class="wfield set planned"><span class="wi">W</span><span class="wt">Zadar - 고도화 #1</span><span class="st">· 예약</span><span class="car">▾</span></span></div>
+              <div class="arow"><button class="btn start">▶ 시작</button><button class="btn queue">큐 연결</button><button class="btn del">✕</button></div>
+            </div>
+          </div>
+          <div>
+            <div class="colh cmp">검토 대기 <span class="mono">72</span></div>
+            <div class="zone-h">UNASSIGNED SESSIONS 1</div>
+            <div class="sgroup">
+              <span class="stab">SESSION</span>
+              <div class="top"><span class="pchip" style="--dc:var(--d-ak)">agent-kanban</span><span class="r"><span class="unread">● 1</span><span class="idchip">#4dc382dd</span><button class="kebab">⋯</button></span></div>
+              <h4>Session test</h4>
+              <div class="mrow"><span class="rt">CLAUDE</span>1 card</div>
+              <div class="wrow"><span class="wfield hot"><span class="wi">W</span><span class="wt">Work 없음</span><span class="car">▾</span></span></div>
+              <div class="arow"><button class="toggle">hide</button><span class="r"><button class="btn done">✓ 완료</button></span></div>
+              <div class="picker" style="left:-6px;top:150px">
+                <input value="" placeholder="Work 검색…" />
+                <ul>
+                  <li class="on"><span class="chk">✓</span>Work 없음</li>
+                  <li><span class="chk"></span>Zadar - 고도화 #1<span class="cnt">3 세션</span></li>
+                  <li><span class="chk"></span>GHES 마이그레이션<span class="cnt">5 세션</span></li>
+                  <li><span class="chk"></span>zdd-zetta2 - Review<span class="cnt">2 세션</span></li>
+                  <li class="sep"></li>
+                  <li class="new">＋ 새 Work 만들어 넣기…</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="height:250px"></div>
+      </div>
+      <ul class="why">
+        <li>TODO 카드 · 진행 중 카드 · 미배정 세션 · Work 안 세션 모두 <b>같은 자리에 같은 <code>W … ▾</code> 칸</b></li>
+        <li>누르면 같은 피커(검색 + 목록 + <code>＋ 새 Work</code>). 세션이 있으면 넣기/옮기기/빼기, 없으면 예약 — 차이는 내부에서 처리</li>
+        <li>지금 상태(없음 / 예약 / 연결)가 항상 보임. <code>⋯</code>에서는 Work 목록을 빼서 메뉴가 짧아짐</li>
+      </ul>
+    </div>
+  </div>
+  <div class="impl"><b>구현 메모</b>
+    <ul>
+      <li><code>BoardCardWorkField</code>를 세션 그룹 헤더(<code>BoardSessionGroupCard</code>, 미배정·Work 안 공용)에도 같은 위치(메타 줄 아래)로 붙임 — 판단은 이미 있는 <code>resolveWorkFieldChange</code> → <code>runWorkAction</code> 그대로</li>
+      <li>피커에 검색 입력과 <code>＋ 새 Work 만들어 넣기…</code>(→ 기존 <code>BoardNewWorkDialog</code>) 추가. 카드·세션 공용</li>
+      <li><code>BoardWorkMoveMenu</code>(<code>⋯ → Work로 이동</code>)의 Work 목록 제거. 드래그 & 드롭과 하단 트레이는 그대로 유지</li>
+      <li>범위: Works 그룹 모드뿐 아니라 SESSION 모드의 세션 그룹에도 표시 (카드와 같은 "모든 그룹 모드" 규칙)</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────────────────── ③ ───────────────────────── -->
+<section class="case" id="c3">
+  <h2><span class="no">③</span> Work 상세의 연결된 세션 행</h2>
+  <p class="lead">세션 대화를 보려면 행 오른쪽 작은 <code>대화</code> 버튼을 눌러야 하고, 프로젝트는 회색 메타 줄 중간(<code>10/21 · mcp-server · 카드 1</code>)에 묻혀 있습니다. 메인 보드에서는 이미 프로젝트 칩을 맨 위로, 런타임을 아래로 옮겼습니다.</p>
+  <div class="pair">
+    <div class="pane before">
+      <div class="tag">BEFORE — 지금</div>
+      <div class="stage">
+        <div class="wd">
+          <div class="wdh"><span class="badge">진행 중 · 1일째</span><span class="idchip" style="margin-left:auto">WORK #zmNWoJCU</span></div>
+          <h3>ZEPETOFUL - asset save rollback</h3>
+          <div class="lh">연결된 세션 <span class="n">2</span></div>
+          <div class="srow">
+            <div class="body">
+              <div class="tt">ZEPETOFUL - asset save rollback</div>
+              <div class="mm"><span class="rt">CLAUDE</span>10/21 · mcp-server · 카드 1 · <span class="idchip">#d35021d4</span></div>
+            </div>
+            <button class="btn" style="outline:3px solid var(--prog);outline-offset:2px">대화</button><button class="kebab">⋯</button>
+          </div>
+          <div class="srow">
+            <div class="body">
+              <div class="tt">rollback 리뷰</div>
+              <div class="mm"><span class="rt">CLAUDE</span>10/21 · zepetoful · 카드 2 · <span class="idchip">#a91c07e2</span></div>
+            </div>
+            <button class="btn">대화</button><button class="kebab">⋯</button>
+          </div>
+          <span class="pin" style="left:-14px;top:138px">P</span>
+        </div>
+      </div>
+      <ul class="why">
+        <li>행을 눌러도 아무 일이 없고, 대화를 보려면 작은 <code>대화</code> 버튼을 정확히 눌러야 함</li>
+        <li>P — 프로젝트(<code>mcp-server</code>)가 날짜·카드 수 사이의 회색 글자라, 여러 프로젝트가 섞인 Work에서 구분이 안 됨</li>
+        <li>메인 보드 카드(프로젝트 칩 맨 위)와 행의 구조가 다름</li>
+      </ul>
+    </div>
+
+    <div class="pane after">
+      <div class="tag">AFTER — 제안</div>
+      <div class="stage">
+        <div class="wd">
+          <div class="wdh"><span class="badge">진행 중 · 1일째</span><span class="idchip" style="margin-left:auto">WORK #zmNWoJCU</span></div>
+          <h3>ZEPETOFUL - asset save rollback</h3>
+          <div class="lh">연결된 세션 <span class="n">2</span></div>
+          <div class="srow click hover">
+            <div class="body">
+              <div class="top"><span class="tt">ZEPETOFUL - asset save rollback</span><span class="idchip" style="margin-left:auto">#d35021d4</span></div>
+              <div class="mm"><span class="pchip hero" style="--dc:var(--d-mcp)">mcp-server</span><span class="rt">CLAUDE</span>10/21 · 카드 1</div>
+            </div>
+            <button class="kebab">⋯</button><span class="go">›</span>
+          </div>
+          <div class="srow click">
+            <div class="body">
+              <div class="top"><span class="tt">rollback 리뷰</span><span class="idchip" style="margin-left:auto">#a91c07e2</span></div>
+              <div class="mm"><span class="pchip hero" style="--dc:var(--d-ak)">zepetoful</span><span class="rt">CLAUDE</span>10/21 · 카드 2</div>
+            </div>
+            <button class="kebab">⋯</button><span class="go">›</span>
+          </div>
+          <span class="pin" style="left:4px;top:170px">P</span>
+        </div>
+      </div>
+      <ul class="why">
+        <li><b>행 전체가 버튼</b> — 누르면 바로 대화 팝업. hover 시 Work 색 테두리 + 오른쪽 <code>›</code>로 눌린다는 걸 표시. <code>대화</code> 버튼은 없앰</li>
+        <li>P — 1행: 제목 ··· 세션 id / 2행: <b>프로젝트 칩(보드와 같은 색)</b> · 런타임 · 날짜 · 카드 수 — 프로젝트가 메타 줄 맨 앞에서 색으로 먼저 읽힘</li>
+        <li><code>⋯</code>(이동 · 역할 · 빼기)는 그대로, 눌러도 대화가 열리지 않게 분리</li>
+      </ul>
+    </div>
+  </div>
+  <div class="impl"><b>구현 메모</b>
+    <ul>
+      <li><code>WorkDetailDialog.tsx</code> 세션 행: <code>role="button"</code> + Enter/Space로 <code>onOpenSession</code>, <code>WorkSessionMenu</code>·<code>IdChip</code>은 클릭 전파 차단</li>
+      <li>프로젝트 칩은 보드와 같은 <code>works-dir-chip kv2-project-chip</code> + <code>dirAccentClass</code> 재사용</li>
+      <li>역할(개발/리뷰/디버그) 색 띠는 그대로 유지</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ───────────────────────── ④ ───────────────────────── -->
+<section class="case" id="c4">
+  <h2><span class="no">④</span> 접힌 Work 열기 — 메뉴 대신 버튼</h2>
+  <p class="lead">세션 그룹은 <code>hide</code> / <code>show</code> 버튼으로 바로 접고 펴는데, Work는 작은 <code>▸</code> 또는 <code>⋯ → 세션 펼치기</code>로만 열 수 있습니다.</p>
+  <div class="pair">
+    <div class="pane before">
+      <div class="tag">BEFORE — 지금</div>
+      <div class="stage">
+        <div class="work">
+          <span class="wtab">WORK</span>
+          <div class="wh"><button class="chev">▸</button><span class="title">Agent-kanban - UI 개선 #3</span><button class="kebab hot">⋯</button></div>
+          <div class="wm"><span class="pchip" style="--dc:var(--d-ak)">agent-kanban</span>4 sessions<span class="r"><span class="unread">● 5</span><span class="idchip">#5rPb</span></span></div>
+          <div class="menu" style="right:-10px;top:36px;min-width:180px">
+            <ul>
+              <li style="background:var(--work-tint-2)">세션 펼치기</li>
+              <li>Work 상세 열기</li>
+              <li>이름 변경</li>
+              <li>다른 Work와 병합…</li>
+              <li>Work 완료…</li>
+            </ul>
+          </div>
+        </div>
+        <div class="sgroup" style="margin-top:44px">
+          <span class="stab">SESSION</span>
+          <div class="top"><span class="pchip" style="--dc:var(--d-mcp)">mcp-server</span><span class="r"><span class="idchip">#d35021d4</span></span></div>
+          <h4>ZEPETOFUL - asset save rollback</h4>
+          <div class="arow"><button class="toggle" style="outline:3px solid var(--prog);outline-offset:2px">show</button><span class="r"><button class="btn done">✓ 완료</button></span></div>
+        </div>
+        <div style="height:60px"></div>
+      </div>
+      <ul class="why">
+        <li>Work를 여는 방법이 <code>▸</code>(작고 잘 안 보임) 또는 <code>⋯</code> 메뉴 첫 항목</li>
+        <li>바로 아래 세션 그룹은 <code>show</code> 버튼 — 같은 "펼치기"인데 모양이 다름</li>
+      </ul>
+    </div>
+
+    <div class="pane after">
+      <div class="tag">AFTER — 제안</div>
+      <div class="stage">
+        <div class="work">
+          <span class="wtab">WORK</span>
+          <div class="wh"><span class="title">Agent-kanban - UI 개선 #3</span><button class="kebab">⋯</button></div>
+          <div class="wm"><span class="pchip" style="--dc:var(--d-ak)">agent-kanban</span>4 sessions<span class="r"><span class="unread">● 5</span><span class="idchip">#5rPb</span></span></div>
+          <div class="wfoot"><button class="toggle" style="outline:3px solid var(--prog);outline-offset:2px">show 4</button><span class="muted mono">숨긴 세션 4 · unread 5</span></div>
+        </div>
+        <div class="work">
+          <span class="wtab">WORK</span>
+          <div class="wh"><span class="title">ZEPETOFUL - asset save rollback</span><button class="kebab">⋯</button></div>
+          <div class="wm"><span class="pchip" style="--dc:var(--d-mcp)">mcp-server</span>1 session<span class="r"><span class="idchip">#zmNW</span></span></div>
+          <div class="inner"><b>ZEPETOFUL - asset save rollback</b> <span class="muted mono">· 세션 1 · show</span></div>
+          <div class="wfoot"><button class="toggle">hide</button></div>
+        </div>
+        <div class="menu" style="position:static;margin-top:16px;min-width:0;width:220px">
+          <ul>
+            <li class="muted mono" style="font-size:11px">Work ⋯ 메뉴 (after)</li>
+            <li>Work 상세 열기</li>
+            <li>이름 변경</li>
+            <li>다른 Work와 병합…</li>
+            <li>Work 완료…</li>
+          </ul>
+        </div>
+      </div>
+      <ul class="why">
+        <li>Work 아래에 세션 그룹과 <b>같은 <code>hide</code> / <code>show</code> 버튼</b>. 접혀 있으면 <code>show 4</code>처럼 숨긴 세션 수를 같이 표시</li>
+        <li>작은 <code>▸</code>는 없애고 제목이 그만큼 넓어짐. <code>⋯</code>에는 Work 자체 동작만 남김</li>
+        <li>컬럼 <code>⋯ → 모든 Work 세션 접기/펼치기</code>(일괄)는 그대로, 개별은 이 버튼으로</li>
+      </ul>
+    </div>
+  </div>
+  <div class="impl"><b>구현 메모</b>
+    <ul>
+      <li><code>BoardWorkContainer.tsx</code>: chevron과 <code>⋯ → 세션 접기/펼치기</code> 항목 제거, 메타 줄 아래에 <code>.kv2-complete-session-toggle</code>과 같은 스타일의 토글 추가 (같은 <code>toggleCollapsed</code>)</li>
+      <li>펼친 상태의 <code>＋ Show N more sessions</code>는 그대로 — 접기/펴기와 "더 보기"는 다른 동작</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+<script>
+document.getElementById('themeSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-theme-set]');
+  if (!b) return;
+  document.documentElement.dataset.theme = b.dataset.themeSet;
+  document.querySelectorAll('#themeSeg button').forEach((x) => x.classList.toggle('on', x === b));
+});
+if (new URLSearchParams(location.search).get('theme') === 'dark') document.querySelector('[data-theme-set="dark"]').click();
+</script>
+</body>
+</html>

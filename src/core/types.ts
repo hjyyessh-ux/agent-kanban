@@ -424,6 +424,15 @@ export interface KanbanCard {
   supersededByCardId?: string;
   supersededAt?: string;
   scheduledDispatch?: ScheduledDispatchState;
+  /**
+   * A Work reserved for this card before it had a `sessionId` (a TODO card has
+   * none yet). `KanbanStore.updateCard`'s session-assigned hook links the
+   * session to this Work the moment dispatch sets one and clears the field —
+   * see `src/plugin/works/work-planned-link.ts`. A card with `sessionId`
+   * already set uses the normal `WorkSessionLink` flow (`POST
+   * /api/works/:id/sessions`) instead; this field is for the gap before that.
+   */
+  plannedWorkId?: string;
   // TODO: Add labels?: string[]
   // TODO: Add priority?: 'low' | 'medium' | 'high' | 'urgent'
   // TODO: Add sessionLinks?: string[] (link to related sessions)
@@ -663,6 +672,7 @@ export interface CreateCardInput {
   telegramReplyMessageId?: number;
   telegramReplyError?: string;
   telegramReplyUpdatedAt?: string;
+  plannedWorkId?: string;
 }
 
 export interface UpdateCardInput {
@@ -713,6 +723,7 @@ export interface UpdateCardInput {
   telegramReplyUpdatedAt?: string | null;
   git?: CardGitState;        // git 브랜치 활동 (캡처 단계에서 기록)
   usage?: CardUsageStats;    // 사용 도구 집계 (캡처 단계에서 기록)
+  plannedWorkId?: string | null;  // null = clear the reservation
 }
 
 // ─── Scheduler Types ────────────────────────────────────────────────

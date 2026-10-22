@@ -22,12 +22,16 @@ interface BoardColumnHeaderProps {
   onArchive?: () => void;
   /** `GROUP: WORKS`: Work fragments drawn in this column (`WORK n`, right side). */
   workCount?: number;
+  /** Whether the column's last bulk Work command folded them — picks the toggle's label. */
+  worksCollapsed?: boolean;
+  onToggleWorksCollapsed?: () => void;
 }
 
 type ColumnMenuInput = Pick<
   BoardColumnHeaderProps,
   | 'status' | 'count' | 'actionableCount' | 'unreadCount' | 'hideAllSessionsLabel'
   | 'onHideAllSessions' | 'onMarkAllRead' | 'onCompleteAll' | 'onArchive'
+  | 'workCount' | 'worksCollapsed' | 'onToggleWorksCollapsed'
 >;
 
 /**
@@ -45,9 +49,20 @@ export function getColumnMenuItems({
   onMarkAllRead,
   onCompleteAll,
   onArchive,
+  workCount = 0,
+  worksCollapsed = false,
+  onToggleWorksCollapsed,
 }: ColumnMenuInput): BoardColumnMenuItem[] {
   const bulkActionCount = actionableCount ?? count;
   const items: BoardColumnMenuItem[] = [];
+
+  if ((status === 'complete' || status === 'done') && onToggleWorksCollapsed && workCount > 0) {
+    items.push({
+      id: 'toggle-works',
+      label: worksCollapsed ? COLUMN_MENU_COPY.expandWorks : COLUMN_MENU_COPY.collapseWorks,
+      onSelect: () => onToggleWorksCollapsed(),
+    });
+  }
 
   if (status === 'complete' && onHideAllSessions && count > 0) {
     items.push({ id: 'hide-all', label: hideAllSessionsLabel, onSelect: () => onHideAllSessions() });
@@ -79,6 +94,8 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
   onCompleteAll,
   onArchive,
   workCount = 0,
+  worksCollapsed,
+  onToggleWorksCollapsed,
 }) => {
   const isWipOver = status === 'in_progress' && count > WIP_LIMIT;
   const isWipWarning = status === 'in_progress' && count === WIP_LIMIT;
@@ -92,6 +109,9 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
     onMarkAllRead,
     onCompleteAll,
     onArchive,
+    workCount,
+    worksCollapsed,
+    onToggleWorksCollapsed,
   });
 
   return (

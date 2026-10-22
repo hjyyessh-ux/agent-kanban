@@ -201,3 +201,27 @@ describe('BoardColumnHeader', () => {
     expect(jumps).toBe(1);
   });
 });
+
+describe('getColumnMenuItems — Work bulk fold', () => {
+  test('complete and done columns with Works lead with the fold toggle; its label follows worksCollapsed', () => {
+    let toggles = 0;
+    const onToggleWorksCollapsed = () => { toggles += 1; };
+    for (const status of ['complete', 'done'] as const) {
+      const open = getColumnMenuItems({ status, count: 3, workCount: 2, onToggleWorksCollapsed });
+      expect(open[0]?.label).toBe(COLUMN_MENU_COPY.collapseWorks);
+      open[0]?.onSelect();
+      const folded = getColumnMenuItems({ status, count: 3, workCount: 2, worksCollapsed: true, onToggleWorksCollapsed });
+      expect(folded[0]?.label).toBe(COLUMN_MENU_COPY.expandWorks);
+    }
+    expect(toggles).toBe(2);
+  });
+
+  test('no toggle without Works in the column or outside complete/done', () => {
+    const onToggleWorksCollapsed = () => undefined;
+    const labels = (items: ReturnType<typeof getColumnMenuItems>) => items.map((item) => item.label);
+    expect(labels(getColumnMenuItems({ status: 'complete', count: 3, workCount: 0, onToggleWorksCollapsed })))
+      .not.toContain(COLUMN_MENU_COPY.collapseWorks);
+    expect(labels(getColumnMenuItems({ status: 'todo', count: 3, workCount: 2, onToggleWorksCollapsed })))
+      .not.toContain(COLUMN_MENU_COPY.collapseWorks);
+  });
+});

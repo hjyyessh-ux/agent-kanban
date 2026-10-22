@@ -1364,9 +1364,58 @@
 }
 
 .work-session-meta {
-  margin-top: 2px;
+  margin-top: 4px;
   font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-muted);
+}
+
+/* The row is the button that opens the conversation (no separate 대화). */
+.work-session-item--open {
+  cursor: pointer;
+}
+
+.work-session-item--open:hover,
+.work-session-item--open:focus-visible {
+  border-color: var(--kv2-work-border);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--kv2-work-border);
+}
+
+.work-session-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+}
+
+.work-session-head .work-session-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.work-session-id,
+.work-session-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* Project leads the meta line in its board colour — what tells rows apart in a multi-repo Work. */
+.work-session-meta .work-session-project {
+  margin-right: 6px;
+  vertical-align: 1px;
+}
+
+.work-session-go {
+  flex: 0 0 auto;
+  color: var(--kv2-text-muted);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-md);
+  font-weight: 800;
+}
+
+.work-session-item--open:hover .work-session-go,
+.work-session-item--open:focus-visible .work-session-go {
+  color: var(--kv2-work-text);
 }
 
 /* The board's runtime chip, reused verbatim, inside a meta line.

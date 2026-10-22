@@ -1,4 +1,4 @@
-import type { MoveWorkSessionResponse, Work, WorkInboxSession } from '../../../../src/core/types';
+import type { CreateWorkInput, MoveWorkSessionResponse, Work, WorkInboxSession } from '../../../../src/core/types';
 import type { WorkSessionNoticeState } from '../Works/WorkSessionNotice';
 import {
   noticeForLinkedSessions,
@@ -25,6 +25,8 @@ export interface BoardWorkMutations {
   createWithSession: (session: WorkInboxSession, title: string) => Promise<Work>;
   moveToNewWork: (session: BoardSessionRef, title: string) => Promise<MoveWorkSessionResponse>;
   deleteWork: (workId: string) => Promise<void>;
+  /** An empty Work for a sessionless card to reserve (`새 Work 만들기` in its Work field). */
+  createWork: (input: CreateWorkInput) => Promise<Work>;
   notify: (notice: WorkSessionNoticeState) => void;
 }
 

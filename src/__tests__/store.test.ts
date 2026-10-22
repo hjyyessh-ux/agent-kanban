@@ -1042,5 +1042,74 @@ describe('KanbanStore — Queue Operations', () => {
       expect(store.updateCard('non-existent', { title: 'X' })).rejects.toThrow('Card not found: non-existent');
     });
   });
+
+  test('updateCard sets and clears plannedWorkId', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'T', description: 'D' });
+
+      await store.updateCard(card.id, { plannedWorkId: 'work-1' });
+      expect((await store.getCard(card.id))!.plannedWorkId).toBe('work-1');
+
+      await store.updateCard(card.id, { plannedWorkId: null });
+      expect((await store.getCard(card.id))!.plannedWorkId).toBeUndefined();
+    });
+  });
+
+  describe('session-assigned hook', () => {
+    test('fires only the first time sessionId goes from unset to set', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const card = await store.createCard({ title: 'T', description: 'D' });
+        const seen: string[] = [];
+        store.setSessionAssignedHook((hooked) => { seen.push(hooked.id); });
+
+        await store.updateCard(card.id, { sessionId: 'sess-1' });
+        expect(seen).toEqual([card.id]);
+
+        // Already has a sessionId — re-setting it (or any other field) must not re-fire.
+        await store.updateCard(card.id, { sessionId: 'sess-1' });
+        await store.updateCard(card.id, { title: 'T2' });
+        expect(seen).toEqual([card.id]);
+      });
+    });
+
+    test('does not fire for a card created with a sessionId already set', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const card = await store.createCard({ title: 'T', description: 'D', sessionId: 'sess-1' });
+        const seen: string[] = [];
+        store.setSessionAssignedHook((hooked) => { seen.push(hooked.id); });
+
+        await store.updateCard(card.id, { title: 'T2' });
+        expect(seen).toEqual([]);
+      });
+    });
+
+    test('a hook that throws does not fail the write that set the sessionId', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const card = await store.createCard({ title: 'T', description: 'D' });
+        store.setSessionAssignedHook(() => { throw new Error('boom'); });
+
+        const updated = await store.updateCard(card.id, { sessionId: 'sess-1' });
+        expect(updated.sessionId).toBe('sess-1');
+        expect((await store.getCard(card.id))!.sessionId).toBe('sess-1');
+      });
+    });
+
+    test('the returned card reflects a change the hook made (e.g. clearing plannedWorkId)', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const card = await store.createCard({ title: 'T', description: 'D', plannedWorkId: 'work-1' });
+        store.setSessionAssignedHook(async (hooked) => {
+          await store.updateCard(hooked.id, { plannedWorkId: null });
+        });
+
+        const updated = await store.updateCard(card.id, { sessionId: 'sess-1' });
+        expect(updated.plannedWorkId).toBeUndefined();
+      });
+    });
+  });
 });
 });

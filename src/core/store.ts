@@ -37,6 +37,15 @@ import {
   validateQueueCompatibility,
 } from './scheduling';
 
+/**
+ * Called once a card's `sessionId` goes from unset to set, after the
+ * `updateCard` write that did it has released its lock. The only caller
+ * today is `src/plugin/works/work-planned-link.ts` (wired in `bootstrap.ts`),
+ * which links `card.plannedWorkId` to Works — this store never imports
+ * `WorkStore` itself, so the hook keeps the two stores independent.
+ */
+export type SessionAssignedHook = (card: KanbanCard) => void | Promise<void>;
+
 function inferAgentRuntime(input: Pick<CreateCardInput, 'agentRuntime' | 'sourceContext'>): AgentRuntime {
   if (input.agentRuntime) return input.agentRuntime;
   if (input.sourceContext === 'codex') return 'codex';
@@ -187,6 +196,7 @@ function buildCard(input: CreateCardInput, now: string): KanbanCard {
     telegramReplyMessageId: input.telegramReplyMessageId,
     telegramReplyError: input.telegramReplyError,
     telegramReplyUpdatedAt: input.telegramReplyUpdatedAt,
+    plannedWorkId: input.plannedWorkId,
     createdAt: now,
     updatedAt: now,
   };
@@ -220,6 +230,7 @@ export class KanbanStore {
   private readonly screenshotDir: string;
   private readonly fileLock: FileLock;
   private lockPromise: Promise<void> = Promise.resolve();
+  private sessionAssignedHook?: SessionAssignedHook;
 
   constructor(dataDir: string) {
     this.dataDir = resolveDir(dataDir);
@@ -229,6 +240,11 @@ export class KanbanStore {
     this.legacyBoardPath = join(this.dataDir, 'board.json');
     this.tmpPath = join(this.dataDir, '.active.json.tmp');
     this.fileLock = new FileLock(join(this.dataDir, '.board.json.lock'));
+  }
+
+  /** See `SessionAssignedHook`. Called once, from the app's boot wiring. */
+  setSessionAssignedHook(hook: SessionAssignedHook): void {
+    this.sessionAssignedHook = hook;
   }
 
   /**
@@ -504,6 +520,7 @@ export class KanbanStore {
     const now = new Date().toISOString();
 
     let updatedCard: KanbanCard | undefined;
+    let sessionJustAssigned = false;
 
     await this.withDualLock(async () => {
       const board = await this.load();
@@ -511,6 +528,7 @@ export class KanbanStore {
       if (index === -1) {
         throw new Error(`Card not found: ${id}`);
       }
+      const previousSessionId = board.cards[index].sessionId;
       // Separate null (=delete) fields from normal updates
       const {
         queuedAfterCardId,
@@ -545,6 +563,7 @@ export class KanbanStore {
         completedAt,
         durationMs,
         completedSeenAt,
+        plannedWorkId,
         ...safeUpdates
       } = updates;
       const previousStatus = board.cards[index].status;
@@ -755,6 +774,11 @@ export class KanbanStore {
       } else if (telegramReplyUpdatedAt !== undefined) {
         board.cards[index].telegramReplyUpdatedAt = telegramReplyUpdatedAt;
       }
+      if (plannedWorkId === null) {
+        delete board.cards[index].plannedWorkId;
+      } else if (plannedWorkId !== undefined) {
+        board.cards[index].plannedWorkId = plannedWorkId;
+      }
       if (
         queuedAfterCardId !== undefined
         || queuePosition !== undefined
@@ -770,7 +794,25 @@ export class KanbanStore {
       board.lastModified = now;
       await this.save(board);
       updatedCard = board.cards[index];
+      sessionJustAssigned = typeof input.sessionId === 'string' && input.sessionId.length > 0 && !previousSessionId;
     });
+
+    // Fired after the lock above is released — `WorkStore` (the hook's usual
+    // home) has its own lock, and calling into it while this one is still held
+    // would be a reentrant deadlock risk for no benefit; the hook only ever
+    // reacts to a write that already committed.
+    if (sessionJustAssigned && this.sessionAssignedHook && updatedCard) {
+      try {
+        await this.sessionAssignedHook(updatedCard);
+      } catch {
+        // Best-effort: a failed post-link reaction (e.g. the Works auto-link
+        // in work-planned-link.ts) must never fail the write that gave this
+        // card its sessionId.
+      }
+      // The hook may have changed the card further (e.g. cleared
+      // `plannedWorkId`) — re-read so the caller sees the final state.
+      updatedCard = (await this.getCard(id)) ?? updatedCard;
+    }
 
     return updatedCard!;
   }

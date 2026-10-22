@@ -58,7 +58,7 @@ export function selectBoardNavOrder(
       .map((vm) => selectCardById(allCards, vm.id))
       .filter((card): card is KanbanCard => !!card);
     const groups = worksColumn
-      ? [...worksColumn.fragments.flatMap((fragment) => fragment.groups), ...worksColumn.unassigned]
+      ? [...worksColumn.unassigned, ...worksColumn.fragments.flatMap((fragment) => fragment.groups)]
       : groupCompleteCardsBySession(rawCards);
     for (const group of groups) {
       for (const card of group.cards) {

@@ -31,7 +31,7 @@ import { CapabilitiesView } from './components/Capabilities/CapabilitiesView';
 import { useScripts } from './hooks/useScripts';
 import { useSkills } from './hooks/useSkills';
 import { useSkillRoots } from './hooks/useSkillRoots';
-import type { KanbanCard, Work, WorkInboxSession } from '../../src/core/types';
+import type { CreateWorkInput, KanbanCard, Work, WorkInboxSession } from '../../src/core/types';
 import './components/Scheduler/Scheduler.css';
 import './components/Settings/Settings.css';
 import './App.css';
@@ -56,7 +56,7 @@ import {
 import { BOARD_GROUP_MODE_STORAGE_KEY, parseBoardGroupMode, type BoardGroupMode } from './components/Board/board-group-mode';
 import { fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
 import { useQuickActions } from './hooks/useQuickActions';
-import { CARD_DETAIL_COPY, TOOLBAR_COPY } from './constants/copy';
+import { BOARD_WORKS_COPY, CARD_DETAIL_COPY, TOOLBAR_COPY } from './constants/copy';
 import { QuickActionsDrawer } from './components/QuickActions/QuickActionsDrawer';
 
 const WikiView = React.lazy(async () => {
@@ -170,9 +170,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [requestUnreadJump, unreadJumpEnabled]);
   const worksGroupActive = activeTab === 'board' && boardGroupMode === 'works';
-  // Gated like every other 10s poll: the board only pays for Works while it
-  // groups by them.
-  const works = useWorks(activeTab === 'works' || timelineActive || worksGroupActive);
+  // Gated like every other 10s poll, but the board needs the active Works list
+  // in every group mode now — `BoardCardWorkField` shows a todo/in-progress
+  // card's Work picker everywhere, not just `GROUP: WORKS`.
+  const works = useWorks(activeTab === 'works' || activeTab === 'board' || timelineActive);
   const activeWorks = useMemo(() => works.works.filter((work) => work.status === 'active'), [works.works]);
   // `WORK:` only exists in GROUP: WORKS; elsewhere it is ignored (not cleared),
   // and a Work that closed meanwhile reads as `all`.
@@ -432,6 +433,7 @@ export default function App() {
     createWithSession: (session, title) => works.createWorkFromSession(session, title),
     moveToNewWork: (session, title) => works.moveSessionToNewWork(session, title),
     deleteWork: works.deleteWork,
+    createWork: works.createWork,
     notify: setWorkSessionNotice,
   }), [
     works.linkSessionToWork,
@@ -440,7 +442,25 @@ export default function App() {
     works.createWorkFromSession,
     works.moveSessionToNewWork,
     works.deleteWork,
+    works.createWork,
   ]);
+
+  /**
+   * The Work pickers' `새 Work 만들기` in card detail and NEW TASK. `works.error`
+   * only renders on the Works/Timeline tabs, so a failure is also posted as a
+   * board notice — those dialogs open over the Board.
+   */
+  const createWorkWithNotice = useCallback(async (input: CreateWorkInput): Promise<Work> => {
+    try {
+      return await works.createWork(input);
+    } catch (error: unknown) {
+      setWorkSessionNotice({
+        tone: 'warn',
+        message: `⚠ ${error instanceof Error ? error.message : BOARD_WORKS_COPY.noticeFailed}`,
+      });
+      throw error;
+    }
+  }, [works.createWork]);
 
   /**
    * Re-use the board's SessionConversationModal for a session addressed from the
@@ -742,12 +762,13 @@ export default function App() {
                 questions={questions}
                 viewMode={boardViewMode === 'list' ? 'list' : 'board'}
                 groupMode={boardGroupMode}
-                works={worksGroupActive && !works.loading ? activeWorks : undefined}
+                works={!works.loading ? activeWorks : undefined}
                 workMutations={boardWorkMutations}
                 onWorkOpen={(workId, intent) => {
                   setOpenWorkIntent(intent);
                   setOpenWorkId(workId);
                 }}
+                onSetPlannedWork={(cardId, workId) => updateCard(cardId, { plannedWorkId: workId })}
                 workFilter={effectiveWorkFilter}
                 filters={boardFilters}
                 unreadOnly={unreadOnly}
@@ -868,6 +889,9 @@ export default function App() {
       {showCreateModal && (
         <CreateCardDialog
           allCards={cards}
+          works={activeWorks}
+          onCreateWork={createWorkWithNotice}
+          initialPlannedWorkId={typeof effectiveWorkFilter === 'object' ? effectiveWorkFilter.workId : undefined}
           onClose={() => setShowCreateModal(false)}
           onCreate={createCard}
           onDispatch={dispatchCard}
@@ -1038,6 +1062,8 @@ export default function App() {
           onScreenshotDeleted={(screenshotId) => {
             setSelectedCard(prev => prev ? { ...prev, screenshots: prev.screenshots?.filter(s => s.id !== screenshotId) || [] } : null);
           }}
+          works={works.works}
+          onCreateWork={createWorkWithNotice}
         />
       )}
 

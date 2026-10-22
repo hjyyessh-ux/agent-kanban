@@ -87,10 +87,13 @@ export const BOARD_WORKS_COPY = {
   showMore: (hidden: number) => `＋ Show ${hidden} more ${hidden === 1 ? 'session' : 'sessions'}`,
   showLess: 'Show less ▴',
   unassignedHeading: 'Unassigned sessions',
-  unassignedEmpty: 'No unassigned sessions',
   columnWorkCount: (count: number) => `Work ${count}`,
   collapse: 'Work 접기',
   expand: 'Work 펼치기',
+  /** Footer toggle — same `hide` / `show` face as a session group; folded, it counts the sessions it hides. */
+  toggleHide: 'hide',
+  toggleShow: (sessions: number) => `show ${sessions}`,
+  hiddenNote: (sessions: number, unread: number) => `숨긴 세션 ${sessions}${unread > 0 ? ` · unread ${unread}` : ''}`,
   titleHint: '클릭: Work 상세',
   favoriteHint: 'Work 완료 시에도 보드에 남는 즐겨찾기 카드',
   elsewhereHint: '다른 컬럼의 같은 Work로 이동',
@@ -99,29 +102,27 @@ export const BOARD_WORKS_COPY = {
   menuRename: '이름 변경',
   menuMerge: '다른 Work와 병합…',
   menuComplete: 'Work 완료…',
-  /** `⋯` first item: fold the Work to header + meta / open it (newest 2 sessions, then Show more). */
-  menuCollapseSessions: '세션 접기',
-  menuExpandSessions: '세션 펼치기',
-  /** BoardCard footer in `GROUP: WORKS`. */
+  /** BoardCard footer, every group mode (`BoardCardWorkField`). */
   tagIcon: 'W',
   tagHint: 'Work 상세',
-  unassignedTag: 'Work 미배정 · 드래그해서 넣기',
+  /** `BoardCardWorkField` — the always-on Work picker on a todo/in-progress card. */
+  workFieldHintEmpty: '눌러서 Work 지정',
+  workFieldHintPlanned: '예약됨 — 시작하면 이 Work에 연결 · 눌러서 변경',
+  workFieldHintLinked: 'Work에 연결됨 · 눌러서 변경',
   /** Drag & drop (4/5): hints are overlays, the tray rises from the bottom. */
-  dropHint: '여기에 놓아 이 Work에 넣기',
-  unassignHint: '여기에 놓으면 Work에서 빼기 (미배정)',
   dragHint: '드래그: Work로 넣기 / 옮기기',
   trayLabel: 'Work로 넣기 ▸',
+  /** Tray label while the pointer is over a target — board targets draw no text over the Work title. */
+  trayHoverPrefix: '놓으면',
+  trayHoverLink: (title: string) => `넣기 → ${title}`,
+  trayHoverMove: (title: string) => `옮기기 → ${title}`,
+  trayHoverUnlink: 'Work에서 빼기 (미배정)',
+  trayHoverNew: '새 Work 만들어 넣기',
   trayAria: 'Work 드롭 트레이',
   trayCurrent: '(현재)',
   trayNew: '＋ 새 Work',
   trayOut: '⊘ Work에서 빼기',
   trayNoSession: '세션이 없는 카드는 Work에 넣을 수 없습니다',
-  /** `⋯ → Work로 이동` (keyboard path for the same actions). */
-  moveMenuLabel: (title: string) => `${title} — Work로 이동`,
-  moveMenuTitle: 'Work로 이동…',
-  moveTo: (title: string) => `→ ${title}`,
-  moveNew: '＋ 새 Work 만들어 넣기…',
-  moveOut: '⊘ Work에서 빼기',
   /** New-Work name dialog. */
   newWorkTitle: '새 Work 만들기',
   newWorkLabel: 'Work 이름',
@@ -133,6 +134,7 @@ export const BOARD_WORKS_COPY = {
   noticeMovedEmptied: (to: string, from: string) => `✓ 세션을 "${to}"(으)로 옮기고, 비워진 Work "${from}"를 삭제했습니다.`,
   noticeUnlinked: (from: string) => `⤺ 세션을 "${from}"에서 뺐습니다 (미배정).`,
   noticeFailed: 'Work 변경에 실패했습니다',
+  noticeCreatedPlanned: (title: string) => `＋ 새 Work "${title}"를 만들고 이 카드에 예약했습니다.`,
   /** Session header `★ N` — favorites survive the Work completion sweep. */
   sessionFavoriteHint: (count: number) => `즐겨찾기 카드 ${count}장 — Work 완료 시 보드에 남음`,
 } as const;
@@ -165,6 +167,9 @@ export const COLUMN_MENU_COPY = {
   markAllRead: '모두 읽음',
   doneAll: '모두 완료',
   archiveAll: '모두 아카이브',
+  /** `GROUP: WORKS` — folds / unfolds every Work container in the column at once. */
+  collapseWorks: '모든 Work 세션 접기',
+  expandWorks: '모든 Work 세션 펼치기',
 } as const;
 
 /** Card detail — reasons a panel is disabled. */
@@ -172,6 +177,34 @@ export const CARD_DETAIL_COPY = {
   queueDisabledScheduled: '예약된 카드는 먼저 예약을 취소해야 큐에 연결할 수 있습니다.',
   scheduleDisabledQueued: '큐에 연결된 카드는 예약할 수 없습니다. 먼저 큐에서 해제하세요.',
   startNowHint: '지금 시작은 이 예약을 소비하고 즉시 한 번만 실행합니다.',
+} as const;
+
+/** `WorkPicker` — the shared Work chooser (board card, session group, card detail, NEW TASK). */
+export const WORK_PICKER_COPY = {
+  ariaLabel: 'Work 지정',
+  none: 'Work 없음',
+  planned: '예약',
+  searchPlaceholder: 'Work 검색…',
+  /** Search box placeholder after `새 Work 만들기` was picked with nothing typed. */
+  namePlaceholder: '새 Work 이름 입력 후 Enter',
+  createNew: '새 Work 만들기',
+  createNamed: (name: string) => `새 Work 만들기: "${name}"`,
+  createAsk: '새 Work 만들기 — 위에 이름을 입력하세요',
+  noMatch: '일치하는 Work가 없습니다',
+  sessionCount: (count: number) => `${count} 세션`,
+} as const;
+
+/** Card detail's Work line under the title — `CardWorkLine` (pre-dispatch, editable) and its read-only form afterward — plus NEW TASK's Work field hint. */
+export const CARD_WORK_COPY = {
+  label: 'Work',
+  emptyHint: '눌러서 Work 지정 — 세션이 시작되면 그 Work에 연결',
+  /** `plannedWorkId` set, no session yet. */
+  plannedHint: '예약 · 세션 시작 시 연결 · 눌러서 변경',
+  /** The card's session already belongs to a Work. */
+  linkedHint: '세션이 이 Work에 연결됨 · 보드의 Work 칸에서 변경',
+  readOnlyHint: '세션이 시작된 카드는 보드의 Work 칸에서 지정합니다',
+  /** NEW TASK — under the Work field. */
+  createHint: 'Work를 고르면 Directory가 그 Work의 프로젝트로 채워지고, 세션이 시작될 때 자동으로 연결됩니다.',
 } as const;
 
 export const SETTINGS_COPY = {

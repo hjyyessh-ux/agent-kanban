@@ -3308,17 +3308,6 @@
   padding: 10px 12px 4px;
 }
 
-.kv2-work-chevron {
-  flex: 0 0 auto;
-  width: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--kv2-work-text);
-  font-size: var(--kv2-text-ui-sm);
-  cursor: pointer;
-}
-
 .kv2-work-title {
   flex: 1 1 auto;
   min-width: 6ch;
@@ -3345,11 +3334,9 @@
   text-decoration: none;
 }
 
-.kv2-work-chevron:focus-visible,
 .kv2-work-title:focus-visible,
 .kv2-work-elsewhere:focus-visible,
-.kv2-work-more:focus-visible,
-.kv2-card-work-tag:focus-visible {
+.kv2-work-more:focus-visible {
   outline: 2px solid var(--kv2-focus-ring);
   outline-offset: 2px;
 }
@@ -3428,8 +3415,7 @@
   display: none;
 }
 
-.kv2-work-head .kv2-column-menu-trigger,
-.kv2-work-move-menu .kv2-column-menu-trigger {
+.kv2-work-head .kv2-column-menu-trigger {
   min-width: 24px;
   min-height: 24px;
   border: 0;
@@ -3438,8 +3424,7 @@
   color: var(--kv2-text-secondary);
 }
 
-.kv2-work-head .kv2-column-menu-trigger:hover,
-.kv2-work-move-menu .kv2-column-menu-trigger:hover {
+.kv2-work-head .kv2-column-menu-trigger:hover {
   background: var(--kv2-work-tint-2);
 }
 
@@ -3472,6 +3457,37 @@
 
 .kv2-work-meta-end .kv2-work-unread {
   flex: 0 0 auto;
+}
+
+/* Footer fold toggle: the session group's `hide` / `show` button, laid out in
+   flow instead of pinned to the card corner. */
+.kv2-work-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  margin: 4px 10px 0;
+  padding: 8px 0 10px 2px;
+  border-top: 2px dashed var(--kv2-work-border);
+}
+
+.kv2-work-foot .kv2-work-toggle {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.kv2-work-toggle:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.kv2-work-foot-note {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* `진행중 1 ↗` chips get their own row under the meta line. */
@@ -3592,17 +3608,6 @@
   margin-top: calc(-1 * var(--kv2-work-tab-height));
 }
 
-.kv2-works-unassigned-empty {
-  padding: 22px 0;
-  border: 2px dashed var(--kv2-border-subtle);
-  color: var(--kv2-text-muted);
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-caption);
-  font-weight: 600;
-  text-align: center;
-  text-transform: uppercase;
-}
-
 .kv2-column-work-count {
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-caption);
@@ -3615,7 +3620,13 @@
   white-space: nowrap;
 }
 
-/* Todo / in-progress card footer in GROUP: WORKS. Above the click layer. */
+/* Todo / in-progress card footer, every group mode (BoardCardWorkField).
+   `.kv2-card-click-layer` is `position: absolute` with its own stacking
+   order, so it paints above this row's normal-flow content regardless of DOM
+   order — `z-index: 2` lifts the row above it, and `pointer-events: none`
+   (overridden back to `auto` on the field itself) lets a click that misses
+   the field fall through to the click-layer and open the card, same as
+   clicking anywhere else on the face. */
 .kv2-card-work-row {
   position: relative;
   z-index: 2;
@@ -3625,49 +3636,340 @@
   pointer-events: none;
 }
 
-.kv2-card-work-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
+/* `BoardCardWorkField` — the board's `WorkPicker` pill (cards and session groups). */
+.kv2-card-work-field {
   min-width: 0;
-  padding: 2px 8px 2px 4px;
-  border: 2px solid var(--kv2-work-border);
-  background: var(--kv2-work-tint);
-  color: var(--kv2-work-text);
-  font-size: var(--kv2-text-caption);
-  font-weight: 700;
-  cursor: pointer;
+  max-width: 100%;
   pointer-events: auto;
 }
 
-.kv2-card-work-tag:disabled {
+.kv2-complete-session-work-row {
+  margin-top: var(--kv2-sp-2);
+}
+
+/* ── WorkPicker (`Works/WorkPicker.tsx`) ─────────────────────────────────
+   One trigger anatomy — `W` chip · title · `예약` · `▾` — in three sizes:
+   `pill` (board), `line` (card detail, under the title), `input` (NEW TASK,
+   matches the Directory control). Empty = dashed muted, linked = solid Work
+   blue, reserved = dashed Work blue + `예약`. */
+.kv2-work-picker {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.kv2-work-picker--input {
+  display: flex;
+  width: 100%;
+}
+
+.kv2-work-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 8px 2px 4px;
+  border: 2px dashed var(--kv2-text-muted);
+  background: transparent;
+  color: var(--kv2-text-muted);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-caption);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kv2-work-picker-trigger:hover:not(:disabled) {
+  background: var(--kv2-work-tint);
+}
+
+.kv2-work-picker-trigger:disabled {
   cursor: default;
 }
 
-.kv2-card-work-tag-icon {
+/* Read-only (a dispatched card's Work follows its session): no `▾` to promise a
+   menu. The NEW TASK input keeps its toggle cell while submitting so the box
+   doesn't change shape. */
+.kv2-work-picker-trigger:disabled:not(.kv2-work-picker-trigger--input) .kv2-work-picker-arrow {
+  display: none;
+}
+
+/* Card detail: the line sits between the title and the meta tiles, on the
+   same 48px gutter as the title row and the meta band. */
+.kv2-detail-work-line {
+  display: flex;
+  min-width: 0;
+  padding: 0 48px;
+}
+
+@media (max-width: 640px) {
+  .kv2-detail-work-line {
+    padding: 0 18px;
+  }
+}
+
+.kv2-work-picker-trigger.is-set {
+  border-style: solid;
+  border-color: var(--kv2-work-border);
+  background: var(--kv2-work-tint);
+  color: var(--kv2-work-text);
+  font-weight: 700;
+}
+
+.kv2-work-picker-trigger.is-set.is-planned {
+  border-style: dashed;
+}
+
+.kv2-work-picker-trigger.is-set:hover:not(:disabled) {
+  background: var(--kv2-work-tint-2);
+}
+
+.kv2-work-picker-icon {
   flex: 0 0 auto;
   padding: 1px 4px;
-  background: var(--kv2-work-tab-bg);
-  color: var(--kv2-work-tab-fg);
+  background: var(--kv2-border);
+  color: var(--kv2-text-secondary);
   font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-3xs);
   font-weight: 800;
+  line-height: 1.3;
 }
 
-.kv2-card-work-tag-title {
+.kv2-work-picker-trigger.is-set .kv2-work-picker-icon {
+  background: var(--kv2-work-tab-bg);
+  color: var(--kv2-work-tab-fg);
+}
+
+.kv2-work-picker-label {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-work-picker-state {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border: 2px dashed var(--kv2-work-border);
+  color: var(--kv2-work-text);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-3xs);
+  font-weight: 700;
+}
+
+.kv2-work-picker-arrow {
+  flex: 0 0 auto;
+  font-size: var(--kv2-text-3xs);
+}
+
+/* Card detail: the "belongs to" bar under the title — full width like the
+   DIRECTORY tile below it, a little shorter (52px vs the tiles' 76px). */
+.kv2-work-picker--line {
+  display: flex;
+  width: 100%;
+}
+
+.kv2-work-picker-trigger--line {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px 0 12px;
+  gap: 10px;
+  border-width: 1px;
+  border-radius: 8px;
+  border-color: var(--kv2-border-muted);
+  background: var(--kv2-surface);
+  font-size: var(--kv2-text-sm);
+}
+
+.kv2-work-picker-trigger--line .kv2-work-picker-icon {
+  padding: 3px 7px;
+  font-size: var(--kv2-text-caption);
+}
+
+.kv2-work-picker-trigger--line .kv2-work-picker-label {
+  max-width: none;
+  text-align: left;
+}
+
+.kv2-work-picker-trigger--line .kv2-work-picker-arrow {
+  margin-left: auto;
+  font-size: var(--kv2-text-lg);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.kv2-work-picker-trigger--line .kv2-work-picker-state {
+  padding: 1px 7px;
+  font-size: var(--kv2-text-caption);
+}
+
+/* NEW TASK: same box as the Directory control beside it. Flex, not a fixed
+   grid: with the `예약` badge absent its `auto` track collapsed and the 42px
+   arrow cell rendered as a clipped sliver. */
+.kv2-work-picker-trigger--input {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-height: 48px;
+  padding: 0;
+  gap: 0;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: 8px;
+  background: var(--kv2-surface);
+  box-shadow: 4px 4px 0 var(--kv2-border-strong);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-sm);
+  overflow: hidden;
+}
+
+.kv2-work-picker-trigger--input.is-set,
+.kv2-work-picker-trigger--input.is-set.is-planned {
+  border-style: solid;
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-work-picker-trigger--input:hover:not(:disabled),
+.kv2-work-picker-trigger--input.is-set:hover:not(:disabled) {
+  background: var(--kv2-surface);
+}
+
+.kv2-work-picker-trigger--input .kv2-work-picker-icon {
+  display: grid;
+  flex: 0 0 38px;
+  place-items: center;
+  padding: 0;
+  border-right: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-directory-accent-bg);
+  font-size: var(--kv2-text-caption);
+}
+
+.kv2-work-picker-trigger--input .kv2-work-picker-label {
+  flex: 1 1 auto;
+  align-self: center;
+  max-width: none;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.kv2-work-picker-trigger--input:not(.is-set) .kv2-work-picker-label {
+  color: var(--kv2-text-muted);
+  font-weight: 500;
+}
+
+.kv2-work-picker-trigger--input .kv2-work-picker-state {
+  align-self: center;
+  margin-right: 8px;
+}
+
+.kv2-work-picker-trigger--input .kv2-work-picker-arrow {
+  display: grid;
+  flex: 0 0 42px;
+  place-items: center;
+  border-left: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-directory-toggle-bg);
+  color: var(--kv2-control-text-color);
+  font-size: var(--kv2-text-xl);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.kv2-work-picker-popover {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: 360px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: 8px;
+  background: var(--kv2-selection-popover-bg);
+  box-shadow: 6px 6px 0 var(--kv2-selection-shadow-color);
+  padding: 6px;
+}
+
+.kv2-work-picker-search {
+  flex: 0 0 auto;
+  margin-bottom: 6px;
+}
+
+.kv2-work-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.kv2-work-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background: var(--kv2-selection-option-bg);
+  color: var(--kv2-selection-option-fg);
+  padding: 7px 10px;
+  text-align: left;
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kv2-work-picker-option.is-active {
+  background: var(--kv2-selection-option-hover-bg);
+  border-color: var(--kv2-selection-option-hover-border);
+}
+
+.kv2-work-picker-option.is-selected {
+  background: var(--kv2-selection-option-selected-bg);
+  border-color: var(--kv2-selection-option-selected-border);
+}
+
+.kv2-work-picker-check {
+  flex: 0 0 12px;
+  color: var(--kv2-work-text);
+  font-weight: 900;
+}
+
+.kv2-work-picker-option-title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.kv2-card-work-unassigned {
-  padding: 2px 8px;
-  border: 2px dashed var(--kv2-text-muted);
-  color: var(--kv2-text-muted);
+.kv2-work-picker-count {
+  flex: 0 0 auto;
+  color: var(--kv2-selection-option-secondary-fg);
+  font-family: var(--kv2-font-mono);
   font-size: var(--kv2-text-caption);
   font-weight: 600;
+}
+
+.kv2-work-picker-option--new {
+  color: var(--kv2-work-text);
+}
+
+/* Picked with nothing typed: the row asks for a name instead of creating. */
+.kv2-work-picker-option--new.is-asking {
+  color: var(--kv2-text-muted);
+  font-style: italic;
+}
+
+.kv2-work-picker-sep {
+  margin: 4px 0;
+  border-top: 2px dashed var(--kv2-border);
+}
+
+.kv2-work-picker-empty {
+  padding: 8px 10px;
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-ui-sm);
 }
 
 /* `★ N` — session header row ① and the Work meta line. */
@@ -3693,17 +3995,6 @@
    Every hint is an overlay (absolute, pointer-events: none) or an outline —
    nothing in flow changes while a drag is live, so the element under the
    pointer is the element the user aimed at. */
-.kv2-work-move-menu {
-  position: relative;
-  z-index: 2;
-  display: inline-flex;
-  flex: 0 0 auto;
-}
-
-.kv2-card-meta-row > .kv2-work-move-menu {
-  margin-left: auto;
-}
-
 .kv2-complete-session-header[draggable='true'] {
   cursor: grab;
 }
@@ -3728,41 +4019,14 @@
   outline-color: var(--kv2-work-border);
 }
 
-.kv2-work.is-drop-self {
-  opacity: 0.55;
+/* No text over the target — it hid a collapsed Work's title. The face
+   change marks the target; the tray label says what the drop will do. */
+.kv2-work.is-drop-target.is-drop-over {
+  background: var(--kv2-work-drop-over-face);
 }
 
-.kv2-work-drop-hint,
-.kv2-works-unassign-hint {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  z-index: 3;
-  padding: 10px;
-  border: 2px dashed var(--kv2-work-border);
-  background: var(--kv2-work-drop-overlay);
-  color: var(--kv2-work-text);
-  font-size: var(--kv2-text-ui-sm);
-  font-weight: 700;
-  text-align: center;
-  pointer-events: none;
-}
-
-.kv2-work-drop-hint {
-  bottom: 8px;
-}
-
-.kv2-works-unassign-hint {
-  top: 0;
-  left: 0;
-  right: 0;
-  border-color: var(--kv2-text-muted);
-  color: var(--kv2-text-secondary);
-}
-
-.kv2-work.is-drop-over .kv2-work-drop-hint {
-  background: var(--kv2-work-tab-bg);
-  color: var(--kv2-work-tab-fg);
+.kv2-works-unassigned.is-drop-target.is-drop-over {
+  outline-color: var(--kv2-text-secondary);
 }
 
 /* Bottom tray — fixed, so mounting it never moves the board. */
@@ -3801,6 +4065,27 @@
   font-size: var(--kv2-text-caption);
   font-weight: 700;
   white-space: nowrap;
+}
+
+/* Fixed width so swapping targets never reflows the tray under the pointer. */
+.kv2-work-tray-label.is-hover {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--kv2-sp-1);
+  width: 36ch;
+  overflow: hidden;
+}
+
+.kv2-work-tray-label-prefix {
+  flex: 0 0 auto;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-work-tray-label-action {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--kv2-work-text);
+  text-overflow: ellipsis;
 }
 
 .kv2-work-tray-list {

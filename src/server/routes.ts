@@ -2574,6 +2574,7 @@ export function createRouteHandler(
           queuedAfterCardId?: string;
           queuePosition?: number;
           queueSessionMode?: import('../core/types').QueueSessionMode;
+          plannedWorkId?: string;
         } & Record<string, unknown>;
         const agentRuntime: import('../core/types').AgentRuntime = (
           body.agentRuntime === 'opencode'
@@ -2597,6 +2598,15 @@ export function createRouteHandler(
             return errorResponse('Queued cards cannot also be scheduled', 400);
           }
           scheduledDispatch = { scheduledAt };
+        }
+        if (body.plannedWorkId !== undefined) {
+          if (typeof body.plannedWorkId !== 'string' || !body.plannedWorkId.trim()) {
+            return errorResponse('Invalid plannedWorkId', 400);
+          }
+          if (!workStore) return errorResponse('Works not available', 503);
+          const plannedWork = await workStore.getWork(body.plannedWorkId);
+          if (!plannedWork) return errorResponse('Work not found', 404);
+          if (plannedWork.status !== 'active') return errorResponse('Work is not active', 400);
         }
         const {
           originChannel: _originChannel,
@@ -3095,6 +3105,15 @@ export function createRouteHandler(
             if (body.agentRuntime !== currentRuntime && existing.status !== 'todo') {
               return errorResponse('Can only change runtime before dispatch', 400);
             }
+          }
+          if (body.plannedWorkId !== undefined && body.plannedWorkId !== null) {
+            if (typeof body.plannedWorkId !== 'string' || !body.plannedWorkId.trim()) {
+              return errorResponse('Invalid plannedWorkId', 400);
+            }
+            if (!workStore) return errorResponse('Works not available', 503);
+            const plannedWork = await workStore.getWork(body.plannedWorkId);
+            if (!plannedWork) return errorResponse('Work not found', 404);
+            if (plannedWork.status !== 'active') return errorResponse('Work is not active', 400);
           }
           const {
             originChannel: _originChannel,

@@ -478,6 +478,7 @@ combobox는 행과 함께 마운트되므로 **Works 폴링보다 먼저** 그�
 - **일정·디렉토리**: 제목과 작업 현황 아래, Summary 위에 펼쳐진 상태로 보여줍니다. 기존 인라인 편집 방식을 유지합니다.
 - **Summary·메모**: 작업 요약과 사용자가 남긴 메모를 읽고 편집합니다.
 - **연결된 세션**: 각 세션의 대화에서 활동과 실행 결과를 확인하고 이어갈 수 있습니다. 별도의 활동·결과 탭은 없습니다. 진행 중인 Work에서는 미배정 세션 선택과 `이 Work에 연결` 버튼이 바로 보입니다.
+- **세션 행 = 대화 열기**: 행 전체(`.work-session-item--open`, `role="button"`, Enter/Space)가 대화를 엽니다 — 별도의 `대화` 버튼은 없앴습니다(`works-ux-before-after.html` ③). 1줄: 제목 ··· 세션 id 칩, 2줄: **색 있는 프로젝트 칩**(보드와 같은 `dirAccentClass`) → 런타임 배지 → 날짜 · `카드 N` · `보관됨`. 끝에 `⋯`와 `›`. id 칩과 `⋯`는 click 전파를 막아 행 열기와 겹치지 않습니다.
 - **Wiki 디렉토리**: 일괄 보관한 Work(`archivedAt`이 있음)에만 표시합니다. 설정된 Wiki 저장 경로를 확인·복사하고 생성된 문서를 열 수 있습니다. 문서 생성 대기, 문서 없음, 저장 위치 미설정·조회 실패 상태도 구분합니다. 저장 경로는 이 영역을 열 때 `GET /api/wiki/config`로 읽고, 문서 목록은 상세 폴링을 따라 갱신합니다.
 - **관리 액션**: 폐기·삭제·병합·끊긴 세션 정리 버튼을 별도 펼치기 없이 제공합니다. 푸터는 본문과 함께 스크롤하고 모바일에서 줄바꿈합니다. 완료한 Work는 `다시 열기`로 카드를 복원할 수 있습니다.
 
@@ -499,7 +500,7 @@ combobox는 행과 함께 마운트되므로 **Works 폴링보다 먼저** 그�
 | 증상 | 원인 |
 |------|------|
 | Timeline 바가 **작업 시작일이 아니라 triage 시각**에서 시작 | `resolveWorkStartedAt`이 카드 없는 링크를 그 링크의 `linkedAt`으로 폴백 |
-| 상세의 `대화` 버튼이 사라진 세션을 가리킴 | 링크가 남아 있으므로 행도 남음 |
+| 상세의 세션 행(당시 `대화` 버튼)이 사라진 세션을 가리킴 | 링크가 남아 있으므로 행도 남음 |
 | 링크가 영구히 잔존 | 제거 경로가 수동 연결 해제뿐 |
 
 지금은 링크에 **스탬프를 찍습니다**(`WorkSessionLink.cardsMissingAt`). 링크를 자동으로 끊지 않는 이유는 **카드 삭제가 soft delete**이기 때문입니다 — `POST /api/cards/:id/restore`로 되돌아오는데, 링크를 자동으로 끊으면 그 세션은 Inbox에도 나타나지 않으므로(카드 없는 세션은 Inbox가 걸러냅니다) 되돌릴 수 있던 동작이 되돌릴 수 없게 됩니다.
@@ -680,7 +681,7 @@ completeWork(workId, { confirmed: true }) → Promise<'done' | 'declined' | 'blo
 
 #### 세션 행의 `⋯` 메뉴
 
-연결된 세션 행은 이미 조밀하므로 세션 단위 액션은 `대화` 옆의 `⋯` 하나로 접어둡니다.
+연결된 세션 행은 이미 조밀하므로 세션 단위 액션은 행 오른쪽 `›` 앞의 `⋯` 하나로 접어둡니다(행 클릭은 대화 열기).
 
 | 항목 | 동작 |
 |------|------|
@@ -949,24 +950,28 @@ App ── useWorks(Works 탭 ∨ Timeline ∨ Board+GROUP:WORKS) ── works.f
 ```
 검토 대기 / 완료 컬럼                         대기 / 진행중 컬럼
 ┌ 헤더 … [WORK n] [⋯]                         ┌ BoardCard
-│ BoardWorkContainer × 조각 수                 │   … 메타 줄
-│   WORK 탭 · ▾ 제목 · ⋯                       │   [W 제목]  또는  Work 미배정 · 드래그해서 넣기
+│ UNASSIGNED SESSIONS n ─ ─ ─                  │   … 메타 줄
+│ BoardCompleteSessionView(groups = unassigned)
+│ BoardWorkContainer × 조각 수
+│   WORK 탭 · 제목 · ⋯                         │   BoardCardWorkField (전 group mode 공용, 아래 [⑦](#⑦-todo-카드-work-지정-boardcardworkfield-전-group-mode))
 │   프로젝트 칩 · x / y sessions · ★ N ··· ● N · #id
 │   진행중 1 ↗ (다른 컬럼에 같은 Work가 있을 때만)
 │   BoardSessionGroupCard × 최신 2개 (헤더만)
 │   ＋ Show N more sessions · ● k unread  /  Show less ▴
-│ UNASSIGNED SESSIONS n ─ ─ ─
-└ BoardCompleteSessionView(groups = unassigned)
+└   hide  /  show N · 숨긴 세션 N · unread k   (푸터 토글)
 ```
 
 - **그리드 뷰 전용**이고, `works`가 로드된 뒤에만 그립니다(`App`은 `works.loading` 동안 `works`를 넘기지 않음) — 그 전과 List 뷰에서는 `session`과 같은 화면입니다.
 - 세션 그룹은 컬럼과 **같은 컴포넌트**(`BoardSessionGroupCard` + `useSessionGroupDisclosure`, `BoardCompleteSessionView.tsx`)입니다. Work 안에서는 기본이 헤더만(`defaultSessionsCollapsed`), 미배정 영역은 컬럼 기본값(검토 대기 펼침 · 완료 접힘)을 따릅니다.
-- **Work 접힘**(▸) = 헤더와 메타 줄만 남습니다(세션 그룹·`Show more` 없음). 접힘/펼침·`Show more`는 컨테이너 로컬 state이며 폴링에 유지됩니다(조각 key = Work id). 처음 목업의 "세션당 상태색 미니 막대"는 사용자 피드백으로 뺐습니다.
-- **`⋯ → 세션 접기` / `세션 펼치기`**(Work `⋯` 메뉴의 첫 항목, ▾/▸ chevron과 같은 동작): 접으면 헤더와 메타 줄만 남습니다. 다시 펼치면 **항상 최신 2개**(`WORK_VISIBLE_SESSIONS`)부터 보이고, 나머지는 `＋ Show N more sessions`를 한 번 더 눌러야 보입니다(접을 때 `Show more` 상태를 초기화). 상태는 Work 조각마다 로컬이며 새로고침하면 펼친 상태로 돌아옵니다. 처음에는 툴바 전역 토글(`Hide sessions`)로 넣었다가 사용자 피드백으로 Work별 메뉴로 옮겼습니다.
+- **Work 접힘**(푸터 `show N`) = 헤더 · 메타 줄 · 푸터 토글만 남습니다(세션 그룹·`Show more` 없음). 접힘/펼침·`Show more`는 컨테이너 로컬 state이며 폴링에 유지됩니다(조각 key = Work id). 처음 목업의 "세션당 상태색 미니 막대"는 사용자 피드백으로 뺐습니다.
+- **미배정은 있을 때만**: 미배정 세션이 0개면 `UNASSIGNED SESSIONS` 머리줄과 빈 박스를 그리지 않아 Work 조각이 컬럼 맨 위로 붙습니다(대기·진행중 컬럼처럼). 드래그 중 빼기 대상(unlink)이 될 수 있을 때만 다시 나타나고, 컬럼에 아무것도 없으면 다른 컬럼과 같은 `No cards`입니다.
+- **미배정이 위, Work가 아래**: 검토 대기·완료 컬럼 모두 `UNASSIGNED SESSIONS` 구역을 Work 조각들 **위에** 그립니다 — 아직 정리 안 된 세션이 먼저 눈에 띄어야 하기 때문입니다(사용자 요청으로 처음의 "Work 먼저" 순서를 뒤집음). unread 점프 순서(`selectBoardNavOrder`)도 같은 순서(미배정 → 조각)입니다.
+- **컬럼 `⋯ → 모든 Work 세션 접기` / `펼치기`**(검토 대기·완료, 그 컬럼에 Work 조각이 있을 때 첫 항목): 그 컬럼의 Work 컨테이너 전부를 한 번에 접거나 펼칩니다. `BoardColumn`의 `{ collapsed, token }`(`WorkCollapseRequest`)을 각 `BoardWorkContainer`에 `collapseRequest`로 내리고, 토큰이 바뀔 때만 적용하므로 그 뒤의 **개별 `hide`/`show` 토글은 그대로 동작**합니다. 라벨은 마지막 일괄 명령 기준(접은 뒤엔 `펼치기`)이고, 접힌 상태에서 새로 나타난 Work도 접힌 채로 시작합니다(`defaultCollapsed`). 컬럼 간에는 독립입니다. 세션 그룹(턴 목록)을 접는 기존 `모두 숨기기`/`모두 접기`와는 별개입니다.
+- **푸터 `hide` / `show N` 토글**(`.kv2-complete-session-toggle` + `.kv2-work-toggle`, 세션 그룹의 `hide`/`show`와 같은 모양): 접으면 헤더와 메타 줄만 남고, 버튼은 `show N`(N = 이 조각의 세션 수)으로, 옆에 `숨긴 세션 N · unread k`가 붙습니다. 다시 펼치면 **항상 최신 2개**(`WORK_VISIBLE_SESSIONS`)부터 보이고, 나머지는 `＋ Show N more sessions`를 한 번 더 눌러야 보입니다(접을 때 `Show more` 상태를 초기화). 상태는 Work 조각마다 로컬이며 새로고침하면 펼친 상태로 돌아옵니다. 처음에는 툴바 전역 토글(`Hide sessions`) → Work `⋯ → 세션 접기` 메뉴 + `▸` chevron이었다가, 세션 그룹과 여는 방법이 달라 보인다는 피드백으로 버튼으로 뺐습니다(`docs/mockups/works-ux-before-after.html` ④). `⋯`에는 Work 자체 동작(상세 열기 · 이름 변경 · 병합 · 완료)만 남고, `onWorkOpen`이 없으면 `⋯` 자체가 없습니다.
 - **헤더에는 제목만**: `● N`과 Work id 칩은 메타 줄 오른쪽 끝(`.kv2-work-meta-end`)에 있습니다. 제목 옆에 있으면 `Agent-kanban UI 개선 점검` 같은 평범한 제목도 `Agent-kanban…`으로 잘렸습니다. 메타 줄은 한 줄을 유지하고(4컬럼 1600px에서도), 좁으면 프로젝트 칩과 id 칩이 먼저 줄어듭니다. `진행중 1 ↗` 칩은 그 아래 별도 줄(`.kv2-work-jumps`)입니다.
 - **제목 클릭** = `WorkDetailDialog`. `⋯`의 `이름 변경` / `다른 Work와 병합…` / `Work 완료…`는 같은 다이얼로그를 `initialIntent`(`rename`/`merge`/`complete`)로 열어 기존 흐름(제목 편집 · 병합 대상 선택 · 완료 확인)을 그대로 씁니다 — 보드에 새 변경 경로는 없습니다.
 - **peer 강조 / 점프**: 조각(`section.kv2-work`)과 Work가 붙은 대기·진행중 카드 래퍼는 `data-work-id` + `data-work-status`를 갖습니다. 제목 hover/focus는 같은 Work 전부에 `.kv2-work-peer`, `진행중 1 ↗`는 그 컬럼의 첫 대상으로 스크롤 + `.kv2-work-flash`(1.2s).
-- **unread 점프**(`u` / `Shift+U`, 컬럼 pill): 순서는 화면과 같게 — 조각들의 세션(숨긴 것 포함) → 미배정 세션(`selectBoardNavOrder`의 `layout.works`). 대상이 접힌 Work나 숨긴 세션 안이면 컨테이너가 펼치고 `Show more`를 연 뒤, 그룹은 disclosure 훅이 엽니다.
+- **unread 점프**(`u` / `Shift+U`, 컬럼 pill): 순서는 화면과 같게 — 미배정 세션 → 조각들의 세션(숨긴 것 포함)(`selectBoardNavOrder`의 `layout.works`). 대상이 접힌 Work나 숨긴 세션 안이면 컨테이너가 펼치고 `Show more`를 연 뒤, 그룹은 disclosure 훅이 엽니다.
 - 컬럼 `⋯ → 모두 숨기기`는 Work 안 세션 그룹에도 적용됩니다.
 
 #### 드래그 & 드롭 (4/5)
@@ -981,17 +986,37 @@ App ── useWorks(Works 탭 ∨ Timeline ∨ Board+GROUP:WORKS) ── works.f
 - **판단은 순수 함수 하나**: `resolveWorkDrop(source, target)`(`board-works.ts`). `null`이면 그 대상은 `preventDefault`를 하지 않아 브라우저가 드롭을 거부합니다 — 기존 보드 핸들러(대기 컬럼 정렬)는 의미가 그대로입니다. 보드에는 원래 **컬럼 간 상태 변경 DnD가 없으므로** 다른 컬럼에 놓아도 상태·Work 모두 그대로입니다.
 - **소스**: 세션 그룹 헤더(Work 안·미배정 모두)와 대기·진행중 카드. `dataTransfer`에는 기존 `text/plain`(cardId)을 유지하고 `application/x-kanban-session`(`WORK_SESSION_DRAG_MIME`)에 `{ sessionId, workId, status, … }`를 함께 씁니다. `dragover` 중에는 `dataTransfer`를 읽을 수 없으므로 실제 판단은 `BoardWorkDnDContext`(`board-work-dnd.tsx`)의 React state로 합니다.
 - **상태 전환은 한 프레임 뒤**(`requestAnimationFrame`): `dragstart` 안에서 리렌더하면 Chrome이 드래그를 취소합니다. 드롭 강조(`is-drop-over`)는 리렌더 없이 class만 토글합니다.
-- **레이아웃 고정**: 드롭 힌트(`.kv2-work-drop-hint`, `.kv2-works-unassign-hint`)와 강조는 전부 overlay/outline(`position: absolute; pointer-events: none`)입니다. 드래그 중 본문이 밀리면 포인터 아래 요소가 바뀝니다.
+- **레이아웃 고정 · 보드 위에는 글자 없음**: 드롭 대상 표시는 outline과 면 색뿐입니다 — 드래그 중엔 점선 outline, 포인터가 올라가면 실선 + Work 면이 `--kv2-work-drop-over-face`로 바뀝니다(미배정 구역은 outline만). 예전에는 대상 안에 `여기에 놓아 이 Work에 넣기` overlay 박스(`.kv2-work-drop-hint`/`.kv2-works-unassign-hint`)를 띄웠는데, 접힌 Work에서는 그 박스가 **제목을 덮어** 어느 Work인지 알 수 없게 만들어서 뺐습니다. 무엇이 일어날지는 트레이 라벨이 말합니다(아래). 드래그 중 본문이 밀리면 포인터 아래 요소가 바뀌므로 표시는 계속 레이아웃을 건드리지 않습니다.
+- **트레이 라벨 = 드롭 안내**: 포인터 아래 대상이 있으면 `Work로 넣기 ▸` 대신 `놓으면 넣기 → <Work 제목>` / `옮기기 → <Work>` / `Work에서 빼기 (미배정)` / `새 Work 만들어 넣기`(`describeDropHover`, 판단은 같은 `resolveWorkDrop`). 보드 대상과 트레이 항목 모두에 반응합니다. 포인터 아래 대상은 `board-work-dnd.tsx`의 작은 외부 store(`setDropHover`/`clearDropHover`/`useDropHover`, `useSyncExternalStore`)에 있어서 **트레이만** 다시 그려집니다 — 보드는 드래그 중 리렌더하지 않는다는 규칙 그대로입니다. `clearDropHover(target)`는 아직 그 대상일 때만 지우므로, 다음 대상의 dragover 뒤에 늦게 온 leave가 라벨을 지우지 않습니다. 라벨 폭은 고정(36ch, 넘치면 말줄임)이라 대상이 바뀌어도 트레이가 포인터 아래에서 흔들리지 않습니다.
 - **트레이**(`BoardWorkDropTray`, 화면 하단 고정): 활성 Work 전부(현재 Work는 `(현재)` 흐리게, 드롭 거부) · `＋ 새 Work` · `⊘ Work에서 빼기`(소속이 있을 때만). 트레이는 컬럼 제약이 없어 **대기·진행중 카드를 Work에 넣는 경로**입니다. `sessionId`가 없는 소스는 항목 대신 `세션이 없는 카드는 Work에 넣을 수 없습니다` 안내만 보입니다.
 - **되돌리기**: 모든 변경 뒤 `WorkSessionNotice`(Works 탭과 같은 컴포넌트, `workAssignNotice.ts` 헬퍼)가 뜨고, 되돌리기는 항상 `useWorks` 변경을 **역으로 한 번 더** 호출합니다(`board-work-actions.ts`의 `applyWorkDropAction`). 원본 Work가 마지막 세션을 잃어 서버가 삭제했으면(`from: null`) 되살리면 새 id·Summary 유실이므로 **되돌리기를 내지 않습니다**(경고 톤 notice).
-- **키보드 대안**: 세션 그룹 헤더와 카드 메타 줄의 `⋯`(`BoardWorkMoveMenu`) → `→ <Work>` / `＋ 새 Work 만들어 넣기…` / `⊘ Work에서 빼기`. 항목은 같은 `resolveWorkDrop`으로 거르고, 메뉴 래퍼가 click/keydown 전파를 막아 헤더의 세션 다이얼로그가 같이 열리지 않습니다(포털 이벤트도 React 트리로 버블링됨).
-- `App`은 `useWorks` 변경을 `BoardWorkMutations`로 묶어 `BoardScreen workMutations`로 내립니다 — fetch는 훅에만 있습니다. `workMutations`가 없거나 WORKS 모드가 아니면 컨텍스트가 `null`이고 드래그 핸들러·`⋯`가 렌더되지 않습니다.
+- **키보드 대안 = Work 필드**: 예전의 `⋯ → Work로 이동` 메뉴(`BoardWorkMoveMenu`)는 지웠습니다. 대신 카드와 **세션 그룹(미배정·Work 안 모두)** 에 같은 `W … ▾` Work 필드(`WorkPicker`, ⑦)가 있고, 선택은 같은 `resolveWorkDrop` → `runWorkAction`으로 갑니다. 세션 그룹의 필드 행(`.kv2-complete-session-work-row`)은 click/keydown 전파를 막아 헤더의 세션 다이얼로그가 같이 열리지 않습니다(포털 이벤트도 React 트리로 버블링됨).
+- `App`은 `useWorks` 변경을 `BoardWorkMutations`로 묶어 `BoardScreen workMutations`로 내립니다 — fetch는 훅에만 있습니다. `workMutations`가 없거나 WORKS 모드가 아니면 드래그 컨텍스트(`BoardWorkDnDContext`)가 `null`이고 드래그 핸들러가 렌더되지 않습니다. Work 필드용 `BoardWorkFieldContext`(`{ works, workForSession, run }`)는 `workMutations && works`만 있으면 **모든 group mode**에서 제공됩니다.
 
 #### 목업 대조 (5/5)
 
 목업 B안과 실제 화면(1600×1000, 라이트·다크)을 나란히 비교한 결과·의도적 차이·테스트 결과는 `docs/reports/works-on-board-implementation.md`에 있습니다. 이 단계에서 바뀐 동작은 하나입니다.
 
 - **Work 안 세션 헤더 row ①**: Work 컨테이너 안은 맨 컬럼보다 좁아서, 줄지 않는 오른쪽 묶음(`● N` · `★ N` · `#id` · `⋯`)에 밀려 프로젝트 칩이 `ag` 두 글자로 줄었습니다. `.kv2-work` 범위에서만 프로젝트 칩에 `min-width: min(9ch, 45%)` 바닥을 주고, 세션 `IdChip`이 먼저 줄어들게(말줄임, 클릭 복사는 그대로) 했습니다 — Work 헤더의 id 칩과 같은 규칙입니다(`kv2/board.css`).
+
+### ⑦ TODO 카드 Work 지정 (`BoardCardWorkField`, 전 group mode)
+
+⑥의 Work 컨테이너/드래그는 **세션이 이미 있는** 카드만 다룹니다. 세션이 아직 없는 TODO 카드(대기 상태, dispatch 전)에는 연결할 Work 자체가 없으므로, 대신 **예약**(`KanbanCard.plannedWorkId`)이라는 두 번째 상태를 둡니다. 스펙은 `docs/mockups/todo-work-assign.html` — 카드 상세 배치는 **A안**(RUNTIME/AGENT/MODEL/DIRECTORY와 나란한 WORK 타일, 접는 섹션 아님), 나머지 두 질문은 **추천안**(전 group mode 노출, `CreateCardDialog`에도 WORK 필드)을 채택했습니다.
+
+- **두 상태**: `plannedWorkId`(세션 없음 — "예약", 사람이 지정) vs 실제 `WorkSessionLink`(세션이 이미 어떤 Work의 `sessionLinks`에 있음 — "연결", ⑥의 drop 메커니즘이 만듦). 한 카드가 동시에 둘 다 가질 수 없습니다 — 세션이 생기는 순간 예약은 연결로 바뀌고 지워집니다(아래 자동 연결).
+- **`BoardCardWorkField`**(`web/src/components/Board/BoardCardWorkField.tsx`) — `BoardCard` 푸터와 **세션 그룹 헤더 아래**의 Work 필드(공용 `WorkPicker` — `W` 칩 · 제목 · `예약` · `▾`, 팝오버는 검색 · `Work 없음` · 활성 Work · `＋ 새 Work 만들어 넣기…`). 팝오버 순서는 검색 → **`새 Work 만들기`(맨 위)** → `Work 없음` → 기존 Work. 검색어를 치면 목록이 걸러지고 커서는 첫 일치 항목에(⏎ = 그 Work에 지정), 일치가 없으면 `새 Work 만들기: "<검색어>"`에 섭니다(⏎ = **그 이름으로 생성**). 검색어 없이 누르면 만들지 않고 검색창에 이름을 입력하라고 안내합니다(`workPickerRows` / `workPickerActiveAfterQuery`, `WorkPicker.test.tsx`). 생성 경로: 세션 있음 → `runWorkAction(source, { kind: 'new' }, title)`이 이름 다이얼로그 없이 `create`/`moveToNew`(트레이 `＋ 새 Work`는 여전히 다이얼로그) · 세션 없는 카드 → `BoardWorkFieldContext.createPlanned`가 빈 Work를 만들고(`BoardWorkMutations.createWork`) 예약 · 카드 상세/NEW TASK → `onCreateWork`(= `useWorks.createWork`) 후 예약/선택. **모든 group mode**(`CARD`/`SESSION`/`WORKS`)에서 대기·진행중 카드와 세션 그룹에 렌더됩니다 — ⑥의 `BoardWorkContainer`/트레이 드래그와는 별개의, 언제나 켜져 있는 단일 카드 진입점입니다.
+  - 세션 없음 → 선택은 `onSetPlanned(cardId, workId | null)`로 카드 PATCH 한 번(`plannedWorkId`). Works 저장소는 전혀 건드리지 않습니다.
+  - 세션 있음 → 선택은 ⑥과 같은 `resolveWorkDrop(source, target)`로 `link`/`move`/`unlink` 액션을 만들어 `onDrop`(= `BoardScreen`의 `runWorkAction`, ⑥의 드래그와 동일 경로)에 넘깁니다 — notice·되돌리기 동작이 드래그와 똑같습니다.
+  - 순수 판단 함수 `resolveWorkFieldChange(card, linkedWork, currentValue, next)`가 둘 중 뭘 할지 고르고, `null`이면 같은 값 재선택 등 아무 일도 하지 않습니다. DOM 상호작용 테스트 대신 이 함수를 직접 테스트합니다(`BoardCardWorkField.test.tsx`) — `renderToStaticMarkup`만 쓰는 이 디렉토리 컨벤션을 따릅니다.
+  - 표시: 예약은 제목 + `예약` 배지, 연결은 평범한 제목, 둘 다 없으면 `Work 없음`. CSS는 `.kv2-work-picker-trigger--{pill|line|input}` + `is-planned`(점선 테두리) / `is-set` 클래스로 구분(`kv2/board.css`). 검색 필터는 순수 함수 `filterWorkPickerOptions`(`WorkPicker.test.tsx`).
+  - `.kv2-card-click-layer`(카드 전체를 덮는 `position: absolute; z-index: 1`)가 클릭을 가로채므로, `.kv2-card-work-row`는 `z-index: 2; pointer-events: none`이고 `.kv2-card-work-field` 자신만 `pointer-events: auto`입니다 — 행의 빈 패딩은 카드 열기로 통과시키되 드롭다운은 클릭되게 하는 트릭.
+- **자동 연결**(`src/plugin/works/work-planned-link.ts` — `createPlannedWorkLinker`): dispatch로 카드가 `sessionId`를 처음 받는 순간 발동하는 `SessionAssignedHook`(`src/core/store.ts`, `KanbanStore.setSessionAssignedHook` — `bootstrap.ts`에서 한 번 연결). 예약된 Work가 아직 `active`면 `WorkStore.addSession`으로 그 세션을 연결하고, `plannedWorkId`를 지웁니다. Work가 그사이 닫히거나 삭제됐으면 **에러로 취급하지 않고** 조용히 예약만 지웁니다 — 세션 자체의 dispatch를 막을 이유가 없기 때문입니다.
+  - `updateCard`는 이 훅을 **락 밖에서, best-effort로** 호출합니다 — 훅이 던져도 카드 쓰기 자체는 실패하지 않습니다.
+- **카드 상세 Work 줄**(`CardWorkLine.tsx`, 제목 바로 아래): 처음 A안의 메타 타일은 "Work는 실행 설정이 아니라 카드의 소속"이라는 피드백으로 제목 아래 `소속` 줄로 옮겼습니다(`works-ux-before-after.html` ①). TODO + 세션 없음 + 편집 가능일 때만 `plannedWorkId`를 쓰는 편집 가능 `WorkPicker variant="line"`, 그 외에는 `sessionLinks`로 찾은 Work(닫힌 Work 포함)를 비활성 picker로 보여줍니다(없으면 `Work 없음`). 판단은 `resolveCardWorkLine`(`CardWorkLine.test.tsx`).
+- **`CreateCardDialog`에도 Work 필드**: `works` prop이 주어지면(= `App`이 `activeWorks` 전달) 필드 순서는 Title → **Work(선택)** → Prompt → Directory → Runtime이고, 생성 시 `onCreate(...)`에 `plannedWorkId`로 실립니다 — 카드가 TODO로 태어나는 순간부터 예약 상태로 시작할 수 있습니다. 필수는 아닙니다.
+  - **Directory 자동 채움**: Work를 고르면 `work.projectDir`로 Directory를 채우되, 사용자가 직접 입력한 경로는 덮어쓰지 않습니다 — 비어 있거나 직전에 자동으로 채운 값일 때만 바꿉니다(순수 함수 `directoryAfterWorkPick`, `Card/work-directory.ts`).
+  - **프리필**: 보드 `WORK:` 필터가 특정 Work면 `App`이 `initialPlannedWorkId`로 넘겨 그 Work(와 Directory)가 미리 선택됩니다.
+- **서버 검증**(`src/server/routes.ts`): `POST /api/cards` / `PATCH /api/cards/:id`가 `plannedWorkId`를 받으면 해당 Work가 존재하고 `active`인지 확인합니다(`404`/`400`). `PATCH`에서 `null`은 예약 해제이므로 검증 없이 통과시킵니다.
 
 ## API 레퍼런스 (`/api/works*`)
 
@@ -1251,7 +1276,9 @@ Works 설정 조회/저장. `GET`은 `WorksConfigDto`(설정값 + `configured` +
 | Timeline 행 모델 (순수) | `web/src/components/Works/timelineRows.ts` — `buildTimelineRows` / `buildStripRows`(Works 탭 strip) / `gridSpan` / `dayCells` |
 | Timeline 집계 (순수, 서버) | `src/core/timeline-aggregate.ts` — `buildTimelineSessions` / `cardExecutionSpan` / `timelineArchiveMonths` |
 | Timeline 데이터 흐름 (웹) | `web/src/hooks/useTimeline.ts`, `fetchTimeline` (`useWorksApi.ts`) |
-| 유닛 테스트 | `src/__tests__/work-store.test.ts`, `work-lifecycle.test.ts`, `works-config.test.ts`, `works-ignored-route.test.ts`, `work-list.test.ts`, `works-reopen-merge-route.test.ts`, `timeline-aggregate.test.ts`, `timeline-route.test.ts`, `web/src/components/Works/timelineModel.test.ts`, `timelineRows.test.ts`, `worksAssign.test.ts` |
+| TODO 카드 Work 예약 (⑦) | `src/plugin/works/work-planned-link.ts` — `createPlannedWorkLinker` (`SessionAssignedHook`) |
+| 예약 전 카드 그룹의 공용 Work 필드 (⑦) | `web/src/components/Board/BoardCardWorkField.tsx` — `resolveWorkFieldChange`(순수) / `BoardCardWorkField` |
+| 유닛 테스트 | `src/__tests__/work-store.test.ts`, `work-lifecycle.test.ts`, `works-config.test.ts`, `works-ignored-route.test.ts`, `work-list.test.ts`, `works-reopen-merge-route.test.ts`, `timeline-aggregate.test.ts`, `timeline-route.test.ts`, `work-planned-link.test.ts`, `web/src/components/Works/timelineModel.test.ts`, `timelineRows.test.ts`, `worksAssign.test.ts`, `web/src/components/Board/BoardCardWorkField.test.tsx` |
 | e2e | `e2e/works.e2e.ts` |
 
 ## 관련 문서

@@ -6,6 +6,8 @@ import {
   UpdateCardInput,
   Screenshot,
   AgentRuntime,
+  CreateWorkInput,
+  Work,
 } from "../../../../src/core/types";
 import { QuestionRequest } from "../../hooks/useQuestionsApi";
 import { fetchModels, ModelInfo, uploadScreenshot } from "../../hooks/useKanbanApi";
@@ -21,6 +23,7 @@ import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
 import { useCardProgress } from "../../hooks/useCardProgress";
 import { DialogSkeleton } from "./DialogSkeleton";
 import { CardMetaPanel, CommandMetaRow, EditingField } from "./CardMetaPanel";
+import { CardWorkLine } from "./CardWorkLine";
 import { CardPhases } from "./CardPhases";
 import { QueueSettingsPanel } from "./QueueSettingsPanel";
 import { ScheduleSettingsPanel } from "./ScheduleSettingsPanel";
@@ -158,6 +161,10 @@ export interface CardDetailDialogProps {
   question?: QuestionRequest;
   onAnswerQuestion?: (questionId: string, answers: string[][]) => Promise<void>;
   onRejectQuestion?: (questionId: string) => Promise<void>;
+  /** Every Work (any status) for the Work line under the title. Omitted → no Work line. */
+  works?: readonly Work[];
+  /** The Work line's `새 Work 만들기` — creates the Work, then reserves it on this card. */
+  onCreateWork?: (input: CreateWorkInput) => Promise<Work>;
 }
 
 export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
@@ -182,6 +189,8 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
   question,
   onAnswerQuestion,
   onRejectQuestion,
+  works,
+  onCreateWork,
 }) => {
   const [collapsedPhases, setCollapsedPhases] = useState<Record<string, boolean>>(() => getDefaultCollapsedPhases(card));
   const [editingField, setEditingField] = useState<EditingField>(null);
@@ -840,6 +849,10 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
               )}
             </div>
           </div>
+
+          {works && (
+            <CardWorkLine card={card} works={works} isTodo={isTodo} canEdit={canEdit} onUpdate={onUpdate} onCreateWork={onCreateWork} />
+          )}
 
           {metaPanel}
         </section>

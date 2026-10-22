@@ -60,7 +60,7 @@ test('Work detail refreshes card activity while it remains open', async ({ page,
   await expect(detail.getByLabel('작업 현황')).toContainText('카드 2', { timeout: 12000 });
   await expect(detail.getByLabel('작업 현황')).toContainText('완료 1');
   await expect(detail.locator('.work-session-meta')).toContainText('카드 2');
-  await detail.locator('.work-session-item').getByRole('button', { name: '대화', exact: true }).click();
+  await detail.locator('.work-session-item .work-session-title').first().click();
   await expect(page.locator('.session-conversation-dialog')).toContainText('첫 번째 결과');
 });
 
@@ -83,7 +83,7 @@ test('the visible session picker adds sessions and conversation includes archive
   await detail.getByRole('button', { name: '이 Work에 연결' }).click();
   await expect(detail.locator('.work-session-list')).toContainText('추가 리뷰');
   await page.screenshot({ path: testInfo.outputPath('sessions-mobile.png'), fullPage: true });
-  await detail.locator('.work-session-item').filter({ hasText: '이전 결정' }).getByRole('button', { name: '대화', exact: true }).click();
+  await detail.locator('.work-session-item').filter({ hasText: '이전 결정' }).locator('.work-session-title').click();
   const conversation = page.locator('.session-conversation-dialog');
   await expect(conversation).toContainText('이전 프롬프트');
   await expect(conversation).toContainText('후속 프롬프트');
