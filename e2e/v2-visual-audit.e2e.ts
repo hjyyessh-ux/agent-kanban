@@ -463,7 +463,8 @@ test.describe('v2 visual audit', () => {
     await group.locator('.kv2-complete-session-header').click();
     const conversation = page.locator('.session-conversation-dialog');
     await expect(conversation).toBeVisible();
-    await expect(conversation.locator('.session-conversation-turnLabel').first()).toHaveCSS('background-color', 'rgb(166, 107, 123)');
+    // Latest turn tag: accent outline + body ink (white on the accent fill failed AA).
+    await expect(conversation.locator('.session-conversation-turnLatestTag').first()).toHaveCSS('border-top-color', 'rgb(166, 107, 123)');
     await page.screenshot({ path: 'e2e/results/v2-visual-session-conversation-dark.png', fullPage: true });
     await page.keyboard.press('Escape');
 

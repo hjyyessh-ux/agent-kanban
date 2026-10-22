@@ -194,7 +194,9 @@ test('Inbox keeps the first title and opens the full conversation from the row',
     await expect(conversation).toHaveCount(0);
   };
   await expect(conversation).toBeVisible();
-  await expect(conversation.locator('.kv2-complete-session-turn')).toHaveCount(3);
+  await expect(conversation.locator('.session-conversation-turn')).toHaveCount(3);
+  // Only the two newest turns open by default; read every turn's body.
+  await conversation.getByRole('button', { name: '모두 펼침' }).click();
   await expect(conversation).toContainText('첫 대화의 요청 본문입니다.');
   await expect(conversation).toContainText('첫 대화의 결과입니다.');
   await expect(conversation).toContainText('수정한 내용으로 PR을 생성해 주세요.');
@@ -2281,7 +2283,7 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   // The header carries the session's own title; the turns carry each card's
   // prompt and result — all of it read out of the archive.
   await expect(conversation).toContainText(firstTitle);
-  await expect(conversation.locator('.kv2-complete-session-turn')).toHaveCount(2);
+  await expect(conversation.locator('.session-conversation-turn')).toHaveCount(2);
   await expect(conversation).toContainText('첫 턴의 결과입니다.');
   await expect(conversation).toContainText('두 번째 턴의 결과입니다.');
 });

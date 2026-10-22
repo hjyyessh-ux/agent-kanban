@@ -1399,8 +1399,53 @@
 
 .kv2-feedback-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
   justify-content: flex-end;
+}
+
+/* "어디에 이어붙는가" — 제목 옆 */
+.kv2-feedback-target {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+}
+
+/* 초안이 있으면 닫아도 남는다는 사실을 보이게 */
+.kv2-feedback-draft {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-feedback-draft-clear {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--kv2-text-secondary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.kv2-feedback-attach.kv2-btn {
+  border: 1.5px dashed var(--kv2-border-strong);
+  font-size: var(--kv2-text-ui-sm);
+}
+
+.kv2-feedback-attach-hint {
+  margin-right: auto;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-feedback-panel--dragging {
+  outline: 2px dashed var(--kv2-focus-ring);
+  outline-offset: 4px;
 }
 
 /* =============================================================
@@ -1573,12 +1618,57 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  overflow: hidden;
+  outline: none;
 }
 
 .kv2-screenshot-lightbox-img {
-  max-width: 90vw;
-  max-height: 90vh;
+  max-width: 92vw;
+  max-height: 84vh;
   object-fit: contain;
+  user-select: none;
+  touch-action: none;
+}
+
+/* 확대/축소 컨트롤 — 하단 중앙 */
+.kv2-screenshot-lightbox-toolbar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--kv2-text-inverse) 40%, transparent);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-scrim-strong);
+}
+
+.kv2-screenshot-lightbox-toolbar button {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--kv2-radius-sm);
+  background: transparent;
+  color: var(--kv2-text-inverse);
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kv2-screenshot-lightbox-toolbar button:hover,
+.kv2-screenshot-lightbox-toolbar button[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--kv2-text-inverse) 50%, transparent);
+}
+
+.kv2-screenshot-lightbox-zoom {
+  min-width: 52px;
+  text-align: center;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-inverse);
 }
 
 .kv2-screenshot-lightbox-close {
@@ -1937,12 +2027,6 @@
   flex-wrap: wrap;
 }
 
-.session-conversation-turnCount {
-  font-size: var(--kv2-text-sm);
-  font-weight: 700;
-  color: var(--kv2-text-secondary);
-}
-
 /* Session IdChip + ⏎ resume, pushed to the right of the top row. */
 .session-conversation-ids {
   display: inline-flex;
@@ -1960,16 +2044,6 @@
   line-height: 1.25;
 }
 
-.session-conversation-stickyMeta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: var(--kv2-text-xs);
-  color: var(--kv2-text-secondary);
-}
-
-/* Project chip leads the top row, same chip as the board card's row ①. */
 .session-conversation-stickyProject {
   font-size: var(--kv2-text-ui-sm);
   line-height: 1.4;
@@ -1978,169 +2052,4 @@
 
 .session-conversation-stickyRange {
   font-family: var(--kv2-font-mono);
-}
-
-/* Turn 바로가기 칩 스트립: turn 수가 많아질 수 있어 가로 스크롤 처리 */
-.session-conversation-turnNav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  padding: 2px 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--kv2-border) transparent;
-}
-
-.session-conversation-turnNav::-webkit-scrollbar {
-  height: 5px;
-}
-
-.session-conversation-turnNav::-webkit-scrollbar-thumb {
-  background: var(--kv2-border);
-  border-radius: 999px;
-}
-
-/* 스트립이 가로로 밀려도 'Turn' 라벨은 좌측에 고정 */
-.session-conversation-turnNavLabel {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  flex: 0 0 auto;
-  padding-right: 8px;
-  background: var(--kv2-surface);
-  font-size: var(--kv2-text-2xs);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--kv2-text-muted);
-}
-
-.session-conversation-turnNavChip {
-  flex: 0 0 auto;
-  min-width: 26px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1.5px solid var(--kv2-border-strong);
-  border-radius: 999px;
-  background: var(--kv2-bg);
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-2xs);
-  font-weight: 700;
-  color: var(--kv2-text-secondary);
-  cursor: pointer;
-  transition: background var(--kv2-transition-fast), color var(--kv2-transition-fast),
-    border-color var(--kv2-transition-fast);
-}
-
-.session-conversation-turnNavChip:hover {
-  border-color: var(--session-accent, var(--kv2-status-complete-display));
-  color: var(--kv2-text-primary);
-}
-
-.session-conversation-turnNavChip.is-active {
-  background: var(--session-accent, var(--kv2-status-complete-display));
-  border-color: var(--session-accent, var(--kv2-status-complete-display));
-  color: var(--kv2-text-inverse);
-}
-
-.session-conversation-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-/* 보드 .kv2-complete-session-timeline 재사용 — 배경/패딩/turn 간격만 모달에 맞게 */
-.session-conversation-timeline {
-  background: transparent;
-  padding: 20px 22px 22px 40px;
-  gap: 22px;
-}
-
-/* turn 카드: 보드 스타일 재사용하되, 모달에서는 색을 입히고 여백을 넉넉히 준다.
-   클릭 대상이 아니므로 cursor 해제. */
-.session-conversation-dialog .kv2-complete-session-turn-body,
-.session-conversation-dialog .kv2-complete-session-card-title {
-  cursor: default;
-}
-
-.session-conversation-dialog .kv2-complete-session-turn-body {
-  border-width: 2px;
-  border-radius: 10px;
-  background: var(--session-accent-wash, var(--kv2-surface-tint-cool));
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-ink-ambient) 5%, transparent);
-}
-
-.session-conversation-dialog .kv2-complete-session-turn--current .kv2-complete-session-turn-body {
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--kv2-ink-ambient) 5%, transparent);
-}
-
-/* 헤더 바: 액센트 워시로 turn 칸을 구분 + 여유 패딩 */
-.session-conversation-dialog .kv2-complete-session-turn-header {
-  padding: 12px 16px;
-  gap: 10px;
-  background: var(--session-accent-soft, color-mix(in srgb, var(--kv2-status-complete-display) 9%, transparent));
-  border-bottom: 2px solid var(--kv2-border-strong);
-}
-
-/* Turn N: pill 형태로 크게, 가장 눈에 띄게 */
-.session-conversation-turnLabel {
-  flex: 0 0 auto;
-  font-family: var(--kv2-font-heading);
-  font-weight: 800;
-  font-size: var(--kv2-text-md);
-  letter-spacing: 0.01em;
-  color: var(--kv2-text-inverse);
-  background: var(--session-accent, var(--kv2-status-complete-display));
-  padding: 4px 14px;
-  border-radius: 999px;
-  box-shadow: 1px 1px 0 color-mix(in srgb, var(--kv2-ink-ambient) 14%, transparent);
-}
-
-.session-conversation-turnLatestTag {
-  flex: 0 0 auto;
-  font-size: var(--kv2-text-2xs);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-display));
-  background: var(--kv2-surface);
-  color: var(--session-accent, var(--kv2-status-complete-display));
-}
-
-/* Started/Completed/duration: 기존 title 자리(헤더 우측)로 이동 */
-.session-conversation-turnMeta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  padding: 0;
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-2xs);
-  color: var(--kv2-text-secondary);
-}
-
-.session-conversation-turnDuration {
-  font-weight: 700;
-  color: var(--kv2-text-primary);
-}
-
-/* CardDetailDialog의 phase 비주얼(.kv2-phase*) 직접 재사용.
-   .kv2-phase margin:0 48px / header padding:0 48px 는 상세 다이얼로그 전용 인셋이므로
-   모달에서는 turn body 안쪽 패딩으로 대체해 Prompt/Result가 칸 경계에서 떨어지게 한다. */
-.session-conversation-phaseStack {
-  padding: 16px 16px 18px;
-  gap: 14px;
-}
-
-.session-conversation-dialog .kv2-phase {
-  margin: 0;
-}
-
-.session-conversation-dialog .kv2-phase-header--outer {
-  padding: 0 2px;
-  margin-bottom: 4px;
 }

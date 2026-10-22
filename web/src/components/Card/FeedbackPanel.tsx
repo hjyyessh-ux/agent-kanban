@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { appendReferenceBlock, type ResolvedReference } from "../../../../src/core/mention-reference";
 import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
 import { MentionTextarea } from "../Mention/MentionTextarea";
+import { ImageLightbox } from "../shared/ImageLightbox";
+import { clearDraft, readDraftImages, readDraftText, writeDraftImages, writeDraftText } from "./feedbackDraft";
 
 interface FeedbackPanelProps {
   cardId: string;
@@ -18,11 +20,26 @@ interface FeedbackPanelProps {
   excludeSessionIds?: string[];
   /** 팝오버가 넘지 말아야 할 경계. 두 호출부 모두 다이얼로그 안이다. */
   boundarySelector?: string;
+  /**
+   * 초안 저장 키. 다이얼로그를 닫아도 작성 중인 내용이 남는다. 세션 모달은
+   * 세션 단위로 넘긴다 — 새 turn이 끝나 피드백 대상 카드가 바뀌어도 초안은 그대로다.
+   */
+  draftKey?: string;
+  /** 제목 옆에 붙는 "어디에 이어붙는가" 표시. */
+  targetLabel?: React.ReactNode;
 }
 
 interface PendingImage {
   file: File;
   url: string;
+}
+
+function toPending(files: File[]): PendingImage[] {
+  return files.map((file) => ({ file, url: URL.createObjectURL(file) }));
+}
+
+function imageFilesOf(files: Iterable<File>): File[] {
+  return Array.from(files).filter((file) => file.type.startsWith("image/"));
 }
 
 export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
@@ -34,19 +51,54 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   projectDir,
   excludeSessionIds,
   boundarySelector = ".kv2-dialog",
+  draftKey,
+  targetLabel,
 }) => {
-  const [feedbackText, setFeedbackText] = useState("");
-  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  const storageKey = draftKey ?? `card:${cardId}`;
+  const [feedbackText, setFeedbackText] = useState(() => readDraftText(storageKey));
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>(() => toPending(readDraftImages(storageKey)));
   /** 본문에 박힌 `@` 토큰의 해석 결과. 제출 직전 블록으로 바뀐다. */
   const [resolvedRefs, setResolvedRefs] = useState<ResolvedReference[]>([]);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingRef = useRef(pendingImages);
+  pendingRef.current = pendingImages;
+  const loadedKeyRef = useRef(storageKey);
 
-  // 컴포넌트가 사라질 때 남아 있는 object URL을 정리한다.
+  // 같은 다이얼로그가 다른 카드로 바뀌면 그 카드의 초안을 불러온다.
+  useEffect(() => {
+    if (loadedKeyRef.current === storageKey) return;
+    loadedKeyRef.current = storageKey;
+    pendingRef.current.forEach((image) => URL.revokeObjectURL(image.url));
+    setFeedbackText(readDraftText(storageKey));
+    setPendingImages(toPending(readDraftImages(storageKey)));
+  }, [storageKey]);
+
+  // 컴포넌트가 사라질 때 object URL만 정리한다 — 파일 자체는 초안에 남는다.
   useEffect(() => {
     return () => {
-      pendingImages.forEach((image) => URL.revokeObjectURL(image.url));
+      pendingRef.current.forEach((image) => URL.revokeObjectURL(image.url));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const updateText = useCallback((text: string) => {
+    setFeedbackText(text);
+    writeDraftText(loadedKeyRef.current, text);
+  }, []);
+
+  const updateImages = useCallback((update: (prev: PendingImage[]) => PendingImage[]) => {
+    setPendingImages((prev) => {
+      const next = update(prev);
+      writeDraftImages(loadedKeyRef.current, next.map((image) => image.file));
+      return next;
+    });
+  }, []);
+
+  const addImages = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    updateImages((prev) => [...prev, ...toPending(files)]);
+  }, [updateImages]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const imageFiles = Array.from(e.clipboardData?.items ?? [])
@@ -58,19 +110,20 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     if (imageFiles.length === 0) return;
 
     e.preventDefault();
-    setPendingImages((prev) => [
-      ...prev,
-      ...imageFiles.map((file) => ({ file, url: URL.createObjectURL(file) })),
-    ]);
-  }, []);
+    addImages(imageFiles);
+  }, [addImages]);
 
   const removePendingImage = useCallback((url: string) => {
-    setPendingImages((prev) => {
-      const target = prev.find((image) => image.url === url);
-      if (target) URL.revokeObjectURL(target.url);
-      return prev.filter((image) => image.url !== url);
-    });
-  }, []);
+    URL.revokeObjectURL(url);
+    updateImages((prev) => prev.filter((image) => image.url !== url));
+  }, [updateImages]);
+
+  const discardDraft = () => {
+    pendingImages.forEach((image) => URL.revokeObjectURL(image.url));
+    setFeedbackText("");
+    setPendingImages([]);
+    clearDraft(storageKey);
+  };
 
   const handleFeedbackSubmit = async (shouldDispatch: boolean) => {
     if (!feedbackText.trim() || isSubmittingFeedback) return;
@@ -86,27 +139,55 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
         shouldDispatch,
         pendingImages.map((image) => image.file)
       );
-      setFeedbackText("");
-      pendingImages.forEach((image) => URL.revokeObjectURL(image.url));
-      setPendingImages([]);
+      // 제출이 성공했을 때만 초안을 지운다 — 실패하면 그대로 남아 다시 보낼 수 있다.
+      discardDraft();
       onClose();
     } finally {
       setIsSubmittingFeedback(false);
     }
   };
 
+  const hasDraft = feedbackText.trim().length > 0 || pendingImages.length > 0;
+
   return (
-    <div className="kv2-feedback-panel">
+    <div
+      className={`kv2-feedback-panel${isDragging ? " kv2-feedback-panel--dragging" : ""}`}
+      onDragOver={(e) => {
+        if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setIsDragging(false);
+      }}
+      onDrop={(e) => {
+        const files = imageFilesOf(e.dataTransfer.files ?? []);
+        setIsDragging(false);
+        if (files.length === 0) return;
+        e.preventDefault();
+        addImages(files);
+      }}
+    >
       <div className="kv2-feedback-header">
         <div className="kv2-feedback-title">Feedback</div>
+        {targetLabel && <span className="kv2-feedback-target">{targetLabel}</span>}
+        {hasDraft && (
+          <span className="kv2-feedback-draft">
+            임시 저장됨 — 닫아도 유지
+            <button type="button" className="kv2-feedback-draft-clear" onClick={discardDraft} disabled={isSubmittingFeedback}>
+              비우기
+            </button>
+          </span>
+        )}
       </div>
       <MentionTextarea
         className="kv2-input kv2-feedback-textarea"
         value={feedbackText}
-        onChange={setFeedbackText}
+        onChange={updateText}
         // 클립보드 스크린샷 첨부는 이 통과에 걸려 있다 — 빼면 조용히 죽는다.
         onPaste={handlePaste}
-        placeholder="Describe what needs additional work... (@로 세션·Work·문서를 참조할 수 있고, 스크린샷은 붙여넣기로 첨부합니다)"
+        placeholder="Describe what needs additional work... (@로 세션·Work·문서를 참조할 수 있습니다)"
         rows={4}
         disabled={isSubmittingFeedback}
         boundarySelector={boundarySelector}
@@ -118,7 +199,14 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
         <div className="kv2-screenshot-grid kv2-feedback-screenshots">
           {pendingImages.map((image) => (
             <div key={image.url} className="kv2-screenshot-item">
-              <img src={image.url} alt={image.file.name} className="kv2-screenshot-thumb" />
+              <button
+                type="button"
+                className="kv2-screenshot-thumb-btn"
+                onClick={() => setPreviewUrl(image.url)}
+                title="크게 보기"
+              >
+                <img src={image.url} alt={image.file.name} className="kv2-screenshot-thumb" />
+              </button>
               <div className="kv2-screenshot-meta">
                 <span className="kv2-screenshot-name" title={image.file.name}>
                   {image.file.name || "pasted image"}
@@ -140,6 +228,26 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
       <div className="kv2-feedback-actions">
         <button
           type="button"
+          className="kv2-btn kv2-btn--ghost kv2-feedback-attach"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isSubmittingFeedback}
+        >
+          📎 스크린샷 {pendingImages.length > 0 ? `${pendingImages.length}` : "첨부"}
+        </button>
+        <span className="kv2-feedback-attach-hint">붙여넣기(⌘V) · 끌어놓기도 됩니다</span>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            addImages(imageFilesOf(e.target.files ?? []));
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
           className="kv2-btn kv2-btn--outline"
           onClick={() => handleFeedbackSubmit(false)}
           disabled={isSubmittingFeedback || !feedbackText.trim()}
@@ -155,6 +263,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
           CREATE & START
         </button>
       </div>
+      {previewUrl && <ImageLightbox src={previewUrl} alt="Pasted screenshot" onClose={() => setPreviewUrl(null)} />}
     </div>
   );
 };

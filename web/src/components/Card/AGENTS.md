@@ -21,11 +21,12 @@ Card detail and card creation dialogs, plus every sub-panel they compose: runtim
 | `CardMarkdown.tsx` | Thin `react-markdown` wrapper (with `remark-gfm`/`remark-breaks`) applying `.kv2-markdown-*` classes; the single markdown renderer reused by Card, Board, Wiki, and Capabilities. |
 | `DialogSkeleton.tsx` | Shared modal chrome (header/title/close button, resizable via `usePersistedDialogSize`, accessibility via `useModalAccessibility`) that every dialog in `Card/`, `Scheduler/`, `Settings/` wraps its content in. |
 | `DirectoryPicker.tsx` | Project-directory text input with autocomplete history (`useDirectoryHistory`) and a derived short display name. |
-| `FeedbackPanel.tsx` | Textarea + pasted/attached screenshots for submitting follow-up feedback on a card (used inline in the detail dialog and inside `Board/SessionConversationModal`). |
+| `FeedbackPanel.tsx` | Textarea + screenshots (paste, drag-drop, or the `📎 스크린샷` button; thumbnails open `ImageLightbox`) for submitting follow-up feedback on a card (used inline in the detail dialog and inside `Board/SessionConversationModal`). Keeps a draft through `feedbackDraft.ts` keyed by `draftKey` (default `card:<id>`), so closing the dialog does not lose it; the draft clears only on successful submit or `비우기`. Optional `targetLabel` sits beside the title. |
+| `feedbackDraft.ts` / `.test.ts` | Feedback draft store: text in `localStorage` (`kanban-feedback-draft:<key>`, survives reload), pasted image `File`s in a module-level map (survive dialog close, not a page reload). |
 | `MetaDropdown.tsx` | Generic body-portal popover anchored to a trigger button via fixed positioning — the low-level primitive several meta dropdowns are built on. |
 | `QuestionPanel.tsx` | Renders a single pending `QuestionRequest` inline in the card detail view with answer/reject actions. |
 | `QueueSettingsPanel.tsx` / `.test.tsx` | Queue-chaining configuration: session mode picker and the shared `QueueTargetList` (also used by `CreateCardDialog`) for picking which card to chain after. |
-| `ScreenshotPanel.tsx` | Drag-and-drop / paste screenshot upload, thumbnail grid, and lightbox preview for a card's attachments. |
+| `ScreenshotPanel.tsx` | Drag-and-drop / paste screenshot upload, thumbnail grid, and `shared/ImageLightbox` preview (zoom) for a card's attachments. |
 | `SessionPickerPanel.tsx` / `.test.tsx` | Resume-existing-session picker; supports both "editing an existing card" and "picking a resume session while creating a new card" modes via a discriminated prop union. |
 
 ## For AI Agents

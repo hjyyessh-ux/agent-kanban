@@ -17,6 +17,7 @@ Small, pure, stateless helper functions shared across components — label forma
 | `cardUpdate.ts` | `applyCardUpdates(card, updates)` merges an `UpdateCardInput` into a `KanbanCard` with the API's semantics: `undefined` keeps, `null` deletes the optional field, values replace. Used by `App.tsx`'s detail-dialog `onUpdate`. |
 | `cardUpdate.test.ts` | Unit tests for the keep/delete/replace contract and non-mutation of the input card. |
 | `project-color.ts` | `projectDirColorSlot(projectDir)` (FNV-1a over the full path → slot 1…`DIR_COLOR_SLOTS`, `null` without a directory) and `dirAccentClass(projectDir)` (`works-dir-c{n}` or `''`). Shared by Works, Timeline, mentions and the board so one directory is one colour everywhere; the CSS lives in `styles/kv2/project-color.css`. Tested by `components/Works/worksAffinity.test.ts`, alongside the palette tokens it indexes. |
+| `text-highlight.ts` | Search-term highlighting via the CSS Custom Highlight API (no DOM mutation, safe over React-rendered markdown). `findMatchOffsets(text, needle)` (case-insensitive, non-overlapping), `applyTextHighlight(name, roots, needle)` builds `Range`s over text nodes (skipping anything under `[data-highlight-skip]`) and registers them as `CSS.highlights[name]`; `clearTextHighlight(name)`. No-op where the API is missing. Style with `::highlight(name)`. Tested by `text-highlight.test.ts`. |
 | `stale-visibility.test.ts` | Unit tests for `shouldShowStaleStatus()`/`staleCardVisualState()`. |
 
 ## For AI Agents

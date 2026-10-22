@@ -101,3 +101,582 @@
   color: var(--kv2-text-muted);
   text-align: center;
 }
+
+/* =============================================================
+   세션 대화 모달 레이아웃 — 헤더 툴바 / 좌측 목차 / turn 목록 / 피드백 독
+   ============================================================= */
+.session-conversation-stickyTitle {
+  font-size: var(--kv2-text-xl);
+}
+
+.session-conversation-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-secondary);
+}
+
+.session-conversation-stats b {
+  font-family: var(--kv2-font-mono);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.session-conversation-seg {
+  display: inline-flex;
+  border: 1.5px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  overflow: hidden;
+}
+
+.session-conversation-seg button {
+  border: 0;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  padding: 4px 10px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-conversation-seg button + button {
+  border-left: 1.5px solid var(--kv2-border-strong);
+}
+
+.session-conversation-seg button:hover {
+  color: var(--kv2-text-primary);
+  background: var(--kv2-surface-hover);
+}
+
+.session-conversation-seg button[aria-pressed='true'] {
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
+}
+
+.session-conversation-search {
+  flex: 1 1 180px;
+  min-width: 160px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+  font-size: var(--kv2-text-ui-sm);
+}
+
+.session-conversation-search:focus-within {
+  border-color: var(--kv2-border-strong);
+}
+
+.session-conversation-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--kv2-text-primary);
+  font: inherit;
+}
+
+.session-conversation-searchCount {
+  font-family: var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.session-conversation-toolBtn.kv2-btn {
+  font-size: var(--kv2-text-ui-sm);
+}
+
+/* 목차 | 본문 2열. 목차를 접으면 본문만 남는다. */
+.session-conversation-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.session-conversation-body.has-outline {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.session-conversation-body.has-outline-rail {
+  grid-template-columns: 52px minmax(0, 1fr);
+}
+
+/* 목차 머리: "Turns N" + 닫기(«) — ClickUp의 Close sidebar처럼 목차 자신이 닫는다 */
+.session-conversation-outlineHead {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -8px -6px 4px;
+  padding: 8px 6px 6px 12px;
+  background: var(--kv2-surface-sunken);
+  border-bottom: 1px solid var(--kv2-border);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--kv2-text-secondary);
+}
+
+.session-conversation-outlineHead b {
+  font-family: var(--kv2-font-mono);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-outlineToggle {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--kv2-radius-sm);
+  background: none;
+  color: var(--kv2-text-secondary);
+  font-size: var(--kv2-text-md);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-conversation-outlineToggle:hover {
+  border-color: var(--kv2-border);
+  background: var(--kv2-surface-hover);
+  color: var(--kv2-text-primary);
+}
+
+/* 접힌 목차: » 버튼 + T# 만 남는 얇은 레일 (제목은 title 툴팁) */
+.session-conversation-outlineRail {
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border-right: 1.5px solid var(--kv2-border);
+  background: var(--kv2-surface-sunken);
+}
+
+.session-conversation-outlineRail .session-conversation-outlineToggle {
+  flex: none;
+  margin-bottom: 4px;
+}
+
+.session-conversation-railItem {
+  flex: none;
+  width: 100%;
+  padding: 5px 0;
+  border: 1.5px solid transparent;
+  border-radius: var(--kv2-radius-sm);
+  background: none;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+  text-align: center;
+  cursor: pointer;
+}
+
+.session-conversation-railItem:hover {
+  background: var(--kv2-surface-hover);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-railItem.is-active {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-railItem.is-latest {
+  text-decoration: underline;
+  text-decoration-color: var(--session-accent, var(--kv2-status-complete-display));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.session-conversation-outline {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 6px;
+  border-right: 1.5px solid var(--kv2-border);
+  background: var(--kv2-surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-conversation-outlineItem {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 1px 6px;
+  width: 100%;
+  padding: 6px;
+  border: 1.5px solid transparent;
+  border-radius: var(--kv2-radius-sm);
+  background: none;
+  color: var(--kv2-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-conversation-outlineItem:hover {
+  background: var(--kv2-surface-hover);
+}
+
+.session-conversation-outlineItem.is-active {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-surface);
+}
+
+.session-conversation-outlineNo {
+  grid-row: span 2;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+}
+
+.session-conversation-outlineItem.is-latest .session-conversation-outlineNo {
+  color: var(--kv2-text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--session-accent, var(--kv2-status-complete-display));
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.session-conversation-outlineTitle {
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 회색 막대 대신 시작 시각 · 소요시간을 글자로 */
+.session-conversation-outlineMeta {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+}
+
+.session-conversation-scroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.session-conversation-turns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px 22px;
+}
+
+/* turn 카드: 면은 중립, 액센트(핑크/초록)는 최신 turn의 좌측 바와 태그에만 */
+.session-conversation-turn {
+  position: relative;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-lg);
+  background: var(--kv2-surface);
+  box-shadow: inset 4px 0 0 var(--kv2-border);
+}
+
+.session-conversation-turn.is-latest {
+  border-color: var(--kv2-border-strong);
+  box-shadow: inset 4px 0 0 var(--session-accent, var(--kv2-status-complete-display)),
+    2px 2px 0 color-mix(in srgb, var(--kv2-shadow-hard-color) 18%, transparent);
+}
+
+.session-conversation-turnHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px 9px 16px;
+  border: 0;
+  background: none;
+  color: var(--kv2-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.session-conversation-turnHead:hover .session-conversation-turnTitle {
+  text-decoration: underline;
+}
+
+.session-conversation-turnCaret {
+  flex: 0 0 auto;
+  width: 12px;
+  color: var(--kv2-text-muted);
+  transition: transform var(--kv2-transition-fast);
+}
+
+.session-conversation-turn.is-open .session-conversation-turnCaret {
+  transform: rotate(90deg);
+}
+
+.session-conversation-turnNo {
+  flex: 0 0 auto;
+  min-width: 30px;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-text-secondary);
+}
+
+/* 흰 글자 + 핑크 채움(3.45:1)은 AA 미달 — 외곽선 태그 + 본문 잉크로 */
+.session-conversation-turnLatestTag,
+.session-conversation-turnRunning {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1.5px solid var(--session-accent, var(--kv2-status-complete-display));
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.session-conversation-turnRunning {
+  border-color: var(--kv2-status-progress-display);
+  text-transform: none;
+}
+
+.session-conversation-turnTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--kv2-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-conversation-turnTime {
+  flex: 0 0 auto;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  color: var(--kv2-text-muted);
+}
+
+.session-conversation-turnDuration {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+/* 접힌 turn: 결과 첫 줄 */
+.session-conversation-turnPreview {
+  margin: -4px 0 0;
+  padding: 0 14px 10px 66px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-conversation-turnBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 16px 16px 20px;
+}
+
+.session-conversation-part {
+  border-radius: var(--kv2-radius-md);
+}
+
+.session-conversation-part--result {
+  background: var(--kv2-phase-result-bg);
+  box-shadow: inset 4px 0 0 var(--kv2-phase-result-accent);
+}
+
+.session-conversation-part--prompt {
+  background: var(--kv2-phase-prompt-bg);
+  box-shadow: inset 4px 0 0 var(--kv2-phase-prompt-accent);
+}
+
+/* 왼쪽 액센트 바와 글 사이를 넉넉히(24px) — 바에 글이 붙어 보이지 않게 */
+.session-conversation-partHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 0 24px;
+}
+
+.session-conversation-partName {
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--kv2-text-secondary);
+}
+
+.session-conversation-partAction.kv2-btn {
+  margin-left: auto;
+  font-size: var(--kv2-text-2xs);
+}
+
+.session-conversation-part .kv2-phase-aside,
+.session-conversation-part .kv2-phase-more {
+  margin-left: 24px;
+  margin-right: 20px;
+}
+
+.session-conversation-part .kv2-phase-more {
+  margin-bottom: 12px;
+}
+
+.session-conversation-dialog .session-conversation-part .kv2-phase-content {
+  padding: 8px 22px 16px 24px;
+}
+
+/* 세션 내 검색어 하이라이트 (CSS Custom Highlight API, utils/text-highlight.ts) */
+::highlight(session-search) {
+  background-color: color-mix(in srgb, var(--kv2-status-progress-display) 55%, transparent);
+  color: var(--kv2-text-primary);
+}
+
+.session-conversation-noResult,
+.session-conversation-empty {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+}
+
+.session-conversation-shots {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-conversation-shot {
+  width: 120px;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.session-conversation-shot:hover {
+  border-color: var(--kv2-border-strong);
+}
+
+.session-conversation-shot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.session-conversation-turnBody .session-conversation-subagents {
+  margin: 0;
+}
+
+/* 피드백 독: 위 경계선을 끌어 높이를 조절한다. 높이를 정하면 입력창이 남는 공간을 채운다. */
+.session-conversation-feedbackDock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 75%;
+  overflow: auto;
+  padding: 10px 20px 14px;
+}
+
+.session-conversation-dockHandle {
+  position: absolute;
+  top: -6px;
+  left: 0;
+  right: 0;
+  height: 12px;
+  cursor: ns-resize;
+  z-index: 2;
+  touch-action: none;
+}
+
+.session-conversation-dockHandle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 44px;
+  height: 5px;
+  transform: translateX(-50%);
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-border-strong);
+  opacity: 0.45;
+  transition: opacity var(--kv2-transition-fast);
+}
+
+.session-conversation-dockHandle:hover::after,
+.session-conversation-dockHandle:focus-visible::after {
+  opacity: 1;
+}
+
+.session-conversation-dockHandle:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+}
+
+.session-conversation-feedbackDock .kv2-feedback-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  gap: 8px;
+}
+
+.session-conversation-feedbackDock .kv2-mention-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-conversation-feedbackDock .kv2-feedback-textarea {
+  flex: 1 1 auto;
+  min-height: 56px;
+  resize: none;
+}
+
+/* 모달 자체 크기 조절: 우하단 그립을 눈에 보이게 */
+.session-conversation-dialog.kv2-dialog--resizable::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 12px;
+  height: 12px;
+  pointer-events: none;
+  background: linear-gradient(135deg, transparent 0 45%, var(--kv2-text-muted) 45% 55%, transparent 55% 70%, var(--kv2-text-muted) 70% 80%, transparent 80%);
+}
