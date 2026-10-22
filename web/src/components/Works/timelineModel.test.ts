@@ -3,7 +3,9 @@ import type { Work } from '../../../../src/core/types';
 import {
   addDays,
   bufferAroundToday,
+  bufferAtFloor,
   bufferEdgeToExtend,
+  earliestFloor,
   buildBars,
   clampLabelWidth,
   columnAtPointer,
@@ -151,6 +153,41 @@ describe('scroll buffer', () => {
     expect(bufferEdgeToExtend({ first: 70, last: 92 }, 100)).toBeNull();
     expect(bufferEdgeToExtend({ first: 70, last: 93 }, 100)).toBe('end');
     expect(bufferEdgeToExtend({ first: 3, last: 98 }, 100)).toBe('start');
+  });
+
+  test('a floor (first Work start) caps the past: column 0 is that day, never earlier', () => {
+    const floor = addDays(startOfDay(NOW), -10);
+    const buffer = bufferAroundToday(NOW, 0, floor);
+    expect(buffer.start).toEqual(floor);
+    // The future side keeps the same room as without a floor.
+    expect(buffer.dayCount).toBe(10 + bufferAroundToday(NOW).dayCount - 56);
+    expect(bufferAtFloor(buffer, floor)).toBe(true);
+    // A floor older than the default window changes nothing.
+    expect(bufferAroundToday(NOW, 0, addDays(NOW, -200)).start).toEqual(addDays(startOfDay(NOW), -56));
+  });
+
+  test('prepending stops at the floor and adds only the days left before it', () => {
+    const floor = new Date(2026, 7, 20);
+    const buffer = { start: new Date(2026, 8, 1), dayCount: 84 };
+    const partial = extendBuffer(buffer, 'start', BUFFER_EXTEND_DAYS, TIMELINE_BUFFER_MAX_DAYS, floor);
+    expect(partial.shift).toBe(12);
+    expect(partial.buffer.start).toEqual(floor);
+    const none = extendBuffer(partial.buffer, 'start', BUFFER_EXTEND_DAYS, TIMELINE_BUFFER_MAX_DAYS, floor);
+    expect(none.shift).toBe(0);
+    expect(none.buffer).toBe(partial.buffer);
+  });
+
+  test('a blocked start still lets the end grow', () => {
+    expect(bufferEdgeToExtend({ first: 0, last: 20 }, 100, 7, true)).toBeNull();
+    expect(bufferEdgeToExtend({ first: 0, last: 95 }, 100, 7, true)).toBe('end');
+  });
+
+  test('a future floor clamps to today; no floor means no limit', () => {
+    const today = startOfDay(NOW);
+    expect(earliestFloor(addDays(NOW, 5), today)).toEqual(today);
+    expect(earliestFloor(null, today)).toBeNull();
+    expect(earliestFloor(new Date('nope'), today)).toBeNull();
+    expect(bufferAtFloor({ start: today, dayCount: 10 }, null)).toBe(false);
   });
 
   test('오늘 puts today second from the left; the initial view, second from the right', () => {

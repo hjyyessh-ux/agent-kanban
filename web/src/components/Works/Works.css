@@ -739,23 +739,83 @@
   white-space: nowrap;
 }
 
-/* ── Work cards ─────────────────────────────────────────────── */
-.works-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--kv2-sp-3);
-}
-
-.works-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--kv2-sp-4);
-  padding: var(--kv2-sp-4) var(--kv2-sp-4) var(--kv2-sp-4) var(--kv2-sp-6);
+/* ── Work list ─────────────────────────────────────────────────
+   One framed panel — search/sort toolbar, then 실행 중 / 진행 중 groups of
+   rows separated by hairlines. It used to be a stack of separately framed,
+   shadowed cards, which made 20 Works read as 20 equally loud objects. The
+   row's left band carries the state: blue while a card runs, warn when past
+   its planned end, muted once resolved. */
+.works-list-panel {
   border: 3px solid var(--kv2-ink-pure);
   border-radius: var(--kv2-radius-sm);
   background: var(--kv2-surface);
   box-shadow: var(--kv2-shadow-md);
+  overflow: hidden;
+}
+
+.works-list-panel > .works-active-toolbar {
+  align-items: center;
+  margin: 0;
+  padding: var(--kv2-sp-3) var(--kv2-sp-4);
+  border-bottom: 2px solid var(--kv2-border-strong);
+  background: var(--kv2-surface-sunken);
+}
+
+.works-active-select {
+  flex: none;
+  width: auto;
+  min-width: 9rem;
+}
+
+.works-list-count {
+  margin-left: auto;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+}
+
+.works-list-empty {
+  padding: var(--kv2-sp-6) var(--kv2-sp-4);
+  text-align: center;
+}
+
+.works-list-group + .works-list-group {
+  border-top: 2px solid var(--kv2-border-strong);
+}
+
+.works-list-group-label {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-3) var(--kv2-sp-4) var(--kv2-sp-2);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--kv2-text-muted);
+}
+
+.works-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.works-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 13rem;
+  align-items: center;
+  gap: var(--kv2-sp-2) var(--kv2-sp-5);
+  padding: var(--kv2-sp-3) var(--kv2-sp-4) var(--kv2-sp-3) var(--kv2-sp-5);
+  border-top: 1px solid var(--kv2-border-subtle);
+  background: var(--kv2-surface);
+  transition: background var(--kv2-transition-fast);
+}
+
+.works-card:hover,
+.works-card:focus-within {
+  background: var(--kv2-surface-hover);
 }
 
 .works-card::before {
@@ -764,15 +824,17 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 8px;
-  background: var(--works-accent, var(--kv2-status-todo-accent));
+  width: 4px;
+  background: var(--works-accent, transparent);
 }
 
-.works-card--active { --works-accent: var(--kv2-status-todo-accent); }
+.works-card--active { --works-accent: transparent; }
+.works-card--running { --works-accent: var(--kv2-info-accent); }
 .works-card--done { --works-accent: var(--kv2-status-done-accent); }
 .works-card--discarded { --works-accent: var(--kv2-text-muted); }
 
-.works-card--resolved {
+.works-card--resolved .works-card-body,
+.works-card--resolved .works-card-side {
   opacity: 0.82;
 }
 
@@ -782,57 +844,225 @@
   inset: 0;
   padding: 0;
   border: 0;
-  border-radius: inherit;
   background: transparent;
   cursor: pointer;
 }
 
 .works-card-open:focus-visible {
   outline: 3px solid var(--kv2-focus-ring);
-  outline-offset: -6px;
+  outline-offset: -3px;
 }
 
 .works-card-body {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
   min-width: 0;
 }
 
 .works-card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
   font-family: var(--kv2-font-heading);
   font-weight: 800;
   font-size: var(--kv2-text-md);
   color: var(--kv2-text-primary);
 }
 
+.works-card-title-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.works-card-title .kv2-badge {
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-xs);
+  border-radius: var(--kv2-radius-pill);
+  text-transform: none;
+}
+
+/* "Something is running" — the one badge on this screen that changes while
+   you look at it, so it pulses gently instead of shouting in a fill. */
+.works-running-badge {
+  gap: var(--kv2-sp-1);
+  border-color: var(--kv2-info-border);
+  background: var(--kv2-info-surface);
+  color: var(--kv2-info-text);
+  font-weight: 800;
+  border-radius: var(--kv2-radius-pill);
+  text-transform: none;
+}
+
+.works-running-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: works-running-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes works-running-pulse {
+  50% { opacity: 0.3; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .works-running-badge::before { animation: none; }
+}
+
+.works-stale-badge {
+  border-color: var(--kv2-warn-border);
+  background: var(--kv2-warn-surface);
+  color: var(--kv2-warn-text);
+}
+
 .works-card-meta {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--kv2-sp-3);
-  margin-top: var(--kv2-sp-1);
+  gap: var(--kv2-sp-1) var(--kv2-sp-2);
   font-size: var(--kv2-text-xs);
   color: var(--kv2-text-secondary);
 }
 
-.works-card-summary {
-  margin-top: var(--kv2-sp-2);
-  padding: var(--kv2-sp-2) var(--kv2-sp-3);
-  border-left: 3px solid var(--kv2-success-border);
-  border-radius: 0 var(--kv2-radius-sm) var(--kv2-radius-sm) 0;
-  background: var(--kv2-success-surface);
-  color: var(--kv2-success-text);
+.works-project-chip {
+  gap: var(--kv2-sp-1);
   font-size: var(--kv2-text-xs);
 }
 
-.works-card-side {
-  display: flex;
-  align-items: center;
-  gap: var(--kv2-sp-2);
-  flex: none;
+.works-project-chip-count {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  opacity: 0.85;
 }
 
-.works-card-action {
+.works-card-facts {
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+}
+
+/* The one line under the title, tagged with where it came from (요약 / 메모 /
+   최근 결과) — see `workListPreview`. */
+.works-card-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-secondary);
+}
+
+.works-card-line-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.works-card-line--empty {
+  color: var(--kv2-text-muted);
+  font-style: italic;
+}
+
+.works-card-src {
+  flex: none;
+  padding: 0 var(--kv2-sp-1);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  font-size: var(--kv2-text-2xs);
+  font-style: normal;
+  font-weight: 800;
+  color: var(--kv2-text-muted);
+}
+
+.works-card-src--summary {
+  border-color: var(--kv2-purple-border);
+  color: var(--kv2-purple-text);
+}
+
+.works-card-src--notes {
+  border-color: var(--kv2-warn-border);
+  color: var(--kv2-warn-text);
+}
+
+.works-card-src--result {
+  border-color: var(--kv2-success-border);
+  color: var(--kv2-success-text);
+}
+
+.works-card-line-action {
   position: relative;
   z-index: 2;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--kv2-text-link);
+  font: inherit;
+  font-style: normal;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.works-card-line-action:hover { text-decoration: underline; }
+.works-card-line-action:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Right column: progress, counts, at most one flag. */
+.works-card-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+}
+
+.works-progress {
+  display: flex;
+  height: 6px;
+  border-radius: var(--kv2-radius-pill);
+  background: var(--kv2-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--kv2-border-subtle);
+  overflow: hidden;
+}
+
+.works-progress-done { background: var(--kv2-success-accent); }
+.works-progress-running { background: var(--kv2-info-accent); }
+
+.works-progress-nums {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kv2-sp-2);
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+}
+
+.works-progress-running-label {
+  color: var(--kv2-info-text);
+  font-weight: 700;
+}
+
+.works-card-flag {
+  font-size: var(--kv2-text-xs);
+  font-weight: 700;
+  text-align: right;
+}
+
+.works-card-flag--warn { color: var(--kv2-warn-text); }
+.works-card-flag--ok {
+  color: var(--kv2-text-muted);
+  font-weight: 600;
+}
+
+.works-card-flag--ok::before {
+  content: "✓ ";
+  color: var(--kv2-success-text);
+  font-weight: 800;
 }
 
 /* ── Role chips (shared by modal + detail) ──────────────────── */
@@ -1057,19 +1287,81 @@
   padding: 4px 8px;
 }
 
-/* ── Meta tiles ─────────────────────────────────────────────── */
+/* ── 속성: one folded line, the meta tiles inside ──────────────── */
+.work-props {
+  margin: 0 48px;
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+}
+
+.work-props-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--kv2-text-secondary);
+  font: inherit;
+  font-size: var(--kv2-text-ui-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-props-head:hover {
+  background: var(--kv2-surface-hover);
+}
+
+.work-props-caret {
+  color: var(--kv2-text-muted);
+  transition: transform 120ms ease;
+}
+
+.work-props.is-open .work-props-caret {
+  transform: rotate(90deg);
+}
+
+.work-props-title {
+  color: var(--kv2-text-primary);
+}
+
+.work-props-sum {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.work-props-sum b {
+  color: var(--kv2-text-primary);
+}
+
+.work-props-muted,
+.work-props-action {
+  color: var(--kv2-text-muted);
+}
+
+.work-props-action {
+  flex: none;
+}
+
 .work-detail-overview {
-  padding: 0 48px;
+  padding: 0 12px 12px;
   gap: 12px;
 }
 
-/* Four tiles: DIRECTORY · START · END (PLANNED END) · LAST ACTIVITY. The
-   directory takes the whole first line — a path needs the width and, like the
-   card detail's DIRECTORY tile it reuses (click-to-edit → DirectoryPicker), it
-   is the one value that wraps. */
+/* Three tiles: DIRECTORY · START · END (PLANNED END). The directory gets the
+   double share — a path needs the width and, like the card detail's DIRECTORY
+   tile it reuses (click-to-edit → DirectoryPicker), it is the one value that
+   wraps. */
 .work-meta-panel {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1083,7 +1375,7 @@
 /* Directory tile: the project's colour on its left edge, the same stripe the
    Timeline and Works list draw for that directory. */
 .work-meta-card.kv2-meta-card--directory {
-  grid-column: 1 / -1;
+  grid-column: auto; /* the card detail's tile spans the row; here it is 2fr of one */
   border-left: 6px solid var(--works-dir-accent, var(--kv2-border-muted));
 }
 
@@ -1499,15 +1791,11 @@
   display: none;
 }
 
-.work-detail-note {
-  margin: 0 48px;
-  padding: var(--kv2-sp-3);
-  border-left: 3px solid var(--kv2-success-border);
-  border-radius: 0 var(--kv2-radius-sm) var(--kv2-radius-sm) 0;
-  background: var(--kv2-success-surface);
-  color: var(--kv2-success-text);
+/* What 완료 does, beside 완료 — small and quiet, not a box of its own. */
+.work-detail-footer-hint {
+  align-self: center;
+  color: var(--kv2-text-muted);
   font-size: var(--kv2-text-xs);
-  line-height: 1.55;
 }
 
 .work-date-error {
@@ -1522,15 +1810,19 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .work-detail-overview,
+  .work-meta-card.kv2-meta-card--directory {
+    grid-column: 1 / -1;
+  }
+
   .work-detail-section,
-  .work-detail-note,
-  .work-detail-inline-error {
+  .work-detail-inline-error,
+  .work-detail-facts-row,
+  .work-kpis {
     padding-left: 20px;
     padding-right: 20px;
   }
 
-  .work-detail-note {
+  .work-props {
     margin-left: 20px;
     margin-right: 20px;
   }
@@ -1553,12 +1845,7 @@
 
 
   .works-card {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .works-card-side {
-    justify-content: flex-end;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1716,8 +2003,11 @@
   outline-offset: -4px;
 }
 
-/* ⚙ sits at the far end of the header line. */
-.works-config-gear {
+/* ⋯ (폐기한 세션) and ⚙ sit together at the far end of the header line. */
+.works-view-header-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-1);
   margin-left: auto;
 }
 
@@ -2286,7 +2576,6 @@
    active, so nothing else competes for the stripe. */
 .works-card--overrun {
   --works-accent: var(--kv2-warn-accent);
-  border-color: var(--kv2-warn-text-deep);
 }
 
 /* A merge source. Muted rather than warn: nothing needs attention, the row is
@@ -2303,9 +2592,15 @@
 .works-active-layout > .works-section { min-width: 0; }
 .works-triage-section .works-inbox-header { flex-wrap: wrap; }
 .works-triage-section .works-inbox-rows { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.work-detail-progress { margin: 0 48px var(--kv2-sp-4); }
-.work-session-picker { margin-top: var(--kv2-sp-4); }
+.work-session-picker { display: grid; gap: var(--kv2-sp-2); margin-top: var(--kv2-sp-3); }
 .work-session-picker select { min-width: 0; flex: 1; }
+.work-session-picker-toggle {
+  justify-self: start; padding: 4px 6px; border: 0; border-radius: var(--kv2-radius-sm);
+  background: transparent; color: var(--kv2-text-link); font: inherit; font-size: var(--kv2-text-ui-sm); cursor: pointer;
+}
+.work-session-picker-toggle:hover:not(:disabled) { background: var(--kv2-surface-hover); }
+.work-session-picker-toggle:disabled { color: var(--kv2-text-secondary); cursor: default; }
+.work-session-picker-count { color: var(--kv2-text-muted); }
 .work-wiki-archive { display: grid; gap: var(--kv2-sp-3); }
 .work-wiki-archive-path { overflow-wrap: anywhere; }
 .work-detail-footer { position: static; }
@@ -2314,6 +2609,260 @@
   .works-triage-section .works-inbox-rows { max-height: 280px; }
 }
 @media (max-width: 640px) {
-  .work-detail-progress { margin-left: 16px; margin-right: 16px; }
   .work-detail-id { display: none; }
+}
+
+/* ── Work detail v2: facts line · KPI tiles · 세션 흐름 · session search ──
+   Same 48px gutter as the sections around them. */
+.work-detail-facts-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--kv2-sp-1) var(--kv2-sp-2);
+  padding: 0 48px var(--kv2-sp-3);
+  margin-top: calc(-1 * var(--kv2-sp-2));
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.work-detail-facts-text {
+  color: var(--kv2-text-muted);
+}
+
+.work-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--kv2-sp-3);
+  padding: 0 48px var(--kv2-sp-2);
+}
+
+.work-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+}
+
+.work-kpi b {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xl);
+  line-height: 1.2;
+  color: var(--kv2-text-primary);
+}
+
+.work-kpi span {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.work-kpi--ok { border-color: var(--kv2-success-border); }
+.work-kpi--ok b { color: var(--kv2-success-text); }
+.work-kpi--running { border-color: var(--kv2-info-border); }
+.work-kpi--running b { color: var(--kv2-info-text); }
+.work-kpi--warn { border-color: var(--kv2-warn-border); }
+
+/* The scoped timeline already carries its own frame. */
+.work-detail-flow .tl-work {
+  min-width: 0;
+}
+
+.work-search-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.work-search-icon {
+  font-size: var(--kv2-text-md);
+  color: var(--kv2-text-muted);
+}
+
+.work-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.work-search-count {
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-secondary);
+  white-space: nowrap;
+}
+
+.work-search-empty {
+  text-align: center;
+}
+
+.work-search-results {
+  display: flex;
+  flex-direction: column;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+  overflow: hidden;
+}
+
+.work-search-group + .work-search-group {
+  border-top: 1px solid var(--kv2-border-muted);
+}
+
+.work-search-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+}
+
+.work-search-group-head:hover {
+  background: var(--kv2-surface-hover);
+}
+
+.work-search-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-search-group-toggle:focus-visible,
+.work-search-turn:focus-visible,
+.work-search-hit:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.work-search-caret {
+  flex: none;
+  width: 1em;
+  color: var(--kv2-text-muted);
+  transition: transform var(--kv2-transition-fast);
+}
+
+.work-search-group.is-open .work-search-caret {
+  transform: rotate(90deg);
+}
+
+.work-search-group-head .works-dir-chip {
+  flex: none;
+  font-size: var(--kv2-text-2xs);
+}
+
+.work-search-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: var(--kv2-text-primary);
+}
+
+.work-search-turns {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--kv2-sp-1);
+  max-width: 45%;
+}
+
+/* T# chips — the "card number that jumps to the highlighted spot". */
+.work-search-turn {
+  padding: 0 var(--kv2-sp-1);
+  border: 1px solid var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-warn-surface);
+  color: var(--kv2-warn-text);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-xs);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.work-search-turn:hover {
+  border-color: var(--kv2-warn-text);
+}
+
+.work-search-group-count {
+  min-width: 2ch;
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-muted);
+  text-align: right;
+}
+
+.work-search-hits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  padding: 0 var(--kv2-sp-3) var(--kv2-sp-3) calc(var(--kv2-sp-3) + 1.5em);
+}
+
+.work-search-hit {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  gap: var(--kv2-sp-2);
+  align-items: baseline;
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.work-search-hit:hover {
+  border-color: var(--kv2-border-strong);
+  background: var(--kv2-surface-hover);
+}
+
+.work-search-hit-where {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--kv2-font-mono);
+  color: var(--kv2-text-secondary);
+}
+
+.work-search-hit-where small {
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--kv2-text-muted);
+}
+
+.work-search-hit-snippet {
+  min-width: 0;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Same tint as the session modal's ::highlight(session-search), so a hit
+   looks identical before and after it is opened. */
+.work-search-results mark {
+  border-radius: 2px;
+  background-color: color-mix(in srgb, var(--kv2-status-progress-display) 55%, transparent);
+  color: var(--kv2-text-primary);
+}
+
+.work-search-more {
+  align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  .work-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .work-search-turns { display: none; }
 }

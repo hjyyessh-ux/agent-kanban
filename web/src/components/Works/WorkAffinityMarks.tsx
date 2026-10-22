@@ -1,5 +1,7 @@
 import { projectDirLabel } from './worksAssign';
+import type { Work } from '../../../../src/core/types';
 import { dirAccentClass } from './worksAffinity';
+import { workProjectShares } from './workListPreview';
 
 /**
  * Colour-coded `projectDir` chip. On the session being triaged it is the
@@ -76,6 +78,30 @@ export function WorkAffinityMarks({
         </span>
       )}
       {extra && <span className="works-affinity-extra">{extra}</span>}
+    </>
+  );
+}
+
+/**
+ * Every project a Work's sessions ran in, as colour chips with a session count.
+ * Shared by the list row and the detail header so the same Work names the same
+ * projects in the same order in both places.
+ */
+export function WorkProjectChips({ work }: { work: Pick<Work, 'projectDir' | 'sessionLinks'> }) {
+  const shares = workProjectShares(work);
+  if (shares.length === 0) return null;
+  return (
+    <>
+      {shares.map(({ projectDir, sessionCount }) => (
+        <b
+          key={projectDir}
+          className={`works-dir-chip works-project-chip ${dirAccentClass(projectDir)}`}
+          title={`${projectDir} · 세션 ${sessionCount}`}
+        >
+          {projectDirLabel(projectDir)}
+          {shares.length > 1 && <small className="works-project-chip-count">{sessionCount}</small>}
+        </b>
+      ))}
     </>
   );
 }

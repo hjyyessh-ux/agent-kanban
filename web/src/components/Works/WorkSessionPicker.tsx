@@ -1,23 +1,37 @@
 import { useState } from 'react';
 import type { WorkInboxSession } from '../../../../src/core/types';
 
+/**
+ * `＋ 세션 연결` — one line under the session list. It used to be a heading,
+ * a helper sentence and "없습니다" even when nothing could be linked; now the
+ * line says how many unassigned sessions exist and only opens into the
+ * select when there is one to pick.
+ */
 export function WorkSessionPicker({ sessions, onAdd }: {
   sessions: WorkInboxSession[];
   onAdd: (session: WorkInboxSession) => Promise<void>;
 }) {
+  const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const session = sessions.find(item => item.sessionId === selected);
-  return <section className="work-session-picker" aria-label="세션 추가">
-    <div className="kv2-panel-heading"><span className="kv2-session-title">세션 추가</span></div>
-    <p className="kv2-session-helper">이 목표로 진행한 미배정 세션을 연결하세요.</p>
-    {sessions.length === 0 ? <p className="works-empty">연결할 미배정 세션이 없습니다.</p> : <form
+  const empty = sessions.length === 0;
+  const expanded = open && !empty;
+  return <section className={`work-session-picker${expanded ? ' is-open' : ''}`} aria-label="세션 추가">
+    <button type="button" className="work-session-picker-toggle" aria-expanded={expanded}
+      disabled={empty} onClick={() => setOpen(value => !value)}>
+      <span className="work-session-picker-plus" aria-hidden="true">＋</span> 세션 연결{' '}
+      <span className="work-session-picker-count">
+        · {empty ? '연결할 미배정 세션 없음' : `미배정 ${sessions.length}개`}
+      </span>
+    </button>
+    {expanded && <form
       className="works-active-toolbar" onSubmit={event => {
         event.preventDefault();
         if (!session || busy) return;
         setBusy(true); setError(null);
-        void onAdd(session).then(() => setSelected(''))
+        void onAdd(session).then(() => { setSelected(''); setOpen(false); })
           .catch((e: unknown) => setError(e instanceof Error ? e.message : '세션 연결에 실패했습니다'))
           .finally(() => setBusy(false));
       }}>
@@ -30,6 +44,6 @@ export function WorkSessionPicker({ sessions, onAdd }: {
       </select>
       <button className="kv2-btn kv2-btn--primary" disabled={!session || busy}>{busy ? '연결 중…' : '이 Work에 연결'}</button>
     </form>}
-    {error && <p role="alert">{error}</p>}
+    {error && <p role="alert" className="work-date-error">{error}</p>}
   </section>;
 }

@@ -10,7 +10,11 @@ interface FeedbackPanelProps {
   isSubmittingFeedback: boolean;
   setIsSubmittingFeedback: (val: boolean) => void;
   onCreateFeedback: (cardId: string, feedback: string, shouldDispatch: boolean, screenshots?: File[]) => Promise<void>;
-  onClose: () => void;
+  /**
+   * 제출 성공 뒤 호출 — 카드 상세는 닫는다. 세션 모달은 넘기지 않는다: 창을 연 채로
+   * 방금 보낸 turn이 대기/실행 중으로 이어붙는 걸 지켜보게 한다.
+   */
+  onClose?: () => void;
   /** 대상 카드의 프로젝트 — `@` 후보에서 같은 디렉토리가 먼저 온다. */
   projectDir?: string;
   /**
@@ -141,7 +145,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
       );
       // 제출이 성공했을 때만 초안을 지운다 — 실패하면 그대로 남아 다시 보낼 수 있다.
       discardDraft();
-      onClose();
+      onClose?.();
     } finally {
       setIsSubmittingFeedback(false);
     }

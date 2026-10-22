@@ -74,9 +74,13 @@ function resolveConfirm(page: Page, mode: '완료' | '폐기'): Locator {
   return page.getByRole('dialog', { name: `${mode} 확인`, exact: true });
 }
 
-/** Open the completion confirmation from a list row and wait for its scope read. */
+/**
+ * Open the completion confirmation and wait for its scope read. The list row has
+ * no 완료 button any more — completing goes through the detail dialog's footer.
+ */
 async function openCompleteConfirm(page: Page, workTitle: string): Promise<Locator> {
-  await workCard(page, workTitle).getByRole('button', { name: '완료…' }).click();
+  await workCard(page, workTitle).getByRole('button', { name: /상세 열기$/ }).click();
+  await page.locator('.work-detail-footer').getByRole('button', { name: '✔ 완료 (일괄 archive)' }).click();
   const dialog = resolveConfirm(page, '완료');
   await expect(dialog).toBeVisible();
   // The confirm action is disabled until the preview lands: the dialog exists to
@@ -630,8 +634,9 @@ test('폐기한 세션은 헤더 ⋯의 폐기한 세션 목록에서 복원해 
   await notice.getByRole('button', { name: '알림 닫기' }).click();
 
   // …and the list is the durable path, long after the toast is gone.
-  // …and the list is behind the Inbox header's ⋯.
-  await page.getByRole('button', { name: '미배정 세션 메뉴' }).click();
+  // …and the list is behind the Works header's ⋯ (the Inbox section itself
+  // disappears once it is empty, so the entry cannot live there).
+  await page.getByRole('button', { name: 'Works 메뉴' }).click();
   await page.getByRole('menuitem', { name: /폐기한 세션 \d+개/ }).click();
   const ignoredRow = page.locator('.works-ignored-row').filter({ hasText: card.title });
   await expect(ignoredRow).toBeVisible();
@@ -900,7 +905,7 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, oldTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, oldTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: oldTitle });
   await expect(detail).toBeVisible();
 
@@ -934,7 +939,7 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
   // Escape that cleared the draft in state alone was followed by a blur that
   // committed the abandoned text.
   await page.getByRole('tab', { name: 'Works' }).click();
-  await workCard(page, newTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, newTitle).getByRole('button', { name: /상세 열기$/ }).click();
   // Addressed by class, not by accessible name: the name *is* the title being
   // edited, so a locator built from it stops matching the moment a rename lands.
   const reopened = page.locator('.work-detail-dialog');
@@ -952,7 +957,8 @@ test('상세에서 제목과 디렉토리를 고치면 목록과 Timeline이 따
 
   // The directory is editable too, and it is what the affinity colour hashes.
   // Same tile as the card detail: a click-to-edit DIRECTORY card that swaps to
-  // the DirectoryPicker.
+  // the DirectoryPicker — inside the folded 속성 line, opened first.
+  await reopened.getByRole('button', { name: /^속성/ }).click();
   const dirTile = reopened.locator('.kv2-meta-card--directory');
   await expect(dirTile.locator('.kv2-meta-value--mono')).toHaveText(PROJECT_DIR);
   await dirTile.click();
@@ -1005,7 +1011,7 @@ test('상세는 상태와 산출물을 사용자 언어로만 말한다', async 
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -1140,13 +1146,11 @@ test('Completing a Work archives every card under its sessions', async ({ page, 
   // is expanded.
   await expect(active).toHaveCount(0);
   await expandResolved(page);
-  const resolvedSection = page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' });
+  const resolvedSection = page.getByRole('region', { name: '완료·폐기한 Work', exact: true });
 
-  // It lost its 완료 button on the way.
   const resolved = workCard(page, workTitle);
   await expect(resolved).toHaveClass(/works-card--resolved/);
   await expect(resolved).toHaveClass(/works-card--done/);
-  await expect(resolved.getByRole('button', { name: '완료…' })).toHaveCount(0);
 
   // Both cards were flipped to `done` and swept off the board into the archive.
   await expect(async () => {
@@ -1225,7 +1229,7 @@ test('상세에서 완료를 취소하면 상세 다이얼로그가 닫히지 �
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, workTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
   await expect(detail).toBeVisible();
 
@@ -1258,7 +1262,7 @@ test('폐기도 확인을 거치고, 취소하면 Work가 그대로 남는다', 
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, workTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
 
   // 폐기 used to fire straight off the button with no confirmation and no undo.
@@ -1397,6 +1401,8 @@ test('Timeline re-dates a Work by dragging a bar edge and via the detail dialog'
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
   await expect(dialog).toBeVisible();
+  // Directory and dates live in the folded 속성 line.
+  await dialog.getByRole('button', { name: /^속성/ }).click();
   const endInput = dialog.getByLabel('End', { exact: true });
   const endDay = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 2);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -1442,6 +1448,8 @@ test('An open Work takes a planned end that survives completion', async ({ page,
   // Set a planned end from the dialog: Sunday, the last column of the week.
   await page.locator('.tl-bar').filter({ hasText: title }).click();
   const dialog = page.getByRole('dialog', { name: title });
+// Directory and dates live in the folded 속성 line.
+  await dialog.getByRole('button', { name: /^속성/ }).click();
   const endField = dialog.locator('.work-meta-card').filter({ hasText: 'Planned end' });
   const sunday = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6);
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -1965,7 +1973,7 @@ test('⋯ 메뉴의 세션 이동은 양쪽 시작일을 다시 계산하고, �
   expect((await apiGetWork(target.id)).startedAt).toBe(newest);
 
   await openWorksTab(page);
-  await workCard(page, sourceTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, sourceTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: sourceTitle });
   await expect(detail).toBeVisible();
 
@@ -2066,7 +2074,7 @@ test('Work 삭제는 확인을 거쳐 세션만 Inbox로 되돌리고 카드는 
   }
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -2147,7 +2155,7 @@ test('카드가 모두 삭제된 세션은 상세에서 경고로 표시되고 �
     .find((link) => link.sessionId === goneSession)?.cardsMissingAt).toBeTruthy();
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -2191,7 +2199,7 @@ test('카드가 모두 삭제된 세션은 상세에서 경고로 표시되고 �
  */
 async function expandResolved(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^완료·폐기 \d/ }).click();
-  await expect(page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '완료·폐기한 Work', exact: true })).toBeVisible();
 }
 
 /**
@@ -2237,7 +2245,7 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   await apiAddWorkSession(work.id, { sessionId, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const open = page.getByRole('dialog', { name: title });
   await expect(open.locator('.work-wiki-archive')).toHaveCount(0);
   const sessionRow = open.locator('.work-session-item');
@@ -2260,7 +2268,7 @@ test('완료된 Work 상세는 archive된 산출물과 세션 제목을 그대�
   ).toBe(0);
 
   await expandResolved(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const resolved = page.getByRole('dialog', { name: title });
   await expect(resolved).toBeVisible();
 
@@ -2312,7 +2320,7 @@ test('완료된 Work 상세는 완료 안내를 감추고 기간을 resolvedAt�
 
   await openWorksTab(page);
   await expandResolved(page);
-  await workCard(page, title).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, title).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: title });
   await expect(detail).toBeVisible();
 
@@ -2323,12 +2331,15 @@ test('완료된 Work 상세는 완료 안내를 감추고 기간을 resolvedAt�
   // adds the resolution date and the last activity.
   await expect(detail.locator('.work-detail-facts')).not.toContainText('일째');
   await expect(detail.locator('.work-detail-facts')).not.toContainText('active');
-  // The resolution date lives in the End field, not repeated in Last activity.
+  // The resolution date lives in the End field (folded 속성 line); the folded
+  // line itself already says it.
+  await expect(detail.getByRole('button', { name: /^속성/ })).toContainText('종료');
+  await detail.getByRole('button', { name: /^속성/ }).click();
   await expect(detail.getByLabel('End', { exact: true })).not.toHaveValue('');
 
-  // The "✅ 완료 시: …" notice describes an action this Work no longer has, and
+  // The "완료하면 …" hint describes an action this Work no longer has, and
   // 폐기 would overwrite the resolution the sweep already recorded.
-  await expect(detail.locator('.work-detail-note')).toHaveCount(0);
+  await expect(detail.locator('.work-detail-footer-hint')).toHaveCount(0);
   await expect(detail.getByRole('button', { name: '폐기…' })).toBeDisabled();
   // 완료 is not merely disabled but gone: a greyed-out primary still read as
   // "click me", and the slot now holds the transition this Work does have.
@@ -2397,7 +2408,7 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
   const work = await seedWork({ title: workTitle, projectDir: PROJECT_DIR });
 
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, workTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: workTitle });
   // 메모 opens folded when empty — a disclosure heading, like the card detail's
   // sections — so the textarea appears only after the heading is clicked.
@@ -2417,7 +2428,7 @@ test('상세의 메모는 저장 후 새로고침해도 남는다', async ({ pag
 
   // Reload, reopen: still there, and not folded into the LLM Summary.
   await openWorksTab(page);
-  await workCard(page, workTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, workTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const reopened = page.getByRole('dialog', { name: workTitle });
   // A saved note opens unfolded: it is the reason the reader came back.
   await expect(reopened.getByLabel('메모', { exact: true })).toHaveValue(text);
@@ -2445,8 +2456,8 @@ test('Active 목록은 검색으로 걸러지고 오래 방치된 순으로 다�
   await apiUpdateWork(fresh.id, { notes: '가장 최근' });
 
   await openWorksTab(page);
-  const activeSection = page.locator('.works-section').filter({ hasText: '진행 중인 작업' });
-  const titles = () => activeSection.locator('.works-card .works-card-title');
+  const activeSection = page.getByRole('region', { name: '진행 중인 Work', exact: true });
+  const titles = () => activeSection.locator('.works-card .works-card-title-text');
   await expect(titles()).toHaveCount(3);
 
   // Default is 최근 활동, so the newest patch is first.
@@ -2502,7 +2513,7 @@ test('다른 Work에 병합하면 세션이 합쳐지고 원본은 병합됨으�
   await apiAddWorkSession(to.id, { sessionId: toSession, projectDir: PROJECT_DIR, role: 'dev' });
 
   await openWorksTab(page);
-  await workCard(page, fromTitle).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, fromTitle).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: fromTitle });
   await detail.getByRole('button', { name: '⇉ 다른 Work에 병합…' }).click();
 
@@ -2529,7 +2540,7 @@ test('다른 Work에 병합하면 세션이 합쳐지고 원본은 병합됨으�
   await expect(workCard(page, toTitle)).toContainText('세션 2');
   await expect(workCard(page, fromTitle)).toHaveCount(0);
   await expandResolved(page);
-  const resolvedSection = page.locator('.works-section').filter({ hasText: '완료·폐기한 작업' });
+  const resolvedSection = page.getByRole('region', { name: '완료·폐기한 Work', exact: true });
   const resolved = workCard(page, fromTitle);
   await expect(resolved).toContainText('병합됨');
   await expect(resolved).not.toContainText('폐기');
@@ -2572,7 +2583,7 @@ test('상세 다이얼로그의 푸터 버튼은 390px에서도 전부 화면 �
 
   await page.setViewportSize({ width: 390, height: 844 });
   await openWorksTab(page);
-  await workCard(page, `[E2E ${runId}] 모바일 푸터`).getByRole('button', { name: '상세', exact: true }).click();
+  await workCard(page, `[E2E ${runId}] 모바일 푸터`).getByRole('button', { name: /상세 열기$/ }).click();
   const detail = page.getByRole('dialog', { name: `[E2E ${runId}] 모바일 푸터` });
   await expect(detail).toBeVisible();
 

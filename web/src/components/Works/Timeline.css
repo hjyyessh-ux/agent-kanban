@@ -1323,3 +1323,56 @@
     padding: var(--kv2-sp-2);
   }
 }
+
+/* ── Floor: the Works strip / a Work's own timeline stop at the first start ──
+   `◀ 7일` disables there and this note says why, instead of a dead button. */
+.tl-floor-note {
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  color: var(--kv2-warn-text);
+}
+
+/* ── Work detail · 세션 흐름 (`variant="work"`) ──
+   The Board grid scoped to one Work: its plan bar and its sessions, always
+   expanded. Same rows, same colours; only the chrome is lighter. */
+.tl-work {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+}
+
+.tl-controls--work {
+  margin-bottom: 0;
+}
+
+.tl-controls--work .tl-range-label {
+  font-size: var(--kv2-text-sm);
+  min-width: 0;
+}
+
+.tl-controls--work .tl-legend {
+  margin-left: auto;
+}
+
+.timeline--work .tl-scroll {
+  max-height: 320px;
+}
+
+.tl-work-error {
+  margin: 0;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-danger-text);
+}
+
+/* Session search: rows without a hit step back, hit cells get a ring. The row
+   is `display: contents`, so its cells carry the fade. */
+.tl-row--dimmed > * {
+  opacity: 0.3;
+  transition: opacity 120ms ease;
+}
+
+.tl-day--hit {
+  outline: 2px solid var(--kv2-text-primary);
+  outline-offset: 1px;
+}

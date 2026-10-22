@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type {
+  KanbanCard,
   Work,
   WorkListEntry,
   WorkIgnoredSession,
@@ -14,11 +15,11 @@ import { ErrorAlert } from '../shared/ErrorAlert';
 import { IdChip } from '../shared/IdChip';
 import { RuntimeBadge } from '../Board/BoardCardSections';
 import type { UiAlert } from '../../hooks/uiAlert';
-import type { BulkAssignResult, UseWorksResult, WorkResolveOutcome } from '../../hooks/useWorks';
+import type { BulkAssignResult, UseWorksResult } from '../../hooks/useWorks';
 import { WorkAssignInline } from './WorkAssignInline';
 import { WorksOverflowMenu } from './WorksOverflowMenu';
 import { InboxSuggestions } from './InboxSuggestions';
-import { DirChip } from './WorkAffinityMarks';
+import { DirChip, WorkProjectChips } from './WorkAffinityMarks';
 import { chainedWorkIds } from './worksAffinity';
 import {
   IGNORED_SESSIONS_PAGE_SIZE,
@@ -33,7 +34,12 @@ import {
   noticeForNewWork,
   type WorkAssignUndoActions,
 } from './workAssignNotice';
-import { WorkResolveConfirmDialog } from './WorkResolveConfirmDialog';
+import {
+  WORK_PREVIEW_LABELS,
+  partitionRunningWorks,
+  workListPreview,
+  workRunningCounts,
+} from './workListPreview';
 import {
   STALE_WORK_DAYS,
   OLD_SESSION_DAYS,
@@ -50,7 +56,6 @@ import {
   DEFAULT_SESSION_ROLE,
   suggestWorkAssignments,
   suggestWorkTitle,
-  summarizeRoles,
   type InboxRowExtent,
 } from './worksAssign';
 import './Works.css';
@@ -82,11 +87,12 @@ export interface WorksViewProps {
   /** Undo toasts for 연결 / 폐기 (owned by `App`); omit to act without them. */
   assignNotice?: WorkAssignUndoActions;
   /**
-   * Complete a Work. Only ever called with the confirmation obtained, because
-   * the list row routes through `WorkResolveConfirmDialog` first — a bare click
-   * used to run the bulk archive outright.
+   * Board cards. Drives the row's `실행 중` group and badge (top-level
+   * `in_progress` cards of a linked session) and the `최근 결과` fallback of
+   * its one-line preview. Completing a Work is not offered here — that lives
+   * in the detail dialog's footer.
    */
-  onCompleteWork: (workId: string, options?: { confirmed?: boolean }) => Promise<WorkResolveOutcome>;
+  cards: readonly KanbanCard[];
   onRefresh: () => Promise<void>;
   onClearError: () => void;
   /** Open all turns of the session, including archived cards. */
@@ -454,24 +460,33 @@ function resolvedWordFor(work: Work): string {
   return work.status === 'discarded' ? '폐기' : '완료';
 }
 
-/** One Work card in the Active or Resolved list. */
+/**
+ * One Work row in the Active or Resolved list.
+ *
+ * The whole row opens the detail — there is no 완료… / 상세 pair any more. The
+ * completion sweep archives every card of the Work, which deserves the detail
+ * dialog's full context (cards, wiki, sessions) rather than a list-row button
+ * next to the one people click to look at it.
+ */
 function WorkListCard({
   work,
-  onRequestComplete,
+  cards,
+  running,
   onOpenWork,
   staleDays,
 }: {
   work: WorkListEntry;
-  /** Opens the confirmation dialog; the row never mutates anything directly. */
-  onRequestComplete: (work: Work) => void;
+  /** Board cards — the `최근 결과` fallback of the preview line. */
+  cards: readonly KanbanCard[];
+  /** Top-level cards of this Work running right now (`workRunningCounts`). */
+  running: number;
   onOpenWork?: (work: Work) => void;
   staleDays: number;
 }) {
   const resolved = work.status !== 'active';
   const sessionCount = work.sessionLinks.length;
-  const roleSummary = summarizeRoles(work);
-  const stale = !resolved && daysSince(work.activity?.lastActivityAt ?? work.updatedAt) >= staleDays;
-  const summaryLines = work.summary?.lines ?? [];
+  const lastActivityAt = work.activity?.lastActivityAt ?? work.updatedAt;
+  const stale = !resolved && running === 0 && daysSince(lastActivityAt) >= staleDays;
   // An `active` Work past its planned end. `stale` (nothing has happened for N
   // days) is a different complaint and both can be true at once, so they are
   // separate marks rather than one merged warning.
@@ -479,9 +494,16 @@ function WorkListCard({
   // A merge source. Without this the row read "폐기" — the same word as a Work
   // someone gave up on — with no hint that its sessions live on elsewhere.
   const superseded = work.resolution === 'superseded';
+  const preview = useMemo(() => workListPreview(work, cards), [work, cards]);
+  const cardCount = work.activity?.cardCount ?? 0;
+  const doneCount = work.activity?.doneCount ?? 0;
+  const pct = (n: number) => (cardCount > 0 ? `${Math.min(100, (n / cardCount) * 100)}%` : '0%');
+  const allDone = !resolved && cardCount > 0 && doneCount >= cardCount && running === 0;
 
   return (
-    <div className={`works-card works-card--${work.status}${resolved ? ' works-card--resolved' : ''}${overrun ? ' works-card--overrun' : ''}`}>
+    <div
+      className={`works-card works-card--${work.status}${resolved ? ' works-card--resolved' : ''}${overrun ? ' works-card--overrun' : ''}${running > 0 ? ' works-card--running' : ''}`}
+    >
       {onOpenWork && (
         <button
           type="button"
@@ -491,52 +513,63 @@ function WorkListCard({
         />
       )}
       <div className="works-card-body">
-        <div className="works-card-title">{work.title}</div>
+        <div className="works-card-title">
+          <span className="works-card-title-text">{work.title}</span>
+          {running > 0 && <span className="kv2-badge works-running-badge">실행 중 {running}</span>}
+          {stale && <span className="kv2-badge works-stale-badge">{daysSince(lastActivityAt)}일간 활동 없음</span>}
+          {superseded && <span className="kv2-badge works-superseded-chip">병합됨</span>}
+        </div>
         <div className="works-card-meta">
-          <DirChip projectDir={work.projectDir} />
-          <span>
+          <WorkProjectChips work={work} />
+          <span className="works-card-facts">
             세션 {sessionCount}
-            {roleSummary && ` (${roleSummary})`}
-          </span>
-          <span>
+            {' · '}
             {resolved && work.resolvedAt
               ? `${formatShortDate(work.startedAt)} → ${formatShortDate(work.resolvedAt)} ${resolvedWordFor(work)}`
               : `시작 ${formatShortDate(work.startedAt)}`}
+            {' · '}
+            {formatTimeAgo(lastActivityAt)}
           </span>
-          {overrun && <span className="kv2-badge work-overrun-chip">{overrun}</span>}
-          {superseded && <span className="kv2-badge works-superseded-chip">병합됨</span>}
-          {work.activity && <span>카드 {work.activity.cardCount} · 진행 {work.activity.inProgressCount} · 완료 {work.activity.doneCount}</span>}
-          <span>최근 활동 {formatTimeAgo(work.activity?.lastActivityAt ?? work.updatedAt)}</span>
-          {stale && <span className="works-warn">⚠ {daysSince(work.activity?.lastActivityAt ?? work.updatedAt)}일간 활동 없음</span>}
         </div>
-        {summaryLines.length > 0 && (
-          <div className="works-card-summary">{summaryLines.join(' ')}</div>
+        {preview.source === 'none' ? (
+          <div className="works-card-line works-card-line--empty">
+            <span className="works-card-src">—</span>
+            <span>요약·메모가 없습니다.</span>
+            {onOpenWork && (
+              <button
+                type="button"
+                className="works-card-line-action"
+                title="상세를 열어 요약을 생성합니다"
+                onClick={() => onOpenWork(work)}
+              >
+                요약 생성
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="works-card-line" title={preview.text}>
+            <span className={`works-card-src works-card-src--${preview.source}`}>{WORK_PREVIEW_LABELS[preview.source]}</span>
+            <span className="works-card-line-text">{preview.text}</span>
+          </div>
         )}
       </div>
-      {/* No 세션 count badge here: the meta line above already says
-          `세션 17 (개발 17)`, and the badge repeated the same number two
-          inches to its right. This column is for the row's actions. */}
       <div className="works-card-side">
-        {!resolved && (
-          <button
-            type="button"
-            // Ghost, not the green primary it used to be: completing a Work is
-            // the most destructive action on this screen, so it must not be the
-            // most inviting target on a row people click to open 상세.
-            className="kv2-btn kv2-btn--small kv2-btn--ghost works-card-action"
-            onClick={() => onRequestComplete(work)}
-          >
-            완료…
-          </button>
-        )}
-        <button
-          type="button"
-          className="kv2-btn kv2-btn--small kv2-btn--outline works-card-action"
-          disabled={!onOpenWork}
-          onClick={onOpenWork ? () => onOpenWork(work) : undefined}
+        <div
+          className="works-progress"
+          role="img"
+          aria-label={`카드 ${cardCount}장 중 ${doneCount}장 완료${running > 0 ? `, ${running}장 실행 중` : ''}`}
         >
-          상세
-        </button>
+          <span className="works-progress-done" style={{ width: pct(doneCount) }} />
+          {running > 0 && <span className="works-progress-running" style={{ width: pct(running) }} />}
+        </div>
+        <div className="works-progress-nums">
+          <span>{doneCount} / {cardCount} 카드 완료</span>
+          {running > 0 && <span className="works-progress-running-label">실행 {running}</span>}
+        </div>
+        {/* One flag at most: a late plan outranks "everything finished". */}
+        {overrun
+          ? <div className="works-card-flag works-card-flag--warn">{overrun}</div>
+          : allDone && <div className="works-card-flag works-card-flag--ok">결과 확인 후 완료 가능</div>}
       </div>
     </div>
   );
@@ -556,7 +589,7 @@ export function WorksView({
   ignoredSessions,
   onRestoreIgnoredSession,
   assignNotice,
-  onCompleteWork,
+  cards,
   onRefresh,
   onClearError,
   onOpenSession,
@@ -569,9 +602,6 @@ export function WorksView({
   const [showConfig, setShowConfig] = useState(false);
   const [showIgnored, setShowIgnored] = useState(false);
   const [section, setSection] = useState<'active' | 'resolved'>('active');
-  // The Work whose completion is awaiting confirmation. One instance for the
-  // whole list: the row button only names a target, it never mutates.
-  const [completing, setCompleting] = useState<Work | null>(null);
 
   // ── Inbox multi-select ──
   // Selection mode turns itself on the moment a drag picks anything up; the
@@ -851,6 +881,15 @@ export function WorksView({
     [works, section, activeQuery, activeDir, activeSort],
   );
   const activeFiltered = activeWorks.length !== activeTotal;
+  const runningCounts = useMemo(() => workRunningCounts(works, cards), [works, cards]);
+  // Running Works first, then the chosen sort. Resolved Works never run, so
+  // that section is one flat list.
+  const workGroups = useMemo(() => {
+    const { running, rest } = partitionRunningWorks(activeWorks, runningCounts);
+    return { running, rest };
+  }, [activeWorks, runningCounts]);
+  const sortLabel = WORK_LIST_SORT_LABELS.find(([value]) => value === activeSort)?.[1] ?? '';
+  const sortPhrase = sortLabel.endsWith('순') ? sortLabel : `${sortLabel}순`;
   const staleDays = config?.staleDays ?? STALE_WORK_DAYS;
   const suggestSessionChain = config?.assignSuggestResumeChain ?? true;
   // Both assignment settings default to `true` before the config lands, which is
@@ -877,6 +916,23 @@ export function WorksView({
             </button>
           ))}
         </div>
+        <span className="works-view-header-tools">
+        {/* The restore list is a recovery path, not a triage action. It lived
+            behind the 미배정 header's ⋯, which pinned that whole section on
+            screen even when nothing was left to triage; the Inbox now
+            disappears when empty, so the entry moved up here. Still rendered
+            while the panel is open after its last entry was restored, so the
+            panel can always be closed again. */}
+        {canRestore && (ignoredCount > 0 || showIgnored) && (
+          <WorksOverflowMenu
+            label="Works 메뉴"
+            items={[{
+              id: 'ignored',
+              label: showIgnored ? '🗑 폐기한 세션 목록 닫기' : `🗑 폐기한 세션 ${ignoredCount}개`,
+              onSelect: () => setShowIgnored((v) => !v),
+            }]}
+          />
+        )}
         {canConfig && (
           <button
             type="button"
@@ -889,10 +945,18 @@ export function WorksView({
             ⚙
           </button>
         )}
+        </span>
       </div>
 
       {showConfig && config && onSaveConfig && (
         <WorksConfigPanel config={config} busy={loading} onSave={onSaveConfig} />
+      )}
+
+      {showIgnored && onRestoreIgnoredSession && (
+        <IgnoredSessionsPanel
+          sessions={ignoredSessions ?? []}
+          onRestore={onRestoreIgnoredSession}
+        />
       )}
 
       {error && (
@@ -914,11 +978,11 @@ export function WorksView({
         <div className="loading-spinner" role="status" aria-label="Loading works..." />
       ) : (
         <div className={section === 'active' ? 'works-active-layout' : undefined}>
-          {/* The section also renders with an empty Inbox when something is on
-              the ignore list: the restore list is reached from this header, and
-              hiding the header would make a discarded session unrecoverable
-              exactly when the Inbox is finally clean. */}
-          {section === 'active' && (
+          {/* Only while something is left to triage. An empty Inbox used to
+              keep a "📥 미배정 0" box on screen (it carried the 폐기한 세션
+              entry, now in the Works header ⋯), pushing the list down for
+              nothing. */}
+          {section === 'active' && inbox.length > 0 && (
             <section className="works-section works-triage-section" aria-label="미배정 세션">
               <div className="works-inbox">
                 <div className="works-inbox-header">
@@ -956,35 +1020,7 @@ export function WorksView({
                   >
                     ⚡ 순서대로 배정
                   </button>
-                  {/* The restore list is a recovery path, not a triage action,
-                      so it lives behind the header's ⋯ rather than as a third
-                      button competing with the two above. Still rendered while
-                      the panel is open after its last entry was restored, so
-                      the panel can always be closed again. */}
-                  {canRestore && (ignoredCount > 0 || showIgnored) && (
-                    <WorksOverflowMenu
-                      label="미배정 세션 메뉴"
-                      items={[{
-                        id: 'ignored',
-                        label: showIgnored ? '🗑 폐기한 세션 목록 닫기' : `🗑 폐기한 세션 ${ignoredCount}개`,
-                        onSelect: () => setShowIgnored((v) => !v),
-                      }]}
-                    />
-                  )}
                 </div>
-
-                {showIgnored && onRestoreIgnoredSession && (
-                  <IgnoredSessionsPanel
-                    sessions={ignoredSessions ?? []}
-                    onRestore={onRestoreIgnoredSession}
-                  />
-                )}
-
-                {inbox.length === 0 && (
-                  <p className="works-empty">
-                    미배정 세션이 없습니다. 폐기한 세션은 위 ⋯ 메뉴에서 복원할 수 있습니다.
-                  </p>
-                )}
 
                 <div
                   className={`works-inbox-rows${dragging ? ' is-dragging' : ''}`}
@@ -1065,89 +1101,97 @@ export function WorksView({
             </section>
           )}
 
-          <section className="works-section works-grouped-section" aria-labelledby="works-grouped-heading">
-            <div className="works-grouped-header">
-              <h2 id="works-grouped-heading" className="kv2-panel-heading works-grouped-title">
-                <span aria-hidden="true">{section === 'resolved' ? '🗂️' : '🎯'}</span>
-                {section === 'resolved' ? '완료·폐기한 작업' : '진행 중인 작업'}
-              </h2>
-              <span className="kv2-badge">
-                {activeFiltered ? `${activeWorks.length} / ${activeTotal}개` : `전체 ${activeTotal}개`}
-              </span>
-            </div>
+          <section className="works-section works-grouped-section" aria-label={section === 'resolved' ? '완료·폐기한 Work' : '진행 중인 Work'}>
+            <div className="works-list-panel">
               <div className="works-active-toolbar">
                 <input
                   type="search"
                   className="kv2-input works-active-search"
-                  placeholder="Work 검색 (제목·디렉토리·메모·Summary)"
+                  placeholder="Work 검색 (제목·프로젝트·메모·요약)"
                   value={activeQuery}
                   aria-label="Work 검색"
                   onChange={(e) => setActiveQuery(e.target.value)}
                 />
                 {activeDirs.length > 1 && (
-                  <label className="works-active-filter">
-                    <span className="kv2-label">디렉토리</span>
-                    <select
-                      className="kv2-select"
-                      value={activeDir}
-                      onChange={(e) => setActiveDir(e.target.value)}
-                    >
-                      <option value="">전체</option>
-                      {activeDirs.map((dir) => (
-                        <option key={dir} value={dir}>{projectDirLabel(dir)}</option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <label className="works-active-filter">
-                  <span className="kv2-label">정렬</span>
                   <select
-                    className="kv2-select"
-                    value={activeSort}
-                    aria-label="정렬"
-                    onChange={(e) => setActiveSort(e.target.value as WorkListSort)}
+                    className="kv2-select works-active-select"
+                    value={activeDir}
+                    aria-label="프로젝트"
+                    onChange={(e) => setActiveDir(e.target.value)}
                   >
-                    {WORK_LIST_SORT_LABELS.map(([value, label]) => (
-                      <option key={value} value={value}>{label}</option>
+                    <option value="">전체 프로젝트</option>
+                    {activeDirs.map((dir) => (
+                      <option key={dir} value={dir}>{projectDirLabel(dir)}</option>
                     ))}
                   </select>
-                </label>
+                )}
+                <select
+                  className="kv2-select works-active-select"
+                  value={activeSort}
+                  aria-label="정렬"
+                  title={section === 'active' ? '실행 중인 Work는 정렬과 상관없이 항상 맨 위에 옵니다' : undefined}
+                  onChange={(e) => setActiveSort(e.target.value as WorkListSort)}
+                >
+                  {WORK_LIST_SORT_LABELS.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <span className="works-list-count">
+                  {activeFiltered ? `${activeWorks.length} / ${activeTotal}개` : `${activeTotal}개`}
+                </span>
               </div>
-            {activeWorks.length === 0 ? (
-              <p className="works-empty">
-                {activeTotal === 0
-                  ? section === 'resolved' ? '완료·폐기한 Work가 없습니다.' : '진행 중인 Work가 없습니다. 미배정 세션을 묶어 시작하세요.'
-                  : '검색·필터 조건에 맞는 Work가 없습니다.'}
-              </p>
-            ) : (
-              <div className="works-list">
-                {activeWorks.map((work) => (
-                  <WorkListCard
-                    key={work.id}
-                    work={work}
-                    onRequestComplete={setCompleting}
-                    onOpenWork={onOpenWork}
-                    staleDays={staleDays}
-                  />
-                ))}
-              </div>
-            )}
+              {activeWorks.length === 0 ? (
+                <p className="works-empty works-list-empty">
+                  {activeTotal === 0
+                    ? section === 'resolved' ? '완료·폐기한 Work가 없습니다.' : '진행 중인 Work가 없습니다. 미배정 세션을 묶어 시작하세요.'
+                    : '검색·필터 조건에 맞는 Work가 없습니다.'}
+                </p>
+              ) : (
+                <>
+                  {workGroups.running.length > 0 && (
+                    <div className="works-list-group" role="group" aria-label="실행 중">
+                      <div className="works-list-group-label">
+                        <span className="kv2-badge works-running-badge">실행 중</span>
+                        지금 카드가 돌고 있는 Work
+                      </div>
+                      <div className="works-list">
+                        {workGroups.running.map((work) => (
+                          <WorkListCard
+                            key={work.id}
+                            work={work}
+                            cards={cards}
+                            running={runningCounts.get(work.id) ?? 0}
+                            onOpenWork={onOpenWork}
+                            staleDays={staleDays}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {workGroups.rest.length > 0 && (
+                    <div className="works-list-group" role="group" aria-label={section === 'resolved' ? '완료·폐기' : '진행 중'}>
+                      <div className="works-list-group-label">
+                        {section === 'resolved' ? '완료·폐기' : '진행 중'} · {sortPhrase}
+                      </div>
+                      <div className="works-list">
+                        {workGroups.rest.map((work) => (
+                          <WorkListCard
+                            key={work.id}
+                            work={work}
+                            cards={cards}
+                            running={0}
+                            onOpenWork={onOpenWork}
+                            staleDays={staleDays}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </section>
-
-
         </div>
-      )}
-
-      {completing && (
-        <WorkResolveConfirmDialog
-          work={completing}
-          mode="complete"
-          onCancel={() => setCompleting(null)}
-          onConfirm={() => onCompleteWork(completing.id, { confirmed: true })}
-          // The list needs nothing on success — the poll (and the optimistic
-          // update in `useWorks`) moves the Work into Resolved on its own.
-          onResolved={() => {}}
-        />
       )}
     </div>
   );

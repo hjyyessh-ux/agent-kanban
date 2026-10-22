@@ -362,12 +362,17 @@
   text-underline-offset: 3px;
 }
 
+/* 피드백 turn은 요청 첫 줄이 제목이라 길다 — 두 줄까지 보여준다 */
 .session-conversation-outlineTitle {
   font-size: var(--kv2-text-ui-sm);
   font-weight: 600;
-  white-space: nowrap;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 /* 회색 막대 대신 시작 시각 · 소요시간을 글자로 */
@@ -462,6 +467,10 @@
   text-transform: none;
 }
 
+.session-conversation-turnRunning.is-queued {
+  border-color: var(--kv2-border-strong, var(--kv2-text-muted));
+}
+
 .session-conversation-turnTitle {
   flex: 1 1 auto;
   min-width: 0;
@@ -523,6 +532,16 @@
   box-shadow: inset 4px 0 0 var(--kv2-phase-prompt-accent);
 }
 
+/* 실행 중 turn의 진행 단계 (TurnLiveProgress) — 카드 상세 Progress 단계와 같은 톤 */
+.session-conversation-part--progress {
+  background: var(--kv2-phase-progress-bg);
+  box-shadow: inset 4px 0 0 var(--kv2-phase-progress-accent);
+}
+
+.session-conversation-progress {
+  padding: 8px 22px 14px 24px;
+}
+
 /* 왼쪽 액센트 바와 글 사이를 넉넉히(24px) — 바에 글이 붙어 보이지 않게 */
 .session-conversation-partHead {
   display: flex;
@@ -572,6 +591,26 @@
   color: var(--kv2-text-muted);
 }
 
+/* 결과 없음 줄 + 대기 중 turn의 `▶ 지금 실행` */
+.session-conversation-noResultRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-conversation-startTurn {
+  margin-left: auto;
+}
+
+.session-conversation-startError {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0 14px;
+  font-size: var(--kv2-text-ui-sm);
+  color: var(--kv2-text-danger);
+}
+
 .session-conversation-shots {
   display: flex;
   gap: 8px;
@@ -598,6 +637,62 @@
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* 대기 중 turn의 Prompt 편집기 — 본문 + 첨부 이미지 + 저장/취소. */
+.session-turn-editor {
+  display: grid;
+  gap: var(--kv2-sp-2);
+}
+
+.session-turn-editor-input {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  font-size: var(--kv2-text-sm);
+  line-height: 1.55;
+}
+
+.session-turn-editor-shots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.session-turn-editor-shot {
+  position: relative;
+  display: inline-flex;
+}
+
+.session-turn-editor-shotRemove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: 50%;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-danger);
+  font-size: var(--kv2-text-sm);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-turn-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--kv2-sp-2);
+}
+
+.session-turn-editor-hint {
+  margin-right: auto;
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-xs);
 }
 
 .session-conversation-turnBody .session-conversation-subagents {

@@ -4,23 +4,32 @@ import { splitFeedbackHeader } from '../../../../src/core/mention-search';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { FeedbackPanel } from '../Card/FeedbackPanel';
 import { CardMarkdown } from '../Card/CardMarkdown';
-import { PhaseAside, PhaseBody } from '../Card/CardPhases';
+import { PhaseAside, PhaseBody, ProgressSteps } from '../Card/CardPhases';
 import { splitCardResult } from '../Card/card-result';
 import { ExecutionTypeBadge } from './BoardCardSections';
+import { BoardCardTimeMeta } from './BoardCard';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
 import { dirAccentClass } from '../../utils/project-color';
 import { getScreenshotUrl } from '../../hooks/useKanbanApi';
+import { useCardProgress } from '../../hooks/useCardProgress';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
 import { COPIED_LABEL, IdChip, ResumeCopyButton } from '../shared/IdChip';
 import { ImageLightbox } from '../shared/ImageLightbox';
 import { formatDuration, resolveRunDurationMs } from '../../utils/format-duration';
 import { applyTextHighlight, clearTextHighlight } from '../../utils/text-highlight';
+import { previewLine } from '../../utils/text-preview';
 import type { CompleteSessionGroup } from './BoardCompleteSessionView';
 import { groupCardsByParent, type CardWithChildren } from './board-utils';
+import { SessionTurnEditor } from './SessionTurnEditor';
 
 interface SessionConversationModalProps {
   group: CompleteSessionGroup;
+  /**
+   * 이 세션의 아직 끝나지 않은 카드(todo/in_progress) — 대기/실행 중 turn으로
+   * 뒤에 이어붙는다. `group`은 complete/done 카드만 담고 있다.
+   */
+  liveCards?: KanbanCard[];
   status: 'complete' | 'done';
   onClose: () => void;
   onCreateFeedback: (
@@ -29,6 +38,22 @@ interface SessionConversationModalProps {
     shouldDispatch: boolean,
     screenshots?: File[],
   ) => Promise<void>;
+  /**
+   * Open with the search box already filled — a Works detail search result
+   * lands here with the same query highlighted. Read once, on mount.
+   */
+  initialQuery?: string;
+  /** Open with this turn unfolded and scrolled into view. Read once, on mount. */
+  focusCardId?: string;
+  /** 대기 중 turn의 `▶ 지금 실행` — 피드백을 실행 없이 만들어 둔 뒤 나중에 시작한다. */
+  onStartTurn?: (cardId: string) => Promise<void>;
+  /**
+   * 대기 중(todo) turn의 Prompt를 고친다(description 전체, 피드백 헤더 포함).
+   * 생략하면 `✎ 편집`을 숨긴다. 이미지는 screenshots API로 바로 올라가고,
+   * 끝나면 `onTurnScreenshotsChanged`로 보드를 다시 읽게 한다.
+   */
+  onEditTurn?: (cardId: string, description: string) => Promise<void>;
+  onTurnScreenshotsChanged?: () => void;
 }
 
 // ── 보기 설정: 모두 localStorage에 남아 다음에 열 때도 같은 모양으로 열린다 ──
@@ -45,7 +70,8 @@ export const RECENT_OPEN_COUNT = 2;
 const DOCK_MIN_HEIGHT = 140;
 const DOCK_MAX_RATIO = 0.75;
 const DOCK_KEY_STEP = 24;
-const PREVIEW_MAX_CHARS = 160;
+const NO_LIVE_CARDS: KanbanCard[] = [];
+const FEEDBACK_TITLE_PATTERN = /^Feedback(?:\s*#\d+)?:/;
 /** `::highlight(session-search)` 이름 — conversation.css와 짝 */
 const SEARCH_HIGHLIGHT = 'session-search';
 
@@ -112,17 +138,27 @@ function compareOldestCardFirst(a: KanbanCard, b: KanbanCard): number {
 }
 
 /**
- * 접힌 turn 밑에 보여줄 결과 한 줄 — 마크다운 기호를 걷어낸 첫 비어있지 않은 줄.
- * 접어둔 turn도 "무엇으로 끝났는지"는 펼치지 않고 읽힌다.
+ * 세션의 top-level turn을 과거→최신 순으로. index + 1이 화면의 T# 번호다 —
+ * Works 상세의 세션 검색도 이 함수로 번호를 매겨, 결과의 T3이 모달의 T3과 같다.
  */
-export function previewLine(text: string | undefined): string {
-  if (!text) return '';
-  const line = text
-    .split('\n')
-    .map((raw) => raw.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|>\s*|\d+\.\s+)/, '').replace(/[*_`]/g, '').trim())
-    .find((raw) => raw.length > 0 && !/^[-=|:\s]+$/.test(raw));
-  if (!line) return '';
-  return line.length > PREVIEW_MAX_CHARS ? `${line.slice(0, PREVIEW_MAX_CHARS)}…` : line;
+export function orderSessionTurns(cards: KanbanCard[]): CardWithChildren[] {
+  return groupCardsByParent(cards).sort(compareOldestCardFirst);
+}
+
+// 접힌 turn 미리보기 한 줄 — Works 목록의 "최근 결과"도 같은 규칙을 쓰므로 utils로 옮겼다.
+export { previewLine };
+
+/**
+ * turn에 보여줄 제목. 피드백 turn의 카드 제목은 `Feedback #4: <세션 제목>` 패턴이라
+ * 목차에서 전부 똑같아 보인다 — 실제 요청은 피드백 헤더 아래 본문 첫 줄이므로 그걸 쓴다.
+ */
+export function turnTitle(card: Pick<KanbanCard, 'title' | 'description'>): string {
+  const { header, body } = splitFeedbackHeader(card.description ?? '');
+  if (header || FEEDBACK_TITLE_PATTERN.test(card.title ?? '')) {
+    const line = previewLine(body);
+    if (line) return line;
+  }
+  return card.title || '(untitled)';
 }
 
 /** 세션 내 검색 — 제목·프롬프트·결과·subagent 지시/응답까지 대소문자 무시 부분 일치. */
@@ -204,6 +240,42 @@ const SubagentTurn: React.FC<{ child: KanbanCard }> = ({ child }) => {
   );
 };
 
+/**
+ * 실행 중 turn의 진행 — 카드 상세와 같은 run 단계 타임라인(3초 폴링)과 progressSummary.
+ * 실행 중이고 펼친 turn에서만 마운트되므로 닫힌/끝난 turn은 폴링하지 않는다.
+ */
+const TurnLiveProgress: React.FC<{ card: KanbanCard }> = ({ card }) => {
+  const progress = useCardProgress(card.id, true);
+  const [allSteps, setAllSteps] = useState(false);
+  const summary = card.progressSummary?.trim();
+  const hasSteps = Boolean(progress && progress.steps.length > 0);
+
+  return (
+    <section className="session-conversation-part session-conversation-part--progress">
+      <div className="session-conversation-partHead" data-highlight-skip>
+        <span className="session-conversation-partName">Progress</span>
+        {hasSteps && (
+          <button
+            type="button"
+            className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+            onClick={() => setAllSteps((value) => !value)}
+          >
+            {allSteps ? '최근 단계만 ▴' : '전체 단계 ▾'}
+          </button>
+        )}
+      </div>
+      <div className="session-conversation-progress">
+        {summary && <CardMarkdown text={summary} />}
+        {progress && hasSteps ? (
+          <ProgressSteps progress={progress} live collapsed={!allSteps} />
+        ) : (
+          !summary && <p className="session-conversation-noResult">진행 단계를 기다리는 중…</p>
+        )}
+      </div>
+    </section>
+  );
+};
+
 interface SessionConversationTurnProps {
   card: CardWithChildren;
   turnNumber: number;
@@ -213,6 +285,15 @@ interface SessionConversationTurnProps {
   searchHit: boolean;
   onToggle: () => void;
   onPreviewImage: (url: string) => void;
+  /** 대기 중(todo) turn을 지금 실행한다 — 생략하면 실행 버튼을 숨긴다. */
+  onStartTurn?: (cardId: string) => Promise<void>;
+  /**
+   * 대기 중(todo) turn의 Prompt를 고친다(description 전체, 피드백 헤더 포함).
+   * 생략하면 `✎ 편집`을 숨긴다. 이미지는 screenshots API로 바로 올라가고,
+   * 끝나면 `onTurnScreenshotsChanged`로 보드를 다시 읽게 한다.
+   */
+  onEditTurn?: (cardId: string, description: string) => Promise<void>;
+  onTurnScreenshotsChanged?: () => void;
 }
 
 const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
@@ -223,8 +304,14 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   searchHit,
   onToggle,
   onPreviewImage,
+  onStartTurn,
+  onEditTurn,
+  onTurnScreenshotsChanged,
 }) => {
+  const [editing, setEditing] = useState(false);
   const [promptClamped, setPromptCollapsed] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const promptCollapsed = promptClamped && !searchHit;
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
@@ -238,6 +325,10 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   const subagents = card.childCards ? [...card.childCards].sort(compareOldestCardFirst) : [];
   const screenshots = card.screenshots ?? [];
   const isRunning = card.status === 'in_progress';
+  const isQueued = card.status === 'todo';
+  // 시작된 순간 편집기는 닫힌다 — 실행 중인 프롬프트를 고칠 수는 없다.
+  const canEdit = isQueued && Boolean(onEditTurn);
+  const isEditing = editing && canEdit;
   const bodyId = `session-turn-body-${card.id}`;
 
   return (
@@ -256,9 +347,25 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
         <span className="session-conversation-turnNo" data-highlight-skip>T{turnNumber}</span>
         {isLatest && <span className="session-conversation-turnLatestTag" data-highlight-skip>latest</span>}
         {isRunning && <span className="session-conversation-turnRunning" data-highlight-skip>실행 중</span>}
-        <span className="session-conversation-turnTitle">{card.title || '(untitled)'}</span>
+        {isQueued && <span className="session-conversation-turnRunning is-queued" data-highlight-skip>대기 중</span>}
+        <span className="session-conversation-turnTitle" title={card.title}>{turnTitle(card)}</span>
         <span className="session-conversation-turnTime" data-highlight-skip>{formatShortTimestamp(card.startedAt ?? card.createdAt)}</span>
-        {duration && <span className="session-conversation-turnDuration" data-highlight-skip>{duration}</span>}
+        {isRunning ? (
+          <span className="session-conversation-turnDuration" data-highlight-skip>
+            <BoardCardTimeMeta
+              vm={{
+                status: card.status,
+                createdAt: card.createdAt,
+                updatedAt: card.updatedAt,
+                startedAt: card.startedAt,
+                completedAt: card.completedAt,
+                durationMs: card.durationMs,
+              }}
+            />
+          </span>
+        ) : (
+          duration && <span className="session-conversation-turnDuration" data-highlight-skip>{duration}</span>
+        )}
       </button>
 
       {!open && preview && <p className="session-conversation-turnPreview">{preview}</p>}
@@ -269,7 +376,16 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
           <section className="session-conversation-part session-conversation-part--prompt">
             <div className="session-conversation-partHead" data-highlight-skip>
               <span className="session-conversation-partName">Prompt</span>
-              {!promptClamped && (
+              {canEdit && !isEditing && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
+                  onClick={() => setEditing(true)}
+                >
+                  ✎ 편집
+                </button>
+              )}
+              {!promptClamped && !isEditing && (
                 <button
                   type="button"
                   className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
@@ -288,10 +404,24 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
                 onToggle={() => setHeaderOpen((value) => !value)}
               />
             )}
-            <PhaseBody collapsed={promptCollapsed} onExpand={() => setPromptCollapsed(false)}>
-              {prompt ? <CardMarkdown text={prompt} /> : <p>(no prompt)</p>}
-            </PhaseBody>
+            {isEditing && onEditTurn ? (
+              <SessionTurnEditor
+                card={card}
+                header={feedbackHeader}
+                body={prompt}
+                onSave={onEditTurn}
+                onScreenshotsChanged={() => onTurnScreenshotsChanged?.()}
+                onPreviewImage={onPreviewImage}
+                onClose={() => setEditing(false)}
+              />
+            ) : (
+              <PhaseBody collapsed={promptCollapsed} onExpand={() => setPromptCollapsed(false)}>
+                {prompt ? <CardMarkdown text={prompt} /> : <p>(no prompt)</p>}
+              </PhaseBody>
+            )}
           </section>
+
+          {isRunning && <TurnLiveProgress card={card} />}
 
           {result ? (
             <section className="session-conversation-part session-conversation-part--result">
@@ -319,10 +449,33 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
               </div>
             </section>
           ) : (
-            <p className="session-conversation-noResult">{isRunning ? '실행 중 — 아직 결과가 없습니다.' : '결과가 없습니다.'}</p>
+            <div className="session-conversation-noResultRow">
+              <p className="session-conversation-noResult">
+                {isRunning ? '실행 중 — 아직 결과가 없습니다.' : isQueued ? '대기 중 — 아직 시작하지 않았습니다.' : '결과가 없습니다.'}
+              </p>
+              {/* `Create Feedback`(실행 안 함)으로 만든 turn을 나중에 이 자리에서 시작한다. */}
+              {isQueued && onStartTurn && (
+                <button
+                  type="button"
+                  className="kv2-btn kv2-btn--small kv2-btn--success session-conversation-startTurn"
+                  data-highlight-skip
+                  disabled={starting}
+                  onClick={() => {
+                    setStarting(true);
+                    setStartError(null);
+                    onStartTurn(card.id)
+                      .catch((e: unknown) => setStartError(e instanceof Error ? e.message : '실행하지 못했습니다'))
+                      .finally(() => setStarting(false));
+                  }}
+                >
+                  {starting ? '시작 중…' : '▶ 지금 실행'}
+                </button>
+              )}
+              {startError && <p className="session-conversation-startError" role="alert">⚠ {startError}</p>}
+            </div>
           )}
 
-          {screenshots.length > 0 && (
+          {screenshots.length > 0 && !isEditing && (
             <div className="session-conversation-shots" aria-label={`Screenshots (${screenshots.length})`}>
               {screenshots.map((shot) => (
                 <button
@@ -356,9 +509,15 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
 
 export const SessionConversationModal: React.FC<SessionConversationModalProps> = ({
   group,
+  liveCards = NO_LIVE_CARDS,
   status,
   onClose,
   onCreateFeedback,
+  initialQuery,
+  focusCardId,
+  onStartTurn,
+  onEditTurn,
+  onTurnScreenshotsChanged,
 }) => {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [turnOrder, setTurnOrder] = useState<TurnOrder>(() =>
@@ -368,11 +527,13 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     readStored(EXPAND_MODE_STORAGE_KEY, ['recent', 'all', 'none'] as const, 'recent'),
   );
   // 개별 turn을 손으로 펼치고 접은 기록. 펼침 모드를 바꾸면 초기화된다.
-  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
+  const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>(
+    () => (focusCardId ? { [focusCardId]: true } : {}),
+  );
   const [outlineCollapsed, setOutlineCollapsed] = useState(
     () => readStored(OUTLINE_STORAGE_KEY, ['1', '0'] as const, '0') === '1',
   );
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery ?? '');
   const [dockHeight, setDockHeight] = useState<number | null>(readDockHeight);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const newestFirst = turnOrder === 'newest';
@@ -381,12 +542,13 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // group.cards는 최신순(index 0 = 최신)이며 subagent 자식 카드도 섞여 있다.
+  // liveCards(대기/실행 중)도 합친다 — 생성 시각순이라 자연히 마지막 turn이 된다.
   // groupCardsByParent로 자식을 부모 턴의 childCards로 접어 넣어 top-level 턴만 남긴다
   // (유령 턴 제거). Turn 번호는 항상 과거→최신 기준(1 = 첫 턴)이고, 표시 순서만
   // turnOrder로 뒤집는다 — 기본은 최신순(최신 turn이 맨 위).
   const orderedTurns = useMemo(
-    () => groupCardsByParent(group.cards).sort(compareOldestCardFirst),
-    [group.cards],
+    () => orderSessionTurns(liveCards.length > 0 ? [...group.cards, ...liveCards] : group.cards),
+    [group.cards, liveCards],
   );
 
   const turnCount = orderedTurns.length;
@@ -435,6 +597,22 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     const top = root.scrollTop + el.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
     root.scrollTo({ top, behavior: 'smooth' });
   }, []);
+
+  // 검색 결과에서 열렸으면 그 turn으로 바로 이동한다(한 번만). 레이아웃이 잡힌 뒤에
+  // 스크롤해야 하므로 다음 프레임으로 미룬다.
+  const focusedRef = useRef(false);
+  useEffect(() => {
+    if (focusedRef.current || !focusCardId) return;
+    const index = orderedTurns.findIndex((card) => card.id === focusCardId);
+    if (index < 0) return;
+    // 표시가 끝난 프레임에서만 완료로 친다 — 그 전에 turn 목록이 다시 계산되면
+    // (보드 poll) cleanup이 프레임을 취소하고 다음 실행이 다시 시도한다.
+    const frame = requestAnimationFrame(() => {
+      focusedRef.current = true;
+      scrollToTurn(index + 1);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusCardId, orderedTurns, scrollToTurn]);
 
   const changeOrder = useCallback((next: TurnOrder) => {
     setTurnOrder(next);
@@ -658,7 +836,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
                 data-outline-turn={turnNumber}
                 aria-current={turnNumber === activeTurn ? 'true' : undefined}
                 className={`session-conversation-railItem${turnNumber === activeTurn ? ' is-active' : ''}${turnNumber === turnCount ? ' is-latest' : ''}`}
-                title={card.title || '(untitled)'}
+                title={turnTitle(card)}
                 onClick={() => scrollToTurn(turnNumber)}
               >
                 T{turnNumber}
@@ -697,11 +875,11 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
                   data-outline-turn={turnNumber}
                   aria-current={isActive ? 'true' : undefined}
                   className={`session-conversation-outlineItem${isActive ? ' is-active' : ''}${turnNumber === turnCount ? ' is-latest' : ''}`}
-                  title={card.title}
+                  title={`${turnTitle(card)}\n${card.title}`}
                   onClick={() => scrollToTurn(turnNumber)}
                 >
                   <span className="session-conversation-outlineNo" data-highlight-skip>T{turnNumber}</span>
-                  <span className="session-conversation-outlineTitle">{card.title || '(untitled)'}</span>
+                  <span className="session-conversation-outlineTitle">{turnTitle(card)}</span>
                   <span className="session-conversation-outlineMeta" data-highlight-skip>
                     {formatShortTimestamp(card.startedAt ?? card.createdAt)}
                     {duration && ` · ${duration}`}
@@ -722,6 +900,9 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
                 isLatest={turnNumber === turnCount}
                 open={isTurnOpen(turnNumber, turnCount, expandMode, openOverrides[card.id], hit)}
                 searchHit={hit}
+                onStartTurn={onStartTurn}
+                onEditTurn={onEditTurn}
+                onTurnScreenshotsChanged={onTurnScreenshotsChanged}
                 onToggle={() =>
                   setOpenOverrides((prev) => ({
                     ...prev,
@@ -780,7 +961,6 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
             isSubmittingFeedback={isSubmittingFeedback}
             setIsSubmittingFeedback={setIsSubmittingFeedback}
             onCreateFeedback={onCreateFeedback}
-            onClose={onClose}
             projectDir={feedbackTarget.projectDir ?? group.projectDir}
             // 지금 읽고 있는 바로 그 세션이다 — 자기 참조는 후보에서 막는다.
             excludeSessionIds={group.sessionId ? [group.sessionId] : undefined}

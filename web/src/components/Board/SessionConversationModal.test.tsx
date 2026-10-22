@@ -6,6 +6,7 @@ import {
   isTurnOpen,
   previewLine,
   turnMatchesQuery,
+  turnTitle,
 } from './SessionConversationModal';
 import type { CompleteSessionGroup } from './BoardCompleteSessionView';
 
@@ -124,7 +125,70 @@ describe('SessionConversationModal', () => {
     expect(html).toContain('📎 스크린샷 첨부');
   });
 
-  test('hides the toolbar and outline for a single-turn session', () => {
+  test('appends live cards as running/queued turns while feedback still targets the last complete turn', () => {
+    const html = renderToStaticMarkup(
+      <SessionConversationModal
+        group={threeTurns()}
+        liveCards={[
+          makeTurn('c4', '2026-10-04T00:00:00.000Z', {
+            status: 'in_progress',
+            result: undefined,
+            startedAt: '2026-10-04T00:00:00.000Z',
+          }),
+          // Feedback created but not dispatched yet — no sessionId.
+          makeTurn('c5', '2026-10-05T00:00:00.000Z', {
+            status: 'todo',
+            result: undefined,
+            sessionId: undefined,
+            feedbackForCardId: 'c3',
+          }),
+        ]}
+        status="complete"
+        onClose={() => undefined}
+        onCreateFeedback={async () => undefined}
+      />,
+    );
+
+    expect(renderedTurnOrder(html)).toEqual([5, 4, 3, 2, 1]);
+    expect(html).toContain('실행 중');
+    expect(html).toContain('session-conversation-part--progress');
+    expect(html).toContain('대기 중 — 아직 시작하지 않았습니다.');
+    expect(html).toContain('→ T3에 이어붙임');
+  });
+
+  test('a queued turn offers ▶ 지금 실행 only when the modal can start it', () => {
+    const group = makeGroup([makeTurn('c2', '2026-10-02T00:00:00.000Z', { status: 'todo', result: undefined }), makeTurn('c1', '2026-10-01T00:00:00.000Z')]);
+    expect(render(group)).not.toContain('지금 실행');
+    const html = renderToStaticMarkup(
+      <SessionConversationModal
+        group={group}
+        status="complete"
+        onClose={() => undefined}
+        onCreateFeedback={async () => undefined}
+        onStartTurn={async () => undefined}
+      />,
+    );
+    expect(html).toContain('대기 중 — 아직 시작하지 않았습니다.');
+    expect(html).toContain('▶ 지금 실행');
+  });
+
+  test('only a queued turn offers ✎ 편집, and only when the modal can save it', () => {
+    const group = makeGroup([makeTurn('c2', '2026-10-02T00:00:00.000Z', { status: 'todo', result: undefined }), makeTurn('c1', '2026-10-01T00:00:00.000Z')]);
+    expect(render(group)).not.toContain('✎ 편집');
+    const html = renderToStaticMarkup(
+      <SessionConversationModal
+        group={group}
+        status="complete"
+        onClose={() => undefined}
+        onCreateFeedback={async () => undefined}
+        onEditTurn={async () => undefined}
+      />,
+    );
+    // One button: the finished turn c1 is not editable.
+    expect(html.split('✎ 편집')).toHaveLength(2);
+  });
+
+    test('hides the toolbar and outline for a single-turn session', () => {
     const html = render(makeGroup([makeTurn('c1', '2026-10-01T00:00:00.000Z')]));
 
     expect(html).not.toContain('session-conversation-toolbar');
@@ -165,5 +229,34 @@ describe('turnMatchesQuery', () => {
     expect(turnMatchesQuery(card, 'clickhouse')).toBe(true);
     expect(turnMatchesQuery(card, 'nope')).toBe(false);
     expect(turnMatchesQuery(card, '  ')).toBe(true);
+  });
+});
+
+describe('turnTitle', () => {
+  const feedbackPrompt = [
+    '[Feedback for: Agent-kanban - UI 개선#4]',
+    '[Original Card ID: d0xX84ST]',
+    '[Original Result: Gather remaining context.',
+    '',
+    'Export the...]',
+    '---',
+    '일단 prompt가 그래도 먼저 나와야함. 그리고 result가 나와야하고.',
+    '그리고 목차접기 이 버튼은 목차쪽에 있어야함.',
+  ].join('\n');
+
+  test('a feedback turn is titled by the first line under the feedback header', () => {
+    expect(turnTitle({ title: 'Feedback #4: Agent-kanban - UI 개선#4', description: feedbackPrompt })).toBe(
+      '일단 prompt가 그래도 먼저 나와야함. 그리고 result가 나와야하고.',
+    );
+  });
+
+  test('a regular turn keeps its card title', () => {
+    expect(turnTitle({ title: 'Agent-kanban - UI 개선#4', description: '세션 모달 역순 정렬 버튼' })).toBe(
+      'Agent-kanban - UI 개선#4',
+    );
+  });
+
+  test('falls back to the card title when the feedback body is empty', () => {
+    expect(turnTitle({ title: 'Feedback #1: X', description: '[Feedback for: X]\n---\n' })).toBe('Feedback #1: X');
   });
 });

@@ -115,12 +115,33 @@ export function rangeFromBuffer(buffer: TimelineBuffer): TimelineRange {
  * Used on mount and by `오늘`, which may land far from wherever the old buffer
  * had drifted.
  */
-export function bufferAroundToday(now: Date, visibleDays = 0): TimelineBuffer {
+export function bufferAroundToday(now: Date, visibleDays = 0, earliest?: Date | null): TimelineBuffer {
   const ahead = Math.max(visibleDays, 14) + BUFFER_INITIAL_FUTURE_DAYS;
+  const today = startOfDay(now);
+  // A floor (the Works tab's first Work start) cuts the past short: column 0 is
+  // that day, so the scroller physically cannot go further left.
+  const floor = earliestFloor(earliest, today);
+  const past = floor ? Math.min(BUFFER_INITIAL_PAST_DAYS, dayDiff(floor, today)) : BUFFER_INITIAL_PAST_DAYS;
   return {
-    start: addDays(startOfDay(now), -BUFFER_INITIAL_PAST_DAYS),
-    dayCount: Math.min(TIMELINE_BUFFER_MAX_DAYS, BUFFER_INITIAL_PAST_DAYS + ahead),
+    start: addDays(today, -past),
+    dayCount: Math.min(TIMELINE_BUFFER_MAX_DAYS, past + ahead),
   };
+}
+
+/**
+ * The scroll floor as a local midnight, never later than `today` — a Work
+ * whose start was typed into the future must not hide today from its own
+ * timeline. `null`/invalid → no floor (the Board timeline's endless past).
+ */
+export function earliestFloor(earliest: Date | null | undefined, today: Date): Date | null {
+  if (!earliest || Number.isNaN(earliest.getTime())) return null;
+  const day = startOfDay(earliest);
+  return day.getTime() > today.getTime() ? startOfDay(today) : day;
+}
+
+/** Whether column 0 already sits on (or before) the floor — no more past to add. */
+export function bufferAtFloor(buffer: TimelineBuffer, floor: Date | null): boolean {
+  return floor !== null && buffer.start.getTime() <= floor.getTime();
 }
 
 export type BufferEdge = 'start' | 'end';
@@ -145,15 +166,20 @@ export function extendBuffer(
   edge: BufferEdge,
   days = BUFFER_EXTEND_DAYS,
   max = TIMELINE_BUFFER_MAX_DAYS,
+  floor: Date | null = null,
 ): BufferExtension {
   if (edge === 'start') {
+    // Never past the floor: prepend only the days left before it.
+    const room = floor ? Math.max(0, dayDiff(floor, buffer.start)) : days;
+    const added = Math.min(days, room);
+    if (added === 0) return { buffer, shift: 0 };
     return {
       buffer: {
-        start: addDays(buffer.start, -days),
+        start: addDays(buffer.start, -added),
         // Over the cap → the far (future) end is what gets dropped.
-        dayCount: Math.min(max, buffer.dayCount + days),
+        dayCount: Math.min(max, buffer.dayCount + added),
       },
-      shift: days,
+      shift: added,
     };
   }
   const grown = buffer.dayCount + days;
@@ -202,8 +228,10 @@ export function bufferEdgeToExtend(
   visible: VisibleColumns,
   dayCount: number,
   edgeDays = BUFFER_EDGE_DAYS,
+  startBlocked = false,
 ): BufferEdge | null {
-  if (visible.first < edgeDays) return 'start';
+  // At the floor the start has nothing left to add; the end may still need to grow.
+  if (visible.first < edgeDays && !startBlocked) return 'start';
   if (visible.last > dayCount - 1 - edgeDays) return 'end';
   return null;
 }

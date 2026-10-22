@@ -60,7 +60,7 @@ const STEP_KIND_LABELS: Record<string, string> = {
 // shows only three steps (the most recent three while live, so the current
 // activity is visible); expanded shows the summary chips and every step. Steps
 // carrying a `body` (edit diff, full command, …) expand inline on click.
-const ProgressSteps: React.FC<{
+export const ProgressSteps: React.FC<{
   progress: CardRunProgress;
   live: boolean;
   collapsed: boolean;

@@ -8,6 +8,7 @@ import { dirAccentClass } from './worksAffinity';
 import type { WorkSessionNoticeState } from './WorkSessionNotice';
 import {
   bufferAroundToday,
+  bufferAtFloor,
   bufferEdgeToExtend,
   clampLabelWidth,
   columnAtPointer,
@@ -15,6 +16,7 @@ import {
   describeTimelineError,
   describeWorkDateEdit,
   dragColumnLeft,
+  earliestFloor,
   endIsoForColumn,
   extendBuffer,
   firstColumnForToday,
@@ -46,6 +48,7 @@ import {
 import {
   buildStripRows,
   buildTimelineRows,
+  buildWorkScopeRows,
   filterTimelineRows,
   filterTimelineSessions,
   filterTimelineWorks,
@@ -56,6 +59,7 @@ import {
   type TimelineDayCell,
   type TimelineDirOption,
   type TimelineDirRow,
+  type TimelineHighlight,
   type TimelineRow,
   type TimelineSessionRow,
   type TimelineWorkRow,
@@ -109,9 +113,14 @@ export interface TimelineViewProps {
    * Works tab's shared alert already shows `error`), capped at 240px, and
    * collapsible. Default `board` is the full Board-tab timeline.
    */
-  variant?: 'board' | 'strip';
+  variant?: 'board' | 'strip' | 'work';
   /** Strip only: the `전체 타임라인 ↗` button — switch to the Board tab's timeline. */
   onOpenFullTimeline?: () => void;
+  /**
+   * `work` only: search hits from the Work detail's session search. Sessions
+   * outside the hit set dim, cells holding a hit card get a ring.
+   */
+  highlight?: TimelineHighlight | null;
 }
 
 const DOW_LABELS = ['월', '화', '수', '목', '금', '토', '일'];
@@ -258,6 +267,8 @@ function statusClass(work: Work): string {
  */
 type PendingScroll =
   | { kind: 'today'; anchor: 'left' | 'right' }
+  /** Same placement as `today`, around another day (a finished Work's end). */
+  | { kind: 'date'; ms: number; anchor: 'left' | 'right' }
   | { kind: 'column'; column: number };
 
 /** In-flight edge drag. `origin` is the span the drag started from. */
@@ -524,10 +535,12 @@ const SessionRailRow = memo(function SessionRailRow({
   row,
   gridRow,
   handlers,
+  hitCardIds,
 }: {
   row: TimelineSessionRow;
   gridRow: number;
   handlers: TimelineHandlers;
+  hitCardIds?: ReadonlySet<string>;
 }) {
   const { session, span } = row;
   const cardCount = session.cards.length;
@@ -561,6 +574,7 @@ const SessionRailRow = memo(function SessionRailRow({
       </div>
       {row.cells.map((cell) => {
         const single = cell.cards.length === 1 ? cell.cards[0] : null;
+        const hit = hitCardIds ? cell.cards.some((card) => hitCardIds.has(card.id)) : false;
         const openable = single ? Boolean(openCard) : Boolean(openSession);
         const onClick = () => {
           if (single && openCard) openCard(single.id);
@@ -574,7 +588,7 @@ const SessionRailRow = memo(function SessionRailRow({
           >
             <button
               type="button"
-              className={`tl-day tl-day--${cell.status}`}
+              className={`tl-day tl-day--${cell.status}${hit ? ' tl-day--hit' : ''}`}
               disabled={!openable}
               onClick={onClick}
               title={cellTitle(cell)}
@@ -649,6 +663,7 @@ const WorkRowView = memo(function WorkRowView({
   resizable,
   compact,
   strip,
+  scoped,
   dragPreview,
   startHidden,
   handlers,
@@ -661,6 +676,11 @@ const WorkRowView = memo(function WorkRowView({
   compact: boolean;
   /** Strip rows have no sessions under them — no caret, no `세션 N` sub line. */
   strip: boolean;
+  /**
+   * The Work detail's own timeline: its sessions are always shown (no caret)
+   * and the title is plain text — it would only reopen the dialog it sits in.
+   */
+  scoped: boolean;
   /** Non-null only while *this* Work's bar is being dragged. */
   dragPreview: TimelineSpan | null;
   /** See `TimelineRowBarProps.startHidden` — a boolean so scrolling only re-renders rows it flips. */
@@ -679,7 +699,7 @@ const WorkRowView = memo(function WorkRowView({
         style={{ gridRow, gridColumn: 1 }}
       >
         <span className="tl-label-line">
-          {!strip && (
+          {!strip && !scoped && (
             <button
               type="button"
               className="tl-group-toggle tl-group-toggle--caret"
@@ -697,7 +717,7 @@ const WorkRowView = memo(function WorkRowView({
           )}
           {/* The strip's bar is its one click target: a second button with the
               Work's exact title would duplicate the Works list's own. */}
-          {strip ? (
+          {strip || scoped ? (
             <span className="tl-label-title" title={row.work.title}>{row.work.title}</span>
           ) : (
             <button
@@ -713,7 +733,7 @@ const WorkRowView = memo(function WorkRowView({
         {!strip && (
           <span className="tl-label-sub">
             세션 {row.sessionCount}
-            {row.collapsed && row.sessionCount > 0 ? ' · 펼치기' : ''}
+            {!scoped && row.collapsed && row.sessionCount > 0 ? ' · 펼치기' : ''}
           </span>
         )}
       </div>
@@ -742,18 +762,24 @@ const SessionRowView = memo(function SessionRowView({
   range,
   todayIndex,
   handlers,
+  dimmed = false,
+  hitCardIds,
 }: {
   row: TimelineSessionRow;
   gridRow: number;
   range: TimelineRange;
   todayIndex: number;
   handlers: TimelineHandlers;
+  /** A search is active and this session has no hit. */
+  dimmed?: boolean;
+  /** Cards matching the search — their day cells get a ring. */
+  hitCardIds?: ReadonlySet<string>;
 }) {
   const title = sessionLabel(row.session);
   const { openSession, assignSession } = handlers;
 
   return (
-    <div className="tl-row" data-session-id={row.session.sessionId}>
+    <div className={`tl-row${dimmed ? ' tl-row--dimmed' : ''}`} data-session-id={row.session.sessionId}>
       <div
         className={`tl-label tl-label--session${row.workId ? '' : ' tl-label--session-loose'} ${dirAccentClass(row.session.projectDir)}`}
         style={{ gridRow, gridColumn: 1 }}
@@ -808,7 +834,7 @@ const SessionRowView = memo(function SessionRowView({
         )}
       </div>
       <RowCells range={range} gridRow={gridRow} todayIndex={todayIndex} kind="session" />
-      <SessionRailRow row={row} gridRow={gridRow} handlers={handlers} />
+      <SessionRailRow row={row} gridRow={gridRow} handlers={handlers} hitCardIds={hitCardIds} />
     </div>
   );
 });
@@ -878,8 +904,12 @@ export function TimelineView({
   sessionFilter,
   variant = 'board',
   onOpenFullTimeline,
+  highlight = null,
 }: TimelineViewProps) {
   const strip = variant === 'strip';
+  /** `work`: the Work detail's own timeline — `works` holds just that Work. */
+  const scoped = variant === 'work';
+  const scopeWork = scoped ? works[0] : undefined;
   const [stripCollapsed, setStripCollapsed] = useState(readStripCollapsed);
   const [zoom, setZoom] = useState<TimelineZoom>('week');
   const columnWidth = strip ? STRIP_COLUMN_WIDTH : TIMELINE_COLUMN_WIDTH[zoom];
@@ -903,11 +933,38 @@ export function TimelineView({
   // polls re-render us).
   const todayMs = startOfDay(new Date()).getTime();
   /**
+   * How far left the grid may go. The Board timeline's past is endless; the
+   * Works strip stops at the earliest active Work's start and a Work's own
+   * timeline at that Work's start — there is nothing of theirs before it, so
+   * scrolling there only ever showed empty columns.
+   */
+  const floorMs = useMemo(() => {
+    const starts = scoped
+      ? (scopeWork ? [scopeWork.startedAt] : [])
+      : strip
+        ? works.filter((work) => work.status === 'active').map((work) => work.startedAt)
+        : [];
+    const times = starts.map((iso) => new Date(iso).getTime()).filter(Number.isFinite);
+    if (times.length === 0) return null;
+    return earliestFloor(new Date(Math.min(...times)), new Date(todayMs))?.getTime() ?? null;
+  }, [scoped, scopeWork, strip, works, todayMs]);
+  const floor = useMemo(() => (floorMs === null ? null : new Date(floorMs)), [floorMs]);
+  /**
    * The rendered day columns — a scroll buffer, not the visible slice. It grows
    * by 28 days when the viewport nears either end (`syncScroll`), so the past is
-   * effectively endless while the DOM stays capped.
+   * endless while the DOM stays capped — unless a floor stops it.
    */
-  const [buffer, setBuffer] = useState<TimelineBuffer>(() => bufferAroundToday(new Date(todayMs)));
+  /**
+   * The day the grid opens on. Today, except for a finished Work's own
+   * timeline: its sessions all ran before it ended, so opening on today showed
+   * an empty week. Read once — later polls must not yank the view.
+   */
+  const [openingMs] = useState(() => {
+    if (!scopeWork || scopeWork.status === 'active' || !scopeWork.resolvedAt) return todayMs;
+    const end = startOfDay(new Date(scopeWork.resolvedAt)).getTime();
+    return Number.isFinite(end) && end < todayMs ? end : todayMs;
+  });
+  const [buffer, setBuffer] = useState<TimelineBuffer>(() => bufferAroundToday(new Date(openingMs), 0, floor));
   const range = useMemo(() => rangeFromBuffer(buffer), [buffer]);
   const todayIndex = dayDiff(range.start, new Date(todayMs));
   /**
@@ -916,8 +973,8 @@ export function TimelineView({
    * today" so the first fetch already asks for the right window.
    */
   const [visible, setVisible] = useState<VisibleColumns>(() => {
-    const today = dayDiff(buffer.start, new Date(todayMs));
-    return { first: Math.max(0, today - 13), last: today };
+    const opening = dayDiff(buffer.start, new Date(openingMs));
+    return { first: Math.max(0, opening - 13), last: opening };
   });
   // Aligned to 14-day blocks (timelineFetchWindow): scrolling a day keeps the
   // same from/to strings, so `useTimeline` does not refetch. Named apiWindow,
@@ -937,6 +994,10 @@ export function TimelineView({
   const filteredWorks = useMemo(
     () => filterTimelineWorks(works, filteredSessions, sessionFilter),
     [works, filteredSessions, sessionFilter],
+  );
+  const scopeRows = useMemo(
+    () => (scopeWork ? buildWorkScopeRows(scopeWork, timeline.sessions, range, new Date(todayMs)) : []),
+    [scopeWork, timeline.sessions, range, todayMs],
   );
   const allRows = useMemo(() => buildTimelineRows({
     sessions: filteredSessions,
@@ -960,7 +1021,7 @@ export function TimelineView({
     () => (strip ? buildStripRows(works, range, new Date(todayMs)) : []),
     [strip, works, range, todayMs],
   );
-  const rows: TimelineRow[] = strip ? stripRows : boardRows;
+  const rows: TimelineRow[] = strip ? stripRows : scoped ? scopeRows : boardRows;
   const legend = useMemo(() => timelineLegend(rows), [rows]);
   const months = useMemo(() => monthSegments(range), [range]);
   const rangeLabel = visibleRangeLabel(range, visible);
@@ -1253,7 +1314,7 @@ export function TimelineView({
    * render. `buffer` is also written by `syncScroll` itself, so a second scroll
    * event before React re-renders cannot grow the buffer twice.
    */
-  const viewRef = useRef({ buffer, columnWidth, frozen: false });
+  const viewRef = useRef({ buffer, columnWidth, frozen: false, floor });
   /**
    * Absolute `scrollLeft` to land on once the grown buffer has rendered — the
    * pre-growth position plus `shift × columnWidth`. Absolute on purpose:
@@ -1274,7 +1335,11 @@ export function TimelineView({
   const reissueRef = useRef(false);
   /** `scrollLeft` as of the last `syncScroll` — see `keepScrollOnLabelFocus`. */
   const settledScrollLeftRef = useRef(0);
-  const pendingScrollRef = useRef<PendingScroll | null>({ kind: 'today', anchor: 'right' });
+  const pendingScrollRef = useRef<PendingScroll | null>(
+    openingMs === todayMs ? { kind: 'today', anchor: 'right' } : { kind: 'date', ms: openingMs, anchor: 'right' },
+  );
+  /** Scroller width the last "today" jump was computed for (see the ResizeObserver). */
+  const todayAnchorRef = useRef<{ width: number; pending: PendingScroll } | null>(null);
   const frameRef = useRef(0);
   /** Empty-space drag pan: where it started, so a move is a pure delta. */
   const panRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number } | null>(null);
@@ -1284,8 +1349,8 @@ export function TimelineView({
   // growing the buffer under them shifts every column index they hold.
   const frozen = dragging || resizingLabel;
   useLayoutEffect(() => {
-    viewRef.current = { buffer, columnWidth, frozen };
-  }, [buffer, columnWidth, frozen]);
+    viewRef.current = { buffer, columnWidth, frozen, floor };
+  }, [buffer, columnWidth, frozen, floor]);
 
   const labelTrackWidth = useCallback(
     () => labelHeadRef.current?.offsetWidth ?? 0,
@@ -1315,9 +1380,9 @@ export function TimelineView({
     // the old buffer — measuring it against the new one would prepend again.
     const edge = view.frozen || pendingScrollLeftRef.current !== null
       ? null
-      : bufferEdgeToExtend(next, view.buffer.dayCount);
+      : bufferEdgeToExtend(next, view.buffer.dayCount, undefined, bufferAtFloor(view.buffer, view.floor));
     if (edge) {
-      const { buffer: grown, shift } = extendBuffer(view.buffer, edge);
+      const { buffer: grown, shift } = extendBuffer(view.buffer, edge, undefined, undefined, view.floor);
       // `viewRef` is what keeps a second scroll event before the re-render
       // from growing again.
       viewRef.current = { ...view, buffer: grown };
@@ -1380,16 +1445,50 @@ export function TimelineView({
       const column = pending.kind === 'column'
         ? pending.column
         : firstColumnForToday(
-          todayIndex,
+          pending.kind === 'today' ? todayIndex : dayDiff(buffer.start, new Date(pending.ms)),
           Math.floor((el.clientWidth - labelTrackWidth()) / columnWidth),
           pending.anchor,
         );
       el.scrollLeft = scrollLeftForColumn(column, columnWidth);
+      todayAnchorRef.current = pending.kind === 'column' ? null : { width: el.clientWidth, pending };
     }
     // An append with nothing trimmed moves no pixels and fires no scroll
     // event, so re-check here: a very wide viewport may need another step.
     syncScroll();
   }, [buffer, columnWidth, stripCollapsed, todayIndex, labelTrackWidth, syncScroll]);
+
+  // The first "today second from the right" is measured off the scroller's
+  // width at its first layout. Inside a dialog that width is not final yet
+  // (the persisted dialog size lands a moment later), so until the user moves
+  // the grid themselves, a resize re-applies that opening position.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let untouched = true;
+    const touched = () => {
+      untouched = false;
+    };
+    const events = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const;
+    events.forEach((type) => el.addEventListener(type, touched, { passive: true }));
+    // Only the opening layout settles like this; a window resize much later
+    // (after a ◀ 7일 click, which happens outside the scroller) must not jump.
+    const settle = window.setTimeout(touched, 1500);
+    const observer = new ResizeObserver(() => {
+      // Compared against the width the opening position was computed for —
+      // the resize can land before this effect even subscribes.
+      const last = todayAnchorRef.current;
+      if (!untouched || !last || el.clientWidth === last.width) return;
+      pendingScrollRef.current = last.pending;
+      // Re-run the layout effect that consumes it.
+      setBuffer((current) => ({ ...current }));
+    });
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(settle);
+      events.forEach((type) => el.removeEventListener(type, touched));
+    };
+  }, []);
 
   // A drag/resize that ended near an edge never got its growth step.
   useEffect(() => {
@@ -1424,6 +1523,23 @@ export function TimelineView({
     el.scrollTo({ left, behavior: 'smooth' });
   }, []);
 
+  /**
+   * A search that starts (or changes) with none of its hits in view brings the
+   * most recent one in, second from the right — otherwise a hit last week
+   * outlines nothing and the dimmed grid reads as "no results".
+   */
+  const highlightLatestAt = highlight?.latestAt;
+  useEffect(() => {
+    if (highlightLatestAt === undefined) return;
+    const { buffer: current } = viewRef.current;
+    const column = dayDiff(current.start, startOfDay(new Date(highlightLatestAt)));
+    if (column < 0 || column >= current.dayCount) return;
+    if (column >= visible.first && column <= visible.last) return;
+    const span = visible.last - visible.first + 1;
+    scrollByDays(Math.max(0, column - span + 2) - visible.first);
+    // Only when the hit moves, not on every scroll the user makes afterwards.
+  }, [highlightLatestAt, scrollByDays]);
+
   /** Direct scroll input wins over a button/key scroll still in flight. */
   const cancelScrollTarget = useCallback(() => {
     scrollTargetRef.current = null;
@@ -1433,8 +1549,29 @@ export function TimelineView({
   const goToday = () => {
     scrollTargetRef.current = null;
     pendingScrollRef.current = { kind: 'today', anchor: 'left' };
-    setBuffer(bufferAroundToday(new Date(todayMs), visible.last - visible.first + 1));
+    setBuffer(bufferAroundToday(new Date(todayMs), visible.last - visible.first + 1, floor));
   };
+
+  /**
+   * The floor moved later (the Works load after mount, or the earliest Work's
+   * start was edited): cut the columns now before it, keeping the same dates
+   * under the viewport. A floor moving earlier needs nothing — the next
+   * scroll toward the start simply grows down to it.
+   */
+  useLayoutEffect(() => {
+    if (floorMs === null) return;
+    const current = viewRef.current.buffer;
+    const cut = dayDiff(current.start, new Date(floorMs));
+    if (cut <= 0) return;
+    const next = { start: new Date(floorMs), dayCount: Math.max(1, current.dayCount - cut) };
+    viewRef.current = { ...viewRef.current, buffer: next };
+    const el = scrollRef.current;
+    if (el) pendingScrollLeftRef.current = Math.max(0, el.scrollLeft - cut * viewRef.current.columnWidth);
+    setBuffer(next);
+    setVisible((prev) => ({ first: Math.max(0, prev.first - cut), last: Math.max(0, prev.last - cut) }));
+  }, [floorMs]);
+  /** At the floor with its first column in view: `◀ 7일` has nowhere to go. */
+  const atFloor = bufferAtFloor(buffer, floor) && visible.first === 0;
   const atToday = visible.first === firstColumnForToday(todayIndex, 0, 'left');
 
   /** Zoom only changes the column width; the first visible date stays put. */
@@ -1521,7 +1658,7 @@ export function TimelineView({
 
   const grid = (
     <div
-      className={`timeline${strip ? ' timeline--strip' : ''}${compact ? ' timeline--month' : ''}${dragging ? ' timeline--dragging' : ''}${resizingLabel ? ' timeline--label-resizing' : ''}${panning ? ' timeline--panning' : ''}${failed ? ' timeline--errored' : ''}`}
+      className={`timeline${strip ? ' timeline--strip' : ''}${scoped ? ' timeline--work' : ''}${highlight ? ' timeline--searching' : ''}${compact ? ' timeline--month' : ''}${dragging ? ' timeline--dragging' : ''}${resizingLabel ? ' timeline--label-resizing' : ''}${panning ? ' timeline--panning' : ''}${failed ? ' timeline--errored' : ''}`}
       style={{
         '--tl-label-width': `${labelWidth}px`,
         '--tl-col-width': `${columnWidth}px`,
@@ -1561,7 +1698,7 @@ export function TimelineView({
             style={{ gridRow: '1 / 3', gridColumn: 1 }}
             ref={labelHeadRef}
           >
-            {strip ? 'Work' : '프로젝트 · 세션'}
+            {strip ? 'Work' : scoped ? 'Work · 세션' : '프로젝트 · 세션'}
             <span
               role="separator"
               aria-orientation="vertical"
@@ -1641,6 +1778,7 @@ export function TimelineView({
                   resizable={resizable}
                   compact={compact}
                   strip={strip}
+                  scoped={scoped}
                   dragPreview={dragView?.workId === row.work.id ? dragView.preview : null}
                   startHidden={row.bar !== null && row.bar.rawStartIndex < visible.first}
                   handlers={handlers}
@@ -1655,6 +1793,8 @@ export function TimelineView({
                 range={range}
                 todayIndex={todayIndex}
                 handlers={handlers}
+                dimmed={highlight !== null && !highlight.sessionIds.has(row.session.sessionId)}
+                hitCardIds={highlight?.sessionIds.has(row.session.sessionId) ? highlight.cardIds : undefined}
               />
             );
           })}
@@ -1664,10 +1804,11 @@ export function TimelineView({
               {busy && '불러오는 중…'}
               {/* An unanswered read must never be reported as an empty week. */}
               {!busy && strip && '이 기간에 진행 중인 Work가 없습니다. 좌우로 스크롤해 다른 날짜를 보거나 전체 타임라인을 여세요.'}
+              {!busy && scoped && !failed && '이 기간에 실행된 세션이 없습니다. 좌우로 스크롤해 다른 날짜를 보세요.'}
               {!busy && failed && '타임라인을 불러오지 못해 비어 있습니다. 위 알림의 다시 시도를 눌러 주세요.'}
-              {!busy && !strip && !failed && dirFilter
+              {!busy && !strip && !scoped && !failed && dirFilter
                 && '이 디렉토리에는 이 기간에 실행된 세션이 없습니다. 필터를 전체로 돌리면 다른 프로젝트가 보입니다.'}
-              {!busy && !strip && !failed && !dirFilter
+              {!busy && !strip && !scoped && !failed && !dirFilter
                 && '이 기간에 실행된 세션이 없습니다. 카드를 실행하면 실행한 날부터 여기에 나타납니다.'}
             </div>
           )}
@@ -1675,6 +1816,15 @@ export function TimelineView({
       </div>
     </div>
   );
+
+  const floorHint = floor
+    ? scoped
+      ? `← Work 시작일(${floor.getMonth() + 1}/${floor.getDate()}) 이전은 없습니다`
+      : `← 가장 이른 진행 중 Work 시작일(${floor.getMonth() + 1}/${floor.getDate()})보다 앞으로는 가지 않습니다`
+    : '';
+  const floorNote = atFloor && floor
+    ? <span className="tl-floor-note" role="status">{floorHint}</span>
+    : null;
 
   // Shared by both toolbars. `◀ 7일`/`7일 ▶` are the scroll in buttons;
   // `오늘` rebuilds the buffer around today, so it works from any distance.
@@ -1684,6 +1834,8 @@ export function TimelineView({
         type="button"
         className="kv2-btn kv2-btn--small"
         aria-label="7일 전으로"
+        disabled={atFloor}
+        title={atFloor && floor ? floorHint : undefined}
         onClick={() => scrollByDays(-PAGE_STEP_DAYS)}
       >
         ◀ 7일
@@ -1721,6 +1873,7 @@ export function TimelineView({
           {!stripCollapsed && (
             <>
               {stepButtons}
+              {floorNote}
             </>
           )}
           <span className="tl-strip-actions">
@@ -1749,6 +1902,37 @@ export function TimelineView({
           </span>
         </div>
         {!stripCollapsed && <div className="tl-strip-body" id="tl-strip-body">{grid}</div>}
+      </section>
+    );
+  }
+
+  if (scoped) {
+    return (
+      <section className="tl-work" aria-label="세션 흐름">
+        {timeline.error && (
+          <p className="tl-work-error" role="alert">{describeTimelineError(timeline.error.message)}</p>
+        )}
+        <div className="tl-controls tl-controls--work">
+          {stepButtons}
+          {floorNote}
+          <label className="tl-subagent-toggle">
+            <input
+              type="checkbox"
+              checked={showSubagents}
+              onChange={(event) => setShowSubagents(event.target.checked)}
+            />
+            서브에이전트
+          </label>
+          <div className="tl-legend">
+            {legend.map((item) => (
+              <span key={item.key}>
+                <i className={`tl-legend-swatch tl-legend-swatch--${item.key}`} aria-hidden="true" />
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
+        {grid}
       </section>
     );
   }
