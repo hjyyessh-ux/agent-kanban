@@ -162,12 +162,24 @@ const SUBAGENT_STORAGE_KEY = 'kanban-timeline-subagents';
 const HELP_SEEN_STORAGE_KEY = 'kanban-timeline-help-seen';
 /** Whether the Works tab's strip is folded away. */
 const STRIP_COLLAPSED_STORAGE_KEY = 'kanban-works-timeline-strip-collapsed';
+/** The strip's user-dragged height (px). Absent → the CSS cap (240px) applies. */
+const STRIP_HEIGHT_STORAGE_KEY = 'kanban-works-timeline-strip-height';
+const MIN_STRIP_HEIGHT = 120;
 
 function readStripCollapsed(): boolean {
   try {
     return localStorage.getItem(STRIP_COLLAPSED_STORAGE_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function readStripHeight(): number | null {
+  try {
+    const parsed = Number(localStorage.getItem(STRIP_HEIGHT_STORAGE_KEY));
+    return Number.isFinite(parsed) && parsed >= MIN_STRIP_HEIGHT ? parsed : null;
+  } catch {
+    return null;
   }
 }
 
@@ -1009,6 +1021,24 @@ export function TimelineView({
     } catch { /* quota exceeded */ }
   }, [strip, stripCollapsed]);
 
+  // The strip's scroller is `resize: vertical` (Timeline.css). The native grip
+  // writes an inline `height`; restore the saved one on mount and persist a new
+  // one only once the user has dragged (no inline height → the CSS cap rules).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!strip || stripCollapsed || !el) return;
+    const saved = readStripHeight();
+    if (saved !== null) el.style.height = `${saved}px`;
+    const observer = new ResizeObserver(() => {
+      if (!el.style.height) return;
+      try {
+        localStorage.setItem(STRIP_HEIGHT_STORAGE_KEY, String(Math.round(el.getBoundingClientRect().height)));
+      } catch { /* quota exceeded */ }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [strip, stripCollapsed]);
+
   useEffect(() => {
     try {
       localStorage.setItem(SUBAGENT_STORAGE_KEY, showSubagents ? '1' : '0');
@@ -1451,6 +1481,11 @@ export function TimelineView({
     if (event.button !== 0 || event.pointerType !== 'mouse') return;
     if (event.target instanceof Element && event.target.closest(PAN_EXCLUDED_SELECTOR)) return;
     const el = event.currentTarget;
+    // Scrollbars and the strip's height grip sit outside the client box; a
+    // pan's pointer capture there would swallow the native drag.
+    const rect = el.getBoundingClientRect();
+    if (event.clientX - rect.left - el.clientLeft >= el.clientWidth
+      || event.clientY - rect.top - el.clientTop >= el.clientHeight) return;
     scrollTargetRef.current = null;
     panRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: el.scrollLeft };
     el.setPointerCapture(event.pointerId);

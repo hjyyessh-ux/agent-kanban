@@ -564,18 +564,6 @@
   text-transform: uppercase;
 }
 
-.kv2-directory-clear {
-  border: 2px solid var(--kv2-border-strong);
-  border-radius: 6px;
-  background: var(--kv2-surface);
-  color: var(--kv2-control-text-color);
-  cursor: pointer;
-  font-size: var(--kv2-text-xs);
-  font-weight: 900;
-  padding: 4px 8px;
-  box-shadow: 2px 2px 0 var(--kv2-border-strong);
-}
-
 .kv2-directory-list {
   position: relative;
   z-index: 1;
