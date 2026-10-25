@@ -59,7 +59,17 @@ export interface TelegramCommandDispatchPlan {
 
 export type TelegramCommandResult =
   | { type: 'reply'; text: string; keyboard?: TelegramInlineKeyboardMarkup; toast?: string }
-  | { type: 'select-session'; text: string; sessionId: string; cardId: string; agentRuntime: AgentRuntime }
+  | {
+      type: 'select-session';
+      text: string;
+      toast?: string;
+      keyboard?: TelegramInlineKeyboardMarkup;
+      sessionId: string;
+      cardId: string;
+      agentRuntime: AgentRuntime;
+    }
+  /** Fetch the session's latest prompt + response; the poller reads the cards. */
+  | { type: 'show-last'; session: TelegramSessionSummary }
   | {
       type: 'set-defaults';
       text: string;
@@ -111,6 +121,13 @@ const TELEGRAM_COMMAND_DEFINITIONS: readonly TelegramCommandDefinition[] = [
     description: '현재 세션 정보 보기',
     helpEntry: '/session_info (/세션정보)',
     aliases: ['/세션정보', '/session'],
+  },
+  {
+    token: '/last',
+    command: 'last',
+    description: '마지막 프롬프트/응답 불러오기',
+    helpEntry: '/last [번호] (/마지막)',
+    aliases: ['/마지막', '/last_turn'],
   },
   {
     token: '/switch_session',
@@ -325,8 +342,9 @@ export function buildTelegramHelpText(): string {
     '',
     '기본',
     '- /help: 사용 가능한 명령 보기',
-    '- /sessions (/세션목록): 세션 목록 보기',
+    '- /sessions (/세션목록): 보드의 세션을 최신순으로 보고 버튼으로 이어하기',
     '- /session_info (/세션정보): 현재 세션 정보 보기',
+    '- /last [번호] (/마지막): 현재(또는 지정한) 세션의 마지막 프롬프트와 응답 보기',
     '- /switch_session 3 (/세션변경 3): 지정한 세션으로 전환',
     '- /new_session (/새세션): 다음 메시지부터 새 세션 시작',
     '',
@@ -520,6 +538,13 @@ export function resolveModelId(
 
 const MODEL_CALLBACK_PREFIX = 'md';
 const DIRECTORY_CALLBACK_PREFIX = 'dir';
+const SESSION_CALLBACK_PREFIX = 'ses';
+const LAST_TURN_CALLBACK = 'last';
+
+/** Same staleness guard as directories: the board list reorders as cards update. */
+function sessionCallbackDigest(session: Pick<TelegramSessionSummary, 'agentRuntime' | 'sessionId'>): string {
+  return createHash('sha1').update(`${session.agentRuntime}:${session.sessionId}`).digest('hex').slice(0, 8);
+}
 
 /**
  * Recent directories are re-derived when the tap arrives, so the index alone
@@ -659,6 +684,28 @@ export function resolveTelegramCallback(
     return buildDirectorySetResult(dir);
   }
 
+  if (parts[0] === SESSION_CALLBACK_PREFIX) {
+    const index = Number.parseInt(parts[1] ?? '', 10);
+    const digest = parts[2];
+    // The list may have reordered since it was rendered; find the session by
+    // digest first so a stale button still lands on the session it showed.
+    const target = digest
+      ? context.sessions.find(session => sessionCallbackDigest(session) === digest)
+      : undefined;
+    if (!target || !Number.isFinite(index)) {
+      return {
+        type: 'reply',
+        text: '⚠️ 그 세션을 보드에서 찾지 못했습니다. /sessions 를 다시 실행해 주세요.',
+        toast: '세션을 찾지 못했습니다',
+      };
+    }
+    return buildSessionSelection(target);
+  }
+
+  if (parts[0] === LAST_TURN_CALLBACK) {
+    return resolveLastTurnTarget(context, '');
+  }
+
   return null;
 }
 
@@ -692,28 +739,100 @@ function buildRuntimeStatusText(context: TelegramCommandContext): string {
   ].join('\n');
 }
 
+/** How many sessions `/sessions` lists and offers as buttons. */
+export const TELEGRAM_SESSION_LIST_LIMIT = 10;
+
+function formatRelativeTime(iso: string, now: number = Date.now()): string {
+  const minutes = Math.floor((now - new Date(iso).getTime()) / 60_000);
+  if (!Number.isFinite(minutes) || minutes < 1) return '방금';
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  return `${Math.floor(hours / 24)}일 전`;
+}
+
+function truncateLabel(text: string, max: number): string {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  return singleLine.length > max ? `${singleLine.slice(0, max - 1)}…` : singleLine;
+}
+
 export function buildTelegramSessionsText(sessions: TelegramSessionSummary[], selectedSessionId?: string): string {
   if (sessions.length === 0) {
-    return '📭 현재 연결된 세션이 없습니다. 일반 메시지를 보내면 새 카드가 생성됩니다.';
+    return '📭 보드에 이어할 수 있는 세션이 없습니다. 일반 메시지를 보내면 새 카드가 생성됩니다.';
   }
 
-  const lines = ['📚 세션 목록'];
-  for (const session of sessions) {
+  const shown = sessions.slice(0, TELEGRAM_SESSION_LIST_LIMIT);
+  const lines = [`📚 보드 세션 (최신순 ${shown.length}/${sessions.length})`];
+  for (const session of shown) {
     const isSelected = session.sessionId === selectedSessionId;
-    const label = getPrimaryAgentDisplayLabel(session.agentType) ?? session.agentType ?? 'Default';
     lines.push(
       '',
-      `${isSelected ? '👉 ' : ''}${session.index}. ${session.title}`,
-      `- 런타임: ${formatRuntime(session.agentRuntime)}`,
-      `- 카드: ${session.cardId}`,
-      `- 상태: ${session.status}`,
-      `- 에이전트: ${label}`,
-      `- 모델: ${session.model ?? 'default'}`,
+      `${isSelected ? '👉 ' : ''}${session.index}. ${truncateLabel(session.title, 60)}`,
+      `- ${formatRuntime(session.agentRuntime)} · ${session.model ?? 'default'} · ${session.status} · ${formatRelativeTime(session.updatedAt)}`,
+      ...(session.projectDir ? [`- ${shortenDirectoryLabel(session.projectDir)}`] : []),
     );
   }
 
-  lines.push('', '세션 전환: /switch_session 3 또는 /세션변경 3');
+  lines.push('', '버튼을 누르면 그 세션에서 이어합니다. (/switch_session 3 도 가능)');
   return lines.join('\n');
+}
+
+function buildSessionsKeyboard(sessions: TelegramSessionSummary[]): TelegramInlineKeyboardMarkup | undefined {
+  const shown = sessions.slice(0, TELEGRAM_SESSION_LIST_LIMIT);
+  if (shown.length === 0) return undefined;
+  return {
+    inline_keyboard: shown.map(session => [{
+      text: `${session.index}. ${truncateLabel(session.title, 32)}`,
+      callback_data: `${SESSION_CALLBACK_PREFIX}:${session.index}:${sessionCallbackDigest(session)}`,
+    }]),
+  };
+}
+
+function buildSessionSelection(target: TelegramSessionSummary): TelegramCommandResult {
+  return {
+    type: 'select-session',
+    text: [
+      `✅ ${target.index}번 ${formatRuntime(target.agentRuntime)} 세션으로 전환했습니다. 이후 메시지는 이 세션으로 전달됩니다.`,
+      `- 세션: ${truncateLabel(target.title, 80)}`,
+      `- 모델: ${target.model ?? 'default'}`,
+      ...(target.projectDir ? [`- 디렉토리: ${target.projectDir}`] : []),
+      ...(target.status === 'in_progress'
+        ? ['⚠️ 이 세션은 아직 진행 중입니다. 지금 보내면 진행 중인 작업과 겹칠 수 있습니다.']
+        : []),
+    ].join('\n'),
+    toast: `${target.index}번 세션 선택`,
+    keyboard: { inline_keyboard: [[{ text: '📜 마지막 내용 불러오기', callback_data: LAST_TURN_CALLBACK }]] },
+    sessionId: target.sessionId,
+    cardId: target.cardId,
+    agentRuntime: target.agentRuntime,
+  };
+}
+
+/** `/last [n]`: the selected session, or the n-th listed one, else the newest. */
+function resolveLastTurnTarget(context: TelegramCommandContext, argsText: string): TelegramCommandResult {
+  const trimmed = argsText.trim();
+  if (trimmed) {
+    const targetIndex = Number.parseInt(trimmed, 10);
+    const target = Number.isFinite(targetIndex)
+      ? context.sessions.find(session => session.index === targetIndex)
+      : undefined;
+    if (!target) {
+      return { type: 'reply', text: `❌ ${trimmed}번 세션을 찾지 못했습니다. /sessions 로 목록을 확인하세요.` };
+    }
+    return { type: 'show-last', session: target };
+  }
+
+  const session = context.sessions.find(item => item.sessionId === context.selectedSessionId)
+    ?? (context.selectedSessionId ? undefined : context.sessions[0]);
+  if (!session) {
+    return {
+      type: 'reply',
+      text: context.selectedSessionId
+        ? '⚠️ 선택된 세션이 보드에 없습니다. /last 3 처럼 번호를 지정하거나 /sessions 로 다시 선택하세요.'
+        : '📭 불러올 세션이 없습니다.',
+    };
+  }
+  return { type: 'show-last', session };
 }
 
 export function buildTelegramSessionInfoText(
@@ -745,7 +864,15 @@ export function resolveTelegramCommand(
   if (!command) return null;
 
   if (command === '/sessions') {
-    return { type: 'reply', text: buildTelegramSessionsText(context.sessions, context.selectedSessionId) };
+    return {
+      type: 'reply',
+      text: buildTelegramSessionsText(context.sessions, context.selectedSessionId),
+      keyboard: buildSessionsKeyboard(context.sessions),
+    };
+  }
+
+  if (command === '/last') {
+    return resolveLastTurnTarget(context, argsText);
   }
 
   if (command === '/session_info') {
@@ -763,13 +890,7 @@ export function resolveTelegramCommand(
     if (!target) {
       return { type: 'reply', text: `❌ ${targetIndex}번 세션을 찾지 못했습니다. /sessions 로 목록을 확인하세요.` };
     }
-    return {
-      type: 'select-session',
-      text: `✅ ${target.index}번 ${formatRuntime(target.agentRuntime)} 세션으로 전환했습니다. 이후 메시지는 이 세션으로 전달됩니다.`,
-      sessionId: target.sessionId,
-      cardId: target.cardId,
-      agentRuntime: target.agentRuntime,
-    };
+    return buildSessionSelection(target);
   }
 
   if (command === '/new_session') {

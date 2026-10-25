@@ -1,11 +1,11 @@
 import type { KanbanStore } from '../core/store';
 import type { SettingsStore } from '../core/settings-store';
-import { sendTelegramMessage } from './telegram-notifier';
+import { sendTelegramMarkdown } from './telegram-notifier';
 
 /**
- * Long results are split across messages by `sendTelegramMessage` rather than
+ * Long results are split across messages by `sendTelegramMarkdown` rather than
  * truncated here — a cut-off completion loses exactly the part the user asked
- * for.
+ * for. The result is Markdown, so it is rendered (tables, code, emphasis).
  */
 function buildTelegramCompletionMessage(card: {
   id: string;
@@ -66,7 +66,7 @@ export async function notifyTelegramCompletion(input: {
     return;
   }
 
-  const sendResult = await sendTelegramMessage(
+  const sendResult = await sendTelegramMarkdown(
     telegramToken,
     card.telegramChatId,
     buildTelegramCompletionMessage(card, input.result),

@@ -13,6 +13,7 @@ import { DEFAULT_PRIMARY_MODEL, getDefaultModelForAgent, getPrimaryAgentDisplayL
 import {
   answerTelegramCallbackQuery,
   getTelegramUpdates,
+  sendTelegramMarkdown,
   sendTelegramMessage,
   setTelegramChatMenuButton,
   setTelegramCommands,
@@ -104,14 +105,38 @@ export class TelegramPoller {
     }
   }
 
-  async getSessionsForChat(chatId: number): Promise<TelegramSessionSummary[]> {
-    const cards = await this.store.getCards({ includeArchived: true });
+  /**
+   * Sessions `/sessions` offers: every live (non-archived) board session,
+   * newest first, wherever it started — not only ones this chat created.
+   * Subagent cards are left out; they are not resumable on their own.
+   */
+  async getSessionsForChat(_chatId: number): Promise<TelegramSessionSummary[]> {
+    const cards = await this.store.getCards();
+    return this.summarizeSessions(cards.filter(card => !card.parentCardId));
+  }
+
+  /**
+   * Sessions a selection can resolve against: the board list plus this chat's
+   * own history, archived included, so a pinned session keeps working after
+   * its cards are archived.
+   */
+  private async getResolvableSessions(chatId: number): Promise<TelegramSessionSummary[]> {
+    const board = await this.getSessionsForChat(chatId);
+    const seen = new Set(board.map(session => this.sessionKey(session.agentRuntime, session.sessionId)));
+    const history = await this.store.getCards({ includeArchived: true });
+    const chatOnly = this.summarizeSessions(history.filter(card => card.telegramChatId === chatId))
+      .filter(session => !seen.has(this.sessionKey(session.agentRuntime, session.sessionId)));
+    return [...board, ...chatOnly];
+  }
+
+  private summarizeSessions(cards: KanbanCard[]): TelegramSessionSummary[] {
     const relevant = cards
-      .filter(card => card.telegramChatId === chatId && card.sessionId)
+      .filter(card => card.sessionId)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
     const bySession = new Map<string, typeof relevant[number]>();
     const projectDirBySession = new Map<string, string>();
+    const titleBySession = new Map<string, string>();
     for (const card of relevant) {
       if (!card.sessionId) continue;
       const key = this.sessionKey(resolveAgentRuntime(card), card.sessionId);
@@ -121,13 +146,16 @@ export class TelegramPoller {
       if (card.projectDir && !projectDirBySession.has(key)) {
         projectDirBySession.set(key, card.projectDir);
       }
+      if (card.sessionTitle && !titleBySession.has(key)) {
+        titleBySession.set(key, card.sessionTitle);
+      }
     }
 
     return Array.from(bySession.entries()).map(([key, card], index) => ({
       index: index + 1,
       sessionId: card.sessionId!,
       cardId: card.id,
-      title: card.sessionTitle ?? card.title,
+      title: titleBySession.get(key) ?? card.title,
       status: card.status,
       agentRuntime: resolveAgentRuntime(card),
       agentType: card.agentType,
@@ -345,7 +373,91 @@ export class TelegramPoller {
       return;
     }
 
+    if (result.type === 'select-session') {
+      await answerTelegramCallbackQuery(token, query.id, result.toast);
+      await this.applySessionSelection(chatId, result);
+      await sendTelegramMessage(token, chatId, result.text, undefined, result.keyboard);
+      return;
+    }
+
+    if (result.type === 'show-last') {
+      await answerTelegramCallbackQuery(token, query.id, '📜 불러오는 중');
+      await this.sendLastTurn(token, chatId, result.session);
+      return;
+    }
+
     await answerTelegramCallbackQuery(token, query.id);
+  }
+
+  private async applySessionSelection(
+    chatId: number,
+    selection: { sessionId: string; cardId: string; agentRuntime: AgentRuntime },
+  ): Promise<void> {
+    this.activeSessions.set(chatId, {
+      sessionId: selection.sessionId,
+      cardId: selection.cardId,
+      agentRuntime: selection.agentRuntime,
+      consecutiveFailures: 0,
+    });
+    if (this.options.telegramStateStore) {
+      await this.options.telegramStateStore.upsertChatState(chatId, {
+        selectedSessionId: selection.sessionId,
+        selectedCardId: selection.cardId,
+        selectedAgentRuntime: selection.agentRuntime,
+        mode: 'pinned',
+        lastReminderAt: new Date().toISOString(),
+        lastAcknowledgedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  /**
+   * Show the session's latest exchange: the newest card's prompt and its
+   * response. A card still running has no response yet, so the last finished
+   * one is shown alongside it.
+   */
+  private async sendLastTurn(token: string, chatId: number, session: TelegramSessionSummary): Promise<void> {
+    const cards = (await this.store.getCards({ includeArchived: true }))
+      .filter(card => card.sessionId === session.sessionId
+        && resolveAgentRuntime(card) === session.agentRuntime
+        && !card.parentCardId)
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    const latest = cards[0];
+    if (!latest) {
+      await sendTelegramMessage(token, chatId, `📭 ${session.index}번 세션에서 불러올 대화가 없습니다.`);
+      return;
+    }
+
+    const answered = latest.result?.trim() ? latest : cards.find(card => card.result?.trim());
+    const sections = [
+      `**📜 마지막 대화 — ${session.index}. ${session.title}**`,
+      `- ${this.formatRuntime(session.agentRuntime)} · ${session.model ?? 'default'} · 카드 ${latest.id} (${latest.status})`,
+    ];
+
+    if (answered !== latest) {
+      sections.push('', '**🙋 프롬프트 (진행 중)**', this.quotePrompt(latest.description || latest.title));
+      sections.push('', '⏳ 아직 응답이 없습니다.');
+    }
+    if (answered) {
+      sections.push(
+        '',
+        answered === latest ? '**🙋 프롬프트**' : `**🙋 직전 프롬프트** (카드 ${answered.id})`,
+        this.quotePrompt(answered.description || answered.title),
+        '',
+        '**🤖 응답**',
+        answered.result!.trim(),
+      );
+    }
+
+    await sendTelegramMarkdown(token, chatId, sections.join('\n'));
+  }
+
+  /** Prompts can be long pastes; keep the reply about the response. */
+  private quotePrompt(prompt: string): string {
+    const limit = 1500;
+    const text = prompt.trim().length > limit ? `${prompt.trim().slice(0, limit)}…` : prompt.trim();
+    return text.split('\n').map(line => `> ${line}`).join('\n');
   }
 
   private async tryHandleExplicitCommand(token: string, chatId: number, telegramMessageId: string, text: string): Promise<boolean> {
@@ -359,7 +471,7 @@ export class TelegramPoller {
     const result = resolveTelegramCommand(text, context, state?.mode === 'pinned');
     if (!result) return false;
 
-    if (command === '/new_session') {
+    if (command === '/new_session' && result.type === 'reply') {
       await this.resetChatSession(chatId);
       await sendTelegramMessage(token, chatId, result.text);
       return true;
@@ -386,23 +498,13 @@ export class TelegramPoller {
     }
 
     if (result.type === 'select-session') {
-      this.activeSessions.set(chatId, {
-        sessionId: result.sessionId,
-        cardId: result.cardId,
-        agentRuntime: result.agentRuntime,
-        consecutiveFailures: 0,
-      });
-      if (this.options.telegramStateStore) {
-        await this.options.telegramStateStore.upsertChatState(chatId, {
-          selectedSessionId: result.sessionId,
-          selectedCardId: result.cardId,
-          selectedAgentRuntime: result.agentRuntime,
-          mode: 'pinned',
-          lastReminderAt: new Date().toISOString(),
-          lastAcknowledgedAt: new Date().toISOString(),
-        });
-      }
-      await sendTelegramMessage(token, chatId, result.text);
+      await this.applySessionSelection(chatId, result);
+      await sendTelegramMessage(token, chatId, result.text, undefined, result.keyboard);
+      return true;
+    }
+
+    if (result.type === 'show-last') {
+      await this.sendLastTurn(token, chatId, result.session);
       return true;
     }
 
@@ -710,7 +812,7 @@ export class TelegramPoller {
 
   private async resolveSessionForChat(chatId: number): Promise<SessionResolution> {
     const active = this.activeSessions.get(chatId);
-    const sessions = await this.getSessionsForChat(chatId);
+    const sessions = await this.getResolvableSessions(chatId);
     if (active) {
       const sessionInfo = this.findSessionSummary(sessions, active.sessionId, active.agentRuntime);
       if (sessionInfo) {
@@ -780,7 +882,7 @@ export class TelegramPoller {
     sessionId: string,
     agentRuntime?: AgentRuntime,
   ): Promise<TelegramSessionSummary | undefined> {
-    const sessions = await this.getSessionsForChat(chatId);
+    const sessions = await this.getResolvableSessions(chatId);
     return this.findSessionSummary(sessions, sessionId, agentRuntime);
   }
 

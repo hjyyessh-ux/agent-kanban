@@ -49,7 +49,7 @@ plugin/
 | Change stale-card detection | `stale-checker.ts` | Orphan/stuck heuristics |
 | Change question ingestion or auto-answering | `question-monitor.ts` | `/event` SSE + `/question` polling |
 | Change Telegram command routing | `telegram-commands.ts` | Explicit commands, aliases, inline keyboards, callback data |
-| Change Telegram message sending or splitting | `telegram-notifier.ts` | 4096-cap part splitting, keyboards, `answerCallbackQuery` |
+| Change Telegram message sending or splitting | `telegram-notifier.ts`, `telegram-markdown.ts` | 4096-cap part splitting, Markdown → HTML rendering, keyboards, `answerCallbackQuery` |
 | Change Telegram follow-up/reminder behavior | `telegram-poller.ts`, `telegram-reminder.ts` | Session reuse + reminders |
 | Change wiki triage/classification or vault output | `wiki/wiki-prompts.ts`, `wiki/wiki-writer.ts` | Bump `WIKI_PROMPT_VERSION` in `wiki/wiki-config.ts` on prompt changes |
 | Change wiki queue/backfill behavior | `wiki/wiki-worker.ts` | Consumes wiki-pending archived cards; singleton-runtime only |
@@ -84,6 +84,8 @@ plugin/
 - Telegram command routing must stay deterministic; explicit commands are parsed before natural message dispatch.
 - Telegram agent/model overrides must come from shared core agent config, not duplicated plugin-local constants.
 - Telegram ACK and warning messages default to plain text; only explicit parse modes should set `parse_mode`.
+- Agent results (completion messages, `/last`) go through `sendTelegramMarkdown()` (`telegram-markdown.ts`): GFM is rendered to Telegram HTML, tables become monospace `<pre>` (or one record per row when too wide), parts split only between blocks, and a part Telegram can't parse is resent as plain text.
+- `/sessions` lists every live board session (not just this chat's), newest first, with `ses:` buttons that pin the session; selection resolution also covers this chat's archived sessions. `/last` is read-only.
 - `sendTelegramMessage()` splits text over Telegram's 4096-code-unit cap into numbered parts instead of truncating. Never reintroduce a truncate helper on the completion path — a cut-off result loses exactly what the user asked for.
 - Inline keyboards go through `TelegramCommandResult.keyboard`; taps arrive as `update.callback_query` and are resolved by `resolveTelegramCallback()`. Every callback path must call `answerTelegramCallbackQuery()` or the button spins forever.
 - `/directory` callback data pins each button to a digest of its path. The recent-directory list is re-derived from cards at tap time, so a stale index must be rejected rather than silently switching to the wrong project.
