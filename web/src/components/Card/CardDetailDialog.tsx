@@ -20,6 +20,7 @@ import {
   DEFAULT_CODEX_SANDBOX,
 } from "../../../../src/core/runtime-config";
 import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
+import { useCardResultSync } from "../../hooks/useCardResultSync";
 import { useCardProgress } from "../../hooks/useCardProgress";
 import { DialogSkeleton } from "./DialogSkeleton";
 import { CardMetaPanel, CommandMetaRow, EditingField } from "./CardMetaPanel";
@@ -209,6 +210,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
 
   const isTodo = card.status === "todo";
   const runProgress = useCardProgress(card.id, card.status === "in_progress");
+  const resultSync = useCardResultSync(card, onUpdate);
   const canEdit = !!onUpdate;
   const cardRuntime = card.agentRuntime ?? "opencode";
   const resumeCommand = card.sessionId
@@ -765,6 +767,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
         onDescriptionPaste={handleDescriptionPaste}
         collapsedPhases={collapsedPhases}
         togglePhase={togglePhase}
+        resultSync={resultSync}
       />
     </section>
   );

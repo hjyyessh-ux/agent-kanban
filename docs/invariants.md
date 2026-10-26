@@ -57,6 +57,7 @@
 - defer된 카드는 후속 Stop의 drain 루프가 완료시킨다. drain 루프는 background task 잔존 여부와 무관하게(early-exit 앞에서) 항상 실행되어야 한다.
 - 카드 `result`는 Stop 입력의 `transcript_path`에서 **현재 턴(마지막 실제 사용자 프롬프트 이후)의 assistant text 블록 전부**를 모아 만든다(`collect_turn_text`). `last_assistant_message`는 마지막 메시지 하나뿐이라 단독으로 쓰면 중간 답변이 사라진다. transcript를 못 읽었거나 수집 결과에 `last_assistant_message`가 포함되지 않으면(미flush) `last_assistant_message`로 fallback한다. tool_result만 담긴 `user` 엔트리와 `isSidechain` 엔트리는 턴 경계/본문에서 제외한다.
 - `collect_turn_text`의 "실제 사용자 프롬프트" 정의는 `on-prompt.sh`의 카드 생성 필터와 **같아야 한다**: `Another Claude session sent a message` / `<task-notification>` / `<agent-message` / `<teammate-message` 로 시작하는 `user` 엔트리(string content 또는 text 블록)는 turn 경계가 아니다. 이 필터가 없으면 teammate 보고를 N번 받은 부모의 result가 마지막 보고 이후 토막(수백 바이트)으로 잘린다.
+- `isMeta: true` `user` 엔트리도 turn 경계가 아니다. Skill 도구는 skill 본문(`Base directory for this skill: …`)을 **턴 중간에** tool_result 없는 `isMeta` text 엔트리로 남기므로, 이를 프롬프트로 보면 skill 호출 이전 답변이 result에서 통째로 사라진다.
 - **fork 세션**: Claude Code `/fork`는 transcript 전체를 새 session id로 복사하고(엔트리 uuid 유지, fork 마커 없음) 자식 환경에 `CLAUDE_CODE_CHILD_SESSION=1`만 준다. fork 세션의 transcript는 **첫 UserPromptSubmit 시점에는 아직 디스크에 없다**(첫 턴과 함께 기록됨, 2026-10-19 `--fork-session` 실측). 따라서 판정의 본체는 `on-stop.sh`다: `transcript_path`의 첫 `user` 엔트리 uuid와 같은 uuid를 가진 같은 디렉토리의 가장 오래된 다른 jsonl을 부모로 산출해 `<session>.forked-from`에 캐시하고(빈 파일 = fork 아님, 세션당 1회만 스캔), 현재 카드에 `forkedFromSessionId`를 PATCH 한다. `on-prompt.sh`는 이 캐시를 읽어 이후 카드에 필드를 실어 보내며, transcript가 이미 있을 때만 같은 규칙으로 선판정한다(없으면 부정 캐시를 쓰지 않는다). `on-stop.sh`는 그 부모 세션의 `pending-*`도 drain 대상에 포함한다(pending은 부모 session id로 키잉되므로 그렇지 않으면 fork의 Stop이 부모 카드를 영원히 못 닫는다). `forkedFromSessionId`는 계보 전용이며 dispatch에 쓰지 않는다(`resumeSessionId`와 분리).
 
 ### Telegram 라우팅
@@ -102,6 +103,15 @@
 - Codex/Claude stale run은 `RuntimeRunStore.reconcileStale(store)`가 처리한다.
 - `ClaudeCodexWatchdog`의 "active run 없음 → todo 복귀" 판정은 RuntimeRunStore로 시작한 보드 dispatch 카드에만 적용한다. `.codex/hooks/on-prompt.sh` / `.claude/hooks/on-prompt.sh`가 만든 organic CLI 카드(`sourceContext=codex` 또는 `claude-code`)는 run artifact가 없으므로 watchdog orphan으로 되돌리면 안 된다. 해당 카드는 Stop hook이 `complete`로 닫는다.
 - queue helper는 성공 완료 콜백에서만 호출하고, 실패 흔적이 있는 `todo` card는 자동 재dispatch하지 않는다.
+
+### 카드 결과 Resync (`POST /api/cards/:id/resync`)
+
+- 결과가 잘리거나 비어버린 claude/codex 카드는 세션 transcript(없으면 최신 run의 `events.jsonl`)에서 **그 카드의 턴만** 다시 가져온다(`src/plugin/runtimes/card-result-resync.ts`, `transcript-turn.ts`).
+- 턴은 카드가 보낸 프롬프트의 **정확 일치(trim만 허용)**로 찾는다 — 보드 dispatch 카드는 최신 run의 `prompt.md`, organic hook 카드는 `description`. 시간만으로 턴을 고르면 안 된다: 실측상 미일치는 전부 프롬프트가 CLI에 도달하지 못한 턴(`thread-store conflict`, `session is running in the background`)이었고, 그 세션에서 사용자가 이어간 다른 대화가 카드에 붙는다.
+- 같은 프롬프트가 여러 번이면 anchor(run `startedAt` / 카드 `createdAt`) 기준 -2분~+15분 창 안에서 가장 가까운 것을 고른다. 창 밖이면 미일치다.
+- Claude transcript는 트리다. 턴 = 매칭 프롬프트의 **자손** 중 파일 순서상 다음 실제 프롬프트 이전 엔트리. rewind된 시도도 자기 카드의 답을 갖고, 늦게 도착해 발사 노드에 매달린 background task-notification은 다음 턴 몫이다. 같은 종류 형제(assistant 둘, 비-tool user 둘, 같은 `tool_use_id` 결과 둘)는 대체 분기이므로 최신 하나만 따라간다. `parentUuid` 순환이 실제 파일에 있으므로 방문 집합 필수.
+- Codex rollout의 슬라이스 = 매칭 프롬프트부터 다음 실제 프롬프트 또는 `task_complete`/`task_started`까지. 실행 중 입력한 메시지는 같은 task에 합류하지만 카드는 각자 생기므로 프롬프트 단위로 자른다. AGENTS.md·`<environment_context`·`<skill`·`<turn_aborted` 등 하네스 주입 user 메시지는 프롬프트가 아니다.
+- resync는 `result`/`finalResult`만 함께 쓰고 **status는 절대 바꾸지 않는다**(완료 전환은 queue 자동 dispatch/Telegram과 엮임). 기존 result보다 길 때(또는 비었거나 `(no output)`일 때)만 덮어쓴다. active run이 있으면 409로 거부한다.
 
 ### 예약/스케줄 dispatch
 
@@ -235,6 +245,7 @@ bun test src/__tests__/runtime-registry.test.ts
 bun test src/__tests__/dispatch-routing.test.ts
 bun test src/__tests__/codex-cli-adapter.test.ts
 bun test src/__tests__/claude-adapter.test.ts
+bun test src/__tests__/transcript-turn.test.ts src/__tests__/card-result-resync.test.ts
 bun test src/__tests__/queue-helper.test.ts
 bun test src/__tests__/work-lifecycle.test.ts
 bun test src/__tests__/work-sessions-route.test.ts

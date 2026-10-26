@@ -4,6 +4,8 @@ import { EditingField } from './CardMetaPanel';
 import { CardMarkdown } from './CardMarkdown';
 import { splitCardResult } from './card-result';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
+import type { CardResultSyncControl } from '../../hooks/useCardResultSync';
+import { RESULT_SYNC_COPY } from '../../constants/copy';
 
 interface CardPhasesProps {
   card: KanbanCard;
@@ -20,6 +22,8 @@ interface CardPhasesProps {
   onDescriptionPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
   collapsedPhases: Record<string, boolean>;
   togglePhase: (phase: string) => void;
+  /** ↻ Sync for claude/codex session cards; null hides it. */
+  resultSync?: CardResultSyncControl | null;
 }
 
 interface PhaseCardProps {
@@ -32,6 +36,8 @@ interface PhaseCardProps {
   onEdit?: () => void;
   onSave?: () => void;
   onCancel?: () => void;
+  /** Extra header buttons, left of the show/hide toggle. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -271,6 +277,7 @@ const PhaseCard: React.FC<PhaseCardProps> = ({
   onEdit,
   onSave,
   onCancel,
+  actions,
   children,
 }) => {
   return (
@@ -300,6 +307,7 @@ const PhaseCard: React.FC<PhaseCardProps> = ({
               </button>
             </div>
           )}
+          {actions}
           {!isEditing && (
             <button
               type="button"
@@ -334,6 +342,7 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
   onDescriptionPaste,
   collapsedPhases,
   togglePhase,
+  resultSync,
 }) => {
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [showEarlierResult, setShowEarlierResult] = useState(false);
@@ -422,13 +431,40 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
         </PhaseCard>
       )}
 
-      {card.result && (
+      {(card.result || (resultSync && card.status !== 'todo')) && (
         <PhaseCard
           name="Result"
           tone="result"
           collapsed={collapsedPhases.result}
           onToggle={() => togglePhase('result')}
+          actions={resultSync && (
+            <button
+              type="button"
+              className="kv2-phase-action kv2-phase-action--sync"
+              onClick={resultSync.sync}
+              disabled={resultSync.syncing}
+              title={RESULT_SYNC_COPY.title}
+            >
+              {resultSync.syncing ? RESULT_SYNC_COPY.syncing : RESULT_SYNC_COPY.action}
+            </button>
+          )}
         >
+          {resultSync?.message && (
+            <div
+              className={`kv2-result-sync-status kv2-result-sync-status--${resultSync.tone}`}
+              role={resultSync.tone === 'error' ? 'alert' : 'status'}
+            >
+              <span>{resultSync.message}</span>
+              {resultSync.markComplete && (
+                <button type="button" className="kv2-btn kv2-btn--success kv2-btn--small" onClick={resultSync.markComplete}>
+                  {RESULT_SYNC_COPY.markComplete}
+                </button>
+              )}
+            </div>
+          )}
+          {!card.result ? (
+            <p className="kv2-result-sync-empty">{RESULT_SYNC_COPY.empty}</p>
+          ) : (
           <PhaseBody
             collapsed={collapsedPhases.result}
             onExpand={() => togglePhase('result')}
@@ -444,6 +480,7 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
             )}
             <CardMarkdown text={finalResult} />
           </PhaseBody>
+          )}
         </PhaseCard>
       )}
 

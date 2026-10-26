@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { KanbanCard, KanbanStatus } from "../../../../src/core/types";
 import { CardDetailDialog } from "./CardDetailDialog";
-import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from "../../constants/copy";
+import { CARD_ACTION_COPY, CARD_DETAIL_COPY, RESULT_SYNC_COPY } from "../../constants/copy";
 
 function makeCard(status: KanbanStatus): KanbanCard {
   return {
@@ -27,6 +27,23 @@ function renderDialog(card: KanbanCard): string {
 }
 
 describe("CardDetailDialog", () => {
+  test("offers ↻ Sync on a claude/codex session card — with an empty Result when nothing was captured", () => {
+    const lost = renderDialog({ ...makeCard("in_progress"), agentRuntime: "claude", sessionId: "sess-1" });
+    expect(lost).toContain(RESULT_SYNC_COPY.action);
+    expect(lost).toContain(RESULT_SYNC_COPY.empty);
+
+    const captured = renderDialog({ ...makeCard("complete"), agentRuntime: "codex", sessionId: "t-1", result: "답" });
+    expect(captured).toContain(RESULT_SYNC_COPY.action);
+    expect(captured).not.toContain(RESULT_SYNC_COPY.empty);
+  });
+
+  test("hides ↻ Sync where there is no CLI transcript to sync from", () => {
+    // opencode (default runtime), no session yet, and a todo card that never ran.
+    expect(renderDialog({ ...makeCard("complete"), sessionId: "oc-1", result: "답" })).not.toContain(RESULT_SYNC_COPY.action);
+    expect(renderDialog({ ...makeCard("complete"), agentRuntime: "claude", result: "답" })).not.toContain(RESULT_SYNC_COPY.action);
+    expect(renderDialog({ ...makeCard("todo"), agentRuntime: "claude", sessionId: "s" })).not.toContain(RESULT_SYNC_COPY.empty);
+  });
+
   test("expands prompt by default while the card is still open", () => {
     for (const status of ["todo", "in_progress"] as const) {
       const html = renderDialog(makeCard(status));

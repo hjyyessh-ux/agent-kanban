@@ -1,4 +1,4 @@
-import type { AgentRuntime, CompletionSeenBatchResponse, KanbanCard, CreateCardInput, UpdateCardInput, Screenshot, DispatchResult } from '../../../src/core/types';
+import type { AgentRuntime, CardResultResyncResponse, CompletionSeenBatchResponse, KanbanCard, CreateCardInput, UpdateCardInput, Screenshot, DispatchResult } from '../../../src/core/types';
 import type { RuntimeCatalogEntry } from '../../../src/core/runtime-config';
 import type { MentionResolveResponse, ResolvedReference } from '../../../src/core/mention-reference';
 import type { MentionSearchResponse } from '../../../src/core/mention-search';
@@ -162,6 +162,15 @@ export async function dispatchCard(id: string): Promise<DispatchResult> {
     headers: { 'Content-Type': 'application/json' },
   });
   return handleResponse<DispatchResult>(res);
+}
+
+/** Re-pull the card's result from its session transcript (POST /api/cards/:id/resync). */
+export async function resyncCardResult(id: string): Promise<CardResultResyncResponse> {
+  const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(id)}/resync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return handleResponse<CardResultResyncResponse>(res);
 }
 
 export async function scheduleCard(id: string, scheduledAt: string): Promise<KanbanCard> {

@@ -62,6 +62,10 @@ TRANSCRIPT_PATH=$(echo "$HOOK_INPUT" | jq -r '.transcript_path // empty')
 # "real prompt" on the Stop side. Without it a parent that received N teammate reports would
 # collect only the text after the LAST report — the final synthesis would be cut down to its
 # closing fragment (the 306-byte-result bug).
+#
+# `isMeta` user entries are harness context, not prompts either. The Skill tool records the skill
+# body ("Base directory for this skill: …") as an `isMeta` text entry IN THE MIDDLE of a turn;
+# treating it as a turn start dropped every answer written before the skill was invoked.
 collect_turn_text() {
   local path="$1"
   [ -n "$path" ] && [ -f "$path" ] || return 0
@@ -77,6 +81,7 @@ collect_turn_text() {
     def is_prompt:
       .type == "user"
       and ((.isSidechain // false) | not)
+      and ((.isMeta // false) | not)
       and (
         (
           (.message.content | type) == "string"

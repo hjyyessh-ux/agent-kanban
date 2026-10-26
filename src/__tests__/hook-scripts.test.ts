@@ -547,6 +547,38 @@ describe('runtime hook scripts', () => {
     });
   });
 
+  test('claude on-stop keeps the answer written before a mid-turn skill injection (isMeta)', async () => {
+    await withTempDir(async (dir) => {
+      await withFakeApi(async (apiUrl, requests) => {
+        const sessionId = HOOKS.claude.promptInput.session_id;
+        // The Skill tool records the skill body as an `isMeta` text-only user entry in the middle of
+        // the turn. It has no tool_result block, so without the isMeta filter it looked like a new
+        // prompt and everything before it was dropped from the card result.
+        const lines = [
+          { type: 'user', message: { role: 'user', content: '스킬 써서 정리해줘' } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '스킬을 불러옵니다' }, { type: 'tool_use', id: 's1', name: 'Skill', input: {} }] } },
+          { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 's1', content: 'Launching skill' }] } },
+          { type: 'user', isMeta: true, message: { role: 'user', content: [{ type: 'text', text: 'Base directory for this skill: /x\n\n# Skill' }] } },
+          { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: '정리 결과' }] } },
+        ];
+        const transcriptPath = join(dir, `${sessionId}.jsonl`);
+        writeFileSync(transcriptPath, lines.map(line => JSON.stringify(line)).join('\n') + '\n');
+
+        await runHook(HOOKS.claude.prompt, HOOKS.claude.promptInput, { apiUrl, dataDir: dir });
+        await runClaudeStop({
+          session_id: sessionId,
+          transcript_path: transcriptPath,
+          last_assistant_message: '정리 결과',
+        }, { apiUrl, dataDir: dir });
+
+        const completeRequest = requests.findLast(
+          request => request.method === 'PATCH' && request.path === '/api/cards/card-from-hook',
+        );
+        expect((completeRequest?.body as { result?: string }).result).toBe('스킬을 불러옵니다\n\n정리 결과');
+      });
+    });
+  });
+
   test('claude on-prompt stamps forkedFromSessionId on a forked session and on-stop drains the parent pending stash', async () => {
     await withTempDir(async (dir) => {
       await withFakeApi(async (apiUrl, requests) => {
