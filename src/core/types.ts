@@ -366,6 +366,18 @@ export interface CardRunProgress {
   };
 }
 
+// POST /api/cards/:id/resync 응답. 세션 transcript(없으면 run events.jsonl)에서
+// 이 카드의 턴을 프롬프트 정확 일치로 찾아 result/finalResult 를 다시 채운다.
+// status 는 건드리지 않는다 — turnCompleted 는 UI 가 "완료 처리"를 제안할지 판단용.
+export interface CardResultResyncResponse {
+  outcome: 'updated' | 'unchanged';   // unchanged = 기존 result 가 같거나 더 김
+  source: 'transcript' | 'run_events';
+  turnCompleted: boolean;             // CLI 가 그 턴을 끝까지 마쳤는지
+  previousLength: number;
+  resultLength: number;
+  card: KanbanCard;
+}
+
 /**
  * One-shot dispatch reservation for a top-level todo card.
  * State transitions:

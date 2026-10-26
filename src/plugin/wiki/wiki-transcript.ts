@@ -44,7 +44,37 @@ interface CodexRolloutLine {
  */
 export function resolveClaudeTranscriptPath(projectDir: string, sessionId: string): string {
   const mungedDir = projectDir.replace(/[/.]/g, '-');
-  return join(homedir(), '.claude', 'projects', mungedDir, `${sessionId}.jsonl`);
+  return join(claudeProjectsRoot(), mungedDir, `${sessionId}.jsonl`);
+}
+
+/**
+ * Root of the Claude Code transcript store. `CLAUDE_CONFIG_DIR` is Claude
+ * Code's own relocation of `~/.claude`, honoured for the same reason
+ * `CODEX_HOME` is below — and it gives tests a seam for the cross-project scan.
+ */
+function claudeProjectsRoot(): string {
+  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim();
+  return join(configDir || join(homedir(), '.claude'), 'projects');
+}
+
+/**
+ * A Claude transcript in ANY project directory. The card's `projectDir` is the
+ * cwd at prompt time; a session that `cd`s elsewhere, or a card whose directory
+ * was edited afterwards, files its transcript under a different munged name.
+ * One level of readdir — the same order of cost as the codex scan.
+ */
+export function findClaudeTranscriptAnyProject(sessionId: string): string | undefined {
+  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) return undefined;
+  const root = claudeProjectsRoot();
+  try {
+    const glob = new Bun.Glob(`*/${sessionId}.jsonl`);
+    for (const relative of glob.scanSync({ cwd: root, onlyFiles: true })) {
+      return join(root, relative);
+    }
+  } catch {
+    // No projects directory. Same as "no transcript".
+  }
+  return undefined;
 }
 
 /**
@@ -122,7 +152,9 @@ export function locateSessionTranscript(
     }
   }
   const codexPath = resolveCodexTranscriptPath(sessionId);
-  return codexPath ? { path: codexPath, format: 'codex' } : undefined;
+  if (codexPath) return { path: codexPath, format: 'codex' };
+  const anyProjectPath = findClaudeTranscriptAnyProject(sessionId);
+  return anyProjectPath ? { path: anyProjectPath, format: 'claude' } : undefined;
 }
 
 function textFromContent(content: unknown): string {

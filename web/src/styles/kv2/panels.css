@@ -2053,3 +2053,40 @@
 .session-conversation-stickyRange {
   font-family: var(--kv2-font-mono);
 }
+
+/* Result phase ↻ Sync — `useCardResultSync`. */
+.kv2-phase-action--sync:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.kv2-result-sync-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--kv2-border);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-caption);
+  line-height: 1.4;
+}
+
+.kv2-result-sync-status--ok {
+  background: var(--kv2-success-surface);
+  color: var(--kv2-success-text);
+}
+
+.kv2-result-sync-status--error {
+  background: var(--kv2-danger-surface);
+  color: var(--kv2-text-danger);
+}
+
+.kv2-result-sync-empty {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--kv2-border);
+  font-family: var(--kv2-font-sans);
+  font-size: var(--kv2-text-caption);
+  color: var(--kv2-text-muted);
+}

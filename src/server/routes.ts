@@ -33,6 +33,7 @@ import type { QuestionRequest } from '../plugin/question-monitor';
 import type { WikiWorker } from '../plugin/wiki/wiki-worker';
 import type { RuntimeRunStore } from '../plugin/runtimes/runtime-run-store';
 import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/run-progress';
+import { CardResultResyncError, resyncCardResult } from '../plugin/runtimes/card-result-resync';
 import {
   locateSessionTranscript,
   loadSessionTranscript,
@@ -3033,6 +3034,22 @@ export function createRouteHandler(
         const message = e instanceof Error ? e.message : '';
         if (message.includes('not found')) return errorResponse('Card not found', 404);
         return errorResponse('Agent thread update failed', 500);
+      }
+    }
+
+    // Route: POST /api/cards/:id/resync
+    // Re-pulls a claude/codex card's result from the session transcript (or the
+    // run's events.jsonl when the transcript is gone) by locating the turn whose
+    // prompt matches the card's EXACTLY. Writes result/finalResult only — never
+    // status — so it cannot trigger queue auto-dispatch. See card-result-resync.ts.
+    const resyncMatch = path.match(/^\/api\/cards\/([^/]+)\/resync$/);
+    if (resyncMatch && method === 'POST') {
+      try {
+        return json(await resyncCardResult({ store, runStore: runtimeRunStore }, resyncMatch[1]));
+      } catch (e: unknown) {
+        if (e instanceof CardResultResyncError) return errorResponse(e.message, e.status);
+        const message = e instanceof Error ? e.message : 'Result sync failed';
+        return errorResponse(message, 500);
       }
     }
 

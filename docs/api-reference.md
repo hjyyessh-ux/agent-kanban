@@ -85,6 +85,24 @@
 `GET /api/cards/:id/progress`도 전체 단계와 tool detail/body를 반환합니다. UI의 접힌 상태는 일부만
 보여줄 수 있지만 펼치면 서버가 반환한 전체 내용을 표시합니다.
 
+### `POST /api/cards/:id/resync`
+
+claude/codex 카드의 결과를 세션 transcript에서 다시 가져옵니다(카드 상세 Result의 `↻ Sync`).
+카드가 보낸 프롬프트(최신 run의 `prompt.md`, 없으면 `description`)와 **정확히 일치하는 턴**만 찾고,
+transcript가 없으면 최신 run의 `events.jsonl`로 대체합니다. `result`/`finalResult`만 갱신하며
+status는 바꾸지 않습니다. 기존 결과가 더 길면 그대로 둡니다.
+
+```json
+{ "outcome": "updated", "source": "transcript", "turnCompleted": true,
+  "previousLength": 312, "resultLength": 4821, "card": { "...": "..." } }
+```
+
+| 상태 | 의미 |
+|------|------|
+| `400` | claude/codex 카드가 아님 |
+| `404` | 카드 없음 · transcript 없음 · 프롬프트가 transcript에 없음 · 턴에 assistant 텍스트 없음 |
+| `409` | `sessionId` 없음 · 실행 중인 run 있음 |
+
 ### `DELETE /api/cards/:id`
 
 카드를 active view에서 숨기고 `deletedAt`을 기록합니다. 응답은 `204 No Content`입니다.

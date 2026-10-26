@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
+  findClaudeTranscriptAnyProject,
   loadSessionTranscript,
   locateSessionTranscript,
   resolveClaudeTranscriptPath,
@@ -187,5 +188,29 @@ describe('loadSessionTranscript', () => {
 
   test('no session id is undefined', () => {
     expect(loadSessionTranscript({ sessionId: undefined })).toBeUndefined();
+  });
+});
+
+describe('claude transcript in another project directory', () => {
+  // The card's projectDir is the cwd at prompt time; a session that cd's away
+  // (or a card whose directory was edited) files its transcript elsewhere.
+  test('locateSessionTranscript falls back to scanning every project under CLAUDE_CONFIG_DIR', () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'ak-claude-config-'));
+    const original = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = configDir;
+    try {
+      const sessionId = 'aktest02-2222-4000-8000-000000000002';
+      const path = join(configDir, 'projects', '-Users-someone-other-repo', `${sessionId}.jsonl`);
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, '{}');
+
+      expect(findClaudeTranscriptAnyProject(sessionId)).toBe(path);
+      expect(locateSessionTranscript(sessionId, '/Users/someone/wrong-dir')).toEqual({ path, format: 'claude' });
+      expect(findClaudeTranscriptAnyProject('../escape')).toBeUndefined();
+    } finally {
+      if (original === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = original;
+      rmSync(configDir, { recursive: true, force: true });
+    }
   });
 });

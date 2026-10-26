@@ -22,6 +22,8 @@ Runtime layer for the standalone daemon (non-opencode dispatch path). Defines th
 | `child-linker.ts` | `ChildLinker.onChildEvent()` — creates/updates/completes subagent child cards from Claude stream events; dedups by `(parentCardId, childRunId, taskId)` and cross-run by `(parentCardId, childTaskId)` |
 | `claude-codex-watchdog.ts` | `ClaudeCodexWatchdog` — 30s poll over `in_progress` claude/codex cards; no active run → back to `todo`; active run idle >30min → `staleStatus: 'stuck'`. Skips organic CLI hook cards (`sourceContext` `codex`/`claude-code`) which never open a run — their lifecycle is owned by the prompt/stop hooks |
 | `result-segments.ts` | `joinResultSegments()` — joins every streamed assistant text block into the card `result`; the CLI's own last-message is only a fallback. `lastResultSegment()` — the run's last text block, stored separately as the card's `finalResult` |
+| `transcript-turn.ts` | Pure extractors for **one card's turn**: `extractClaudeTurn()` (prompt's descendants in the transcript tree, cut at the next real prompt in file order; skips `isMeta`/injected entries, keeps only the latest of forked siblings, cycle-safe), `extractCodexTurn()` (slice from the prompt to the next prompt / task boundary; harness-injected user messages ignored), `extractRunEventsTurn()` (re-accumulate a run's `events.jsonl`). Prompt match is exact (trim) + nearest to the anchor inside -2m..+15m — never time alone |
+| `card-result-resync.ts` | `resyncCardResult()` behind `POST /api/cards/:id/resync`: picks the prompt (`prompt.md` of the latest run, else `description`), locates the transcript (falls back to the run's events), writes `result`+`finalResult` only when longer — **never status**. `CardResultResyncError.reason` maps to 400/404/409 |
 | `claude-stream-parser.ts` | `parseClaudeStreamLine()` — one line of `claude --output-format stream-json` → `ClaudeStreamEvent` union (`system/init`, `assistant`, `result`, `subagent_*`, `error`) |
 | `codex-jsonl-parser.ts` | `parseCodexJsonlLine()` — one line of `codex exec --json` → `CodexJsonlEvent` union (`thread_started`, `turn_completed`, `agent_message`, `error`); tolerates multiple Codex event-shape variants for the thread id |
 | `claude-binary.ts` | `createClaudeBinaryResolver()` — resolves `claude` via `Bun.which`, else falls back to a pinned `npx @anthropic-ai/claude-code@<version>` (setting `agent.claude.npx_version`); result cached, `resetCache()` for tests |
@@ -53,6 +55,7 @@ bun test src/__tests__/runtime-run-store.test.ts
 bun test src/__tests__/daemon-runtime-host.test.ts
 bun test src/__tests__/runtime-api.test.ts
 bun test src/__tests__/runtime-lock.test.ts
+bun test src/__tests__/transcript-turn.test.ts src/__tests__/card-result-resync.test.ts
 ```
 
 Runtime dispatch is one of the high-risk areas tracked in `docs/invariants.md` ("Runtime dispatch" row) — its contract spans `src/core/types.ts`, `src/core/runtime-config.ts`, this directory, and `src/plugin/index.ts`. Read that doc's "Runtime dispatch" and "Git/Usage 캡처" invariant lists before changing adapter completion/failure branches, and update it alongside code + tests.

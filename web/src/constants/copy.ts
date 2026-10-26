@@ -179,6 +179,21 @@ export const CARD_DETAIL_COPY = {
   startNowHint: '지금 시작은 이 예약을 소비하고 즉시 한 번만 실행합니다.',
 } as const;
 
+/** Result phase — re-pull a lost/truncated result from the session transcript (`useCardResultSync`). */
+export const RESULT_SYNC_COPY = {
+  action: '↻ Sync',
+  syncing: 'Sync 중…',
+  title: '세션 transcript에서 이 카드의 결과를 다시 가져옵니다',
+  empty: '결과가 기록되지 않았습니다. 세션에는 결과가 있다면 ↻ Sync로 가져올 수 있습니다.',
+  updated: (before: number, after: number) =>
+    `결과를 다시 가져왔습니다 (${before.toLocaleString()} → ${after.toLocaleString()}자)`,
+  unchanged: '이미 최신 결과입니다 — transcript보다 짧지 않습니다',
+  fromRunEvents: ' · transcript가 없어 실행 기록에서 복구',
+  turnIncomplete: ' · 세션에서도 이 턴은 끝까지 실행되지 않았습니다',
+  markComplete: '완료로 표시',
+  failed: (message: string) => `Sync 실패: ${message}`,
+} as const;
+
 /** `WorkPicker` — the shared Work chooser (board card, session group, card detail, NEW TASK). */
 export const WORK_PICKER_COPY = {
   ariaLabel: 'Work 지정',
