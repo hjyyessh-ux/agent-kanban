@@ -72,6 +72,10 @@
 - Telegram 모델 목록/버튼은 `src/core/runtime-config.ts`의 공용 catalog를 사용한다. 짧은 모델명은 normalized exact id, unique suffix 순으로 해석하고, 그 뒤에도 여러 모델이 남으면 runtime default만 선택할 수 있어야 한다. 따라서 `fable5`와 `fable5.1`은 각각 독립적으로 선택된다.
 - trailing agent command와 explicit agent command는 필요할 때만 새 dispatch를 강제한다.
 - `session.idle` 이후에도 Telegram selected session은 유지되어 다음 plain message가 같은 session으로 follow-up될 수 있어야 한다.
+- `/sessions` 후보는 Telegram에서 만든 세션만이 아니라 **보드의 live(비아카이브) 세션 전체**를 최신순으로 보여준다(subagent 카드 제외). 버튼(`ses:<index>:<digest>`)은 digest로 세션을 찾아 고정하며, 목록에서 사라진 세션이면 다른 세션을 고르지 않고 재조회를 안내한다.
+- selected session 해석(follow-up)은 보드 세션 + 이 chat의 아카이브된 세션까지 포함한다. 카드가 아카이브돼도 pinned session follow-up이 끊기지 않아야 한다.
+- `/last`(및 `last` 버튼)는 읽기 전용이다. 세션의 최신 카드 prompt(`description`)와 `result`를 보여줄 뿐 세션 선택/카드 생성을 하지 않는다.
+- 완료 결과와 `/last` 응답은 `sendTelegramMarkdown`(GFM → Telegram HTML, 표는 monospace)으로 보낸다. HTML 파싱 실패 시 같은 파트를 plain text로 재전송해 결과가 유실되지 않아야 하며, 잘라내지 않고 블록 경계에서 분할한다. ACK/경고 메시지는 계속 plain text다.
 
 ### Feedback 카드
 

@@ -818,6 +818,122 @@ describe('TelegramPoller', () => {
       });
     });
 
+    test('/sessions lists every live board session newest first, not only this chat', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+
+        const older = await store.createCard({
+          title: 'CLI task', description: 'CLI task', sessionId: 'claude-cli-1', agentRuntime: 'claude',
+        });
+        await store.createCard({
+          title: 'Telegram task', description: 'Telegram task', sessionId: 'ses-tg-1', telegramChatId: 12345,
+        });
+        await store.createCard({
+          title: 'Subagent', description: 'Subagent', sessionId: 'claude-sub-1', agentRuntime: 'claude',
+          parentCardId: older.id,
+        });
+        const archived = await store.createCard({
+          title: 'Archived', description: 'Archived', sessionId: 'claude-old-1', agentRuntime: 'claude',
+        });
+        await store.updateCard(archived.id, { status: 'done' });
+        await store.archiveCards([archived.id]);
+        // Touch the CLI card last so it is the newest session.
+        await new Promise(resolve => setTimeout(resolve, 5));
+        await store.updateCard(older.id, { status: 'complete' });
+
+        const poller = new TelegramPoller(store, settingsStore, mock(async () => ({ sessionId: 'unused' })));
+        const sessions = await poller.getSessionsForChat(12345);
+        expect(sessions.map(session => session.sessionId)).toEqual(['claude-cli-1', 'ses-tg-1']);
+
+        const context = await (poller as any).buildCommandContext(12345);
+        const result = resolveTelegramCommand('/sessions', context, false);
+        expect(result?.type).toBe('reply');
+        const keyboard = result && 'keyboard' in result ? result.keyboard : undefined;
+        expect(keyboard?.inline_keyboard.map(row => row[0].text)).toEqual(['1. CLI task', '2. Telegram task']);
+      });
+    });
+
+    test('tapping a session button pins it, and /last shows its prompt and response', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+        const card = await store.createCard({
+          title: 'Board work',
+          description: 'Summarize the pods',
+          sessionId: 'claude-board-1',
+          agentRuntime: 'claude',
+          projectDir: '/tmp/board',
+        });
+        await store.updateCard(card.id, {
+          status: 'complete',
+          result: '| pod | status |\n|---|---|\n| api | Running |',
+        });
+
+        const telegramStateStore = new TelegramStateStore(dir);
+        const poller = new TelegramPoller(
+          store,
+          settingsStore,
+          mock(async () => ({ sessionId: 'unused' })),
+          undefined,
+          { telegramStateStore },
+        );
+        const context = await (poller as any).buildCommandContext(12345);
+        const listing = resolveTelegramCommand('/sessions', context, false);
+        const callbackData = listing && 'keyboard' in listing
+          ? listing.keyboard!.inline_keyboard[0][0].callback_data
+          : '';
+
+        const record = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(210, callbackData)], record);
+        await runPoll(poller);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.selectedSessionId).toBe('claude-board-1');
+        expect(state?.selectedAgentRuntime).toBe('claude');
+        expect(state?.mode).toBe('pinned');
+        const ack = record.bodies.find(body => typeof body.text === 'string' && body.text.includes('전환했습니다'));
+        expect(ack?.text).toContain('/tmp/board');
+        expect(ack?.reply_markup.inline_keyboard[0][0].callback_data).toBe('last');
+
+        const lastRecord = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(211, 'last')], lastRecord);
+        await runPoll(poller);
+
+        const lastTurn = lastRecord.bodies.find(body => body.parse_mode === 'HTML');
+        expect(lastTurn?.text).toContain('Summarize the pods');
+        expect(lastTurn?.text).toContain('<pre>pod │ status');
+        expect(lastTurn?.text).toContain('api │ Running');
+      });
+    });
+
+    test('a stale session button replies instead of pinning another session', async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const settingsStore = new SettingsStore(dir);
+        await seedTelegramSettings(settingsStore);
+        await store.createCard({ title: 'Only', description: 'Only', sessionId: 'ses-only' });
+
+        const telegramStateStore = new TelegramStateStore(dir);
+        const poller = new TelegramPoller(
+          store,
+          settingsStore,
+          mock(async () => ({ sessionId: 'unused' })),
+          undefined,
+          { telegramStateStore },
+        );
+        const record = { urls: [] as string[], bodies: [] as any[] };
+        mockTelegram([makeCallbackUpdate(220, 'ses:1:deadbeef')], record);
+        await runPoll(poller);
+
+        const state = await telegramStateStore.getChatState(12345);
+        expect(state?.selectedSessionId).toBeUndefined();
+        expect(record.bodies.some(body => String(body.text ?? '').includes('/sessions 를 다시 실행'))).toBe(true);
+      });
+    });
+
     test('a callback from a disallowed chat is answered but not applied', async () => {
       await withTempDir(async (dir) => {
         const store = new KanbanStore(dir);
@@ -1859,8 +1975,9 @@ describe('TelegramPoller', () => {
         expect(dispatchFn).not.toHaveBeenCalled();
         const board = await store.load();
         expect(board.cards).toHaveLength(1);
-        expect(sentMessages[0]).toContain('세션 목록');
-        expect(sentMessages[0]).toContain('런타임: Opencode');
+        expect(sentMessages[0]).toContain('보드 세션');
+        expect(sentMessages[0]).toContain('1. Existing session');
+        expect(sentMessages[0]).toContain('Opencode');
       });
     });
 

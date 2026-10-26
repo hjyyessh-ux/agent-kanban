@@ -1,4 +1,5 @@
 import { appendRuntimeDebugLog } from './debug-log';
+import { renderTelegramHtmlParts, telegramHtmlToPlain } from './telegram-markdown';
 
 // Telegram Bot API helper for sending messages
 
@@ -97,33 +98,19 @@ async function postTelegramApi<TResponse extends { ok: boolean; description?: st
   return await response.json() as TResponse;
 }
 
-/**
- * Send a text message to a Telegram chat. Text over the 4096-code-unit API
- * limit is split across several messages rather than truncated; the returned
- * `messageId` is the first part's.
- *
- * @param token - Bot token from BotFather
- * @param chatId - Telegram chat ID (negative for groups/channels)
- * @param text - Message text (supports Markdown)
- * @param parseMode - Parse mode: 'Markdown', 'MarkdownV2', or 'HTML'. Omit for plain text (default).
- * @param replyMarkup - Inline keyboard, attached to the last part.
- */
-export async function sendTelegramMessage(
+interface TelegramOutgoingPart {
+  text: string;
+  /** Sent instead when Telegram rejects `text` under `parseMode`. */
+  plainFallback?: string;
+}
+
+async function sendTelegramParts(
   token: string,
   chatId: number,
-  text: string,
-  parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML',
-  replyMarkup?: TelegramInlineKeyboardMarkup,
+  parts: TelegramOutgoingPart[],
+  parseMode: 'Markdown' | 'MarkdownV2' | 'HTML' | undefined,
+  replyMarkup: TelegramInlineKeyboardMarkup | undefined,
 ): Promise<TelegramSendResult> {
-  const parts = splitTelegramMessage(text);
-  appendRuntimeDebugLog('telegram.send.attempt', {
-    chatId,
-    parseMode: parseMode ?? null,
-    textPreview: text.slice(0, 160),
-    textLength: text.length,
-    ...(parts.length > 1 ? { partCount: parts.length } : {}),
-  });
-
   let firstMessageId: number | undefined;
   try {
     for (const [index, part] of parts.entries()) {
@@ -131,7 +118,7 @@ export async function sendTelegramMessage(
 
       const payload: Record<string, unknown> = {
         chat_id: chatId,
-        text: part,
+        text: part.text,
       };
       if (parseMode) {
         payload.parse_mode = parseMode;
@@ -140,11 +127,27 @@ export async function sendTelegramMessage(
       if (replyMarkup && index === parts.length - 1) {
         payload.reply_markup = replyMarkup;
       }
-      const data = await postTelegramApi<{ ok: boolean; result?: { message_id: number }; description?: string }>(
+      let data = await postTelegramApi<{ ok: boolean; result?: { message_id: number }; description?: string }>(
         token,
         'sendMessage',
         payload,
       );
+
+      // A formatting slip must not cost the user the result: resend as plain text.
+      if (!data.ok && part.plainFallback !== undefined && /can't parse entities/i.test(data.description ?? '')) {
+        appendRuntimeDebugLog('telegram.send.plain_fallback', {
+          chatId,
+          error: data.description ?? null,
+          ...(parts.length > 1 ? { part: index + 1, partCount: parts.length } : {}),
+        });
+        const plainPayload: Record<string, unknown> = { ...payload, text: part.plainFallback };
+        delete plainPayload.parse_mode;
+        data = await postTelegramApi<{ ok: boolean; result?: { message_id: number }; description?: string }>(
+          token,
+          'sendMessage',
+          plainPayload,
+        );
+      }
 
       if (!data.ok) {
         appendRuntimeDebugLog('telegram.send.result', {
@@ -177,6 +180,64 @@ export async function sendTelegramMessage(
       error: error instanceof Error ? error.message : 'Failed to send Telegram message',
     };
   }
+}
+
+/**
+ * Send a text message to a Telegram chat. Text over the 4096-code-unit API
+ * limit is split across several messages rather than truncated; the returned
+ * `messageId` is the first part's.
+ *
+ * @param token - Bot token from BotFather
+ * @param chatId - Telegram chat ID (negative for groups/channels)
+ * @param text - Message text, sent verbatim unless `parseMode` is set
+ * @param parseMode - Parse mode: 'Markdown', 'MarkdownV2', or 'HTML'. Omit for plain text (default).
+ * @param replyMarkup - Inline keyboard, attached to the last part.
+ */
+export async function sendTelegramMessage(
+  token: string,
+  chatId: number,
+  text: string,
+  parseMode?: 'Markdown' | 'MarkdownV2' | 'HTML',
+  replyMarkup?: TelegramInlineKeyboardMarkup,
+): Promise<TelegramSendResult> {
+  const parts = splitTelegramMessage(text);
+  appendRuntimeDebugLog('telegram.send.attempt', {
+    chatId,
+    parseMode: parseMode ?? null,
+    textPreview: text.slice(0, 160),
+    textLength: text.length,
+    ...(parts.length > 1 ? { partCount: parts.length } : {}),
+  });
+  return sendTelegramParts(token, chatId, parts.map(part => ({ text: part })), parseMode, replyMarkup);
+}
+
+/**
+ * Send GitHub-flavored Markdown (agent results) rendered as Telegram HTML:
+ * headings, emphasis, code, and tables laid out in monospace. Split like
+ * `sendTelegramMessage`, but only between rendered blocks so no tag is cut.
+ * A part Telegram cannot parse is resent as plain text.
+ */
+export async function sendTelegramMarkdown(
+  token: string,
+  chatId: number,
+  markdown: string,
+  replyMarkup?: TelegramInlineKeyboardMarkup,
+): Promise<TelegramSendResult> {
+  const parts = renderTelegramHtmlParts(markdown, TELEGRAM_MAX_MESSAGE_LENGTH, PART_PREFIX_BUDGET);
+  appendRuntimeDebugLog('telegram.send.attempt', {
+    chatId,
+    parseMode: 'HTML',
+    textPreview: markdown.slice(0, 160),
+    textLength: markdown.length,
+    ...(parts.length > 1 ? { partCount: parts.length } : {}),
+  });
+  return sendTelegramParts(
+    token,
+    chatId,
+    parts.map(part => ({ text: part, plainFallback: telegramHtmlToPlain(part) })),
+    'HTML',
+    replyMarkup,
+  );
 }
 
 /**

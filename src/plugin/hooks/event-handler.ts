@@ -4,7 +4,7 @@ import type { KanbanStore } from '../../core/store';
 import type { DispatchResult, KanbanCard } from '../../core/types';
 import type { SettingsStore } from '../../core/settings-store';
 import { sanitizeUserText } from './chat-message';
-import { sendTelegramMessage } from '../telegram-notifier';
+import { sendTelegramMarkdown } from '../telegram-notifier';
 import { clearDispatch } from './dispatch-tracker';
 import { clearSeenSessionActivity, hasSeenSessionActivity } from './session-activity-registry';
 import { clearSubagentParent, registerSubagentParent } from './subagent-parent-registry';
@@ -13,9 +13,7 @@ import { resolveSessionParentAnchor } from './parent-anchor';
 import { appendRuntimeDebugLog } from '../debug-log';
 import { captureGitEndAndUsage } from '../runtimes/git-capture';
 
-const MAX_TELEGRAM_MESSAGE_LENGTH = 4096;
 type DispatchResultLike = DispatchResult | { sessionId: string };
-
 
 /**
  * Extract text content from message parts.
@@ -60,23 +58,19 @@ export async function dispatchNextQueuedTodoCard(
   }
 }
 
-function truncateTelegramMessage(text: string): string {
-  if (text.length <= MAX_TELEGRAM_MESSAGE_LENGTH) return text;
-  return `${text.slice(0, MAX_TELEGRAM_MESSAGE_LENGTH - 4)}\n...`;
-}
-
 function buildTelegramCompletionMessage(card: {
   id: string;
   title: string;
   sessionId?: string;
 }, result: string): string {
-  return truncateTelegramMessage([
+  // Not truncated: `sendTelegramMarkdown` splits long results into parts.
+  return [
     '✅ 작업 완료',
     `- 카드: ${card.title} (${card.id})`,
     `- 세션: ${card.sessionId ?? 'unknown'}`,
     '',
     result,
-  ].join('\n'));
+  ].join('\n');
 }
 
 function buildCardTitleFromDescription(description: string): string {
@@ -372,7 +366,7 @@ export function createEventHandler(
           cardId: updatedPrimaryCard.id,
           chatId: updatedPrimaryCard.telegramChatId,
         });
-        const sendResult = await sendTelegramMessage(
+        const sendResult = await sendTelegramMarkdown(
           telegramToken,
           updatedPrimaryCard.telegramChatId,
           buildTelegramCompletionMessage(updatedPrimaryCard, result),
