@@ -189,20 +189,37 @@ describe('BoardCard layout', () => {
     />,
   );
 
-  test('row 1 holds the project chip and the #ID, with the full path on the chip title', () => {
+  test('row 1 holds ☆ and the #ID; the project chip leads the meta line (project · runtime · time)', () => {
     const projectDir = '/Users/user/workspace/ghe-migration-tools-v1.0.5-darwin-arm64';
-    const html = render({ id: 'NoLXQ2abcdef', projectDir });
+    const html = render({ id: 'NoLXQ2abcdef', projectDir, agentRuntime: 'codex', executionKind: 'agent' });
     const top = html.slice(html.indexOf('kv2-card-top'), html.indexOf('kv2-card-surface'));
+    const meta = html.slice(html.indexOf('kv2-card-meta-row'));
 
-    expect(top).toContain('kv2-project-chip');
-    expect(top).toMatch(/works-dir-c[1-8]/);
-    expect(top).toContain(`title="${projectDir}"`);
-    expect(top).toContain('>ghe-migration-tools-v1.0.5-darwin-arm64</span>');
+    expect(top).not.toContain('kv2-project-chip');
+    expect(meta).toContain('kv2-project-chip');
+    expect(meta).toMatch(/works-dir-c[1-8]/);
+    expect(meta).toContain(`title="${projectDir}"`);
+    expect(meta).toContain('>ghe-migration-tools-v1.0.5-darwin-arm64</span>');
+    expect(meta.indexOf('kv2-project-chip')).toBeLessThan(meta.indexOf('>CODEX</span>'));
     expect(top).toContain('kv2-id-chip');
     expect(top).toContain('>#NoLXQ2ab</span>');
     expect(top).toContain('title="Card ID 복사: NoLXQ2abcdef"');
     expect(top).toContain('kv2-favorite-toggle--board');
     expect(html).not.toContain('kv2-card-header-meta--floating');
+  });
+
+  test('a Work field sits in row 1 (option C) — no separate Work row', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({})}
+        draggable={false}
+        onClick={mock(() => undefined)}
+        workField={<span className="probe-work-field">W</span>}
+      />,
+    );
+    const top = html.slice(html.indexOf('kv2-card-top'), html.indexOf('kv2-card-surface'));
+    expect(top).toContain('<div class="kv2-card-top-work"><span class="probe-work-field">W</span></div>');
+    expect(html).not.toContain('kv2-card-work-row');
   });
 
   test('moves the runtime badge to the meta line under the divider', () => {

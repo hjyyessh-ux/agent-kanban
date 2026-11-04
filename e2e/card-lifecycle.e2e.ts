@@ -58,7 +58,7 @@ test.describe('Card Lifecycle — Status Transitions', () => {
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
     await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible({ timeout: 5_000 });
     await doneColumn.locator('.kv2-complete-session-toggle').first().click();
-    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Verify Test' })).toBeVisible({ timeout: 5_000 });
+    await expect(doneColumn.locator('.kv2-complete-session-turn-body[aria-label*="[E2E] Verify Test"]')).toBeVisible({ timeout: 5_000 });
   });
 
   test('full lifecycle via API', async ({ seedCard }) => {

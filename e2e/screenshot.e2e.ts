@@ -8,16 +8,16 @@ const __dirname = path.dirname(__filename);
 const TEST_IMAGE = path.join(__dirname, 'fixtures', 'test-screenshot.png');
 
 test.describe('Screenshot - CreateCardModal', () => {
-  test('create modal shows screenshot drop zone', async ({ page }) => {
+  test('create modal offers screenshot attach right under the prompt', async ({ page }) => {
     await page.goto('/');
 
     // Open create modal via New Task button in TODO column
     await page.locator('.kv2-create-btn').click();
     await expect(page.locator('.kv2-dialog-overlay')).toBeVisible();
 
-    const dropZone = page.locator('.kv2-create-drop-zone');
-    await expect(dropZone).toBeVisible();
-    await expect(dropZone).toContainText('Click or drop screenshots');
+    const promptField = page.locator('.kv2-create-prompt-field');
+    await expect(promptField.locator('#create-card-description-input')).toBeVisible();
+    await expect(promptField.locator('.kv2-create-attach')).toContainText('스크린샷 첨부');
   });
 
   test('attaching file shows preview thumbnail', async ({ page }) => {
@@ -29,9 +29,15 @@ test.describe('Screenshot - CreateCardModal', () => {
     const fileInput = page.locator('.kv2-dialog input[type="file"][accept="image/*"]');
     await fileInput.setInputFiles(TEST_IMAGE);
 
-    // Verify thumbnail appears
-    await expect(page.locator('.kv2-screenshot-img')).toBeVisible();
-    await expect(page.locator('.kv2-screenshot-card')).toHaveCount(1);
+    // Verify the chip appears inside the prompt box, and opens a preview on click
+    const chip = page.locator('.kv2-create-compose .kv2-feedback-shot-chip');
+    await expect(chip).toHaveCount(1);
+    await expect(chip.locator('.kv2-screenshot-thumb')).toBeVisible();
+    await chip.locator('.kv2-feedback-shot-open').click();
+    await expect(page.locator('.kv2-screenshot-lightbox')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Esc closes only the preview — the create dialog stays.
+    await expect(page.locator('.kv2-dialog')).toBeVisible();
   });
 
   test('remove pending screenshot removes thumbnail', async ({ page }) => {
@@ -42,13 +48,13 @@ test.describe('Screenshot - CreateCardModal', () => {
     // Attach file
     const fileInput = page.locator('.kv2-dialog input[type="file"][accept="image/*"]');
     await fileInput.setInputFiles(TEST_IMAGE);
-    await expect(page.locator('.kv2-screenshot-img')).toBeVisible();
+    await expect(page.locator('.kv2-create-compose .kv2-screenshot-thumb')).toBeVisible();
 
     // Click remove button
-    await page.locator('.kv2-screenshot-delete').click();
+    await page.locator('.kv2-create-compose .kv2-feedback-shot-remove').click();
 
     // Verify thumbnail is gone
-    await expect(page.locator('.kv2-screenshot-card')).toHaveCount(0);
+    await expect(page.locator('.kv2-create-compose .kv2-feedback-shot-chip')).toHaveCount(0);
   });
 
   test('create card with screenshot uploads successfully', async ({ page, trackCard }) => {
@@ -63,7 +69,7 @@ test.describe('Screenshot - CreateCardModal', () => {
     // Attach screenshot
     const fileInput = page.locator('.kv2-dialog input[type="file"][accept="image/*"]');
     await fileInput.setInputFiles(TEST_IMAGE);
-    await expect(page.locator('.kv2-screenshot-img')).toBeVisible();
+    await expect(page.locator('.kv2-create-compose .kv2-screenshot-thumb')).toBeVisible();
 
     // Click CREATE button
     await page.getByRole('button', { name: 'CREATE', exact: true }).click();

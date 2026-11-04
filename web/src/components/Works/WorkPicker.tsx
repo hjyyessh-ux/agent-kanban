@@ -42,7 +42,7 @@ export interface WorkPickerProps {
   onCreateNew?: (name: string) => void;
   /** Title for a selected Work missing from `works` (e.g. a closed Work the session still belongs to). */
   fallbackTitle?: string;
-  /** Reservation (no session yet) — dashed trigger + `예약` badge. */
+  /** Reservation (no session yet) — dashed trigger; the border alone says it (no badge). */
   planned?: boolean;
   variant?: WorkPickerVariant;
   ariaLabel?: string;
@@ -50,12 +50,14 @@ export interface WorkPickerProps {
   disabled?: boolean;
   /** Popover boundary — `.kv2-dialog` inside a dialog. */
   boundarySelector?: string;
+  /** Trigger text with no Work (default `Work 없음`) — the board card uses a quiet `＋ Work`. */
+  emptyLabel?: string;
 }
 
 /**
  * The one Work chooser for every surface (board card, session group, card
  * detail's Work line, NEW TASK). Same trigger anatomy — `W` chip · title ·
- * `예약` badge · `▾` — in three sizes, and the same popover: search, then
+ * `▾` (reserved = dashed border) — in three sizes, and the same popover: search, then
  * `＋ 새 Work 만들기` (when the caller can create one), `Work 없음`, and the
  * active Works. Typing filters the list; picking a match assigns it, picking
  * `＋ 새 Work 만들기` creates a Work named after what was typed.
@@ -72,6 +74,7 @@ export const WorkPicker: React.FC<WorkPickerProps> = ({
   title,
   disabled = false,
   boundarySelector,
+  emptyLabel = WORK_PICKER_COPY.none,
 }) => {
   const { open, setOpen, triggerRef, popoverRef, popoverStyle, updatePosition } =
     useAnchoredPopover(280, { boundarySelector });
@@ -82,7 +85,7 @@ export const WorkPicker: React.FC<WorkPickerProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = value ? works.find((work) => work.id === value) : undefined;
-  const label = selected?.title ?? (value ? fallbackTitle ?? value : WORK_PICKER_COPY.none);
+  const label = selected?.title ?? (value ? fallbackTitle ?? value : emptyLabel);
   const isSet = !!value;
 
   const matches = useMemo(() => filterWorkPickerOptions(works, query), [works, query]);
@@ -174,7 +177,6 @@ export const WorkPicker: React.FC<WorkPickerProps> = ({
       >
         <span className="kv2-work-picker-icon" aria-hidden="true">W</span>
         <span className="kv2-work-picker-label">{label}</span>
-        {planned && isSet && <span className="kv2-work-picker-state">{WORK_PICKER_COPY.planned}</span>}
         <span className="kv2-work-picker-arrow" aria-hidden="true">▾</span>
       </button>
 

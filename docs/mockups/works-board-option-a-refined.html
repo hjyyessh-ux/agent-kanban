@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보드 Works — A안 다듬기 (A′) — Agent Kanban</title>
+<style>
+/* 목업 전용 — 다크 테마 kv2 값을 근사 복제. 실제 구현은 kanban-v2.tokens.css 토큰 사용. */
+:root {
+  color-scheme: dark;
+  --app-bg: #16181b;
+  --col-bg: #1b1d20;
+  --surface: #202326;
+  --surface-raised: #272b2f;
+  --surface-hover: #2e3237;
+  --text-primary: #e8eaed;
+  --text-secondary: #b9bfc6;
+  --text-muted: #979ea6;
+  --border: #3a3f45;
+  --border-strong: #5b626a;
+  --complete: #ff3b6b;
+  --complete-soft: #3a2228;
+  --work: #4a78c2;
+  --work-text: #9db8e6;
+  --work-tint: #1d2633;
+  --work-tab-bg: #2c4a73;
+  --session-tab-bg: #3a3f45;
+  --done: #22c55e;
+  --unread: #ff5a5a;
+  --star: #f5b83d;
+  --dir-green: #2f9e6a;
+  --claude: #d97757;
+  --note: #ffd84d;
+  --font-sans: 'Work Sans', system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--app-bg); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; }
+code, .mono { font-family: var(--font-mono); }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+p { margin: 0; line-height: 1.55; }
+.wrap { padding: 20px 28px 60px; }
+.head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.head small { color: var(--text-muted); }
+.lead { color: var(--text-secondary); max-width: 1100px; margin: 12px 0 20px; }
+.lead b { color: var(--text-primary); }
+.label { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; margin-bottom: 10px; }
+.label--before { background: #3a2a2a; color: #ffb4b4; }
+.label--after { background: #1f3326; color: #9be3b5; }
+.label--idea { background: #2b2a1d; color: #efe6b0; }
+.row { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+.section { margin-top: 40px; }
+.caption { font-size: 12px; color: var(--text-muted); margin-top: 8px; max-width: 380px; line-height: 1.5; }
+.notes { margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.notes table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.notes th, .notes td { border-bottom: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; line-height: 1.5; }
+.notes th { color: var(--text-muted); font-weight: 600; }
+.notes td b { color: var(--text-primary); }
+.notes ul { margin: 0; padding-left: 18px; }
+.notes li { margin: 5px 0; line-height: 1.5; color: var(--text-secondary); }
+
+/* 주석 번호 */
+.pin { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; background: var(--note); color: #111; font: 800 11px var(--font-sans); box-shadow: 1px 1px 0 #000; flex: 0 0 auto; }
+.pinned { position: relative; }
+.pinned > .pin { position: absolute; right: -9px; top: -9px; z-index: 3; }
+
+/* 공통 칩 */
+.col { width: 360px; background: var(--col-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.col-head { display: flex; align-items: center; gap: 8px; font: 800 12px var(--font-sans); letter-spacing: .06em; padding: 4px 4px 12px; color: var(--complete); }
+.col-head .n { margin-left: auto; color: var(--text-muted); }
+.dir-chip { font-size: 12px; font-weight: 700; color: #7fd8ab; background: color-mix(in srgb, var(--dir-green) 18%, var(--surface)); border: 1px solid var(--dir-green); padding: 1px 7px; border-radius: 4px; }
+.rt-chip { font-size: 10px; font-weight: 800; letter-spacing: .06em; border: 1px solid var(--border-strong); padding: 2px 7px; border-radius: 999px; color: var(--text-secondary); white-space: nowrap; }
+.rt-chip::before { content: '✳ '; color: var(--claude); }
+.unread-pill { font: 700 11px var(--font-mono); color: #fff; background: var(--unread); padding: 1px 6px; border-radius: 999px; white-space: nowrap; }
+.star-pill { font: 700 11px var(--font-mono); color: var(--star); border: 1px solid color-mix(in srgb, var(--star) 55%, transparent); padding: 0 6px; border-radius: 999px; white-space: nowrap; }
+.ghost { background: none; border: 1px solid var(--border); color: var(--text-secondary); font: 11px var(--font-mono); padding: 2px 7px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.ghost:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--surface-hover); }
+.muted { color: var(--text-muted); }
+
+/* ---------- BEFORE (현재) ---------- */
+.b-work { border: 2px solid var(--work); background: var(--work-tint); border-radius: 4px; padding: 10px; position: relative; margin-top: 14px; }
+.tab { position: absolute; top: -14px; left: -2px; font: 800 10px var(--font-mono); letter-spacing: .1em; background: var(--work-tab-bg); color: #e6eefc; padding: 2px 8px; }
+.b-session { border: 1px solid var(--border-strong); border-left: 4px solid var(--complete); background: var(--surface); padding: 10px; position: relative; margin-top: 14px; }
+.b-session .tab { background: var(--session-tab-bg); color: #e8eaed; }
+.b-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.b-line.sp { justify-content: space-between; }
+.b-title { font-size: 16px; font-weight: 800; margin: 6px 0; }
+.b-btn { border: 2px solid var(--border-strong); padding: 5px 12px; font: 800 12px var(--font-sans); border-radius: 3px; }
+.b-btn--ok { border-color: var(--done); color: #9be3b5; }
+.b-turn { border: 2px solid var(--complete); border-radius: 4px; font-size: 12px; margin-top: 8px; }
+.b-turn .h { display: flex; gap: 6px; align-items: center; padding: 5px 8px; background: var(--complete-soft); font-weight: 700; }
+.b-turn .r { display: grid; grid-template-columns: 54px 1fr; gap: 6px; padding: 4px 8px; border-top: 1px solid var(--border); }
+.b-turn .r span:first-child { font: 700 10px var(--font-mono); color: var(--text-muted); }
+.new { font: 800 9px var(--font-mono); background: var(--unread); color: #fff; padding: 1px 4px; border-radius: 2px; }
+
+/* ---------- A′ ---------- */
+.w { border: 1.5px solid var(--work); background: var(--work-tint); border-radius: 4px; padding: 12px 10px 8px; position: relative; margin-top: 14px; }
+.w .tab, .s .tab { font-size: 9px; padding: 1px 7px; top: -11px; }
+.w-head { display: flex; align-items: center; gap: 6px; }
+.w-title { font-weight: 800; font-size: 15px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.w-meta { font: 11px var(--font-mono); color: var(--text-muted); margin: 4px 0 2px; display: flex; gap: 6px; flex-wrap: wrap; }
+.w-meta b { color: var(--text-secondary); font-weight: 600; }
+.icon-btn { background: none; border: 1px solid transparent; color: var(--text-muted); padding: 1px 6px; border-radius: 4px; font: 12px var(--font-mono); cursor: pointer; white-space: nowrap; }
+.icon-btn:hover, .icon-btn.is-hover { border-color: var(--border); color: var(--text-primary); background: var(--surface-hover); }
+.fold { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-raised); border: 1px solid var(--border); color: var(--text-secondary); font: 700 11px var(--font-sans); padding: 2px 8px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.fold:hover { color: var(--text-primary); border-color: var(--border-strong); }
+
+.s { border: 1px solid var(--border); border-left: 4px solid var(--complete); background: var(--surface); border-radius: 0 4px 4px 0; padding: 10px 10px 8px; position: relative; margin-top: 16px; }
+.s .tab { background: var(--session-tab-bg); color: #e8eaed; }
+.s.is-unread { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--unread) 45%, transparent); }
+.s-r1 { display: flex; align-items: center; gap: 6px; }
+.s-r1 .sp { flex: 1; }
+.s-title-row { display: flex; align-items: flex-start; gap: 8px; margin: 6px 0 2px; }
+.s-title { font-size: 15px; font-weight: 800; flex: 1; min-width: 0; line-height: 1.3; }
+.s-meta { font: 11px var(--font-mono); color: var(--text-muted); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.s-meta b { color: var(--text-secondary); font-weight: 600; }
+.s-actions { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.s-actions .sp { flex: 1; }
+.done-btn { border: 1.5px solid var(--done); color: #9be3b5; background: none; font: 800 11px var(--font-sans); padding: 3px 10px; border-radius: 4px; white-space: nowrap; }
+.hover-only { opacity: 0; transition: opacity .12s; }
+.s:hover .hover-only, .s.is-hover .hover-only, .w-head:hover .hover-only, .w-head.is-hover .hover-only { opacity: 1; }
+
+/* 댓글형 turn */
+.tl { margin: 10px 0 0 4px; padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--complete) 60%, transparent); display: flex; flex-direction: column; gap: 9px; }
+.t { position: relative; font-size: 12.5px; }
+.t::before { content: ''; position: absolute; left: -20px; top: 4px; width: 9px; height: 9px; border-radius: 999px; background: var(--col-bg); border: 2px solid var(--complete); }
+.t.unread::before { background: var(--unread); border-color: var(--unread); box-shadow: 0 0 0 3px color-mix(in srgb, var(--unread) 25%, transparent); }
+.t-head { display: flex; gap: 6px; align-items: baseline; }
+.t-no { font: 11px var(--font-mono); color: var(--text-muted); }
+.t-q { font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t.unread .t-q { color: #fff; }
+.t-time { font: 11px var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.t-star { font-size: 12px; color: var(--star); width: 14px; text-align: center; }
+.t-star.off { color: var(--text-muted); opacity: 0; }
+.t:hover .t-star.off, .t.is-hover .t-star.off { opacity: 1; }
+.t-a { color: var(--text-secondary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+.t-a::before { content: '↳ '; color: var(--text-muted); }
+.more { margin-top: 8px; font-size: 12px; color: var(--work-text); display: flex; gap: 8px; align-items: center; }
+.more .mini-unread { color: var(--unread); font-weight: 700; }
+.more .mini-star { color: var(--star); }
+
+/* 접힌 세션 요약 줄 */
+.folded-sum { margin-top: 8px; padding: 6px 8px; background: var(--surface-raised); border-radius: 4px; font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.folded-sum b { color: var(--text-primary); }
+
+/* 툴팁 */
+.tip { position: absolute; z-index: 4; background: #0d0f10; border: 1px solid var(--border-strong); color: var(--text-primary); font: 11px var(--font-mono); padding: 6px 8px; border-radius: 4px; box-shadow: 3px 3px 0 #000; white-space: nowrap; line-height: 1.5; }
+
+/* 아이디어 미니 카드 */
+.idea { width: 360px; }
+.idea h3 { font-size: 14px; margin: 0 0 6px; }
+.idea p { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 10px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; font-size: 11px; }
+.seg span { padding: 3px 8px; color: var(--text-secondary); }
+.seg span.on { background: var(--surface-hover); color: var(--text-primary); font-weight: 700; }
+.bar-progress { height: 4px; background: var(--surface-raised); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+.bar-progress i { display: block; height: 100%; background: var(--work); }
+.legend-dot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; vertical-align: middle; margin-right: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="head">
+  <h1>보드 Works — A안 다듬기 (A′)</h1>
+  <small>2026-11-04 · COMPLETE 컬럼 · GROUP=WORKS · 다크 테마 · 노란 번호는 설명용 주석</small>
+</div>
+<p class="lead">
+  A안에서 <b>WORK / SESSION 캡션은 살리고</b>, turn은 <b>댓글형(질문 → ↳ 답)</b>을 유지합니다.
+  지난 안에서 빠졌던 <b>★ 즐겨찾기, 안 읽음, CLAUDE 칩, 소요 시간, 마지막 수행 시각</b>을 다시 넣고,
+  <b>접기(HIDE/SHOW)는 메뉴가 아니라 세션 제목 옆에 늘 보이는 버튼</b>으로 둡니다.
+  <br>참고: 지금의 <code>HIDE</code>/<code>SHOW</code>는 세션을 숨기는 게 아니라 <b>그 세션의 turn 목록을 접고 펴는 토글</b>입니다. 지난 안에서 <code>⋯</code> 메뉴에 넣은 건 잘못이었습니다.
+</p>
+
+<!-- ============ 비교: 현재 vs A′ ============ -->
+<div class="row">
+  <div>
+    <span class="label label--before">BEFORE (현재)</span>
+    <div class="col">
+      <div class="col-head">● COMPLETE <span class="n">7</span></div>
+      <div class="b-work">
+        <span class="tab">WORK</span>
+        <div class="b-line sp"><b>GHES 마이그레이션</b><span class="muted">⋯</span></div>
+        <div class="b-line mono muted" style="font-size:11px;margin:6px 0 4px"><span style="border:1px solid #7c6cd6;color:#c4b8ff;padding:0 5px">ghes_migration</span>2 sessions <span class="unread-pill">● 5</span>#CcVbx2l4</div>
+        <div class="b-session">
+          <span class="tab">SESSION</span>
+          <div class="b-line sp"><span class="dir-chip">zanything</span><span><span class="unread-pill">● 5</span> <span class="mono muted" style="font-size:11px">#a7592bb6</span></span></div>
+          <div class="b-title">GHES 이관 - zanything</div>
+          <div class="b-line"><span class="rt-chip">CLAUDE</span><span class="mono">26 cards</span><span class="ghost">⏎ resume</span></div>
+          <div style="border:1px solid var(--work);color:var(--work-text);font-size:11px;padding:1px 6px;display:inline-block;margin-top:8px">W GHES 마이그레이션 ▾</div>
+          <div class="b-line sp" style="margin-top:10px"><span class="b-btn">HIDE</span><span class="b-btn b-btn--ok">✓ 완료</span></div>
+          <div style="text-align:right;margin-top:8px"><span class="ghost">↓ 최신→과거 순</span></div>
+          <div class="b-turn"><div class="h"><span class="new">NEW</span>26. … <span class="muted mono">LATEST · 20:47</span> ☆</div><div class="r"><span>PROMPT</span><span>머지하고 마무리하자.</span></div><div class="r"><span>RESULT</span><span>PR 3개를 모두 머지했…</span></div></div>
+          <div class="b-turn"><div class="h"><span class="new">NEW</span>25. Feedback… <span class="muted mono">20:45</span> ☆</div><div class="r"><span>PROMPT</span><span>actions-yaml-upda…</span></div><div class="r"><span>RESULT</span><span>다시 실행한 zdd-zett…</span></div></div>
+          <div class="b-turn"><div class="h"><span class="new">NEW</span>24. Feedback… <span class="muted mono">20:35</span> ★</div><div class="r"><span>PROMPT</span><span>커밋 후 push 하자…</span></div></div>
+          <div class="muted" style="font-size:12px;margin-top:8px">Show 23 more</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <span class="label label--after">AFTER — A′ (기본 상태)</span>
+    <div class="col">
+      <div class="col-head">● COMPLETE <span class="n">7</span></div>
+
+      <div class="w">
+        <span class="tab">WORK</span>
+        <div class="w-head">
+          <span class="w-title">GHES 마이그레이션</span>
+          <span class="star-pill">★ 1</span>
+          <span class="unread-pill">● 5</span>
+          <span class="pinned"><button class="fold">▴ 접기</button><span class="pin">6</span></span>
+          <button class="icon-btn">⋯</button>
+        </div>
+        <div class="w-meta pinned">세션 <b>2</b> · 총 <b>1h 52m</b> · 마지막 <b>20:47</b><span class="pin" style="right:auto;left:186px;top:-1px">5</span></div>
+
+        <div class="s is-unread">
+          <span class="tab">SESSION</span>
+          <div class="s-r1 pinned">
+            <span class="dir-chip">zanything</span>
+            <span class="rt-chip">CLAUDE</span>
+            <span class="sp"></span>
+            <span class="star-pill">★ 1</span>
+            <span class="unread-pill">● 5</span>
+            <span class="pin">1</span>
+          </div>
+          <div class="s-title-row">
+            <span class="s-title">GHES 이관 - zanything</span>
+            <span class="pinned"><button class="fold">▴ 접기</button><span class="pin">2</span></span>
+          </div>
+          <div class="s-meta pinned"><b>26</b>턴 · <b>1h 16m</b> · 마지막 <b>20:47</b><span class="pin" style="right:auto;left:178px;top:-3px">3</span></div>
+
+          <div class="tl">
+            <div class="t unread">
+              <div class="t-head"><span class="t-no">26</span><span class="t-q">머지하고 마무리하자.</span><span class="t-time">20:47</span><span class="t-star off">☆</span></div>
+              <div class="t-a">PR 3개를 모두 머지했습니다</div>
+            </div>
+            <div class="t unread">
+              <div class="t-head"><span class="t-no">25</span><span class="t-q">actions-yaml-update 반영해줘</span><span class="t-time">20:45</span><span class="t-star off">☆</span></div>
+              <div class="t-a">다시 실행한 zdd-zetta2 빌드가 통과했습니다</div>
+            </div>
+            <div class="t">
+              <div class="t-head"><span class="t-no">24</span><span class="t-q">커밋 후 push 하자</span><span class="t-time">20:35</span><span class="t-star">★</span></div>
+              <div class="t-a">push 완료, PR 생성은 대기</div>
+            </div>
+          </div>
+          <div class="more pinned">이전 23턴 보기 › <span class="mini-unread">● 2</span><span class="mini-star">★ 0</span><span class="pin" style="right:auto;left:150px;top:-2px">4</span></div>
+
+          <div class="s-actions">
+            <button class="ghost">⏎ resume</button>
+            <span class="sp"></span>
+            <button class="done-btn">✓ 완료</button>
+          </div>
+        </div>
+
+        <div class="s">
+          <span class="tab">SESSION</span>
+          <div class="s-r1">
+            <span class="dir-chip">zdd-zetta2</span>
+            <span class="rt-chip">CLAUDE</span>
+            <span class="sp"></span>
+          </div>
+          <div class="s-title-row">
+            <span class="s-title">GHES 이관 - zdd-zetta2</span>
+            <button class="fold">▾ 펼치기</button>
+          </div>
+          <div class="s-meta"><b>14</b>턴 · <b>36m</b> · 마지막 <b>19:12</b></div>
+          <div class="folded-sum"><b>14</b> secrets 다 등록했음 <span class="muted">↳</span> Secret 등록은 확인했습니다</div>
+          <div class="s-actions">
+            <button class="ghost">⏎ resume</button>
+            <span class="sp"></span>
+            <button class="done-btn">✓ 완료</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="s" style="margin-top:22px">
+        <span class="tab">SESSION</span>
+        <div class="s-r1">
+          <span class="dir-chip">agent-kanban</span>
+          <span class="rt-chip">CLAUDE</span>
+          <span class="sp"></span>
+        </div>
+        <div class="s-title-row">
+          <span class="s-title">Agent-kanban - UI 개선</span>
+          <button class="fold">▴ 접기</button>
+        </div>
+        <div class="s-meta"><b>5</b>턴 · <b>8m 40s</b> · 마지막 <b>어제 18:02</b></div>
+        <div class="tl">
+          <div class="t"><div class="t-head"><span class="t-no">5</span><span class="t-q">다시 html 열어줘.</span><span class="t-time">11-03 18:02</span><span class="t-star off">☆</span></div><div class="t-a">목업 두 개를 다시 기본 브라우저로 열었습니다</div></div>
+          <div class="t"><div class="t-head"><span class="t-no">4</span><span class="t-q">B,C는 너무 많이 축약했어…</span><span class="t-time">11-03 17:55</span><span class="t-star off">☆</span></div><div class="t-a">3가지 안을 새 목업으로 만들었고…</div></div>
+        </div>
+        <div class="s-actions pinned">
+          <button class="ghost">⏎ resume</button>
+          <button class="ghost" style="color:var(--work-text);border-color:var(--work)">＋ Work</button>
+          <span class="sp"></span>
+          <button class="done-btn">✓ 완료</button>
+          <span class="pin" style="right:auto;left:150px;top:-8px">7</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <span class="label label--after">AFTER — A′ (마우스를 올렸을 때)</span>
+    <div class="col">
+      <div class="col-head">● COMPLETE <span class="n">7</span></div>
+      <div class="w">
+        <span class="tab">WORK</span>
+        <div class="w-head is-hover">
+          <span class="w-title">GHES 마이그레이션</span>
+          <button class="icon-btn is-hover hover-only">⧉ ID</button>
+          <span class="star-pill">★ 1</span>
+          <span class="unread-pill">● 5</span>
+          <button class="fold">▴ 접기</button>
+          <button class="icon-btn is-hover">⋯</button>
+        </div>
+        <div class="w-meta">세션 <b>2</b> · 총 <b>1h 52m</b> · 마지막 <b>20:47</b></div>
+
+        <div class="s is-unread is-hover" style="position:relative">
+          <span class="tab">SESSION</span>
+          <div class="s-r1">
+            <span class="dir-chip">zanything</span>
+            <span class="rt-chip">CLAUDE</span>
+            <span class="sp"></span>
+            <button class="icon-btn is-hover hover-only">⧉ ID</button>
+            <span class="star-pill">★ 1</span>
+            <span class="unread-pill">● 5</span>
+          </div>
+          <div class="s-title-row">
+            <span class="s-title">GHES 이관 - zanything</span>
+            <button class="fold">▴ 접기</button>
+          </div>
+          <div class="s-meta" style="position:relative"><b>26</b>턴 · <b>1h 16m</b> · 마지막 <b style="text-decoration:underline dotted">20:47</b>
+            <div class="tip" style="left:120px;top:18px">마지막 수행 2026-11-03 20:47:12<br>시작 2026-10-28 15:58<br>소요 = turn별 실행 시간 합계</div>
+          </div>
+          <div class="tl" style="margin-top:74px">
+            <div class="t unread is-hover">
+              <div class="t-head"><span class="t-no">26</span><span class="t-q">머지하고 마무리하자.</span><span class="t-time">20:47 · 27s</span><span class="t-star off">☆</span></div>
+              <div class="t-a">PR 3개를 모두 머지했습니다</div>
+            </div>
+            <div class="t unread">
+              <div class="t-head"><span class="t-no">25</span><span class="t-q">actions-yaml-update 반영해줘</span><span class="t-time">20:45</span><span class="t-star off">☆</span></div>
+              <div class="t-a">다시 실행한 zdd-zetta2 빌드가 통과했습니다</div>
+            </div>
+          </div>
+          <div class="s-actions">
+            <button class="ghost">⏎ resume</button>
+            <button class="ghost hover-only" style="opacity:1">W 이동 ▾</button>
+            <span class="sp"></span>
+            <button class="done-btn">✓ 완료</button>
+          </div>
+        </div>
+      </div>
+      <p class="caption">세션 카드에 마우스를 올리면 <code>⧉ ID</code>(복사)와 <code>W 이동 ▾</code>가 나타나고, turn에 올리면 그 turn의 실행 시간과 ☆가 보입니다. 마지막 시각에 올리면 정확한 날짜가 툴팁으로 뜹니다.</p>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <table>
+    <tr><th style="width:34px">#</th><th style="width:170px">요소</th><th style="width:250px">A′에서 보이는 방식</th><th>왜 이렇게</th></tr>
+    <tr><td><span class="pin">1</span></td><td><b>CLAUDE 칩 · ★ · 안 읽음</b></td><td>세션 첫 줄: 왼쪽에 <b>디렉토리 · CLAUDE</b>, 오른쪽에 <b>★ N · ● N</b></td><td>"무엇으로 돌렸나"는 왼쪽, "나한테 할 일이 있나"는 오른쪽으로 나눠 읽는 방향을 고정합니다. 안 읽은 turn이 있으면 세션 카드 테두리도 옅은 빨강이 됩니다. ★/●는 0이면 숨깁니다.</td></tr>
+    <tr><td><span class="pin">2</span></td><td><b>접기 (HIDE/SHOW)</b></td><td>세션 제목 오른쪽에 늘 보이는 <code>▴ 접기</code> / <code>▾ 펼치기</code></td><td>메뉴를 열 필요 없이 한 번에 누를 수 있게. 지금처럼 맨 아래가 아니라 제목 옆이라 turn이 길어도 위치가 바뀌지 않습니다. 대문자 <code>HIDE</code> 대신 화살표 + 동사로 "숨김"이 아니라 "접기"임을 분명히 합니다.</td></tr>
+    <tr><td><span class="pin">3</span></td><td><b>소요 시간 · 마지막 수행</b></td><td><code>26턴 · 1h 16m · 마지막 20:47</code> 한 줄</td><td>소요는 세션 모달 헤더의 <code>총 1h 16m</code>과 같은 계산(turn별 실행 시간 합). 마지막 시각은 오늘이면 <code>20:47</code>, 어제면 <code>어제 18:02</code>, 그 전이면 <code>11-02 20:47</code>. 정확한 시각은 툴팁. "cards" 대신 "턴"으로 모달과 단어를 맞춥니다.</td></tr>
+    <tr><td><span class="pin">4</span></td><td><b>숨은 turn 요약</b></td><td><code>이전 23턴 보기 › ● 2 ★ 0</code></td><td>지금의 <code>Show 23 more</code>와 같은 동작. 접힌 쪽에 안 읽은 turn이나 ★가 있으면 숫자로 알려줘서 놓치지 않게 합니다.</td></tr>
+    <tr><td><span class="pin">5</span></td><td><b>Work 요약</b></td><td><code>세션 2 · 총 1h 52m · 마지막 20:47</code></td><td>세션 줄과 같은 형식이라 따로 배울 게 없습니다. 태그 칩 <code>ghes_migration</code>과 ID는 hover의 <code>⧉ ID</code> / <code>⋯</code>로.</td></tr>
+    <tr><td><span class="pin">6</span></td><td><b>Work 접기</b></td><td>Work 제목 줄의 <code>▴ 접기</code>(지금은 Work 맨 아래 <code>hide</code>)</td><td>세션과 같은 자리, 같은 모양. 접으면 <code>▾ 펼치기 · 세션 2</code>로 바뀝니다.</td></tr>
+    <tr><td><span class="pin">7</span></td><td><b>Work 없는 세션</b></td><td>아래 줄에 <code>＋ Work</code> 버튼</td><td>Work 안의 세션에서는 <code>W GHES 마이그레이션 ▾</code> 칩이 상자 이름과 중복이라 숨기고, Work 밖의 세션에서만 보입니다. Work 안에서 옮기려면 hover의 <code>W 이동 ▾</code> 또는 드래그.</td></tr>
+  </table>
+  <ul style="margin-top:10px">
+    <li><b>turn 표시(댓글형):</b> <code>번호 질문</code> 굵게 → <code>↳ 답</code> 한 줄. 안 읽은 turn은 <b>채운 빨간 점</b>, 읽은 turn은 빈 점. <code>NEW</code> 배지와 <code>LATEST</code> 라벨은 이 점과 "맨 위 = 최신"으로 대신합니다.</li>
+    <li><b>★:</b> ★가 붙은 turn은 늘 보이고, 안 붙은 turn은 마우스를 올렸을 때만 <code>☆</code>가 나타나 클릭으로 붙입니다.</li>
+    <li><b>정렬 토글</b>(<code>↓ 최신→과거 순</code>)은 세션마다 두지 않고 컬럼 메뉴의 보드 전체 설정 하나로 옮깁니다. 거의 바꾸지 않는 설정이 세션마다 반복되고 있었습니다.</li>
+    <li><b>바뀌지 않는 것:</b> <code>✓ 완료</code>(세션 일괄 done), resume 복사, 드래그로 Work 배정, Work 완료(<code>⋯</code> 메뉴), 상태 색(왼쪽 띠).</li>
+  </ul>
+</div>
+
+<!-- ============ 추가 개선 아이디어 ============ -->
+<div class="section">
+  <h2>A′ 위에 얹을 수 있는 추가 개선 (선택)</h2>
+  <p class="lead" style="margin-top:0">A′만으로도 동작합니다. 아래는 따로 고를 수 있는 작은 개선입니다.</p>
+  <div class="row">
+
+    <div class="idea">
+      <span class="label label--idea">아이디어 1 · 접힌 세션 한 줄 요약</span>
+      <h3>접어도 최신 turn은 한 줄 보이게</h3>
+      <p>지금은 접으면 turn이 전부 사라집니다. 접힌 상태에서도 최신 질문 → 답 한 줄을 남기면 펼치지 않고도 상황을 압니다. (위 A′의 zdd-zetta2 세션이 이 상태)</p>
+      <div class="s" style="margin-top:12px">
+        <span class="tab">SESSION</span>
+        <div class="s-r1"><span class="dir-chip">zdd-zetta2</span><span class="rt-chip">CLAUDE</span><span class="sp"></span></div>
+        <div class="s-title-row"><span class="s-title">GHES 이관 - zdd-zetta2</span><button class="fold">▾ 펼치기</button></div>
+        <div class="s-meta"><b>14</b>턴 · <b>36m</b> · 마지막 <b>19:12</b></div>
+        <div class="folded-sum"><b>14</b> secrets 다 등록했음 <span class="muted">↳</span> Secret 등록은 확인했습니다</div>
+      </div>
+    </div>
+
+    <div class="idea">
+      <span class="label label--idea">아이디어 2 · 컬럼 전체 접기 프리셋</span>
+      <h3>한 번에 "다 접기 / 안 읽은 것만 펼치기"</h3>
+      <p>세션이 많을 때 하나씩 접기 번거로우니 컬럼 머리에 3단 토글을 둡니다. 지금의 <code>모두 숨기기</code> 토큰을 확장하는 방식입니다.</p>
+      <div class="col" style="padding:8px">
+        <div class="col-head" style="padding-bottom:4px">● COMPLETE <span class="n">7</span></div>
+        <div class="seg"><span>모두 펼침</span><span class="on">안 읽은 것만</span><span>모두 접기</span></div>
+        <div class="caption" style="margin-top:8px">"안 읽은 것만": ● 가 있는 세션만 펼치고 나머지는 한 줄 요약으로.</div>
+      </div>
+    </div>
+
+    <div class="idea">
+      <span class="label label--idea">아이디어 3 · Work 진행 막대</span>
+      <h3>Work 안 세션의 완료 비율을 얇은 막대로</h3>
+      <p>Work 제목 아래 4px 막대로 "세션 3개 중 1개 완료"를 보여줍니다. 숫자를 읽지 않아도 Work가 얼마나 끝났는지 보입니다.</p>
+      <div class="w" style="margin-top:12px">
+        <span class="tab">WORK</span>
+        <div class="w-head"><span class="w-title">GHES 마이그레이션</span><span class="unread-pill">● 5</span><button class="fold">▴ 접기</button><button class="icon-btn">⋯</button></div>
+        <div class="w-meta">세션 <b>1/3</b> 완료 · 총 <b>1h 52m</b> · 마지막 <b>20:47</b></div>
+        <div class="bar-progress"><i style="width:33%"></i></div>
+      </div>
+    </div>
+
+    <div class="idea">
+      <span class="label label--idea">아이디어 4 · 첫 사용자용 캡션 툴팁</span>
+      <h3>WORK / SESSION 캡션에 한 줄 설명</h3>
+      <p>캡션은 그대로 두고, 마우스를 올리면 뜻을 알려줍니다. 처음 보는 사람이 용어를 따로 찾지 않아도 됩니다.</p>
+      <div style="position:relative;height:120px">
+        <div class="w" style="margin-top:14px">
+          <span class="tab" style="outline:1px dashed var(--note)">WORK</span>
+          <div class="w-head"><span class="w-title">GHES 마이그레이션</span></div>
+        </div>
+        <div class="tip" style="left:6px;top:46px">WORK = 여러 세션을 묶은 큰 작업<br>세션을 끌어다 놓으면 여기에 묶입니다</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+</body>
+</html>

@@ -185,50 +185,54 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
           </span>
         )}
       </div>
-      <MentionTextarea
-        className="kv2-input kv2-feedback-textarea"
-        value={feedbackText}
-        onChange={updateText}
-        // 클립보드 스크린샷 첨부는 이 통과에 걸려 있다 — 빼면 조용히 죽는다.
-        onPaste={handlePaste}
-        placeholder="Describe what needs additional work... (@로 세션·Work·문서를 참조할 수 있습니다)"
-        rows={4}
-        disabled={isSubmittingFeedback}
-        boundarySelector={boundarySelector}
-        projectDir={projectDir}
-        excludeSessionIds={excludeSessionIds}
-        onReferencesChange={setResolvedRefs}
-      />
-      {pendingImages.length > 0 && (
-        <div className="kv2-screenshot-grid kv2-feedback-screenshots">
-          {pendingImages.map((image) => (
-            <div key={image.url} className="kv2-screenshot-item">
-              <button
-                type="button"
-                className="kv2-screenshot-thumb-btn"
-                onClick={() => setPreviewUrl(image.url)}
-                title="크게 보기"
-              >
-                <img src={image.url} alt={image.file.name} className="kv2-screenshot-thumb" />
-              </button>
-              <div className="kv2-screenshot-meta">
-                <span className="kv2-screenshot-name" title={image.file.name}>
-                  {image.file.name || "pasted image"}
-                </span>
+      {/* Textarea + attachment chips share one bordered box: the chip row is a
+          fixed-height strip, so attachments never paint over the text when the
+          surrounding dock is height-constrained. */}
+      <div className={`kv2-feedback-compose${pendingImages.length > 0 ? " has-shots" : ""}`}>
+        <MentionTextarea
+          className="kv2-input kv2-feedback-textarea"
+          value={feedbackText}
+          onChange={updateText}
+          // 클립보드 스크린샷 첨부는 이 통과에 걸려 있다 — 빼면 조용히 죽는다.
+          onPaste={handlePaste}
+          placeholder="Describe what needs additional work... (@로 세션·Work·문서를 참조할 수 있습니다)"
+          rows={4}
+          disabled={isSubmittingFeedback}
+          boundarySelector={boundarySelector}
+          projectDir={projectDir}
+          excludeSessionIds={excludeSessionIds}
+          onReferencesChange={setResolvedRefs}
+        />
+        {pendingImages.length > 0 && (
+          <div className="kv2-feedback-shot-strip" aria-label={`첨부 스크린샷 ${pendingImages.length}개`}>
+            {pendingImages.map((image) => (
+              <div key={image.url} className="kv2-screenshot-item kv2-feedback-shot-chip">
                 <button
                   type="button"
-                  className="kv2-screenshot-delete"
+                  className="kv2-feedback-shot-open"
+                  onClick={() => setPreviewUrl(image.url)}
+                  title="크게 보기"
+                >
+                  <img src={image.url} alt={image.file.name} className="kv2-screenshot-thumb" />
+                  <span className="kv2-feedback-shot-name" title={image.file.name}>
+                    {image.file.name || "pasted image"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="kv2-feedback-shot-remove"
                   onClick={() => removePendingImage(image.url)}
                   disabled={isSubmittingFeedback}
                   title="Remove screenshot"
+                  aria-label={`${image.file.name || "pasted image"} 첨부 제거`}
                 >
                   ×
                 </button>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
       <div className="kv2-feedback-actions">
         <button
           type="button"

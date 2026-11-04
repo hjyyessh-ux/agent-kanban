@@ -905,6 +905,23 @@
   padding-left: 1.35rem;
 }
 
+/* reset.css strips list-style from every ul/ol — restore markers for rendered markdown. */
+ul.kv2-markdown-list {
+  list-style: disc;
+}
+
+ol.kv2-markdown-list {
+  list-style: decimal;
+}
+
+.kv2-markdown-list .kv2-markdown-list {
+  margin-top: 6px;
+}
+
+.kv2-markdown-list li.task-list-item {
+  list-style: none;
+}
+
 .kv2-markdown-list li + li {
   margin-top: 6px;
 }
@@ -1395,6 +1412,93 @@
 
 .kv2-feedback-textarea:focus {
   border-color: var(--kv2-border-strong);
+}
+
+/* Textarea + attachment strip. Without attachments the wrapper is invisible and
+   the textarea keeps its own border; with attachments the border moves to the
+   wrapper so the chips read as part of the input. */
+.kv2-feedback-compose {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.kv2-feedback-compose.has-shots {
+  border: var(--kv2-btn-stroke-width) solid var(--kv2-border);
+  background: var(--kv2-surface);
+}
+
+.kv2-feedback-compose.has-shots:focus-within {
+  border-color: var(--kv2-border-strong);
+}
+
+.kv2-feedback-compose.has-shots .kv2-feedback-textarea {
+  border-color: transparent;
+}
+
+.kv2-feedback-shot-strip {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px dashed var(--kv2-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.kv2-screenshot-item.kv2-feedback-shot-chip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  max-width: 220px;
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-raised);
+}
+
+.kv2-feedback-shot-open {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 4px 3px 3px;
+  cursor: pointer;
+}
+
+.kv2-feedback-shot-open:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+}
+
+.kv2-feedback-shot-chip .kv2-screenshot-thumb {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 26px;
+  aspect-ratio: auto;
+  border-radius: 2px;
+}
+
+.kv2-feedback-shot-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-feedback-shot-remove {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-ui-sm);
+  cursor: pointer;
+}
+
+.kv2-feedback-shot-remove:hover,
+.kv2-feedback-shot-remove:focus-visible {
+  color: var(--kv2-text-danger);
 }
 
 .kv2-feedback-actions {

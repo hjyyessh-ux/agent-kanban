@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보드 카드 — 옵션 C 다듬기 — Agent Kanban</title>
+<style>
+/* 목업 전용 — Graphite 다크 테마 kv2 값을 근사 복제. 실제 구현은 kv2 토큰(--kv2-*) 사용. */
+:root {
+  color-scheme: dark;
+  --app-bg:#16181b; --surface:#202326; --surface-raised:#272b2f; --surface-hover:#2e3237;
+  --text-primary:#e8eaed; --text-secondary:#b9bfc6; --text-muted:#979ea6; --text-faint:#6f767e;
+  --border:#3a3f45; --border-strong:#5b626a;
+  --work:#4a78c2; --work-text:#9db8e6; --work-tint:#1d2633; --work-tab-bg:#2c4a73; --work-tab-fg:#d6e4ff;
+  --danger:#ff5a5a; --dir-green:#2f9e6a; --claude:#d97757; --note:#ffd84d;
+  --font-sans:'Work Sans',system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--app-bg); color:var(--text-primary); font:14px/1.5 var(--font-sans); }
+.wrap { padding:22px 28px 80px; max-width:1280px; }
+h1 { font-size:20px; margin:0; } h2 { font-size:17px; margin:0; }
+p { margin:0; } code { font-family:var(--font-mono); font-size:12px; background:var(--surface-raised); padding:1px 5px; border-radius:3px; }
+.lead { color:var(--text-secondary); max-width:980px; margin:10px 0 18px; } .lead b { color:var(--text-primary); }
+.label { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.08em; padding:3px 8px; border-radius:4px; }
+.label--before { background:#3a2a2a; color:#ffb4b4; } .label--after { background:#173524; color:#7fe0a6; }
+.section { margin-top:40px; padding-top:22px; border-top:1px solid var(--border); }
+.sec-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+.sub { color:var(--text-secondary); max-width:980px; margin-bottom:14px; }
+.changes { max-width:980px; background:var(--surface); border:1px solid var(--border); padding:10px 16px; margin-bottom:6px; font-size:13px; color:var(--text-secondary); }
+.changes ol { margin:4px 0 0; padding-left:20px; } .changes li { margin:4px 0; } .changes b { color:var(--text-primary); }
+.ba { display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+.ba .arrow { font-size:26px; color:var(--text-muted); }
+.ba .col { display:flex; flex-direction:column; gap:16px; }
+.grid { display:grid; grid-template-columns:300px 380px minmax(260px,1fr); gap:14px 24px; align-items:start; }
+.grid .hd { font-size:11px; font-weight:800; letter-spacing:.08em; color:var(--text-muted); }
+.state-note { font-size:12px; color:var(--text-secondary); line-height:1.55; } .state-note b { color:var(--text-primary); display:block; margin-bottom:2px; }
+.hint { font-size:12px; color:var(--text-muted); margin:0 0 10px; }
+
+/* ───────── 카드 ───────── */
+.card { position:relative; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px 12px 10px 14px; display:flex; flex-direction:column; overflow:hidden; outline:none; }
+.card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent,var(--border-strong)); }
+.card:hover, .card:focus-within { border-color:var(--border-strong); }
+.w300 { width:300px; } .w340 { width:340px; } .w380 { width:380px; }
+.top { display:flex; align-items:center; gap:8px; min-height:24px; min-width:0; }
+.sp { flex:1 1 auto; }
+.hm { display:flex; align-items:center; gap:4px; margin-left:auto; flex:0 0 auto; }
+.fav { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 3px; }
+.idc { font:700 11px var(--font-mono); color:var(--text-secondary); border:1px solid var(--border); padding:1px 6px; border-radius:4px; white-space:nowrap; }
+.dir { font-size:12px; font-weight:700; color:#7fd8ab; background:color-mix(in srgb,var(--dir-green) 18%,var(--surface)); border:1px solid var(--dir-green); padding:1px 7px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+.title { font-weight:700; font-size:14px; line-height:1.35; margin-top:6px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.prompt { font-size:12px; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.divider { height:1px; background:var(--border); margin:9px 0 0; }
+.meta { display:flex; align-items:center; gap:6px; min-width:0; margin-top:8px; font-size:12px; color:var(--text-muted); }
+.rt { font-size:10px; font-weight:800; letter-spacing:.06em; border:1px solid var(--border-strong); padding:2px 7px; border-radius:999px; color:var(--text-secondary); white-space:nowrap; flex:0 0 auto; }
+.rt.claude::before { content:'✳ '; color:var(--claude); }
+.time { white-space:nowrap; flex:0 0 auto; }
+.dot { color:var(--text-faint); flex:0 0 auto; }
+/* project 는 meta row 맨 앞. 줄어드는 항목은 project 뿐 (runtime / time / 구분점은 고정). 최소 폭 확보 후 ellipsis. */
+.meta .dir { flex:0 1 auto; min-width:44px; max-width:100%; }
+.actions { display:flex; align-items:center; gap:6px; margin-top:10px; }
+.btn { font:600 12px var(--font-sans); color:var(--text-secondary); background:none; border:1px solid var(--border-strong); padding:3px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.btn.go { color:#7fe0a6; border-color:#2e6b49; } .btn:hover { background:var(--surface-hover); }
+.del { margin-left:auto; color:var(--danger); border:1px solid #6b2f2f; background:none; width:26px; height:24px; border-radius:4px; cursor:pointer; font-size:12px; }
+.workrow { display:flex; margin-top:8px; min-width:0; }
+
+/* ───────── Work picker ───────── */
+.wp { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; padding:2px 8px 2px 4px; border:2px dashed var(--text-muted); background:transparent; color:var(--text-muted); font:600 11px var(--font-sans); cursor:pointer; text-align:left; }
+.wp:hover { background:var(--work-tint); }
+.wp i { font-style:normal; flex:0 0 auto; padding:1px 4px; background:var(--border); color:var(--text-secondary); font:800 9px/1.3 var(--font-mono); }
+.wp .lb { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wp .st { flex:0 0 auto; padding:0 5px; border:2px dashed var(--work); color:var(--work-text); font:700 9px var(--font-mono); }
+.wp b { flex:0 0 auto; font-size:9px; font-weight:400; }
+.wp.set { border-style:solid; border-color:var(--work); background:var(--work-tint); color:var(--work-text); font-weight:700; }
+.wp.set i { background:var(--work-tab-bg); color:var(--work-tab-fg); }
+.wp.set:hover { background:#243247; }
+.wp.plan { border-style:dashed; } /* 예약: 칩 없이 점선 테두리만으로 구분 */
+.wp.q { border-width:1px; border-color:var(--border-strong); padding:1px 8px; }
+.wp.q:hover { color:var(--text-primary); border-color:var(--text-secondary); }
+.wp.sm { padding:1px 6px 1px 3px; } .wp.q.sm { padding:1px 7px; }
+.c .top .wp { flex:0 1 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h1>보드 카드 — 옵션 C 다듬기</h1>
+    <small style="color:var(--text-muted)">Work 머리띠 + project 우선 meta row · 300px / 380px · Graphite 다크</small>
+  </div>
+  <p class="lead">옵션 C(상단 = Work 슬롯, project = meta row)를 확정하고 두 가지를 수정했습니다. Work picker 는 그대로 클릭 가능하고, hover 시 레이아웃 이동은 없습니다(상단 <code>＋ Work</code> 는 상시 노출이라 hover 로 바뀌는 것이 없음).</p>
+  <div class="changes"><b>반영된 수정</b>
+    <ol>
+      <li><b><code>예약</code> 칩 제거</b> — 예약(planned) Work 는 기존 <b>파란 점선 pill 테두리</b>만으로 구분합니다. 배정(solid 파란 실선), 없음(회색 얇은 <code>＋ Work</code>)과 테두리 스타일로 구별됩니다.</li>
+      <li><b>meta row 순서 = <code>project · runtime · time</code></b> — project 가 최우선이라 맨 앞. 줄어드는 요소는 project 하나뿐이고(최소 44px 보장 후 ellipsis), runtime 배지·시간·구분점은 고정 폭입니다. project 가 없으면 <code>CLAUDE · 2h ago</code> 로 자연스럽게 짧아집니다.</li>
+    </ol>
+  </div>
+
+  <section class="section">
+    <div class="sec-head"><h2>Before → After</h2></div>
+    <p class="sub">좌: 현재 카드 (Work 가 아래 별도 행, project 없으면 빈칸). 우: 다듬은 C. 두 상태를 같은 폭(340px)으로 비교합니다.</p>
+    <div class="ba">
+      <div class="col"><span class="label label--before">현재</span><div id="ba-b1"></div><div id="ba-b2"></div></div>
+      <div class="arrow">→</div>
+      <div class="col"><span class="label label--after">C 다듬기</span><div id="ba-a1"></div><div id="ba-a2"></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="sec-head"><span class="label label--after">옵션 C (다듬기)</span><h2>4개 상태 × 300px / 380px</h2></div>
+    <p class="sub">긴 제목, 긴 project 명, 긴 Work 명이 한꺼번에 들어오는 ③ 이 stress case 입니다.</p>
+    <div class="grid" id="g-c"></div>
+  </section>
+</div>
+
+<script>
+const WORK_PLAN = '[BW] From new task 1793747686844';
+const WORK_LONG = 'GHES 마이그레이션 2차 — 인증 서버 이관 및 롤백 리허설';
+const STATES = [
+  { name:'① project 無 · Work 예약', accent:'var(--border-strong)', id:'#2fIQmL_N', title:'[BW] New task 1793747686844', prompt:'born reserved', rt:'claude', rtl:'CLAUDE', time:'2h ago', proj:null, work:{k:'plan', n:WORK_PLAN},
+    note:'예약 Work 가 상단 머리띠에. <code>예약</code> 칩 없이 <b>파란 점선 테두리</b>만으로 구분. project 가 없으니 meta 는 <code>CLAUDE · 2h ago</code> 로 짧아질 뿐 빈칸 없음.' },
+  { name:'② project 有 · Work 無', accent:'var(--border-strong)', id:'#9Kx3aQ_f', title:'Feedback #11: ZEPETOFUL - tencent 구현 Review', prompt:'tencent 구현 Review 요청 — 리뷰 코멘트 반영', rt:'codex', rtl:'CODEX', time:'8d ago', proj:'mcp-server', work:null,
+    note:'상단 조용한 <code>＋ Work</code> (회색 얇은 테두리, 클릭 가능). meta 는 <code>mcp-server · CODEX · 8d ago</code> — project 가 맨 앞.' },
+  { name:'③ project 有 · Work 배정 (긴 이름)', accent:'#d9a441', id:'#7bTn04_Z', title:'Telegram poller 재시도 로직 정리 — 장문 제목이 두 줄로 넘어가는 경우 확인', prompt:'backoff 와 dedupe 를 분리하고 e2e 보강', rt:'claude', rtl:'CLAUDE', time:'12m ago', proj:'agent-kanban-long-project-name', work:{k:'set', n:WORK_LONG},
+    note:'Work 는 상단에서 ellipsis. meta 는 project 만 줄어들고(최소 44px) runtime · time 은 고정이라 긴 project 명이어도 배지가 깨지지 않음.' },
+  { name:'④ project 無 · Work 無 (가장 허전한 경우)', accent:'var(--border-strong)', id:'#c81QpW_2', title:'로그 로테이션 점검', prompt:'cron 과 logrotate 설정 확인', rt:'codex', rtl:'CODEX', time:'3d ago', proj:null, work:null,
+    note:'상단 <code>＋ Work</code> 로 자리 확보, meta 는 <code>CODEX · 3d ago</code>. 비어 보이는 슬롯이 없음.' },
+];
+const fav = '<span class="fav" aria-hidden="true">☆</span>';
+const hm = s => `<div class="hm">${fav}<span class="idc">${s.id}</span></div>`;
+const dir = s => `<span class="dir" title="/work/${s.proj}">${s.proj}</span>`;
+const rt = s => `<span class="rt ${s.rt}">${s.rtl}</span>`;
+const actions = `<div class="actions"><button class="btn go">▶ 시작</button><button class="btn">큐 연결</button><button class="del" aria-label="삭제">✕</button></div>`;
+const surface = s => `<div class="title">${s.title}</div><div class="prompt">${s.prompt}</div><div class="divider"></div>`;
+const wrap = (cls,w,s,inner) => `<div class="card ${cls} w${w}" tabindex="0" style="--accent:${s.accent}">${inner}</div>`;
+
+function wp(w, o = {}) {
+  const sm = o.sm ? ' sm' : '';
+  if (!w) return o.legacy
+    ? `<button class="wp${sm}" type="button"><i>W</i><span class="lb">Work 없음</span><b>▾</b></button>`
+    : `<button class="wp q${sm}" type="button" aria-label="Work 지정">＋ Work</button>`;
+  if (w.k === 'plan') return `<button class="wp set plan${sm}" type="button" title="${w.n} (예약)" aria-label="예약된 Work: ${w.n}"><i>W</i><span class="lb">${w.n}</span>${o.legacy?'<span class="st">예약</span>':''}<b>▾</b></button>`;
+  return `<button class="wp set${sm}" type="button" title="${w.n}"><i>W</i><span class="lb">${w.n}</span><b>▾</b></button>`;
+}
+const before = (s,w) => wrap('',w,s,
+  `<div class="top">${s.proj?dir(s):'<span class="sp"></span>'}${hm(s)}</div>${surface(s)}
+   <div class="meta">${rt(s)}<span class="time">${s.time}</span></div>
+   <div class="workrow">${wp(s.work,{legacy:true})}</div>${actions}`);
+const after = (s,w) => wrap('c',w,s,
+  `<div class="top">${wp(s.work,{sm:true})}${hm(s)}</div>${surface(s)}
+   <div class="meta">${s.proj?dir(s)+'<span class="dot">·</span>':''}${rt(s)}<span class="dot">·</span><span class="time">${s.time}</span></div>${actions}`);
+
+document.getElementById('ba-b1').innerHTML = before(STATES[0],340);
+document.getElementById('ba-b2').innerHTML = before(STATES[1],340);
+document.getElementById('ba-a1').innerHTML = after(STATES[0],340);
+document.getElementById('ba-a2').innerHTML = after(STATES[1],340);
+let h = '<div class="hd">300px 컬럼</div><div class="hd">380px 컬럼</div><div class="hd">상태별 동작</div>';
+STATES.forEach(s => { h += `<div>${after(s,300)}</div><div>${after(s,380)}</div><div class="state-note"><b>${s.name}</b>${s.note}</div>`; });
+document.getElementById('g-c').innerHTML = h;
+document.querySelectorAll('.wp,.btn,.del').forEach(b => b.addEventListener('click', e => e.preventDefault()));
+</script>
+</body>
+</html>

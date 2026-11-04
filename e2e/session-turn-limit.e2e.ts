@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures/kanban';
+import { BOARD_SESSION_COPY, COLUMN_MENU_COPY } from '../web/src/constants/copy';
 
 // Done cards always render as session groups (collapsed); expanding one shows the turns.
 async function openDoneGroup(page: import('@playwright/test').Page) {
@@ -22,17 +23,19 @@ test.describe('Session group turn limit', () => {
     await page.goto('/');
     const group = await openDoneGroup(page);
 
-    // Scoped to the timeline: the group header names the session by its first card.
+    // Scoped to the timeline. Each turn reads `n prompt` / `↳ result`; the card
+    // title is in the turn's accessible name.
     const timeline = group.locator('.kv2-complete-session-timeline');
-    const titles = timeline.locator('.kv2-complete-session-card-title');
-    await expect(titles).toHaveCount(5);
+    const turns = timeline.locator('.kv2-complete-session-turn-body');
+    await expect(turns).toHaveCount(5);
     // Newest first: turns 8..4 are shown, the three oldest are folded away.
-    await expect(titles.first()).toContainText('turn 8');
-    await expect(timeline).not.toContainText('[E2E-TURN] turn 1');
+    await expect(turns.first()).toHaveAttribute('aria-label', /turn 8/);
+    await expect(turns.first()).toContainText('prompt 8');
+    await expect(timeline).not.toContainText('prompt 1');
 
-    await group.getByRole('button', { name: 'Show 3 more' }).click();
-    await expect(titles).toHaveCount(8);
-    await expect(timeline).toContainText('[E2E-TURN] turn 1');
+    await group.getByRole('button', { name: BOARD_SESSION_COPY.olderTurns(3) }).click();
+    await expect(turns).toHaveCount(8);
+    await expect(timeline).toContainText('prompt 1');
   });
 
   test('a feedback turn is summarized by its instruction, not the generated header', async ({ page, seedCardWithStatus }) => {
@@ -75,7 +78,7 @@ test.describe('Session group turn limit', () => {
     await expect(timeline).not.toContainText('interim note');
   });
 
-  test('keeps the newest 5 when the group is sorted oldest-first', async ({ page, seedCardWithStatus }) => {
+  test('keeps the newest 5 when the board turn order is oldest-first', async ({ page, seedCardWithStatus }) => {
     for (let turn = 1; turn <= 8; turn++) {
       await seedCardWithStatus(
         { title: `[E2E-SORT] turn ${turn}`, description: `prompt ${turn}` },
@@ -86,12 +89,14 @@ test.describe('Session group turn limit', () => {
 
     await page.goto('/');
     const group = await openDoneGroup(page);
-    await group.locator('.kv2-complete-session-sort-inline').click();
+    // The order is board-wide now: the column `⋯` menu, not a per-session toggle.
+    await page.locator('.kv2-column[data-status="done"] .kv2-column-menu-trigger').click();
+    await page.getByRole('menuitem', { name: COLUMN_MENU_COPY.turnOrderOldest }).click();
 
-    const titles = group.locator('.kv2-complete-session-card-title');
-    await expect(titles).toHaveCount(5);
+    const turns = group.locator('.kv2-complete-session-turn-body');
+    await expect(turns).toHaveCount(5);
     // Reversed for display, but the five kept are still the newest five.
-    await expect(titles.first()).toContainText('turn 4');
-    await expect(titles.last()).toContainText('turn 8');
+    await expect(turns.first()).toHaveAttribute('aria-label', /turn 4/);
+    await expect(turns.last()).toHaveAttribute('aria-label', /turn 8/);
   });
 });

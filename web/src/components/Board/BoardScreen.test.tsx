@@ -6,7 +6,7 @@ import type { KanbanCard, Work } from '../../../../src/core/types';
 import { DEFAULT_BOARD_FILTERS } from './board-filters';
 import { sortCardsForColumn } from './board-utils';
 import { groupCompleteCardsBySession } from './BoardCompleteSessionView';
-import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY, COLUMN_MENU_COPY, STATUS_LABELS, WORK_PICKER_COPY } from '../../constants/copy';
+import { BOARD_GROUP_COPY, BOARD_SESSION_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY, COLUMN_MENU_COPY, LIST_COPY, STATUS_LABELS, WORK_PICKER_COPY } from '../../constants/copy';
 
 let cardSeq = 1;
 
@@ -82,16 +82,18 @@ describe('BoardScreen', () => {
     const progressIndex = html.indexOf('data-status="in_progress"');
     const todoIndex = html.indexOf('data-status="todo"');
 
-    expect(doneIndex).toBeGreaterThan(-1);
-    expect(completeIndex).toBeGreaterThan(doneIndex);
+    // Needs-me first; the done pile last and folded by default.
+    expect(completeIndex).toBeGreaterThan(-1);
     expect(progressIndex).toBeGreaterThan(completeIndex);
     expect(todoIndex).toBeGreaterThan(progressIndex);
-    expect(html).toContain('Title');
-    expect(html).toContain('Runtime');
-    expect(html).toContain('Action');
-    expect(html).toContain('Queue');
-    expect(html).toContain('Created');
-    expect(html).toContain('+ Add Task');
+    expect(doneIndex).toBeGreaterThan(todoIndex);
+    expect(html).toMatch(/class="kv2-list-section is-collapsed" data-status="done"/);
+    expect(html).toContain(LIST_COPY.hidden(1));
+    // One column head for the whole list, not one per section.
+    expect(html.match(/class="kv2-list-table-head"/g)).toHaveLength(1);
+    expect(html).toContain(LIST_COPY.colTitle);
+    expect(html).toContain(LIST_COPY.colMeta);
+    expect(html).toContain(LIST_COPY.addTask);
     expect(html).toContain('Card description');
     expect(html).not.toContain('#todo-1');
   });
@@ -171,9 +173,10 @@ describe('BoardScreen', () => {
     expect(html).toContain('title="/Users/user/workspace/agent-kanban"');
     expect(html).not.toContain('kv2-card-directory');
     expect(html).not.toContain('Proj:');
-    expect(html.indexOf('kv2-project-chip')).toBeLessThan(html.indexOf('Directory card'));
+    // Option C: the project chip leads the meta line under the divider.
     expect(html.indexOf('Card description')).toBeLessThan(html.indexOf('kv2-card-divider'));
     expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-card-meta-row'));
+    expect(html.indexOf('kv2-card-meta-row')).toBeLessThan(html.indexOf('kv2-project-chip'));
     expect(html.indexOf('kv2-card-meta-row')).toBeLessThan(html.indexOf('Created 2026-04-15'));
   });
 
@@ -298,9 +301,9 @@ describe('BoardScreen', () => {
     expect(html).toContain('kv2-complete-session-view');
     expect(html).toContain('Updated newer prompt');
     expect(html).not.toContain('Shared session');
-    expect(html).toContain('Prompt');
-    expect(html).toContain('Result');
-    expect(html).toContain('Updated newer prompt first line');
+    // Turns read like comments: the prompt's first line, then `↳` its result's.
+    expect(html).toContain('<span class="kv2-complete-session-card-title">Updated newer prompt first line</span>');
+    expect(html).toContain('<p class="kv2-complete-session-turn-result">Updated newer result first line</p>');
     expect(html).toContain('Updated newer result first line');
     expect(html).toContain('Created newer prompt first line');
     expect(html).toContain('Created newer result first line');
@@ -308,13 +311,13 @@ describe('BoardScreen', () => {
     expect(html).not.toContain('created newer hidden line');
     expect(html).toContain('Session ID');
     expect(html).toContain('session-a');
-    expect(html.indexOf('2. Updated newer prompt')).toBeLessThan(html.indexOf('1. Created later prompt'));
-    // Card anatomy: unread · #id in row ①, title, then runtime · count in the meta row.
-    expect(html.indexOf('Updated newer prompt')).toBeLessThan(html.indexOf('2 cards'));
+    expect(html.indexOf('aria-label="2. Updated newer prompt')).toBeLessThan(html.indexOf('aria-label="1. Created later prompt'));
+    // A′ anatomy: ① project · runtime ··· #id ★ ● N, ② title, ③ `N턴 · … · 마지막 …`.
+    expect(html.indexOf('Updated newer prompt')).toBeLessThan(html.indexOf(BOARD_SESSION_COPY.turnCount(2)));
     expect(html.indexOf('2 unread')).toBeLessThan(html.indexOf('Updated newer prompt'));
     // Bulk actions live behind the header's ⋯ menu (its title lists them in order).
     expect(html).toContain(`aria-label="${STATUS_LABELS.complete} column actions"`);
-    expect(html).toContain(`title="${COLUMN_MENU_COPY.hideAll} · ${COLUMN_MENU_COPY.doneAll}"`);
+    expect(html).toContain(`title="${COLUMN_MENU_COPY.turnOrderOldest} · ${COLUMN_MENU_COPY.hideAll} · ${COLUMN_MENU_COPY.doneAll}"`);
     expect(html).toContain(CARD_ACTION_COPY.done);
   });
 
@@ -348,7 +351,7 @@ describe('BoardScreen', () => {
     expect(groups[0].lastUpdatedAt).toBe('2026-04-17T10:20:00.000Z');
   });
 
-  test('renders complete session card updated metadata below the card surface', () => {
+  test('session meta line: turn count · run time · last run, exact stamps in the tooltip', () => {
     const html = renderToStaticMarkup(
       <BoardScreen
         {...baseProps}
@@ -360,18 +363,22 @@ describe('BoardScreen', () => {
             status: 'complete',
             sessionId: 'session-updated-meta',
             sessionTitle: 'Updated metadata session',
+            startedAt: '2026-04-17T11:00:00.000Z',
+            completedAt: '2026-04-17T11:01:30.000Z',
+            durationMs: 90_000,
             updatedAt: '2026-04-17T12:00:00.000Z',
           }),
         ]}
       />,
     );
 
-    expect(html).toContain('kv2-complete-session-turn-updated');
-    expect(html).toContain('Updated 2026-04-17');
-    expect(html).not.toContain('kv2-complete-session-card-meta');
-    expect(html.indexOf('kv2-complete-session-turn-body')).toBeLessThan(
-      html.indexOf('kv2-complete-session-turn-updated'),
-    );
+    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'));
+    expect(meta).toContain(`<span class="kv2-complete-session-count">${BOARD_SESSION_COPY.turnCount(1)}</span>`);
+    expect(meta).toContain('<span class="kv2-complete-session-duration">1m 30s</span>');
+    expect(meta).toContain('kv2-complete-session-last');
+    expect(html).toMatch(/kv2-complete-session-meta-row" title="마지막 수행 2026-04-17 \d\d:\d\d/);
+    // The old per-turn `Updated …` line is gone.
+    expect(html).not.toContain('kv2-complete-session-turn-updated');
   });
 
   test('does not group complete cards by default', () => {
@@ -422,14 +429,18 @@ describe('BoardScreen', () => {
 
     expect(html).toContain('kv2-complete-session-group--done');
     expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain(BOARD_SESSION_COPY.unfold);
     expect(html).toContain('Done prompt one');
     expect(html).not.toContain('Done session');
     expect(html).toContain(CARD_ACTION_COPY.archive);
-    expect(html).not.toContain('Hidden prompt body');
+    // Folded: no timeline, only the newest exchange as a one-line summary.
+    expect(html).not.toContain('kv2-complete-session-timeline');
+    expect(html).toContain('<p class="kv2-complete-session-folded-summary"><b>Hidden prompt body</b> ↳ Hidden result body</p>');
+    expect(html).not.toContain('Done prompt body');
     expect(html).not.toContain(CARD_ACTION_COPY.done);
   });
 
-  test('session group header follows the card anatomy: project ··· #id, title, divider, runtime · count · resume', () => {
+  test('session group header (A′): project · runtime ··· #id, title + fold, meta line; resume in the actions row', () => {
     const html = renderToStaticMarkup(
       <BoardScreen
         {...baseProps}
@@ -450,13 +461,18 @@ describe('BoardScreen', () => {
     expect(html).not.toContain('Proj:');
     const top = html.slice(html.indexOf('kv2-complete-session-top'), html.indexOf('kv2-complete-session-title-row'));
     expect(top).toContain('kv2-complete-session-project');
-    expect(top).toContain('>#done-pro</span>');
-    expect(top).not.toContain('kv2-runtime-badge');
-    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'));
-    expect(html.indexOf('kv2-card-divider')).toBeLessThan(html.indexOf('kv2-complete-session-meta-row'));
-    expect(meta).toContain('kv2-runtime-badge');
-    expect(meta).toContain('1 card<');
-    expect(meta).toContain('kv2-resume-copy');
+    expect(top).toContain('kv2-runtime-badge');
+    expect(top).not.toContain('kv2-id-chip');
+    const titleRow = html.slice(html.indexOf('kv2-complete-session-title-row'), html.indexOf('kv2-complete-session-meta-row'));
+    expect(titleRow).toContain('class="kv2-complete-session-toggle"');
+    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'), html.indexOf('kv2-complete-session-group-actions'));
+    expect(meta).toContain(`>${BOARD_SESSION_COPY.turnCount(1)}<`);
+    // The id is hover-only at the meta row's end — its slot stays (opacity), so hovering shifts nothing.
+    expect(meta).toContain('<span class="kv2-hover-reveal kv2-complete-session-id"><button type="button" class="kv2-id-chip');
+    expect(meta).toContain('>#done-pro</span>');
+    expect(meta).not.toContain('kv2-resume-copy');
+    const actions = html.slice(html.indexOf('kv2-complete-session-group-actions'));
+    expect(actions).toContain('kv2-resume-copy');
   });
 
   test('shows Script instead of the legacy runtime in grouped done cards', () => {
@@ -678,11 +694,11 @@ describe('BoardScreen', () => {
     const unreadStart = html.indexOf('kv2-complete-session-turn kv2-complete-session-turn--unread"');
     expect(latestStart).toBeGreaterThan(-1);
     expect(unreadStart).toBeGreaterThan(latestStart);
-    // Latest is marked by text only; the NEW tag belongs to the unread turn.
+    // Latest is position (top of the list); unread is the filled node, named in the turn's label.
     const latestTurn = html.slice(latestStart, unreadStart);
-    expect(latestTurn).toContain('LATEST · ');
-    expect(latestTurn).not.toContain('NEW');
-    expect(html.slice(unreadStart)).toContain('kv2-complete-session-new-tag');
+    expect(latestTurn).not.toContain(BOARD_SESSION_COPY.unreadTurn);
+    expect(html.slice(unreadStart)).toContain(`title="${BOARD_SESSION_COPY.unreadTurn}"`);
+    expect(html).not.toContain('kv2-complete-session-new-tag');
     expect(html).toContain('kv2-complete-session-group--unread');
     expect(html).toContain('1 unread');
   });
@@ -781,7 +797,7 @@ describe('BoardScreen', () => {
     expect(html).toContain('data-card-id="todo-in" data-work-id="W1" data-work-status="todo"');
     expect(html).toContain('kv2-card-work-field is-set');
     expect(html).toContain('<span class="kv2-work-picker-label">Board polish</span>');
-    expect(html).toContain(`<span class="kv2-work-picker-label">${WORK_PICKER_COPY.none}</span>`);
+    expect(html).toContain(`<span class="kv2-work-picker-label">${WORK_PICKER_COPY.add}</span>`);
 
     // `BoardCardWorkField` is not gated to `GROUP: WORKS` — every mode shows it once Works have loaded.
     const session = renderToStaticMarkup(<BoardScreen {...baseProps} groupMode="session" works={works} cards={cards} />);
@@ -793,6 +809,7 @@ describe('BoardScreen', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a'])];
     const cards = [
       makeCard({ id: 'a-1', title: 'Turn A', status: 'complete', sessionId: 'session-a' }),
+      makeCard({ id: 'b-1', title: 'Turn B', status: 'complete', sessionId: 'session-b' }),
       makeCard({ id: 'prog-1', title: 'Running', status: 'in_progress', sessionId: 'session-p' }),
     ];
     const mutations = {
@@ -809,8 +826,12 @@ describe('BoardScreen', () => {
       <BoardScreen {...baseProps} groupMode="works" works={works} workMutations={mutations} cards={cards} />,
     );
     expect(html).toMatch(/class="kv2-complete-session-header"[^>]*draggable="true"/);
-    // The session group carries the same Work field as a card, showing its linked Work.
-    expect(html).toContain('kv2-complete-session-work-row');
+    // An unassigned session group carries the same Work field as a card…
+    const unassigned = html.slice(html.indexOf('data-session-group-key="session:session-b"'));
+    expect(unassigned).toContain('kv2-complete-session-work-row');
+    // …but inside a Work it is dropped — the container already names the Work.
+    const inWork = html.slice(html.indexOf('data-work-id="W1"'), html.indexOf('</section>'));
+    expect(inWork).not.toContain('kv2-complete-session-work-row');
     expect(html).not.toContain('kv2-work-move-menu');
     expect(html).toMatch(/class="kv2-card[^"]*" data-id="prog-1" draggable="true"/);
 
@@ -820,12 +841,30 @@ describe('BoardScreen', () => {
     expect(without).toMatch(/class="kv2-card[^"]*" data-id="prog-1" draggable="false"/);
   });
 
-  test('the list view ignores Work containers even in works mode', () => {
+  test('the list view follows GROUP: works → Work row ▸ session row, sessions folded to one row', () => {
     const works = [workFixture('W1', 'Board polish', ['session-a'])];
-    const cards = [makeCard({ id: 'a-1', status: 'complete', sessionId: 'session-a' })];
+    const cards = [
+      makeCard({ id: 'a-1', status: 'complete', sessionId: 'session-a', title: 'Turn A' }),
+      makeCard({ id: 'b-1', status: 'complete', sessionId: 'session-b', title: 'Loose turn' }),
+    ];
     const html = renderToStaticMarkup(<BoardScreen {...baseProps} viewMode="list" groupMode="works" works={works} cards={cards} />);
-    expect(html).not.toContain('data-work-id');
+    expect(html).toContain('class="kv2-list-table-row kv2-list-row--work is-open"');
+    expect(html).toContain('data-work-id="W1"');
+    expect(html).toContain('data-session-group-key="session:session-a"');
+    expect(html).toContain(LIST_COPY.unassigned);
+    expect(html.indexOf('data-work-id="W1"')).toBeLessThan(html.indexOf('data-session-group-key="session:session-b"'));
+    // Turns stay folded until the session row is opened.
+    expect(html).not.toContain('kv2-list-row--turn');
     expect(html).not.toContain('kv2-card-work-row');
+  });
+
+  test('the list view keeps flat rows in GROUP: card, project chip before runtime', () => {
+    const cards = [makeCard({ id: 'c-1', status: 'complete', sessionId: 's', projectDir: '/w/agent-kanban' })];
+    const html = renderToStaticMarkup(<BoardScreen {...baseProps} viewMode="list" groupMode="card" cards={cards} />);
+    expect(html).toContain('data-card-id="c-1"');
+    expect(html).not.toContain('kv2-list-row--session');
+    const meta = html.slice(html.indexOf('kv2-list-col-meta'));
+    expect(meta.indexOf('kv2-list-project')).toBeLessThan(meta.indexOf('kv2-runtime-badge'));
   });
 
   test('the WORK filter narrows the board in works mode only', () => {
@@ -876,7 +915,7 @@ describe('BoardScreen', () => {
       <BoardScreen {...baseProps} groupMode="session" cards={turns} />,
     );
 
-    expect(html).toContain('Show 2 more · <span class="kv2-complete-session-more-unread">1 unread</span>');
+    expect(html).toContain(`${BOARD_SESSION_COPY.olderTurns(2)}<span class="kv2-complete-session-more-unread" aria-label="1 unread">● 1</span>`);
     expect(html).not.toContain('kv2-complete-session-new-tag');
   });
 

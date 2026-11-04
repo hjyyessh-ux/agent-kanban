@@ -23,7 +23,7 @@ test.describe('Archive', () => {
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
     await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible();
     await doneColumn.locator('.kv2-complete-session-toggle').first().click();
-    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Visible' })).toBeVisible();
+    await expect(doneColumn.locator('.kv2-complete-session-turn-body[aria-label*="[E2E] Archive Visible"]')).toBeVisible();
     const menu = await openColumnMenu(doneColumn);
     await expect(menu.getByRole('menuitem', { name: COLUMN_MENU_COPY.archiveAll })).toBeVisible();
   });
@@ -38,13 +38,13 @@ test.describe('Archive', () => {
     const doneColumn = page.locator('.kv2-column[data-status="done"]');
     await expect(doneColumn.locator('.kv2-complete-session-group').first()).toBeVisible();
     await doneColumn.locator('.kv2-complete-session-toggle').first().click();
-    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Remove' })).toBeVisible();
+    await expect(doneColumn.locator('.kv2-complete-session-turn-body[aria-label*="[E2E] Archive Remove"]')).toBeVisible();
 
     const menu = await openColumnMenu(doneColumn);
     await menu.getByRole('menuitem', { name: COLUMN_MENU_COPY.archiveAll }).click();
 
     // Card should disappear from done column
-    await expect(doneColumn.locator('.kv2-complete-session-card-title', { hasText: '[E2E] Archive Remove' })).not.toBeVisible({ timeout: 5_000 });
+    await expect(doneColumn.locator('.kv2-complete-session-turn-body[aria-label*="[E2E] Archive Remove"]')).not.toBeVisible({ timeout: 5_000 });
   });
 
   test('Archive All button not visible when done column empty', async ({ page }) => {

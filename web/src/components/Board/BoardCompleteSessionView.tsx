@@ -8,7 +8,9 @@ import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
 import { dirAccentClass } from '../../utils/project-color';
 import { IdChip, ResumeCopyButton } from '../shared/IdChip';
-import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY } from '../../constants/copy';
+import { BOARD_GROUP_COPY, BOARD_SESSION_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY } from '../../constants/copy';
+import { formatDuration, resolveRunDurationMs } from '../../utils/format-duration';
+import { useBoardTurnOrder } from './board-turn-order';
 import { summarizeGroupFavorites, type WorkDragSource } from './board-works';
 import { useBoardWorkDnD, useBoardWorkField, writeWorkDragData } from './board-work-dnd';
 import { BoardCardWorkField } from './BoardCardWorkField';
@@ -157,7 +159,8 @@ export function groupCompleteCardsBySession(cards: KanbanCard[]): CompleteSessio
     .sort(compareNewestGroupFirst);
 }
 
-function formatTimestamp(iso: string | undefined): string {
+/** `YYYY-MM-DD hh:mm` in local time — tooltips' exact stamp. */
+export function formatTimestamp(iso: string | undefined): string {
   if (!iso) return '-';
 
   const date = new Date(iso);
@@ -185,7 +188,33 @@ export function formatTurnStamp(iso: string | undefined, now: Date = new Date())
   return sameDay ? time : `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${time}`;
 }
 
-function getFirstLine(value: string | undefined, fallback: string): string {
+/**
+ * The session / Work meta line's `마지막 …`: `hh:mm` today, `어제 hh:mm`
+ * yesterday, `MM-DD hh:mm` before that. The exact stamp is in the tooltip.
+ */
+export function formatRecentStamp(iso: string | undefined, now: Date = new Date()): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const isYesterday = date.getFullYear() === yesterday.getFullYear()
+    && date.getMonth() === yesterday.getMonth()
+    && date.getDate() === yesterday.getDate();
+  if (isYesterday) return `어제 ${formatTurnStamp(iso, date)}`;
+  return formatTurnStamp(iso, now);
+}
+
+/** Summed run time of the given turns — the same figure as the session dialog's `총 …`. */
+export function sumRunDurationMs(cards: readonly KanbanCard[]): number {
+  return cards.reduce((sum, card) => sum + Math.max(0, resolveRunDurationMs(card) ?? 0), 0);
+}
+
+function formatRunDuration(ms: number): string | null {
+  return ms > 0 ? formatDuration(ms) : null;
+}
+
+/** First non-empty line of `value`, or `fallback` — turn rows (board and list) summarize with it. */
+export function getFirstLine(value: string | undefined, fallback: string): string {
   const firstLine = value
     ?.split(/\r?\n/)
     .map((line) => line.trim())
@@ -262,6 +291,11 @@ export interface BoardSessionGroupCardProps {
   group: CompleteSessionGroup;
   status: SessionViewStatus;
   disclosure: SessionGroupDisclosure;
+  /**
+   * Drawn inside a Work container: the container already names the Work, so
+   * the Work field only shows on hover (to move it elsewhere).
+   */
+  insideWork?: boolean;
   onCardClick: (card: KanbanCard) => void;
   onSessionOpen?: (group: CompleteSessionGroup) => void;
   onFavoriteToggle?: (card: KanbanCard) => void;
@@ -270,22 +304,29 @@ export interface BoardSessionGroupCardProps {
 }
 
 /**
- * One session group — the `SESSION` tab, the card-anatomy header and the turn
- * timeline. Drawn by the column's session view and, unchanged, inside a Work
- * container (`GROUP: WORKS`). Disclosure state lives with the owner
- * (`useSessionGroupDisclosure`); only the per-group sort toggle is local.
+ * One session group — the `SESSION` tab, the header and the turn timeline
+ * (mockup `docs/mockups/works-board-option-a-refined.html`, A′). Drawn by the
+ * column's session view and, unchanged, inside a Work container
+ * (`GROUP: WORKS`). Disclosure state lives with the owner
+ * (`useSessionGroupDisclosure`); the turn order is board-wide
+ * (`useBoardTurnOrder`, column `⋯` menu).
+ *
+ * Header rows: ① project · runtime ··· ★ N ● N, ② title + fold,
+ * ③ `N턴 · 소요 · 마지막 hh:mm` ··· #id(hover). Turns read like comments: `n 질문` / `↳ 답`.
+ * Hover-only controls keep their slot (opacity), so nothing shifts on hover.
  */
 export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
   group,
   status,
   disclosure,
+  insideWork = false,
   onCardClick,
   onSessionOpen,
   onFavoriteToggle,
   onStatusChange,
   onArchiveCards,
 }) => {
-  const [oldestFirst, setOldestFirst] = useState(false);
+  const oldestFirst = useBoardTurnOrder() === 'oldest';
   const isCollapsed = disclosure.isCollapsed(group.key);
   // GROUP: WORKS — the header is a drag source.
   const dnd = useBoardWorkDnD();
@@ -324,7 +365,6 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
     }
   };
 
-  const toggleSort = () => setOldestFirst((previous) => !previous);
   // group.cards는 최신순(index 0 = 최신). 턴 번호는 시간순 위치(가장 오래된 것 = 1).
   const orderedTurns = group.cards.map((card, index) => ({
     card,
@@ -335,13 +375,21 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
   const hiddenUnreadCount = countUnread(
     orderedTurns.slice(INITIAL_VISIBLE_TURNS).map(({ card }) => card),
   );
-  // `★ N` in row ① counts every turn; folded ones also show on `Show N more · ★ k`.
+  // `★ N` in row ① counts every turn; folded ones also show on the older-turns row.
   const favorites = summarizeGroupFavorites(group, INITIAL_VISIBLE_TURNS);
-  // Sliced newest-first, before the sort toggle reverses it, so "the newest
+  // Sliced newest-first, before the order reverses it, so "the newest
   // five" stays the newest five in either direction.
   const visibleTurns = showAllTurns ? orderedTurns : orderedTurns.slice(0, INITIAL_VISIBLE_TURNS);
   const displayTurns = oldestFirst ? [...visibleTurns].reverse() : visibleTurns;
   const toggleShowAllTurns = () => disclosure.toggleShowAllTurns(group.key);
+
+  const totalDuration = formatRunDuration(sumRunDurationMs(group.cards));
+  const oldestCard = group.cards[group.cards.length - 1];
+  const firstAt = oldestCard ? oldestCard.startedAt ?? oldestCard.createdAt : group.startedAt;
+  const lastStamp = formatRecentStamp(group.lastUpdatedAt);
+  const latestCard = group.cards[0];
+
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
   // The hidden turns are the older ones, so the button sits where they will
   // appear: below the list when newest-first, above it when reversed.
@@ -352,20 +400,19 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
       aria-expanded={showAllTurns}
       onClick={toggleShowAllTurns}
     >
-      {showAllTurns ? 'Hide older turns' : (
+      {showAllTurns ? BOARD_SESSION_COPY.hideOlderTurns : (
         <>
-          {`Show ${hiddenTurnCount} more`}
+          {BOARD_SESSION_COPY.olderTurns(hiddenTurnCount)}
           {hiddenUnreadCount > 0 && (
-            <>
-              {' · '}
-              <span className="kv2-complete-session-more-unread">{hiddenUnreadCount} unread</span>
-            </>
+            <span
+              className="kv2-complete-session-more-unread"
+              aria-label={`${hiddenUnreadCount} unread`}
+            >
+              ● {hiddenUnreadCount}
+            </span>
           )}
           {favorites.hidden > 0 && (
-            <>
-              {' · '}
-              <span className="kv2-complete-session-more-favorite">★ {favorites.hidden}</span>
-            </>
+            <span className="kv2-complete-session-more-favorite">★ {favorites.hidden}</span>
           )}
         </>
       )}
@@ -375,7 +422,7 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
   return (
     <article
       data-session-group-key={group.key}
-      className={`kv2-complete-session-group kv2-complete-session-group--${status}${group.unreadCount > 0 ? ' kv2-complete-session-group--unread' : ''}${isDragged ? ' is-dragged' : ''}`}
+      className={`kv2-complete-session-group kv2-complete-session-group--${status}${group.unreadCount > 0 ? ' kv2-complete-session-group--unread' : ''}${isCollapsed ? ' is-collapsed' : ''}${isDragged ? ' is-dragged' : ''}`}
     >
       {/* Folder tab naming the container — the counterpart of the Work
           container's `WORK` tab, so the two never read as the same box. */}
@@ -387,7 +434,8 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
         aria-haspopup={onSessionOpen ? 'dialog' : undefined}
         aria-expanded={onSessionOpen ? undefined : !isCollapsed}
         draggable={!!workSource}
-        title={workSource ? BOARD_WORKS_COPY.dragHint : undefined}
+        // Inside a Work the container already says where it lives — no hint.
+        title={workSource && !insideWork ? BOARD_WORKS_COPY.dragHint : undefined}
         onDragStart={workSource && dnd ? (event) => {
           writeWorkDragData(event.dataTransfer, workSource);
           dnd.startDrag(workSource);
@@ -401,9 +449,7 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
         }}
       >
         <div className="kv2-complete-session-heading">
-          {/* Same anatomy as BoardCard: ① project ··· unread · #id, ② title,
-              ③ divider, ④ runtime · counts — so the runtime badge and the
-              id sit in the same place on every board item. */}
+          {/* ① what ran it (left) ··· what needs me (right). */}
           <div className="kv2-complete-session-top">
             {group.projectDir ? (
               <span
@@ -415,18 +461,12 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
             ) : (
               <span className="kv2-card-project-spacer" aria-hidden="true" />
             )}
+            <ExecutionTypeBadge
+              runtime={group.agentRuntime}
+              executionKind={group.executionKind}
+              scriptName={group.scriptName}
+            />
             <div className="kv2-complete-session-top-meta">
-              {group.unreadCount > 0 && (
-                // Count only — the filled pill already says "unread", and the
-                // project chip needs the room in row ①.
-                <span
-                  className="kv2-complete-session-unread"
-                  title={`${group.unreadCount} unread`}
-                  aria-label={`${group.unreadCount} unread`}
-                >
-                  {group.unreadCount}
-                </span>
-              )}
               {favorites.total > 0 && (
                 <span
                   className="kv2-favorite-pill"
@@ -436,130 +476,92 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
                   ★ {favorites.total}
                 </span>
               )}
-              {group.sessionId && <IdChip id={group.sessionId} kind="session" />}
+              {group.unreadCount > 0 && (
+                <span
+                  className="kv2-complete-session-unread"
+                  title={`${group.unreadCount} unread`}
+                  aria-label={`${group.unreadCount} unread`}
+                >
+                  ● {group.unreadCount}
+                </span>
+              )}
             </div>
           </div>
           <div className="kv2-complete-session-title-row">
             <span className="kv2-complete-session-title">{group.title}</span>
-          </div>
-          <div className="kv2-card-divider kv2-complete-session-divider" aria-hidden="true" />
-          <div className="kv2-complete-session-meta-row">
-            <ExecutionTypeBadge
-              runtime={group.agentRuntime}
-              executionKind={group.executionKind}
-              scriptName={group.scriptName}
-            />
-            {/* No timestamp here: a board column is too narrow for badge ·
-                count · time · resume, and a clipped time read as a bug.
-                The latest turn shows it as `LATEST · hh:mm`. */}
-            <span
-              className="kv2-complete-session-count"
-              title={`마지막 응답 ${formatTurnStamp(group.lastUpdatedAt)}`}
+            {/* Always visible, never in a menu: folding is the most used control. */}
+            <button
+              type="button"
+              className="kv2-complete-session-toggle"
+              aria-expanded={!isCollapsed}
+              aria-label={isCollapsed ? BOARD_SESSION_COPY.unfoldLabel : BOARD_SESSION_COPY.foldLabel}
+              onKeyDown={stop}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleGroup();
+              }}
             >
-              {group.cards.length === 1 ? '1 card' : `${group.cards.length} cards`}
+              {isCollapsed ? BOARD_SESSION_COPY.unfold : BOARD_SESSION_COPY.fold}
+            </button>
+          </div>
+          <div
+            className="kv2-complete-session-meta-row"
+            title={BOARD_SESSION_COPY.timesHint(formatTimestamp(group.lastUpdatedAt), formatTimestamp(firstAt), totalDuration)}
+          >
+            <span className="kv2-complete-session-count">
+              {BOARD_SESSION_COPY.turnCount(group.cards.length)}
             </span>
-            {resumeCommand && (
-              <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />
+            {totalDuration && <span className="kv2-complete-session-duration">{totalDuration}</span>}
+            {lastStamp && (
+              <span className="kv2-complete-session-last">{BOARD_SESSION_COPY.lastRun(lastStamp)}</span>
+            )}
+            {/* Hover-only, at the end of the roomiest row: it never squeezes the
+                project chip or the title, and its slot is kept so nothing shifts. */}
+            {group.sessionId && (
+              <span className="kv2-hover-reveal kv2-complete-session-id" onClick={stop} onKeyDown={stop}>
+                <IdChip id={group.sessionId} kind="session" />
+              </span>
             )}
           </div>
-          {workField && fieldCard && (
-            // The header opens the session dialog; the field must not.
-            <div
-              className="kv2-card-work-row kv2-complete-session-work-row"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <BoardCardWorkField
-                card={fieldCard}
-                works={workField.works}
-                linkedWork={workField.workForSession(group.sessionId)}
-                onSetPlanned={NOOP_SET_PLANNED}
-                onDrop={workField.run}
-              />
-            </div>
+          {isCollapsed && latestCard && (
+            // Folded, the newest exchange still reads in one line.
+            <p className="kv2-complete-session-folded-summary">
+              <b>{getFirstLine(stripFeedbackHeader(latestCard.description ?? ''), latestCard.title)}</b>
+              {' ↳ '}
+              {getFirstLine(splitCardResult(latestCard).final, BOARD_SESSION_COPY.noResult)}
+            </p>
           )}
-          <div className="kv2-complete-session-group-actions">
-            {status === 'complete' && onStatusChange && (
-              <button
-                type="button"
-                className="kv2-card-action kv2-card-action--done kv2-complete-session-group-action"
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  group.cards.forEach((card) => onStatusChange(card, 'done'));
-                }}
-              >
-                {CARD_ACTION_COPY.done}
-              </button>
-            )}
-            {status === 'done' && onArchiveCards && (
-              <button
-                type="button"
-                className="kv2-card-action kv2-card-action--secondary kv2-complete-session-group-action"
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onArchiveCards(group.cards);
-                }}
-              >
-                {CARD_ACTION_COPY.archive}
-              </button>
-            )}
-          </div>
         </div>
-        <button
-          type="button"
-          className="kv2-complete-session-toggle"
-          aria-expanded={!isCollapsed}
-          onKeyDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            toggleGroup();
-          }}
-        >
-          {isCollapsed ? 'show' : 'hide'}
-        </button>
       </header>
 
       {!isCollapsed && (
         <div className="kv2-complete-session-timeline">
-          {group.cards.length > 1 && (
-            <div className="kv2-complete-session-timeline-bar">
-              <button
-                type="button"
-                className="kv2-complete-session-sort-inline"
-                aria-pressed={oldestFirst}
-                title="대화 순서 전환 (과거 ↔ 최신)"
-                onClick={toggleSort}
-              >
-                {oldestFirst ? '↑ 과거→최신 순' : '↓ 최신→과거 순'}
-              </button>
-            </div>
-          )}
           {oldestFirst && moreTurnsButton}
           {displayTurns.map(({ card, turnNumber }) => {
-            // Latest and unread are separate signals: latest is position
-            // (node + LATEST text, never the unread red), unread is state.
             const isCurrent = turnNumber === group.cards.length;
             const isUnread = isUnreadCompletion(card);
-            const stamp = formatTurnStamp(getResponseSortTimestamp(card));
+            const respondedAt = getResponseSortTimestamp(card);
+            const stamp = formatTurnStamp(respondedAt);
+            const prompt = getFirstLine(stripFeedbackHeader(card.description ?? ''), card.title || BOARD_SESSION_COPY.noPrompt);
+            const result = getFirstLine(splitCardResult(card).final, BOARD_SESSION_COPY.noResult);
+            const duration = formatRunDuration(Math.max(0, resolveRunDurationMs(card) ?? 0));
             return (
               <article
                 key={card.id}
                 data-card-id={card.id}
                 className={`kv2-complete-session-turn${isCurrent ? ' kv2-complete-session-turn--current' : ''}${isUnread ? ' kv2-complete-session-turn--unread' : ''}`}
               >
-                <span className="kv2-complete-session-turn-node" aria-hidden="true" />
+                <span
+                  className="kv2-complete-session-turn-node"
+                  title={isUnread ? BOARD_SESSION_COPY.unreadTurn : undefined}
+                  aria-hidden="true"
+                />
                 <div
                   className="kv2-complete-session-turn-body"
                   role="button"
                   tabIndex={0}
+                  title={BOARD_SESSION_COPY.turnHint(card.title, formatTimestamp(respondedAt), duration)}
+                  aria-label={`${turnNumber}. ${card.title}${isUnread ? ` — ${BOARD_SESSION_COPY.unreadTurn}` : ''}`}
                   onClick={() => onCardClick(card)}
                   onKeyDown={(event) => {
                     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -567,58 +569,21 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
                     onCardClick(card);
                   }}
                 >
-                  <div
-                    className="kv2-complete-session-turn-header"
-                    onKeyDown={(event) => {
-                      event.stopPropagation();
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="kv2-complete-session-card-title"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onCardClick(card);
-                      }}
-                    >
-                      {isUnread && (
-                        <span
-                          className="kv2-complete-session-new-tag"
-                          title="Unread completion"
-                        >
-                          NEW
-                        </span>
-                      )}
-                      <span>{turnNumber}. {card.title}</span>
-                    </button>
-                    {(isCurrent || stamp) && (
-                      <span className="kv2-complete-session-turn-stamp">
-                        {isCurrent ? (stamp ? `LATEST · ${stamp}` : 'LATEST') : stamp}
+                  <div className="kv2-complete-session-turn-header">
+                    <span className="kv2-complete-session-turn-no">{turnNumber}</span>
+                    <span className="kv2-complete-session-card-title">{prompt}</span>
+                    {stamp && <span className="kv2-complete-session-turn-stamp">{stamp}</span>}
+                    {onFavoriteToggle && (
+                      <span onKeyDown={stop}>
+                        <FavoriteToggleButton
+                          active={!!card.favorite}
+                          onToggle={() => onFavoriteToggle(card)}
+                          className="kv2-favorite-toggle--list"
+                        />
                       </span>
                     )}
-                    {onFavoriteToggle && (
-                      <FavoriteToggleButton
-                        active={!!card.favorite}
-                        onToggle={() => onFavoriteToggle(card)}
-                        className="kv2-favorite-toggle--list"
-                      />
-                    )}
                   </div>
-
-                  <div className="kv2-complete-session-text-stack">
-                    <div className="kv2-complete-session-text-row kv2-complete-session-text-row--prompt">
-                      <span className="kv2-complete-session-text-label">Prompt</span>
-                      <p>{getFirstLine(stripFeedbackHeader(card.description ?? ''), '(no prompt)')}</p>
-                    </div>
-
-                    <div className="kv2-complete-session-text-row kv2-complete-session-text-row--result">
-                      <span className="kv2-complete-session-text-label">Result</span>
-                      <p>{getFirstLine(splitCardResult(card).final, '(no result)')}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="kv2-complete-session-turn-updated">
-                  Updated {formatTimestamp(card.updatedAt)}
+                  <p className="kv2-complete-session-turn-result">{result}</p>
                 </div>
               </article>
             );
@@ -626,6 +591,48 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
           {!oldestFirst && moreTurnsButton}
         </div>
       )}
+
+      <div className="kv2-complete-session-group-actions">
+        {resumeCommand && (
+          <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />
+        )}
+        {/* Inside a Work the picker would only repeat the container's name;
+            moving out is drag-and-drop or the Work popup. */}
+        {workField && fieldCard && !insideWork && (
+          <div
+            className="kv2-card-work-row kv2-complete-session-work-row"
+            onClick={stop}
+            onKeyDown={stop}
+          >
+            <BoardCardWorkField
+              card={fieldCard}
+              works={workField.works}
+              linkedWork={workField.workForSession(group.sessionId)}
+              onSetPlanned={NOOP_SET_PLANNED}
+              onDrop={workField.run}
+            />
+          </div>
+        )}
+        <span className="kv2-complete-session-actions-spacer" aria-hidden="true" />
+        {status === 'complete' && onStatusChange && (
+          <button
+            type="button"
+            className="kv2-card-action kv2-card-action--done kv2-complete-session-group-action"
+            onClick={() => group.cards.forEach((card) => onStatusChange(card, 'done'))}
+          >
+            {CARD_ACTION_COPY.done}
+          </button>
+        )}
+        {status === 'done' && onArchiveCards && (
+          <button
+            type="button"
+            className="kv2-card-action kv2-card-action--secondary kv2-complete-session-group-action"
+            onClick={() => onArchiveCards(group.cards)}
+          >
+            {CARD_ACTION_COPY.archive}
+          </button>
+        )}
+      </div>
     </article>
   );
 };

@@ -1,12 +1,17 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { Components } from 'react-markdown';
+import type { Components, Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 
 interface CardMarkdownProps {
   text: string;
 }
+
+// Agents write ranges like "1~4번" constantly; GFM's default single-tilde
+// strikethrough turns "1~4번과 5~8번" into a struck-through span. Only "~~x~~"
+// should strike.
+const remarkPlugins = [[remarkGfm, { singleTilde: false }], remarkBreaks] satisfies Options['remarkPlugins'];
 
 const components: Components = {
   h1: ({ children }) => <h1 className="kv2-markdown-heading">{children}</h1>,
@@ -51,7 +56,7 @@ const components: Components = {
 export const CardMarkdown: React.FC<CardMarkdownProps> = ({ text }) => {
   return (
     <div className="kv2-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>

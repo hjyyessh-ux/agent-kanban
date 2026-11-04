@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import {
   BoardSessionGroupCard,
+  formatRecentStamp,
+  formatTimestamp,
+  sumRunDurationMs,
   useSessionGroupDisclosure,
   type CardRevealRequest,
   type CompleteSessionGroup,
@@ -12,7 +15,8 @@ import type { WorkFragment } from './board-works';
 import { getDirectoryProjectName } from './directory-display';
 import { IdChip } from '../shared/IdChip';
 import { dirAccentClass } from '../../utils/project-color';
-import { BOARD_GROUP_COPY, BOARD_WORKS_COPY, STATUS_LABELS } from '../../constants/copy';
+import { BOARD_GROUP_COPY, BOARD_SESSION_COPY, BOARD_WORKS_COPY, STATUS_LABELS } from '../../constants/copy';
+import { formatDuration } from '../../utils/format-duration';
 import type { WorkDetailIntent } from '../Works/WorkDetailDialog';
 import { useBoardWorkDnD, workDropTargetProps } from './board-work-dnd';
 
@@ -73,9 +77,11 @@ export interface BoardWorkContainerProps {
  * the `WORK` folder tab, the Work-blue border, the tint face and the stacked
  * paper shadow. The body is the newest `WORK_VISIBLE_SESSIONS` session groups,
  * drawn by the same `BoardSessionGroupCard` the column uses, then
- * `＋ Show N more sessions`. The footer `hide` / `show N` button (same face as a
- * session group's) folds it to the header, meta line and that button; opening
+ * `＋ 세션 N개 더 보기`. The header `▴ 접기` / `▾ 펼치기` button (same face and
+ * place as a session group's) folds it to the header and meta line; opening
  * again starts from the newest two. `⋯` carries only the Work's own actions.
+ * Meta line (A′): project · `세션 N` · `총 소요` · `마지막 hh:mm` ··· Work id
+ * (hover only).
  */
 export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
   fragment,
@@ -131,6 +137,17 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
   const isDropTarget = !!dropProps.onDrop;
   const isDropSelf = !!dnd?.drag && dnd.drag.workId === work.id && dnd.drag.status === status;
   const projectName = getDirectoryProjectName(work.projectDir);
+  // Every session already wears its own project chip; repeat the Work's only
+  // when a session runs elsewhere, so the meta line stays one line.
+  const showProject = !!projectName && fragment.groups.some((group) => group.projectDir !== work.projectDir);
+  const workCards = fragment.groups.flatMap((group) => group.cards);
+  const totalMs = sumRunDurationMs(workCards);
+  const totalDuration = totalMs > 0 ? formatDuration(totalMs) : null;
+  const lastUpdatedAt = fragment.groups.reduce<string>(
+    (latest, group) => (group.lastUpdatedAt > latest ? group.lastUpdatedAt : latest),
+    '',
+  );
+  const lastStamp = formatRecentStamp(lastUpdatedAt || undefined);
 
   const jumpTo = (from: HTMLElement, target: KanbanStatus) => {
     const element = boardScope(from).querySelector<HTMLElement>(workFragmentSelector(work.id, target));
@@ -150,7 +167,7 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
     setCollapsed((previous) => !previous);
   };
 
-  // `⋯` holds the Work's own actions only; folding is the footer toggle.
+  // `⋯` holds the Work's own actions only; folding is the header toggle.
   const menuItems: BoardColumnMenuItem[] = onWorkOpen
     ? [
       { id: 'open', label: BOARD_WORKS_COPY.menuOpen, onSelect: () => onWorkOpen(work.id) },
@@ -169,6 +186,20 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
       {...dropProps}
     >
       <span className="kv2-work-tab" aria-hidden="true">{BOARD_GROUP_COPY.workTab}</span>
+      {/* Head + meta are one hit area that opens the Work popup. The title
+          button stays the keyboard path; clicks on the other controls in here
+          (fold, ⋯, ID chip) and portal-rendered menus are left alone. */}
+      <div
+        className={`kv2-work-hit${onWorkOpen ? ' is-clickable' : ''}`}
+        onClick={onWorkOpen ? (event) => {
+          const target = event.target as Element;
+          if (!event.currentTarget.contains(target)) return;
+          if (target.closest('button, a, input, select, textarea, [role="menu"], [role="menuitem"], .kv2-work-id')) return;
+          onWorkOpen(work.id);
+        } : undefined}
+        onMouseEnter={(event) => setPeerHighlight(event.currentTarget, work.id, true)}
+        onMouseLeave={(event) => setPeerHighlight(event.currentTarget, work.id, false)}
+      >
       <header className="kv2-work-head">
         <button
           type="button"
@@ -176,12 +207,38 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
           title={`${work.title} — ${BOARD_WORKS_COPY.titleHint}`}
           disabled={!onWorkOpen}
           onClick={() => onWorkOpen?.(work.id)}
-          onMouseEnter={(event) => setPeerHighlight(event.currentTarget, work.id, true)}
-          onMouseLeave={(event) => setPeerHighlight(event.currentTarget, work.id, false)}
           onFocus={(event) => setPeerHighlight(event.currentTarget, work.id, true)}
           onBlur={(event) => setPeerHighlight(event.currentTarget, work.id, false)}
         >
           {work.title}
+        </button>
+        {fragment.favoriteCount > 0 && (
+          <span
+            className="kv2-favorite-pill"
+            title={BOARD_WORKS_COPY.favoriteHint}
+            aria-label={`${fragment.favoriteCount} starred`}
+          >
+            ★ {fragment.favoriteCount}
+          </span>
+        )}
+        {fragment.unreadCount > 0 && (
+          <span
+            className="kv2-work-unread"
+            title={`${fragment.unreadCount} unread`}
+            aria-label={`${fragment.unreadCount} unread`}
+          >
+            ● {fragment.unreadCount}
+          </span>
+        )}
+        {/* Same `▴ 접기` / `▾ 펼치기` face and place as a session group's. */}
+        <button
+          type="button"
+          className="kv2-complete-session-toggle kv2-work-toggle"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? BOARD_WORKS_COPY.expand : BOARD_WORKS_COPY.collapse}
+          onClick={toggleCollapsed}
+        >
+          {collapsed ? BOARD_WORKS_COPY.toggleShow(fragment.sessionCount) : BOARD_WORKS_COPY.toggleHide}
         </button>
         {menuItems.length > 0 && (
           <BoardColumnMenu
@@ -192,8 +249,11 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
         )}
       </header>
 
-      <div className="kv2-work-meta">
-        {projectName && (
+      <div
+        className="kv2-work-meta"
+        title={lastUpdatedAt ? BOARD_SESSION_COPY.timesHint(formatTimestamp(lastUpdatedAt), formatTimestamp(work.startedAt), totalDuration) : undefined}
+      >
+        {showProject && (
           <span
             className={`works-dir-chip kv2-project-chip kv2-work-project ${dirAccentClass(work.projectDir)}`.trim()}
             title={work.projectDir}
@@ -201,32 +261,18 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
             {projectName}
           </span>
         )}
-        <span className="kv2-work-count">
-          {BOARD_WORKS_COPY.sessionCount(fragment.sessionCount, fragment.totalSessionCount)}
-        </span>
-        {fragment.favoriteCount > 0 && (
-          <span
-            className="kv2-favorite-pill"
-            title={BOARD_WORKS_COPY.favoriteHint}
-            aria-label={`${fragment.favoriteCount} starred`}
-          >
-            ★ {fragment.favoriteCount}
+        {/* One unbreakable group, so a wrap falls before it, never inside it. */}
+        <span className="kv2-work-stats">
+          <span className="kv2-work-count">
+            {BOARD_WORKS_COPY.sessionCount(fragment.sessionCount, fragment.totalSessionCount)}
           </span>
-        )}
-        {/* Unread and the Work id sit on the meta line, not beside the title —
-            next to it they cut a normal Work title down to `Agent-kanban …`. */}
-        <span className="kv2-work-meta-end">
-          {fragment.unreadCount > 0 && (
-            <span
-              className="kv2-work-unread"
-              title={`${fragment.unreadCount} unread`}
-              aria-label={`${fragment.unreadCount} unread`}
-            >
-              ● {fragment.unreadCount}
-            </span>
-          )}
+          {totalDuration && <span className="kv2-work-duration">총 {totalDuration}</span>}
+          {lastStamp && <span className="kv2-work-last">{BOARD_SESSION_COPY.lastRun(lastStamp)}</span>}
+        </span>
+        <span className="kv2-hover-reveal kv2-work-id">
           <IdChip id={work.id} kind="work" />
         </span>
+      </div>
       </div>
       {fragment.elsewhere.length > 0 && (
         // Own row: on the meta line they pushed `● N · #id` onto a second line.
@@ -254,6 +300,7 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
                 group={group}
                 status={status}
                 disclosure={disclosure}
+                insideWork
                 onCardClick={onCardClick}
                 onSessionOpen={onSessionOpen}
                 onFavoriteToggle={onFavoriteToggle}
@@ -285,23 +332,11 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
         </>
       )}
 
-      {/* Same hide / show button as a session group; folded, it names how many sessions it hides. */}
-      <div className="kv2-work-foot">
-        <button
-          type="button"
-          className="kv2-complete-session-toggle kv2-work-toggle"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? BOARD_WORKS_COPY.expand : BOARD_WORKS_COPY.collapse}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? BOARD_WORKS_COPY.toggleShow(fragment.sessionCount) : BOARD_WORKS_COPY.toggleHide}
-        </button>
-        {collapsed && (
-          <span className="kv2-work-foot-note">
-            {BOARD_WORKS_COPY.hiddenNote(fragment.sessionCount, fragment.unreadCount)}
-          </span>
-        )}
-      </div>
+      {collapsed && (
+        <p className="kv2-work-foot-note">
+          {BOARD_WORKS_COPY.hiddenNote(fragment.sessionCount, fragment.unreadCount)}
+        </p>
+      )}
     </section>
   );
 };

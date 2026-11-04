@@ -1,7 +1,7 @@
 import React from 'react';
 import type { KanbanCard, Work } from '../../../../src/core/types';
 import { WorkPicker } from '../Works/WorkPicker';
-import { BOARD_WORKS_COPY } from '../../constants/copy';
+import { BOARD_WORKS_COPY, WORK_PICKER_COPY } from '../../constants/copy';
 import { resolveWorkDrop, type WorkDragSource, type WorkDropTarget } from './board-works';
 import { useBoardWorkField } from './board-work-dnd';
 
@@ -107,6 +107,7 @@ export const BoardCardWorkField: React.FC<BoardCardWorkFieldProps> = ({
         works={works}
         fallbackTitle={linkedWork?.title}
         planned={isPlanned}
+        emptyLabel={WORK_PICKER_COPY.add}
         title={hint}
         onCreateNew={onCreateNew}
         onChange={(next) => {

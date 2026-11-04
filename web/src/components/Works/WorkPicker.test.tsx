@@ -67,11 +67,11 @@ describe('WorkPicker trigger', () => {
     expect(html).not.toContain('kv2-work-picker-state');
   });
 
-  test('a planned Work shows its title and the 예약 badge', () => {
+  test('a planned Work shows its title; the dashed is-planned border is the only mark', () => {
     const html = renderToStaticMarkup(<WorkPicker value="W2" works={works} planned variant="input" onChange={() => undefined} />);
     expect(html).toContain('kv2-work-picker-trigger--input is-set is-planned');
     expect(html).toContain('<span class="kv2-work-picker-label">Telegram poller</span>');
-    expect(html).toContain(`<span class="kv2-work-picker-state">${WORK_PICKER_COPY.planned}</span>`);
+    expect(html).not.toContain('kv2-work-picker-state');
   });
 
   test('a Work missing from the list falls back to fallbackTitle; disabled stays disabled', () => {

@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import type { KanbanCard, KanbanStatus, Work } from '../../../../src/core/types';
 import { BoardColumnHeader } from './BoardColumnHeader';
+import { setBoardTurnOrder, useBoardTurnOrder } from './board-turn-order';
 import { selectCardById } from './board-selectors';
 import type { V2ColumnViewModel } from './board-selectors';
 import { BoardCard, STATUS_ACCENT } from './BoardCard';
@@ -124,6 +125,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
     .filter((card): card is KanbanCard => !!card);
 
   const sessionGrouped = (status === 'complete' && groupComplete) || status === 'done';
+  const turnOrder = useBoardTurnOrder();
   const dnd = useBoardWorkDnD();
   // Same-column UNASSIGNED zone = `⊘ Work에서 빼기` for a session dragged out of a Work here.
   const unassignDropProps = workDropTargetProps(dnd, { kind: 'unassigned', status });
@@ -229,6 +231,9 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
     <div className="kv2-column" data-status={status}>
       <BoardColumnHeader
         status={status}
+        sessionGrouped={sessionGrouped}
+        turnOrder={turnOrder}
+        onTurnOrderChange={setBoardTurnOrder}
         label={column.label}
         count={column.count}
         unreadCount={column.unreadCount}

@@ -92,7 +92,7 @@ test.describe('Card Button Visibility by Status', () => {
     await expect(col.getByRole('button', { name: CARD_ACTION_COPY.done, exact: true })).not.toBeVisible();
 
     await col.locator('.kv2-complete-session-toggle').first().click();
-    await col.locator('.kv2-complete-session-card-title', { hasText: '[E2E] BtnVis Done' }).click();
+    await col.locator('.kv2-complete-session-turn-body[aria-label*="[E2E] BtnVis Done"]').click();
     const dialog = page.locator('.kv2-dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: CARD_ACTION_COPY.reopen, exact: true })).toBeVisible();
