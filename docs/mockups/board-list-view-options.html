@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board LIST 뷰 — 점검과 재설계 3안 — Agent Kanban</title>
+<style>
+/* 목업 전용 — kv2 다크(Graphite) 토큰 값을 근사 복제. 실제 구현은 kanban-v2.tokens.css 의 --kv2-* 토큰만 사용. */
+:root {
+  color-scheme: dark;
+  --app-bg: #1b1d20;       /* --kv2-app-bg */
+  --page-bg: #131517;      /* 목업 페이지 바깥 */
+  --surface: #272a2e;      /* --kv2-surface */
+  --raised: #2d3135;       /* --kv2-surface-raised */
+  --sunken: #202327;       /* --kv2-surface-sunken */
+  --hover: #30343a;        /* --kv2-surface-hover */
+  --border: #34383d;       /* --kv2-border */
+  --strong: #454a50;       /* --kv2-border-strong */
+  --frame: #0e0e15;        /* --kv2-frame */
+  --tx: #d4d7db;           /* --kv2-text-primary */
+  --tx2: #a3a8ae;          /* --kv2-text-secondary */
+  --tx3: #979ea6;          /* --kv2-text-muted */
+  --todo: #3b82f6;         /* --kv2-status-todo-accent */
+  --prog: #facc15;         /* --kv2-status-in-progress-accent */
+  --comp: #ff3b6b;         /* --kv2-status-complete-accent */
+  --done: #22c55e;         /* --kv2-status-done-accent */
+  --unread: #ed7488;       /* 다크 --kv2-text-danger 근사 */
+  --unread-fill: #e5484d;
+  --star: #f5b83d;
+  --work: #4a78c2;
+  --work-tx: #9db8e6;
+  --claude: #d97757;
+  --codex: #8aa4c8;
+  --note: #ffd84d;
+  --sans: 'Work Sans', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page-bg); color: var(--tx); font: 14px/1.5 var(--sans); }
+code, .mono { font-family: var(--mono); }
+code { background: var(--raised); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 18px; margin: 0 0 10px; }
+h3 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 0 0 8px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.page { max-width: 1480px; margin: 0 auto; padding: 24px 28px 80px; }
+.sub { color: var(--tx3); font-size: 12px; }
+.lead { color: var(--tx2); max-width: 980px; margin: 10px 0 20px; }
+.lead b, li b, td b { color: var(--tx); }
+section.blk { margin-top: 48px; }
+.tagl { display: inline-block; font: 800 11px var(--sans); letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; margin-bottom: 8px; }
+.tagl.bad { background: #3a2a2a; color: #ffb4b4; }
+.tagl.new { background: #1f3326; color: #9be3b5; }
+.tagl.rec { background: #3b3410; color: var(--note); }
+.tagl.opt { background: #26303f; color: #9db8e6; }
+
+/* 비교표 / 노트 */
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tbl th, .tbl td { padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; line-height: 1.5; }
+.tbl th { background: var(--sunken); color: var(--tx3); font-weight: 600; }
+.tbl td:first-child { color: var(--tx3); white-space: nowrap; }
+.tbl .recc { background: color-mix(in srgb, var(--note) 6%, var(--surface)); }
+.tbl th.recc { background: color-mix(in srgb, var(--note) 14%, var(--sunken)); color: var(--note); }
+.recbox { margin-top: 16px; border: 1px solid color-mix(in srgb, var(--note) 55%, transparent); background: color-mix(in srgb, var(--note) 6%, var(--surface)); border-radius: 8px; padding: 14px 18px; }
+.recbox h3 { margin-top: 0; color: var(--note); }
+.recbox ul { margin: 6px 0 0; padding-left: 18px; color: var(--tx2); }
+.recbox li { margin: 4px 0; }
+.good li::marker { color: #6fd39a; }
+.badl li::marker { color: #e58a8a; }
+.pc { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0 0; }
+.pc > div { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; }
+.pc h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .06em; color: var(--tx3); }
+.pc ul { margin: 0; padding-left: 18px; color: var(--tx2); font-size: 13px; }
+.pc li { margin: 4px 0; }
+.audit { counter-reset: a; list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+.audit li { counter-increment: a; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px 10px 46px; position: relative; color: var(--tx2); font-size: 13px; }
+.audit li::before { content: counter(a); position: absolute; left: 12px; top: 10px; width: 22px; height: 22px; border-radius: 999px; background: var(--note); color: #111; font: 800 12px/22px var(--sans); text-align: center; }
+.audit li b { display: block; color: var(--tx); font-size: 13.5px; margin-bottom: 2px; }
+.sev { font: 700 10px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: 3px; margin-right: 6px; vertical-align: 1px; }
+.sev.c { background: #4a2a30; color: #ffb4c0; } .sev.d { background: #3b3410; color: #f0d98a; } .sev.s { background: #26303f; color: #9db8e6; } .sev.k { background: #2f2f36; color: #c3c3d0; }
+.scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; background: #101214; padding: 18px 0; }
+.scroll + .sub { margin-top: 6px; }
+.cap { color: var(--tx3); font-size: 12px; margin: 8px 0 0; }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tx2); margin-left: 14px; cursor: pointer; }
+
+/* ============ 가짜 보드 프레임 ============ */
+.frame { container-type: inline-size; background: var(--app-bg); margin: 0 auto; padding-bottom: 18px; }
+.w1400 { width: 1400px; }
+.w768 { width: 768px; }
+.tb { display: flex; align-items: center; gap: 14px; padding: 12px 24px; color: var(--tx2); font-size: 12px; }
+.tb .sp { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; }
+.seg > * { padding: 4px 10px; font: 700 11px var(--sans); letter-spacing: .05em; color: var(--tx2); background: none; border: 0; }
+.seg > * + * { border-left: 1px solid var(--border); }
+.seg > .on { background: var(--hover); color: var(--tx); }
+.seg button:hover:not(.on) { color: var(--tx); background: var(--surface); }
+.tb .lbl { font: 700 10px var(--mono); letter-spacing: .08em; color: var(--tx3); }
+.tb .pill-unread { font: 700 11px var(--mono); color: var(--unread); border: 1px solid color-mix(in srgb, var(--unread) 50%, transparent); padding: 2px 8px; border-radius: 999px; }
+.list { padding: 0 24px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ============ 신규 안: 공통 리스트 ============ */
+.colhead, .r { display: grid; grid-template-columns: 30px minmax(0, 1fr) 210px 84px 104px; align-items: center; column-gap: 12px; }
+.colhead { padding: 0 12px; height: 24px; font: 600 11px var(--sans); color: var(--tx3); letter-spacing: .02em; border-bottom: 1px solid var(--border); }
+.sec { --acc: var(--tx3); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.sec[data-st=complete] { --acc: var(--comp); } .sec[data-st=in_progress] { --acc: var(--prog); } .sec[data-st=todo] { --acc: var(--todo); } .sec[data-st=done] { --acc: var(--done); }
+.sh { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 12px 0 0; background: color-mix(in srgb, var(--acc) 9%, var(--sunken)); border-left: 3px solid color-mix(in srgb, var(--acc) 85%, var(--sunken)); }
+.sec.is-open > .sh { border-bottom: 1px solid var(--border); }
+.sh .tg { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 0 0 12px; background: none; border: 0; text-align: left; }
+.sh .tg:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
+.chev { color: var(--tx3); width: 10px; font-size: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 999px; background: var(--acc); flex: none; }
+.nm { font-weight: 700; font-size: 13.5px; }
+.n { font: 600 12px var(--mono); color: var(--tx2); }
+.ur { font: 700 11px var(--mono); color: var(--unread); }
+.hint { font: 11.5px var(--mono); color: var(--tx3); }
+.sh .sp { flex: 1; }
+.ghost { background: none; border: 1px solid var(--border); color: var(--tx2); font: 700 11.5px var(--sans); padding: 0 10px; height: 24px; border-radius: 4px; white-space: nowrap; }
+.ghost:hover { border-color: var(--strong); color: var(--tx); background: var(--hover); }
+.empty { font-size: 12px; color: var(--tx3); }
+
+.r { min-height: 40px; padding: 0 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent); font-size: 13px; position: relative; }
+.r:last-child { border-bottom: 0; }
+.r:hover { background: var(--hover); }
+.r.is-unread { background: color-mix(in srgb, var(--unread-fill) 5%, transparent); }
+.r.is-unread:hover { background: var(--hover); }
+.c-fav { display: grid; place-items: center; }
+.star { background: none; border: 0; padding: 0; color: var(--tx3); font-size: 14px; line-height: 1; width: 22px; height: 22px; border-radius: 4px; }
+.star:hover { color: var(--star); background: var(--raised); }
+.star.on { color: var(--star); }
+.star.off { opacity: 0; transition: opacity .12s; }
+.r:hover .star.off, .r:focus-within .star.off { opacity: .8; }
+.hv { opacity: 0; transition: opacity .12s; }
+.r:hover .hv, .wh:hover .hv, .r:focus-within .hv { opacity: 1; }
+.chv { background: none; border: 0; color: var(--tx3); width: 22px; height: 22px; border-radius: 4px; font-size: 11px; padding: 0; }
+.chv:hover { background: var(--raised); color: var(--tx); }
+.c-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.c-title b { font-weight: 650; flex: 0 1 auto; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx); }
+.snip { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tx3); font-size: 12px; }
+.ud { width: 7px; height: 7px; border-radius: 999px; background: var(--unread-fill); flex: none; }
+.tag { font: 11px var(--mono); color: var(--tx3); flex: none; }
+.cnt { font: 700 11px var(--mono); flex: none; }
+.cnt.un { color: var(--unread); } .cnt.st { color: var(--star); }
+.no { font: 11px var(--mono); color: var(--tx3); width: 18px; text-align: right; flex: none; }
+.c-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--tx2); white-space: nowrap; }
+.sep { font-style: normal; color: var(--tx3); }
+.pj { padding: 1px 6px; border-radius: 3px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
+.pj-1 { color: #8fdcb2; background: color-mix(in srgb, #34b76e 14%, var(--surface)); }
+.pj-2 { color: #6fcbe0; background: color-mix(in srgb, #107a93 22%, var(--surface)); }
+.pj-3 { color: #f2a0cc; background: color-mix(in srgb, #dd4b9c 14%, var(--surface)); }
+.rtx { font: 700 10.5px var(--mono); letter-spacing: .05em; }
+.rtx::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 999px; margin-right: 5px; background: var(--claude); vertical-align: 1px; }
+.rtx.codex::before { background: var(--codex); }
+.c-time { font: 11.5px var(--mono); color: var(--tx3); white-space: nowrap; }
+.c-act { display: flex; justify-content: flex-end; }
+.ab { height: 26px; min-width: 92px; padding: 0 10px; border-radius: 4px; font: 700 11.5px var(--sans); border: 1px solid var(--strong); background: none; color: var(--tx2); white-space: nowrap; }
+.ab:hover { background: var(--hover); color: var(--tx); }
+.ab.start { background: #3a4a5d; border-color: #4f86c6; color: var(--tx); }
+.ab.start:hover { background: #435770; }
+.ab.ok { border-color: color-mix(in srgb, var(--done) 55%, transparent); color: #9be3b5; }
+.ab.ok:hover { background: color-mix(in srgb, var(--done) 12%, var(--surface)); }
+.qchip { flex: none; background: none; border: 1px solid var(--border); color: var(--tx3); font: 11px var(--mono); padding: 0 6px; height: 20px; border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qchip:hover { color: var(--tx); border-color: var(--strong); }
+.wpill { flex: none; font: 700 11px var(--sans); color: var(--work-tx); border: 1px solid var(--work); padding: 0 7px; height: 20px; line-height: 18px; border-radius: 4px; white-space: nowrap; }
+.wpill.planned { border-style: dashed; }
+.moreline { padding: 6px 12px 6px 54px; font-size: 12px; color: var(--tx3); border-top: 1px solid var(--border); }
+.moreline a { color: var(--work-tx); text-decoration: none; cursor: pointer; }
+
+/* Work / Session (C) */
+.wk { border-left: 3px solid color-mix(in srgb, var(--work) 80%, transparent); margin: 6px 0; background: color-mix(in srgb, var(--work) 5%, var(--surface)); }
+.wh { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 12px 0 9px; background: color-mix(in srgb, var(--work) 11%, var(--surface)); font-size: 13px; }
+.wh b { font-weight: 750; }
+.wh .wm { font: 11.5px var(--mono); color: var(--tx2); }
+.wh .wm .cnt { margin-left: 2px; }
+.wh .sp { flex: 1; }
+.wtab { font: 800 9.5px var(--mono); letter-spacing: .1em; background: #2c4a73; color: #e6eefc; padding: 2px 6px; border-radius: 2px; }
+.wk .r { border-bottom-color: color-mix(in srgb, var(--work) 14%, var(--border)); }
+.wk > .wb > .r:last-child { border-bottom: 0; }
+.rs .c-title b { font-weight: 700; }
+.tr { background: color-mix(in srgb, var(--sunken) 70%, transparent); min-height: 32px; }
+.tr .c-title b { font-weight: 500; color: var(--tx); max-width: 46%; }
+.tr .c-fav { position: relative; }
+.tr .c-fav::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--comp) 40%, transparent); }
+.tr:last-of-type .c-fav::before { bottom: 50%; }
+.wk .rs ~ .tr, .wk .tr { padding-left: 12px; }
+.indent .r { padding-left: 24px; }
+.indent .tr { padding-left: 36px; }
+
+/* ============ B: 보드 미러 박스 ============ */
+.bx { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 14px; background: var(--sunken); }
+.bw { border: 1.5px solid var(--work); background: color-mix(in srgb, var(--work) 8%, var(--app-bg)); border-radius: 4px; padding: 14px 10px 10px; position: relative; margin-top: 4px; }
+.btab { position: absolute; top: -11px; left: -2px; font: 800 9px var(--mono); letter-spacing: .1em; background: #2c4a73; color: #e6eefc; padding: 1px 7px; }
+.bs { border: 1px solid var(--border); border-left: 4px solid var(--comp); background: var(--surface); border-radius: 0 4px 4px 0; padding: 12px 10px 8px; position: relative; margin-top: 14px; }
+.bw > .bs:first-of-type { margin-top: 10px; }
+.bs .btab { background: #3a3f45; color: var(--tx); }
+.bs.loose { margin-top: 0; }
+.bl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bl .sp { flex: 1; }
+.bt { font-size: 14.5px; font-weight: 800; margin: 6px 0 2px; }
+.bm { font: 11.5px var(--mono); color: var(--tx3); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bm b { color: var(--tx2); font-weight: 600; }
+.spine { margin: 10px 0 0 4px; padding-left: 14px; border-left: 2px solid color-mix(in srgb, var(--comp) 60%, transparent); display: flex; flex-direction: column; gap: 8px; }
+.tn { position: relative; font-size: 12.5px; }
+.tn::before { content: ''; position: absolute; left: -20px; top: 4px; width: 9px; height: 9px; border-radius: 999px; background: var(--app-bg); border: 2px solid var(--comp); }
+.tn.un::before { background: var(--unread-fill); border-color: var(--unread-fill); }
+.tn .h { display: flex; gap: 6px; align-items: baseline; }
+.tn .h .q { font-weight: 700; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tn .a { color: var(--tx2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tn .a::before { content: '↳ '; color: var(--tx3); }
+.fold { background: var(--raised); border: 1px solid var(--border); color: var(--tx2); font: 700 11px var(--sans); padding: 2px 8px; border-radius: 4px; }
+.fsum { margin-top: 8px; padding: 6px 8px; background: var(--raised); border-radius: 4px; font-size: 12px; color: var(--tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ============ 좁은 폭 (프레임 폭 기준 container query) ============ */
+@container (max-width: 860px) {
+  .tb { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+  .list { padding: 0 12px; }
+  .colhead { display: none; }
+  .r { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "fav title act" "fav meta time"; row-gap: 2px; padding: 8px 10px; min-height: 52px; }
+  .c-fav { grid-area: fav; align-self: start; padding-top: 1px; }
+  .c-title { grid-area: title; }
+  .c-meta { grid-area: meta; }
+  .c-time { grid-area: time; text-align: right; }
+  .c-act { grid-area: act; }
+  .c-title b { max-width: 100%; }
+  .snip { display: none; }
+  .tr { min-height: 40px; padding-left: 24px; }
+  .indent .tr { padding-left: 24px; }
+  .indent .r { padding-left: 10px; }
+  .qchip { max-width: 140px; }
+  .hv { opacity: 1; }
+  .star.off { opacity: .55; }
+  .moreline { padding-left: 38px; }
+  .sh { padding-right: 8px; }
+  .sh .hint { display: none; }
+  .wh .wm { display: none; }
+}
+
+/* ============ 현재 (BEFORE) 재현 — board.css L873~ 그대로 ============ */
+.cur { --kv2-ink-black: #3c4146; background: var(--app-bg); padding: 0 calc(5% + 30px) 20px; display: flex; flex-direction: column; gap: 12px; font-family: var(--sans); }
+.cur-sec { border: 3px solid var(--frame); box-shadow: 4px 4px 0 var(--frame); background: var(--surface); }
+.cur-h { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 10px 12px; color: var(--frame); font: 800 18px var(--sans); text-transform: uppercase; letter-spacing: .04em; }
+.cur-h[data-s=done] { background: #22c55e; } .cur-h[data-s=complete] { background: #ff3b6b; } .cur-h[data-s=in_progress] { background: #facc15; } .cur-h[data-s=todo] { background: #1e66f5; }
+.cur-h .cnt2 { font: 12px var(--mono); background: var(--surface); padding: 1px 6px; border: 2px solid var(--frame); }
+.cur-h .sp { flex: 1; }
+.cur-create { height: 30px; padding: 0 12px; font: 800 13px var(--sans); text-transform: uppercase; letter-spacing: .04em; border: 2px solid var(--frame); background: #3a4a5d; color: var(--tx); box-shadow: 2px 2px 0 var(--frame); }
+.cur-grid { display: grid; grid-template-columns: 44px minmax(0, 6fr) minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 2fr) minmax(0, 1.5fr); gap: 10px; align-items: center; }
+.cur-head { border-top: 2px solid var(--frame); border-bottom: 2px solid var(--frame); padding: 8px 12px; background: var(--sunken); font: 700 12px var(--mono); letter-spacing: .03em; text-transform: uppercase; }
+.cur-body { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; background: var(--sunken); }
+.cur-row { border: 2px solid var(--strong); padding: 13px 14px; background: linear-gradient(180deg, var(--surface) 0%, #292d31 100%); box-shadow: 4px 4px 0 rgba(8,10,12,.5); position: relative; }
+.cur-row::before { content: ''; position: absolute; left: 0; top: 0; width: 6px; height: 100%; background: linear-gradient(180deg, rgba(251,113,133,.92), rgba(250,204,21,.88)); border-right: 2px solid var(--strong); }
+.cur-row:hover { background: linear-gradient(180deg, var(--surface), #30343a); transform: translate(-1px, -1px); }
+.cur-t { display: flex; flex-direction: column; gap: 5px; padding-left: 8px; min-width: 0; }
+.cur-t b { font-size: 18px; font-weight: 700; line-height: 1.28; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cur-t i { font-style: normal; font-size: 14px; line-height: 1.55; color: var(--tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cur-ud { width: 9px; height: 9px; border: 2px solid #3c4146; border-radius: 50%; background: var(--unread-fill); box-shadow: 1px 1px 0 #3c4146; flex: none; }
+.cur-chip { border: 2px solid var(--strong); padding: 2px 8px; font: 800 11px var(--sans); letter-spacing: .05em; }
+.cur-btn { min-width: 90px; height: 30px; padding: 0 10px; font: 800 12px var(--sans); border: 2px solid var(--frame); background: #3a4a5d; color: var(--tx); box-shadow: 2px 2px 0 rgba(13,15,16,.85); }
+.cur-btn.ok { background: #35483d; }
+.cur-empty { margin: 8px 12px 12px; border: 2px dashed var(--strong); padding: 30px 12px; text-align: center; color: var(--tx3); font: 700 14px var(--sans); }
+.cur-sum { padding: 10px 12px; border-top: 2px solid var(--frame); font: 12px var(--mono); color: var(--tx2); background: var(--sunken); }
+.cur-star { color: var(--tx3); font-size: 18px; text-align: center; }
+.cur-ts { font: 12px var(--mono); color: #899198; }
+.ann { position: absolute; z-index: 5; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 999px; background: var(--note); color: #111; font: 800 11px var(--sans); box-shadow: 1px 1px 0 #000; }
+.ann.l { left: -26px; top: 6px; }
+.ann.r2 { right: -10px; top: -10px; }
+.cur-wrap { position: relative; }
+@media (max-width: 1000px) { .audit, .pc { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>Board LIST 뷰 — 점검과 재설계 3안</h1>
+  <div class="sub">2026-11-04 · 대상: <code>BoardListView.tsx</code> / <code>BoardListRowAction.tsx</code> / <code>board.css</code> L873~1120 · 다크(Graphite) 기준 · 노란 번호는 설명용 주석 · 이 파일은 정적 목업이며 일부 접기/전환만 동작합니다</div>
+  <p class="lead">
+    사용자 피드백: <b>"LIST 쪽 화면은 기존 색감을 유지하지 않고 눈이 아플 정도로 쨍하다. Works, session 등이 전혀 반영되지 않았고 사이즈가 너무 큰 것 같다."</b>
+    아래 순서로 정리합니다. <b>① 비교표/추천 → ② 현재 점검(재현 + 문제 목록) → ③ A·B·C안 → ④ 추천안(C)의 768px 변형.</b>
+    모든 안은 공통으로 <b>섹션 순서를 주의 순서(검토 대기 → 진행중 → 대기 → 완료)</b>로 바꾸고, <b>카드 메타는 project → runtime 순</b>, 시간은 <code>2h ago</code>(<code>formatRelativeTime</code>), planned Work는 <b>파란 점선 pill만</b> 씁니다(<code>예약</code> chip 없음).
+  </p>
+</header>
+
+<!-- ================= 1. 비교표 + 추천 ================= -->
+<section class="blk" style="margin-top:20px">
+  <h2>1. 한눈에 비교</h2>
+  <table class="tbl">
+    <thead><tr><th></th><th>현재</th><th>A · 슬림 테이블</th><th>B · 보드 미러 (Work ▸ Session ▸ turn 박스)</th><th class="recc">C · 하이브리드 — 추천</th></tr></thead>
+    <tbody>
+      <tr><td>핵심 아이디어</td><td>상태별 포화색 바 + 두꺼운 카드 행</td><td>같은 표, 토큰만 kv2 다크로 교체 + 밀도 축소</td><td>보드의 WORK/SESSION 박스를 리스트 안에 그대로 이식</td><td class="recc">표 구조 유지 + <b>기존 GROUP 토글(CARD/SESSION/WORKS)을 리스트도 따름</b>. Work/세션은 얇은 행으로 표현</td></tr>
+      <tr><td>색감</td><td>라이트용 <code>--kv2-status-*-bg</code> 직접 사용 → 쨍함</td><td>9% 틴트 + 3px 상태 띠 + 점 (보드 컬럼 헤더 다크 값과 같은 계열)</td><td>A와 동일 + 박스는 board.css 값 재사용</td><td class="recc">A와 동일</td></tr>
+      <tr><td>행 높이 / 900px 화면당 행</td><td>~80px(+gap 10) / <b>약 8행</b></td><td>40px / <b>약 20행</b></td><td>세션 박스 150~330px / 약 3~5 세션</td><td class="recc">40px(카드)·40px(세션)·32px(turn) / <b>약 18~20행</b></td></tr>
+      <tr><td>Works / Session 반영</td><td>없음 (26장이 무관한 26행)</td><td>없음 (색·밀도만 해결)</td><td><b>완전</b> — 보드와 동일 어휘</td><td class="recc"><b>반영</b> — WORKS면 Work 헤더 행 ▸ 세션 행 ▸ turn 행(접힘), CARD면 평면</td></tr>
+      <tr><td>스캔성 (정렬·비교)</td><td>보통 (행이 큼)</td><td><b>최고</b></td><td>낮음 — 박스 내용이 제각각 높이</td><td class="recc">높음 — 모든 행이 같은 5열 그리드</td></tr>
+      <tr><td>구현 범위</td><td>—</td><td>CSS + <code>LIST_ORDER</code> + 시간 포맷 (작음)</td><td><code>BoardScreen</code>의 <code>worksModel</code>을 list에도 켜고 <code>BoardWorkContainer</code>/<code>BoardCompleteSessionView</code> 재사용 (큼)</td><td class="recc">A + 세션/Work 행 컴포넌트 2종 + list용 <code>selectWorkFragments</code> 연결 + nav order 갱신 (중간)</td></tr>
+      <tr><td>주요 위험</td><td>—</td><td>"Work/session 안 보임" 불만이 그대로 남음</td><td>리스트가 보드의 복제가 되어 존재 이유 약화, 드래그/unread nav 회귀 위험</td><td class="recc">list용 unread jump(<code>navOrder</code>)·<code>revealRequest</code> 펼침 로직 수정 필요, 기존 테스트 1건 의미 변경</td></tr>
+    </tbody>
+  </table>
+  <div class="recbox">
+    <h3>추천: C안 (하이브리드) — 단, A의 색/밀도 수정을 1단계로 먼저 배포</h3>
+    <ul>
+      <li><b>불만 3개를 모두 닫는 가장 작은 안입니다.</b> 색감(A와 동일) + 크기(40px 행) + Works/session(GROUP 토글을 따름).</li>
+      <li><b>LIST의 존재 이유를 지킵니다.</b> 보드는 "맥락을 입체로 보는 곳", 리스트는 "많은 것을 빠르게 훑고 한 줄 액션으로 처리하는 곳". B는 리스트를 보드의 세로 복제로 만들어 이 차이를 지웁니다.</li>
+      <li><b>이미 있는 상태 모델을 재사용합니다.</b> <code>groupMode</code>와 <code>selectWorkFragments</code>가 이미 계산됩니다. 지금은 <code>viewMode === 'board'</code> 조건 때문에 list에서 버려질 뿐입니다 (<code>BoardScreen.tsx</code> L154, L171).</li>
+      <li><b>단계 배포가 가능합니다.</b> 1단계 = 색·밀도·순서·시간 포맷(A 범위, 로직 변경 거의 없음). 2단계 = 세션 행 / Work 헤더 행 추가. 2단계가 막혀도 1단계만으로 가장 큰 불만(눈 아픔)은 해결됩니다.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= 2. 현재 점검 ================= -->
+<section class="blk">
+  <h2>2. 현재 점검</h2>
+  <span class="tagl bad">BEFORE · 현재 모습 재현 (섹션 순서: 완료 → 검토 대기 → 진행중 → 대기)</span>
+  <div class="scroll">
+    <div class="frame w1400" style="padding-bottom:0">
+      <div class="tb"><span class="seg"><span class="on">LIST</span><span>BOARD</span><span>TIMELINE</span></span><span class="lbl">GROUP</span><span class="seg" style="opacity:.45"><span class="on">CARD</span><span>SESSION</span><span>WORKS</span></span><span class="sub">← list에서는 눌러도 아무 변화 없음</span></div>
+      <div class="cur cur-wrap">
+        <!-- 완료 (접힘) -->
+        <div class="cur-sec">
+          <div class="cur-h" data-s="done"><span>▶</span><span>완료</span><span class="cnt2">232</span></div>
+          <div class="cur-sum">232 items hidden</div>
+        </div>
+        <!-- 검토 대기 -->
+        <div class="cur-sec" style="position:relative">
+          <span class="ann r2" style="top:-12px;right:-12px">1</span>
+          <div class="cur-h" data-s="complete"><span>▼</span><span>검토 대기</span><span class="cnt2">40</span></div>
+          <div class="cur-head cur-grid" style="position:relative"><span class="ann" style="left:-36px;top:6px">5</span><span>Fav</span><span>Title</span><span>Runtime</span><span>Action</span><span>Queue</span><span>Created</span></div>
+          <div class="cur-body">
+            <div class="cur-row cur-grid" style="position:relative"><span class="ann l">3</span>
+              <span class="cur-star">★</span>
+              <span class="cur-t"><b><span class="cur-ud"></span>Feedback #9: Agent-kanban - UI 개선</b><i>LIST 쪽의 화면은 기존의 색감을 유지하고 현재 색감을 쓰지 않아서 눈이 아플정도로 쨍하네. …</i></span>
+              <span><span class="cur-chip">CLAUDE</span></span><span><button class="cur-btn ok">✓ 완료</button></span><span></span><span class="cur-ts">2026-11-04 11:00</span></div>
+            <div class="cur-row cur-grid"><span class="cur-star">☆</span>
+              <span class="cur-t"><b><span class="cur-ud"></span>GHES 이관 - zanything</b><i>GHES Actions runner 이관 후 workflow 정리하고 actions-yaml-update 재실행해줘</i></span>
+              <span><span class="cur-chip">CLAUDE</span></span><span><button class="cur-btn ok">✓ 완료</button></span><span></span><span class="cur-ts">2026-11-04 08:12</span></div>
+            <div class="cur-row cur-grid"><span class="cur-star">☆</span>
+              <span class="cur-t"><b>MCP 서버 타임아웃 조사</b><i>mcp-server 의 tools/call 이 30초 넘으면 끊기는 이유를 찾아줘</i></span>
+              <span><span class="cur-chip">CODEX</span></span><span><button class="cur-btn ok">✓ 완료</button></span><span></span><span class="cur-ts">2026-11-03 16:40</span></div>
+          </div>
+          <div class="cur-sum" style="border-top:2px solid var(--frame)">… 이하 37행 생략 (실제 화면에서는 전부 같은 크기로 이어짐)</div>
+        </div>
+        <!-- 진행중 (비어 있음) -->
+        <div class="cur-sec" style="position:relative">
+          <span class="ann r2">4</span>
+          <div class="cur-h" data-s="in_progress"><span>▼</span><span>진행중</span><span class="cnt2">0</span></div>
+          <div class="cur-head cur-grid"><span>Fav</span><span>Title</span><span>Runtime</span><span>Action</span><span>Queue</span><span>Created</span></div>
+          <div class="cur-empty">No cards</div>
+        </div>
+        <!-- 대기 -->
+        <div class="cur-sec" style="position:relative">
+          <div class="cur-h" data-s="todo"><span>▼</span><span>대기</span><span class="cnt2">3</span><span class="sp"></span><button class="cur-create">+ Add Task</button></div>
+          <div class="cur-head cur-grid"><span>Fav</span><span>Title</span><span>Runtime</span><span>Action</span><span style="position:relative">Queue<span class="ann" style="left:46px;top:-2px">6</span></span><span>Created</span></div>
+          <div class="cur-body">
+            <div class="cur-row cur-grid"><span class="cur-star">☆</span>
+              <span class="cur-t"><b>릴리즈 노트 초안</b><i>v0.14 변경점을 카드 기준으로 정리해서 docs/releases 에 초안 작성</i></span>
+              <span><span class="cur-chip">CLAUDE</span></span><span><button class="cur-btn">▶ 시작</button></span>
+              <span style="font:12px var(--mono);color:var(--tx2)">↳ Feedback #9 뒤에</span><span class="cur-ts">2026-11-04 11:00</span></div>
+            <div class="cur-row cur-grid"><span class="cur-star">☆</span>
+              <span class="cur-t"><b>mcp-server 인증 토큰 로테이션</b><i>토큰 만료 전에 자동 교체되도록 스케줄러 연결</i></span>
+              <span><span class="cur-chip">CODEX</span></span><span><button class="cur-btn">▶ 시작</button></span><span></span><span class="cur-ts">2026-11-02 09:30</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">재현 근거: <code>board.css</code> L915~929(섹션 헤더 배경), L988~1014(행), L1016~1050(제목/unread dot), <code>BoardListView.tsx</code>의 <code>formatCreatedTimestamp</code>. 위 화면은 해당 CSS를 그대로 옮긴 것입니다.</p>
+
+  <h3>점검 결과 — 구체적 문제 12개</h3>
+  <ol class="audit">
+    <li><b><span class="sev c">색</span>섹션 바가 다크 토큰이 아니라 라이트용 포화색을 직접 씁니다</b>
+      <code>.kv2-list-section-header[data-status]</code>가 <code>--kv2-status-*-bg</code>(#ff3b6b / #facc15 / #22c55e / #1e66f5)를 그대로 씁니다. 다크 테마가 덮어쓰는 건 <code>--kv2-column-header-*-bg</code>(20~24% 혼합)뿐인데 보드만 이쪽을 쓰고 리스트는 안 씁니다. 상대 휘도 0.64/0.41/0.25/0.16 짜리 면이 휘도 0.012 배경 위에 전폭으로 깔려 눈부심의 원인입니다.</li>
+    <li><b><span class="sev c">색</span>모든 행에 같은 분홍→노랑 그라데이션 띠가 붙습니다</b>
+      <code>.kv2-list-table-row::before</code>가 <code>--kv2-list-row-accent-from/to</code>(rgba(251,113,133)→rgba(250,204,21)) 고정값입니다. 완료 행에도, 대기 행에도 같은 띠 → 상태와 무관한 장식이 "검토 대기"처럼 읽힙니다.</li>
+    <li><b><span class="sev d">밀도</span>행 하나가 ~80px, 행 간격 10px 포함 피치 90px</b>
+      패딩 13+13, 제목 <code>--kv2-text-lg</code>(line 1.28), 요약 줄(line 1.55), 2px 테두리, 4px 하드 섀도. 900px 화면에 약 8행. 완료 232장을 펼치면 약 2만 px.</li>
+    <li><b><span class="sev d">낭비</span>빈 섹션이 100px+ 점선 박스</b>
+      0건이어도 컬럼 헤더 + <code>.kv2-empty</code> "No cards" 박스가 그대로 나옵니다. 위 재현에서 진행중이 그 경우.</li>
+    <li><b><span class="sev d">낭비</span>컬럼 헤더가 섹션마다 4번 반복, 라벨도 거침</b>
+      mono 대문자 <code>FAV TITLE RUNTIME ACTION QUEUE CREATED</code>. "FAV"는 아이콘 열이고, 행이 0개인 섹션에도 나옵니다.</li>
+    <li><b><span class="sev d">낭비</span>QUEUE 열이 폭의 ~16%를 차지하지만 대부분 비어 있음</b>
+      큐가 걸린 대기 카드에서만 값이 있습니다. 나머지 95% 행에서는 빈 칸.</li>
+    <li><b><span class="sev k">일관성</span>시간 표기가 보드와 다릅니다</b>
+      리스트 <code>2026-11-04 11:00</code>(절대, mono) vs 보드 <code>2h ago</code> / <code>마지막 hh:mm</code>. 또 "Created"는 검토/완료 단계에서 중요한 값이 아니라 <b>마지막 활동</b>이 중요합니다.</li>
+    <li><b><span class="sev s">구조</span>Works / Session이 전혀 반영되지 않습니다</b>
+      <code>BoardScreen</code>이 <code>worksModel</code>·<code>unreadBySession</code>·<code>navOrder</code>의 <code>groupComplete</code>를 전부 <code>viewMode === 'board'</code>에서만 켭니다 (테스트 "the list view ignores Work containers even in works mode"). 한 세션의 카드 26장이 서로 무관한 26행이 되고 GROUP 토글은 무반응.</li>
+    <li><b><span class="sev s">구조</span>프로젝트 정보가 없습니다</b>
+      행에 project 칩이 없어 agent-kanban / zanything / mcp-server 카드를 구분 못 합니다. 보드 카드는 project가 맨 앞.</li>
+    <li><b><span class="sev s">구조</span>완료(232)가 맨 위, 기본 펼침, 접힘 상태 비저장</b>
+      <code>LIST_ORDER</code>가 done을 처음에 두고 <code>useState</code> 초깃값이 전부 <code>false</code>(펼침)라 새로고침마다 232행이 위를 덮습니다. 손이 필요한 검토 대기가 두 번째.</li>
+    <li><b><span class="sev c">색</span>헤더 요소 대비·무게</b>
+      800 weight 대문자 + 2px 프레임 박스 카운트. 카운트 글자색이 상속된 <code>--kv2-frame</code>(#0e0e15)라 #272a2e 위에서 약 1.3:1. unread dot도 테두리가 <code>--kv2-ink-black</code>(다크에서 #3c4146)이라 하드 섀도와 함께 뭉개집니다. 섹션별 안 읽음 수(<code>column.unreadCount</code>는 있음)는 표시되지 않습니다.</li>
+    <li><b><span class="sev k">인터랙션</span>hover가 행을 움직이고, 좁은 폭 대응이 없습니다</b>
+      <code>.kv2-list-table-row:hover</code>가 <code>translate(-1px,-1px)</code> + 섀도 변경 → "hover는 opacity만" 원칙 위반. ≤768px는 6열 비율만 바꿀 뿐 카드형 전환이 없어 제목이 거의 잘립니다.</li>
+  </ol>
+</section>
+
+<!-- ================= 3. 옵션 A ================= -->
+<section class="blk">
+  <span class="tagl opt">OPTION A</span>
+  <h2>A · 슬림 테이블 — 같은 표, kv2 토큰으로 다시 칠하기</h2>
+  <p class="lead" style="margin-bottom:10px">상태 색은 <b>3px 좌측 띠 + 8px 점 + 9% 틴트</b>로만 남기고, 행은 <b>40px 한 줄</b>(제목 + 요약 한 줄 인라인)로 줄입니다. QUEUE 열은 없애고 큐 chip은 제목 뒤에 붙입니다. 빈 섹션은 헤더 한 줄, 접힌 섹션은 헤더 오른쪽에 <code>232개 · 마지막 어제</code>. ADD TASK는 ghost 버튼.
+  <label class="chk"><input type="checkbox" id="emptyProg"> 진행중을 비워서 보기 (빈 섹션 처리 확인)</label></p>
+  <div class="scroll"><div class="frame w1400" id="mA"></div></div>
+  <div class="pc">
+    <div><h4>장점</h4><ul class="good">
+      <li>구현이 가장 작음: <code>board.css</code> 규칙 교체 + <code>LIST_ORDER</code> + 시간 포맷. 로직 변경 거의 없음.</li>
+      <li>스캔성 최고. 모든 행이 같은 그리드라 project·runtime·시간이 세로로 정렬됨.</li>
+      <li>보드와 같은 어휘(점, project 칩, <code>2h ago</code>)를 써서 이질감 제거.</li></ul></div>
+    <div><h4>단점</h4><ul class="badl">
+      <li><b>Works/Session 불만이 그대로</b>. 세션 26장이 여전히 26행.</li>
+      <li>GROUP 토글이 리스트에서 계속 무반응이라 "고장난 컨트롤" 인상이 남음.</li>
+      <li>같은 세션 카드끼리 묶어 처리(일괄 완료 등)하려면 보드로 가야 함.</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= 4. 옵션 B ================= -->
+<section class="blk">
+  <span class="tagl opt">OPTION B</span>
+  <h2>B · 보드 미러 — Work ▸ Session ▸ turn 박스를 리스트에 이식</h2>
+  <p class="lead" style="margin-bottom:10px">상태 섹션 틀은 A와 같고, <b>검토 대기 안에서</b> 보드와 같은 <code>WORK</code> / <code>SESSION</code> 탭 박스, <code>세션 N · 총 소요 · 마지막</code>, <code>● N</code>, <code>★ N</code>, 댓글형 turn(질문 → ↳ 답)을 그대로 씁니다. 대기/진행중/완료는 평면 행.</p>
+  <div class="scroll"><div class="frame w1400" id="mB"></div></div>
+  <div class="pc">
+    <div><h4>장점</h4><ul class="good">
+      <li>Work/세션/turn 계층과 요약(안 읽음·★·소요)을 <b>가장 충실히</b> 보여줌. 보드 컴포넌트 재사용 가능.</li>
+      <li>세션 단위 액션(<code>✓ 완료</code>, resume)과 turn별 즐겨찾기를 바로 사용.</li>
+      <li>보드와 시각적으로 완전히 같아 학습 비용 0.</li></ul></div>
+    <div><h4>단점</h4><ul class="badl">
+      <li><b>크다.</b> 세션 박스 1개 = 150~330px. "사이즈가 너무 크다"는 불만과 정면 충돌, 화면당 3~5 세션.</li>
+      <li>박스 높이가 제각각이라 위아래 비교/스캔이 어렵고, 리스트가 보드의 세로 복제로 전락.</li>
+      <li>GROUP=CARD일 때의 모습은 별도로 정의 필요(결국 A가 또 필요). drag&amp;drop·unread jump 회귀 범위가 큼.</li></ul></div>
+  </div>
+</section>
+
+<!-- ================= 5. 옵션 C ================= -->
+<section class="blk">
+  <span class="tagl rec">OPTION C · 추천</span>
+  <h2>C · 하이브리드 — 같은 5열 그리드에 Work 헤더 행 / 세션 행 / turn 행</h2>
+  <p class="lead" style="margin-bottom:10px">카드 행은 A와 동일. <b>GROUP 토글이 리스트에서도 동작</b>합니다.
+    <b>CARD</b> = A와 같은 평면, <b>SESSION</b> = 세션 1개가 1행(<code>#id · 세션 26 · ● 5 · ★ 2</code>, 마지막 시각), <b>WORKS</b> = 얇은 Work 헤더 행(WORK 탭 + <code>2 sessions · 총 소요</code>) 아래 세션 행이 들여쓰기.
+    세션 행의 ▸를 누르면 turn 행(번호 · 질문 · ↳ 답 한 줄 · 시각 · ★)이 펼쳐집니다. <b>아래 위젯을 직접 눌러 보세요</b> (GROUP 전환, 섹션/Work/세션 접기, ★ 토글).</p>
+  <span class="tagl rec" style="background:#2b2a1d">1400px · 데스크톱</span>
+  <div class="scroll"><div class="frame w1400" id="mC"></div></div>
+  <div class="pc">
+    <div><h4>장점</h4><ul class="good">
+      <li>불만 3개(색·크기·Works/Session)를 한 번에 해결. 행 높이는 A와 같은 40px.</li>
+      <li>GROUP 토글이 모든 뷰에서 의미를 가짐. 보드에서 만든 맥락(Work 배정)이 리스트에서도 보임.</li>
+      <li>세션 행에서 <code>✓ 완료</code>, <code>● N</code>, <code>★ N</code>, 마지막 시각을 한 줄로 처리 → 일괄 처리가 빠름.</li>
+      <li>1단계(A 범위) → 2단계(세션/Work 행)로 쪼개 배포 가능.</li></ul></div>
+    <div><h4>단점</h4><ul class="badl">
+      <li>세션/Work 행 컴포넌트 2종 + 접힘 상태(<code>open</code> 키) 관리가 새로 필요. 접힘은 localStorage 저장 권장.</li>
+      <li><code>selectBoardNavOrder</code>(unread 점프)와 <code>revealRequest</code>가 접힌 세션/Work를 펼치도록 확장돼야 함. 기존 테스트 "list ignores Work containers"는 의미 변경.</li>
+      <li>turn 요약이 한 줄이라 질문↔답 전문은 상세 모달로 가야 함(B보다 정보량 적음).</li></ul></div>
+  </div>
+
+  <h3 style="margin-top:30px"><span class="tagl rec" style="margin:0 8px 0 0;background:#2b2a1d">768px · 좁은 폭 변형</span> 같은 컴포넌트가 컨테이너 폭만 보고 2줄 행으로 전환</h3>
+  <p class="cap" style="margin-bottom:10px">컬럼 헤더 숨김 · 1줄차 = ★ / 제목 / 액션, 2줄차 = project · runtime / 시각. 요약 줄과 hover 전용 요소는 상시 노출(터치). 최소 행 높이 52px. 구현은 <code>@container (max-width: 860px)</code>(또는 <code>@media (max-width: 768px)</code>)로 충분.</p>
+  <div class="scroll"><div class="frame w768" id="mC2"></div></div>
+</section>
+
+<!-- ================= 6. 구현 메모 ================= -->
+<section class="blk">
+  <h2>6. 구현 메모 (추천안 기준)</h2>
+  <table class="tbl">
+    <thead><tr><th>단계</th><th>변경</th><th>파일</th></tr></thead>
+    <tbody>
+      <tr><td>1단계 · 색/밀도</td><td>섹션 헤더를 <code>color-mix(in srgb, var(--kv2-status-*-accent) 9%, var(--kv2-surface-sunken))</code> + 3px 좌측 띠 + 점으로 교체(라이트/다크 모두 토큰만 사용, 새 hex 금지). 행 40px, 프레임 3px·하드 섀도·그라데이션 띠(<code>--kv2-list-row-accent-*</code>) 삭제, hover는 배경색만. 컬럼 헤더 1회, QUEUE 열 제거 → 제목 뒤 chip. 빈 섹션 = 헤더만. 접힘 요약은 헤더 우측.</td><td><code>board.css</code>, <code>BoardListView.tsx</code></td></tr>
+      <tr><td>1단계 · 순서/시간</td><td><code>LIST_ORDER</code> = complete → in_progress → todo → done, done 기본 접힘, 접힘 상태 localStorage. <code>formatCreatedTimestamp</code> 대신 <code>formatRelativeTime</code>(title 속성에 절대 시각). 행에 project 칩 추가(<code>works-dir-chip</code> 재사용), 메타 순서 project → runtime.</td><td><code>BoardListView.tsx</code>, <code>utils/format-duration.ts</code></td></tr>
+      <tr><td>2단계 · Works/Session</td><td><code>BoardScreen</code>의 <code>viewMode === 'board'</code> 조건을 완화해 list에도 <code>groupComplete</code>/<code>worksModel</code> 전달. <code>BoardListSessionRow</code> / <code>BoardListWorkRow</code> 추가, <code>selectBoardNavOrder</code>·<code>revealRequest</code>가 접힌 Work/세션을 펼치게 확장, 테스트 갱신. (fragile 파일 아님이지만 <code>docs/works.md</code> 선독 필요)</td><td><code>BoardScreen.tsx</code>, <code>BoardListView.tsx</code>, <code>board-selectors.ts</code>, <code>BoardScreen.test.tsx</code></td></tr>
+      <tr><td>hover 규칙</td><td>★(off 상태), Work 헤더의 <code>열기 ↗</code>는 <code>.kv2-hover-reveal</code>(opacity, 자리 유지). 주 액션 버튼은 상시 노출(고정 폭 92px).</td><td><code>board.css</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+
+<script>
+/* ------------------ 데이터 ------------------ */
+const PJ = { 'zanything': 1, 'agent-kanban': 2, 'mcp-server': 3 };
+const ST = {
+  complete: { label: '검토 대기' }, in_progress: { label: '진행중' }, todo: { label: '대기' }, done: { label: '완료' }
+};
+const ORDER = ['complete', 'in_progress', 'todo', 'done'];
+const ACT = { todo: ['▶ 시작', 'start'], in_progress: ['✓ 실행 종료', ''], complete: ['✓ 완료', 'ok'], done: ['다시 열기', ''] };
+
+const CARDS = {
+  complete: [
+    { title: 'Feedback #9: Agent-kanban - UI 개선', prompt: 'LIST 쪽의 화면은 기존의 색감을 유지하고 현재 색감을 쓰지 않아서 눈이 아플정도로 쨍하네', proj: 'agent-kanban', rt: 'CLAUDE', fav: true, unread: true, t: '2h ago' },
+    { title: 'GHES 이관 - zanything', prompt: 'GHES Actions runner 이관 후 workflow 정리하고 actions-yaml-update 재실행해줘', proj: 'zanything', rt: 'CLAUDE', fav: true, unread: true, t: '3h ago' },
+    { title: 'Feedback #8: actions-yaml-update 재실행', prompt: '다시 실행한 zdd-zetta2 workflow가 통과하는지 확인하고 결과 알려줘', proj: 'zanything', rt: 'CLAUDE', unread: true, t: '3h ago' },
+    { title: 'GHES 마이그레이션 체크리스트 검증', prompt: '체크리스트 항목별로 실제 상태를 확인하고 누락된 것만 표로', proj: 'zanything', rt: 'CODEX', t: '5h ago' },
+    { title: 'MCP 서버 타임아웃 조사', prompt: 'mcp-server 의 tools/call 이 30초 넘으면 끊기는 이유를 찾아줘', proj: 'mcp-server', rt: 'CODEX', unread: true, t: '1d ago' },
+    { title: 'zdd-zetta2 릴리즈 PR 정리', prompt: '머지 순서와 롤백 계획을 PR 본문에 정리', proj: 'zanything', rt: 'CLAUDE', t: '2d ago' }
+  ],
+  in_progress: [
+    { title: 'Telegram 폴러 재시도 로직', prompt: 'getUpdates 409 충돌 시 백오프 후 재시도, 상태 저장소에 마지막 offset 기록', proj: 'agent-kanban', rt: 'CLAUDE', t: '12m 실행' },
+    { title: 'zanything 쿼리 성능 개선', prompt: 'events 조회 쿼리 플랜 확인하고 인덱스 후보 제안', proj: 'zanything', rt: 'CODEX', t: '4m 실행' }
+  ],
+  todo: [
+    { title: '릴리즈 노트 초안', prompt: 'v0.14 변경점을 카드 기준으로 정리해서 docs/releases 에 초안 작성', proj: 'agent-kanban', rt: 'CLAUDE', t: '3h ago', queue: 'Feedback #9 뒤에' },
+    { title: 'mcp-server 인증 토큰 로테이션', prompt: '토큰 만료 전에 자동 교체되도록 스케줄러 연결', proj: 'mcp-server', rt: 'CODEX', t: '2d ago', planned: '인증 정리' },
+    { title: 'DB 스키마 문서화', prompt: 'zanything 주요 테이블 관계도와 컬럼 설명을 docs 에 정리', proj: 'zanything', rt: 'CLAUDE', fav: true, t: '5d ago' }
+  ],
+  done: [
+    { title: 'Telegram /sessions Markdown 렌더링', prompt: 'board-wide /sessions 와 resume 버튼, Markdown 응답', proj: 'agent-kanban', rt: 'CLAUDE', t: '7d ago' },
+    { title: 'zanything ClickHouse TTL 점검', prompt: 'TTL 정책이 파티션 단위로 동작하는지 확인', proj: 'zanything', rt: 'CODEX', t: '8d ago' },
+    { title: 'mcp-server 로그 레벨 조정', prompt: 'info 로그가 과다한 핸들러 정리', proj: 'mcp-server', rt: 'CODEX', t: '8d ago' }
+  ]
+};
+const TOTAL = { complete: 40, in_progress: 2, todo: 3, done: 232 };
+const UNREAD = { complete: 8, in_progress: 0, todo: 0, done: 0 };
+
+const SESS = [
+  { id: 'a7592bb6', work: 'GHES 마이그레이션', title: 'GHES 이관 - zanything', proj: 'zanything', rt: 'CLAUDE', turns: 26, unread: 5, stars: 2, total: '3h 12m', last: '20:47',
+    list: [ { n: 26, q: '머지하고 마무리하자.', a: 'PR 3개를 모두 머지했습니다.', t: '20:47', un: true, fav: true },
+            { n: 25, q: 'Feedback #8: actions-yaml-update 재실행', a: '다시 실행한 zdd-zetta2 workflow 가 통과했습니다.', t: '20:45', un: true },
+            { n: 24, q: '커밋 후 push 하자', a: 'ghes_migration 브랜치로 push 완료.', t: '20:35', un: true, fav: true } ] },
+  { id: 'c41e90d2', work: 'GHES 마이그레이션', title: 'GHES 체크리스트 검증', proj: 'zanything', rt: 'CODEX', turns: 3, unread: 0, stars: 0, total: '24m', last: '18:02',
+    list: [ { n: 3, q: '누락된 항목만 표로 정리해줘', a: '4개 항목이 미완료입니다.', t: '18:02' },
+            { n: 2, q: '체크리스트 항목별 실제 상태 확인', a: '12개 중 8개 확인 완료.', t: '17:51' },
+            { n: 1, q: 'GHES 마이그레이션 체크리스트 작성', a: '초안을 작성했습니다.', t: '17:38' } ] },
+  { id: 'b3e19f07', work: null, title: 'Feedback #9: Agent-kanban - UI 개선', proj: 'agent-kanban', rt: 'CLAUDE', turns: 9, unread: 1, stars: 1, total: '1h 08m', last: '11:12',
+    list: [ { n: 9, q: 'LIST 뷰 점검하고 재설계안 3개 만들어줘', a: '목업 파일을 만들었습니다.', t: '11:12', un: true, fav: true },
+            { n: 8, q: 'works 배정 UI 간소화', a: '선택지 3개로 정리했습니다.', t: '10:40' } ] },
+  { id: 'e0b4417a', work: null, title: 'MCP 서버 타임아웃 조사', proj: 'mcp-server', rt: 'CODEX', turns: 2, unread: 1, stars: 0, total: '9m', last: '어제 16:40',
+    list: [ { n: 2, q: 'keep-alive 설정이 원인인지 확인', a: '프록시 idle timeout 이 30초였습니다.', t: '16:40', un: true },
+            { n: 1, q: 'tools/call 이 30초에 끊기는 이유 조사', a: '재현 완료, 원인 후보 2개.', t: '16:31' } ] }
+];
+const WORK = { title: 'GHES 마이그레이션', proj: 'zanything', sessions: ['a7592bb6', 'c41e90d2'], total: '3h 36m' };
+
+/* ------------------ 조각 ------------------ */
+const g = { emptyProg: false };
+const pj = p => `<span class="pj pj-${PJ[p]}">${p}</span>`;
+const rtx = r => `<span class="rtx ${r.toLowerCase()}">${r}</span>`;
+const metaCell = (p, r) => `<span class="c-meta">${pj(p)}<i class="sep">·</i>${rtx(r)}</span>`;
+const star = on => `<button class="star ${on ? 'on' : 'off'}" type="button" aria-label="즐겨찾기" aria-pressed="${!!on}">${on ? '★' : '☆'}</button>`;
+const ud = () => '<i class="ud" title="안 읽음" aria-label="안 읽음"></i>';
+const actBtn = st => { const [l, c] = ACT[st]; return `<button class="ab ${c}" type="button">${l}</button>`; };
+
+function cardRow(c, st) {
+  return `<div class="r${c.unread ? ' is-unread' : ''}">
+    <span class="c-fav">${star(c.fav)}</span>
+    <span class="c-title">${c.unread ? ud() : ''}<b title="${c.title}">${c.title}</b>${c.planned ? `<span class="wpill planned" title="계획된 Work">W ${c.planned}</span>` : ''}${c.queue ? `<button class="qchip" type="button" title="큐 연결 변경">↳ ${c.queue}</button>` : ''}<span class="snip">${c.prompt}</span></span>
+    ${metaCell(c.proj, c.rt)}
+    <span class="c-time" title="2026-11-04 11:00">${c.t}</span>
+    <span class="c-act">${actBtn(st)}</span></div>`;
+}
+const cnts = s => `${s.unread ? `<span class="cnt un">● ${s.unread}</span>` : ''}${s.stars ? `<span class="cnt st">★ ${s.stars}</span>` : ''}`;
+const wchip = w => `<span class="wpill" title="Work">W ${w}</span>`;
+
+function turnRows(s) {
+  return s.list.map(t => `<div class="r tr${t.un ? ' is-unread' : ''}">
+      <span class="c-fav">${star(t.fav)}</span>
+      <span class="c-title"><span class="no">${t.n}</span>${t.un ? ud() : ''}<b>${t.q}</b><span class="snip">↳ ${t.a}</span></span>
+      <span class="c-meta"></span><span class="c-time">${t.t}</span><span class="c-act"></span></div>`).join('')
+    + `<div class="r tr" style="grid-template-columns:1fr"><span class="sub" style="padding-left:30px">… 이전 ${s.turns - s.list.length}개 turn · <a style="color:var(--work-tx);cursor:pointer">더 보기</a></span></div>`;
+}
+function sessRow(s, I, inWork) {
+  const key = 's' + s.id, open = !!I.open[key];
+  return `<div class="r rs${s.unread ? ' is-unread' : ''}">
+      <button class="c-fav chv" type="button" data-open="${key}" aria-expanded="${open}" aria-label="turn 펼치기">${open ? '▾' : '▸'}</button>
+      <span class="c-title">${s.unread ? ud() : ''}<b>${s.title}</b><span class="tag">#${s.id}</span>${cnts(s)}${!inWork && s.work ? wchip(s.work) : ''}<span class="snip">세션 ${s.turns} · 총 ${s.total}</span></span>
+      ${metaCell(s.proj, s.rt)}
+      <span class="c-time">마지막 ${s.last}</span>
+      <span class="c-act"><button class="ab ok" type="button">✓ 완료</button></span></div>${open ? turnRows(s) : ''}`;
+}
+function workBlock(I) {
+  const open = I.open.wGHES !== false, ss = SESS.filter(s => WORK.sessions.includes(s.id));
+  const un = ss.reduce((a, s) => a + s.unread, 0), stars = ss.reduce((a, s) => a + s.stars, 0);
+  return `<div class="wk"><div class="wh">
+      <button class="chv" type="button" data-open="wGHES" data-def="1" aria-expanded="${open}" aria-label="Work 접기">${open ? '▾' : '▸'}</button>
+      <span class="wtab">WORK</span><b>${WORK.title}</b>${pj(WORK.proj)}
+      <span class="wm">${ss.length} sessions · 총 ${WORK.total} ${cnts({ unread: un, stars })}</span><span class="sp"></span>
+      <button class="ghost hv" type="button">열기 ↗</button></div>
+    ${open ? `<div class="wb indent">${ss.map(s => sessRow(s, I, true)).join('')}</div>` : ''}</div>`;
+}
+
+/* ------------------ 섹션 ------------------ */
+function section(st, I, bodyFn, hintFn) {
+  const open = !I.collapsed[st];
+  const cards = (st === 'in_progress' && g.emptyProg) ? [] : CARDS[st];
+  const total = (st === 'in_progress' && g.emptyProg) ? 0 : TOTAL[st];
+  const empty = total === 0;
+  const ur = UNREAD[st] ? `<span class="ur" title="안 읽음 ${UNREAD[st]}">● ${UNREAD[st]}</span>` : '';
+  const right = empty ? '<span class="empty">비어 있음</span>'
+    : !open ? `<span class="hint">${total}개 숨김${st === 'done' ? ' · 마지막 어제' : ''}</span>` : (hintFn ? `<span class="hint">${hintFn(st)}</span>` : '');
+  const add = st === 'todo' ? '<button class="ghost" type="button">+ Add Task</button>' : '';
+  const body = (!empty && open) ? bodyFn(st, cards) : '';
+  return `<section class="sec${open && !empty ? ' is-open' : ''}" data-st="${st}">
+    <header class="sh"><button class="tg" type="button" data-tg="${st}" aria-expanded="${open && !empty}"><span class="chev">${open && !empty ? '▾' : '▸'}</span><span class="dot"></span><span class="nm">${ST[st].label}</span><span class="n">${total}</span></button>
+      ${ur}${right}<span class="sp"></span>${add}</header>${body}</section>`;
+}
+const flatBody = (st, cards) => cards.map(c => cardRow(c, st)).join('')
+  + (TOTAL[st] > cards.length ? `<div class="moreline">… 나머지 ${TOTAL[st] - cards.length}행 (목업에서는 생략) · <a>더 보기</a></div>` : '');
+const COLHEAD = `<div class="colhead"><span></span><span>제목</span><span>프로젝트 · 런타임</span><span>시각</span><span></span></div>`;
+const toolbar = (mode, interactive) => `<div class="tb">
+    <span class="seg"><span class="on">LIST</span><span>BOARD</span><span>TIMELINE</span></span>
+    <span class="lbl">GROUP</span>
+    <span class="seg" ${interactive ? '' : 'style="opacity:.55"'}>${['cards', 'sessions', 'works'].map(m => `<${interactive ? 'button type="button" data-mode="' + m + '"' : 'span'} class="${mode === m ? 'on' : ''}">${m === 'cards' ? 'CARD' : m.toUpperCase()}</${interactive ? 'button' : 'span'}>`).join('')}</span>
+    <span class="sp"></span><span class="pill-unread">● 8 UNREAD</span></div>`;
+
+/* ------------------ 각 안 ------------------ */
+function renderA(I) {
+  return toolbar('cards', false) + `<div class="list">${COLHEAD}${ORDER.map(st => section(st, I, flatBody)).join('')}</div>`;
+}
+function renderC(I) {
+  const mode = I.mode;
+  const body = (st, cards) => {
+    if (st !== 'complete' || mode === 'cards') return flatBody(st, cards);
+    if (mode === 'sessions') return SESS.map(s => sessRow(s, I, false)).join('');
+    return workBlock(I) + SESS.filter(s => !s.work).map(s => sessRow(s, I, false)).join('');
+  };
+  const hint = st => st !== 'complete' || mode === 'cards' ? '' : (mode === 'works' ? '1 Work · 4 sessions' : '4 sessions');
+  return toolbar(mode, true) + `<div class="list">${I.narrow ? '' : COLHEAD}${ORDER.map(st => section(st, I, body, hint)).join('')}</div>`;
+}
+function boxSess(s, I, loose) {
+  const key = 'b' + s.id, folded = I.open[key] === false || (I.open[key] === undefined && s.turns <= 3 && s.unread === 0);
+  const head = `<span class="btab">SESSION</span>
+    <div class="bl">${pj(s.proj)}<span class="sp"></span>${s.unread ? `<span class="cnt un">● ${s.unread}</span>` : ''}${s.stars ? `<span class="cnt st">★ ${s.stars}</span>` : ''}<span class="tag">#${s.id}</span></div>
+    <div class="bt">${s.title}</div>
+    <div class="bm">${rtx(s.rt)}<span>세션 <b>${s.turns}</b></span><span>총 <b>${s.total}</b></span><span>마지막 <b>${s.last}</b></span>
+      <span class="sp" style="flex:1"></span><button class="fold" type="button" data-open="${key}" data-fold="1">${folded ? '▾ 펼치기' : '▴ 접기'}</button><button class="ab ok" type="button" style="height:24px;min-width:0">✓ 완료</button></div>`;
+  if (folded) return `<div class="bs${loose ? ' loose' : ''}">${head}<div class="fsum"><b>${s.list[0].n}.</b> ${s.list[0].q} ↳ ${s.list[0].a} · 외 ${s.turns - 1}개</div></div>`;
+  return `<div class="bs${loose ? ' loose' : ''}">${head}<div class="spine">${s.list.slice(0, s.turns > 3 ? 2 : 3).map(t => `<div class="tn${t.un ? ' un' : ''}"><div class="h"><span class="no" style="width:auto">${t.n}.</span><span class="q">${t.q}</span><span class="c-time">${t.t}</span>${star(t.fav).replace('off', 'on-off')}</div><div class="a">${t.a}</div></div>`).join('')}</div>
+    <div class="sub" style="margin-top:8px">${s.turns > 2 ? `Show ${s.turns - 2} more` : ''}</div></div>`;
+}
+function renderB(I) {
+  const ws = SESS.filter(s => WORK.sessions.includes(s.id));
+  const complete = (st) => `<div class="bx"><div class="bw"><span class="btab">WORK</span>
+      <div class="bl"><b style="font-size:15px">${WORK.title}</b>${pj(WORK.proj)}<span class="sp"></span><span class="cnt un">● 5</span><span class="cnt st">★ 2</span></div>
+      <div class="bm" style="margin-top:4px"><span><b>${ws.length}</b> sessions</span><span>총 <b>${WORK.total}</b></span><span>마지막 <b>20:47</b></span></div>
+      ${ws.map(s => boxSess(s, I, false)).join('')}</div>
+      ${SESS.filter(s => !s.work).map(s => boxSess(s, I, true)).join('')}</div>`;
+  return toolbar('works', false) + `<div class="list">${COLHEAD}${ORDER.map(st => section(st, I, st === 'complete' ? complete : flatBody, st === 'complete' ? () => '1 Work · 4 sessions' : null)).join('')}</div>`;
+}
+
+/* ------------------ 마운트 ------------------ */
+const mounts = [];
+function mount(id, fn, init) {
+  const el = document.getElementById(id);
+  const I = Object.assign({ collapsed: { done: true }, open: {}, mode: 'works' }, init);
+  const draw = () => { el.innerHTML = fn(I); };
+  el.addEventListener('click', e => {
+    const t = e.target.closest('[data-tg],[data-open],[data-mode],.star');
+    if (!t) return;
+    if (t.matches('.star')) { const on = t.classList.toggle('on'); t.classList.toggle('off', !on); t.textContent = on ? '★' : '☆'; return; }
+    if (t.dataset.tg) { I.collapsed[t.dataset.tg] = !I.collapsed[t.dataset.tg]; }
+    else if (t.dataset.mode) { I.mode = t.dataset.mode; }
+    else if (t.dataset.open) {
+      const k = t.dataset.open, cur = t.dataset.def ? I.open[k] !== false : !!I.open[k];
+      I.open[k] = t.dataset.fold ? (t.textContent.includes('접기') ? false : true) : !cur;
+    }
+    draw();
+  });
+  draw(); mounts.push(draw);
+}
+mount('mA', renderA, {});
+mount('mB', renderB, {});
+mount('mC', renderC, { open: { sa7592bb6: true } });
+mount('mC2', I => renderC(Object.assign(I, { narrow: true })), { open: { sa7592bb6: true } });
+document.getElementById('emptyProg').addEventListener('change', e => { g.emptyProg = e.target.checked; mounts.forEach(d => d()); });
+</script>
+</body>
+</html>

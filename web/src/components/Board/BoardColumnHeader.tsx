@@ -2,6 +2,7 @@ import React from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import { BoardColumnMenu, type BoardColumnMenuItem } from './BoardColumnMenu';
 import { BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
+import type { BoardTurnOrder } from './board-turn-order';
 
 const WIP_LIMIT = 3;
 
@@ -25,13 +26,18 @@ interface BoardColumnHeaderProps {
   /** Whether the column's last bulk Work command folded them — picks the toggle's label. */
   worksCollapsed?: boolean;
   onToggleWorksCollapsed?: () => void;
+  /** The column draws session groups — offers the board-wide turn order. */
+  sessionGrouped?: boolean;
+  turnOrder?: BoardTurnOrder;
+  onTurnOrderChange?: (order: BoardTurnOrder) => void;
 }
 
 type ColumnMenuInput = Pick<
   BoardColumnHeaderProps,
   | 'status' | 'count' | 'actionableCount' | 'unreadCount' | 'hideAllSessionsLabel'
   | 'onHideAllSessions' | 'onMarkAllRead' | 'onCompleteAll' | 'onArchive'
-  | 'workCount' | 'worksCollapsed' | 'onToggleWorksCollapsed'
+  | 'workCount' | 'worksCollapsed' | 'onToggleWorksCollapsed' | 'sessionGrouped'
+  | 'turnOrder' | 'onTurnOrderChange'
 >;
 
 /**
@@ -52,6 +58,9 @@ export function getColumnMenuItems({
   workCount = 0,
   worksCollapsed = false,
   onToggleWorksCollapsed,
+  sessionGrouped = false,
+  turnOrder = 'newest',
+  onTurnOrderChange,
 }: ColumnMenuInput): BoardColumnMenuItem[] {
   const bulkActionCount = actionableCount ?? count;
   const items: BoardColumnMenuItem[] = [];
@@ -61,6 +70,15 @@ export function getColumnMenuItems({
       id: 'toggle-works',
       label: worksCollapsed ? COLUMN_MENU_COPY.expandWorks : COLUMN_MENU_COPY.collapseWorks,
       onSelect: () => onToggleWorksCollapsed(),
+    });
+  }
+
+  if ((status === 'complete' || status === 'done') && sessionGrouped && onTurnOrderChange && count > 0) {
+    const next: BoardTurnOrder = turnOrder === 'newest' ? 'oldest' : 'newest';
+    items.push({
+      id: 'turn-order',
+      label: next === 'oldest' ? COLUMN_MENU_COPY.turnOrderOldest : COLUMN_MENU_COPY.turnOrderNewest,
+      onSelect: () => onTurnOrderChange(next),
     });
   }
 
@@ -96,6 +114,9 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
   workCount = 0,
   worksCollapsed,
   onToggleWorksCollapsed,
+  sessionGrouped = false,
+  turnOrder,
+  onTurnOrderChange,
 }) => {
   const isWipOver = status === 'in_progress' && count > WIP_LIMIT;
   const isWipWarning = status === 'in_progress' && count === WIP_LIMIT;
@@ -112,6 +133,9 @@ export const BoardColumnHeader: React.FC<BoardColumnHeaderProps> = ({
     workCount,
     worksCollapsed,
     onToggleWorksCollapsed,
+    sessionGrouped,
+    turnOrder,
+    onTurnOrderChange,
   });
 
   return (

@@ -146,17 +146,15 @@ export const BoardCard: React.FC<BoardCardProps> = ({
         <span className="kv2-card-drag-handle" aria-hidden="true">⋮⋮</span>
       )}
 
-      {/* Row 1: project chip (shrinks, truncates) ··· right group (never shrinks).
-          Sits above the click layer so the chip's title and the right-group
-          controls stay hoverable; a click on the chip still opens the card. */}
+      {/* Row 1 (option C): the Work slot (picker — `＋ Work` when none, so the
+          row is never empty) ··· right group (never shrinks). The project moved
+          down to lead the meta row. Sits above the click layer so the right
+          group stays hoverable; a click outside the picker still opens the card. */}
       <div className="kv2-card-top" onClick={onClick}>
-        {projectName ? (
-          <span
-            className={`works-dir-chip kv2-project-chip kv2-card-project ${dirAccentClass(vm.projectDir)}`.trim()}
-            title={vm.projectDir}
-          >
-            {projectName}
-          </span>
+        {workField ? (
+          <div className="kv2-card-top-work" onClick={(event) => event.stopPropagation()}>
+            {workField}
+          </div>
         ) : (
           <span className="kv2-card-project-spacer" aria-hidden="true" />
         )}
@@ -207,7 +205,16 @@ export const BoardCard: React.FC<BoardCardProps> = ({
 
       <div className="kv2-card-divider" aria-hidden="true" />
 
+      {/* project · runtime · time — the project outranks the runtime. */}
       <div className="kv2-card-meta-row">
+        {projectName && (
+          <span
+            className={`works-dir-chip kv2-project-chip kv2-card-project ${dirAccentClass(vm.projectDir)}`.trim()}
+            title={vm.projectDir}
+          >
+            {projectName}
+          </span>
+        )}
         <ExecutionTypeBadge
           runtime={vm.agentRuntime}
           executionKind={vm.executionKind}
@@ -215,12 +222,6 @@ export const BoardCard: React.FC<BoardCardProps> = ({
         />
         <BoardCardTimeMeta vm={vm} />
       </div>
-
-      {workField && (
-        <div className="kv2-card-work-row" onClick={(event) => event.stopPropagation()}>
-          {workField}
-        </div>
-      )}
 
       {vm.hasScheduledBadge && (
         <div className="kv2-card-scheduled-row">

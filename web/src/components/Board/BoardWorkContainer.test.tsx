@@ -72,21 +72,23 @@ describe('BoardWorkContainer', () => {
     expect(html).toContain('aria-label="Work Work W1"');
   });
 
-  test('header: title button · ⋯ menu (no chevron) — unread and the Work id live on the meta line', () => {
+  test('header (A′): title · ★ N · ● N · ▴ 접기 · ⋯ — the Work id is hover-only on the meta line', () => {
     const html = render(cards, works);
     expect(html).not.toContain('kv2-work-chevron');
     expect(html).toMatch(/<button type="button" class="kv2-work-title"[^>]*>Work W1<\/button>/);
     expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.menuLabel('Work W1')}"`);
     const head = html.slice(html.indexOf('<header class="kv2-work-head"'), html.indexOf('</header>'));
-    expect(head).not.toContain('kv2-work-unread');
     expect(head).not.toContain('kv2-id-chip');
+    // The id keeps its slot at the meta line's end but only shows on hover — no layout shift.
     const meta = html.slice(html.indexOf('<div class="kv2-work-meta"'));
-    const end = meta.slice(meta.indexOf('<span class="kv2-work-meta-end"'));
-    expect(end).toMatch(/^<span class="kv2-work-meta-end"><span class="kv2-work-unread" title="1 unread" aria-label="1 unread">● 1<\/span>/);
-    expect(end).toContain('kv2-id-chip');
+    expect(meta).toContain('<span class="kv2-hover-reveal kv2-work-id">');
+    expect(head).toContain('<span class="kv2-work-unread" title="1 unread" aria-label="1 unread">● 1</span>');
+    expect(head).toContain('★ 1');
+    expect(head.indexOf('kv2-work-unread')).toBeLessThan(head.indexOf('kv2-work-toggle'));
+    expect(head.indexOf('kv2-work-toggle')).toBeLessThan(head.indexOf('kv2-column-menu'));
   });
 
-  test('⋯ menu carries only the Work dialog flows — folding is the footer toggle', () => {
+  test('⋯ menu carries only the Work dialog flows — folding is the header toggle', () => {
     const html = render(cards, works);
     expect(html).toContain(`title="${[
       BOARD_WORKS_COPY.menuOpen,
@@ -96,30 +98,48 @@ describe('BoardWorkContainer', () => {
     ].join(' · ')}"`);
   });
 
+  test('head + meta form one click target for the Work popup', () => {
+    const html = render(cards, works);
+    const hit = html.indexOf('<div class="kv2-work-hit is-clickable"');
+    expect(hit).toBeGreaterThan(-1);
+    expect(html.indexOf('<header class="kv2-work-head"')).toBeGreaterThan(hit);
+    expect(html.indexOf('<div class="kv2-work-meta"')).toBeGreaterThan(hit);
+  });
+
   test('without onWorkOpen the title is inert and there is no ⋯ menu', () => {
     const html = render(cards, works, { onWorkOpen: undefined });
+    expect(html).toContain('<div class="kv2-work-hit"');
     expect(html).toMatch(/class="kv2-work-title"[^>]*disabled=""/);
     expect(html).not.toContain(BOARD_WORKS_COPY.menuLabel('Work W1'));
     expect(html).toContain('kv2-work-toggle');
   });
 
-  test('open: footer hide toggle styled like a session group toggle, no hidden note', () => {
+  test('open: header fold toggle styled like a session group toggle, no hidden note', () => {
     const html = render(cards, works);
     expect(html).toMatch(new RegExp(`class="kv2-complete-session-toggle kv2-work-toggle" aria-expanded="true" aria-label="${BOARD_WORKS_COPY.collapse}">${BOARD_WORKS_COPY.toggleHide}</button>`));
     expect(html).not.toContain('kv2-work-foot-note');
   });
 
-  test('meta line: project chip · x / y sessions · ★ N · other-column chips', () => {
+  test('meta line: project chip · 세션 x/y · other-column chips', () => {
     const html = render(cards, works);
     expect(html).toContain('works-dir-chip kv2-project-chip kv2-work-project');
     expect(html).toContain('>agent-kanban</span>');
     // 3 sessions here, 4 across the board (s4 is in progress).
     expect(html).toContain(BOARD_WORKS_COPY.sessionCount(3, 4));
-    expect(html).toContain('3 / 4 sessions');
-    expect(html).toContain('class="kv2-favorite-pill"');
-    expect(html).toContain('★ 1');
+    expect(html).toContain('세션 3/4');
     expect(html).toContain('class="kv2-work-elsewhere"');
     expect(html).toContain('진행중 1 ↗');
+  });
+
+  test('meta line drops the Work project chip when every session already shows the same one', () => {
+    const dir = '/Users/user/workspace/agent-kanban';
+    const html = render(
+      [turn('s1', 1, { projectDir: dir }), turn('s2', 3, { projectDir: dir })],
+      [work('W1', ['s1', 's2'])],
+    );
+    expect(html).not.toContain('kv2-work-project');
+    // The sessions still carry it.
+    expect(html).toContain('kv2-complete-session-project');
   });
 
   test('body: the newest two sessions as regular session groups, header-only, then Show N more', () => {
@@ -130,8 +150,14 @@ describe('BoardWorkContainer', () => {
     expect(html).toContain('data-session-group-key="session:s3"');
     expect(html).toContain('data-session-group-key="session:s2"');
     expect(html).not.toContain('data-session-group-key="session:s1"');
-    // Header-only: the turn timeline stays closed until the group is opened.
+    // Header-only: the turn timeline stays closed until the group is opened;
+    // the newest exchange still reads in the folded summary.
     expect(html).not.toContain('kv2-complete-session-timeline');
+    expect(html).toContain('kv2-complete-session-folded-summary');
+    // Inside a Work there is no Work field and no drag tooltip — the container
+    // already names it; hovering a session must not surface the Work name.
+    expect(html).not.toContain('kv2-complete-session-work-row');
+    expect(html).not.toContain(BOARD_WORKS_COPY.dragHint);
     expect(html).toContain(BOARD_WORKS_COPY.showMore(1));
   });
 
@@ -150,11 +176,11 @@ describe('BoardWorkContainer', () => {
     const html = render(cards, works, { defaultCollapsed: true });
     expect(html).toContain('kv2-work kv2-work--collapsed');
     expect(html).toContain(`aria-expanded="false" aria-label="${BOARD_WORKS_COPY.expand}">${BOARD_WORKS_COPY.toggleShow(3)}</button>`);
-    expect(html).toContain('show 3');
-    expect(html).toContain(`<span class="kv2-work-foot-note">${BOARD_WORKS_COPY.hiddenNote(3, 1)}</span>`);
+    expect(html).toContain('▾ 펼치기 · 세션 3');
+    expect(html).toContain(`<p class="kv2-work-foot-note">${BOARD_WORKS_COPY.hiddenNote(3, 1)}</p>`);
     expect(html).toContain('숨긴 세션 3 · unread 1');
     expect(html).toContain('class="kv2-work-meta"');
-    expect(html).toContain('3 / 4 sessions');
+    expect(html).toContain('세션 3/4');
     expect(html).toContain('● 1');
     expect(html).not.toContain('kv2-complete-session-group');
     expect(html).not.toContain('kv2-work-more');

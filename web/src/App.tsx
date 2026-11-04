@@ -1041,6 +1041,11 @@ export default function App() {
           onStartTurn={dispatchCard}
           onEditTurn={(cardId, description) => updateCard(cardId, { description })}
           onTurnScreenshotsChanged={() => { void refreshCards(); }}
+          onOpenCard={(card) => {
+            // A turn only the archive returned has no live board row.
+            const archived = !cards.some((live) => live.id === card.id);
+            handleOpenCard(card, { archived });
+          }}
           onClose={() => {
             setSelectedSession(null);
             setArchivedSessionCards(null);

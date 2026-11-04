@@ -16,7 +16,7 @@ function makeColumn(status: V2ColumnViewModel['status']): V2ColumnViewModel {
 }
 
 describe('BoardListView', () => {
-  test('orders list sections as done -> complete -> in_progress -> todo', () => {
+  test('orders list sections as complete -> in_progress -> todo -> done (needs-me first)', () => {
     const input: V2ColumnViewModel[] = [
       makeColumn('todo'),
       makeColumn('in_progress'),
@@ -27,10 +27,10 @@ describe('BoardListView', () => {
     const ordered = orderColumnsForList(input);
 
     expect(ordered.map((column) => column.status)).toEqual([
-      'done',
       'complete',
       'in_progress',
       'todo',
+      'done',
     ]);
   });
 

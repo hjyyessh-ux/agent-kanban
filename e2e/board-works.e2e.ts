@@ -159,7 +159,7 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
 
     await page.goto('/');
     const runningCard = page.locator('.kv2-column[data-status="in_progress"] .kv2-card', { hasText: `[BW] Running ${run}` });
-    await expect(runningCard.locator('.kv2-work-picker-label')).toHaveText(WORK_PICKER_COPY.none);
+    await expect(runningCard.locator('.kv2-work-picker-label')).toHaveText(WORK_PICKER_COPY.add);
     const cardId = await runningCard.getAttribute('data-id');
 
     expect(await dragTo(page, `.kv2-card[data-id="${cardId}"]`, `[data-tray-work-id="${w1.id}"]`)).toBe(true);
@@ -215,7 +215,7 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
 
     await page.goto('/');
     const trigger = page.locator(`article[data-session-group-key="session:${loose}"] .kv2-work-picker-trigger`);
-    await expect(trigger).toContainText(WORK_PICKER_COPY.none);
+    await expect(trigger).toContainText(WORK_PICKER_COPY.add);
     await trigger.focus();
     await page.keyboard.press('Enter');
     // Opening focuses the search box: type to filter, Enter picks the match.
@@ -264,7 +264,7 @@ test.describe('Board GROUP: WORKS — drag & drop', () => {
     await page.keyboard.press('Enter');
 
     await expect(card.locator('.kv2-work-picker-label')).toHaveText(`[BW] Planned ${run}`);
-    await expect(card.locator('.kv2-work-picker-state')).toHaveText(WORK_PICKER_COPY.planned);
+    await expect(card.locator('.kv2-work-picker-trigger')).toHaveClass(/is-planned/);
     const created = (await apiGetWorks()).find((work) => work.title === `[BW] Planned ${run}`);
     expect(created?.sessionLinks).toEqual([]);
     if (created) trackWork(created.id);
@@ -353,17 +353,16 @@ test.describe('Board GROUP: WORKS — ⋯ 세션 접기', () => {
     const container = page.locator(workIn(w.id, 'complete'));
     const groups = container.locator('[data-session-group-key]');
     await expect(groups).toHaveCount(2);
-    // Unread and the Work id sit on the meta line, not beside the title.
-    await expect(container.locator('.kv2-work-head .kv2-work-unread')).toHaveCount(0);
-    await expect(container.locator('.kv2-work-meta .kv2-work-unread')).toHaveText('● 1');
+    // A′: unread rides the head next to the fold toggle; the meta line is counts and times.
+    await expect(container.locator('.kv2-work-head .kv2-work-unread')).toHaveText('● 1');
 
-    // The footer hide / show button folds the Work — `⋯` no longer does.
+    // The header `▴ 접기` / `▾ 펼치기` button folds the Work — `⋯` does not.
     const toggle = container.locator('.kv2-work-toggle');
-    await expect(toggle).toHaveText('hide');
+    await expect(toggle).toHaveText(BOARD_WORKS_COPY.toggleHide);
     await toggle.click();
     await expect(container).toHaveClass(/kv2-work--collapsed/);
     await expect(groups).toHaveCount(0);
-    await expect(container.locator('.kv2-work-meta')).toContainText('3 sessions');
+    await expect(container.locator('.kv2-work-meta')).toContainText(BOARD_WORKS_COPY.sessionCount(3, 3));
     await expect(toggle).toHaveText(BOARD_WORKS_COPY.toggleShow(3));
 
     await toggle.click();

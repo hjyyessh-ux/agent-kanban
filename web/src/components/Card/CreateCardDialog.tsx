@@ -18,6 +18,7 @@ import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
 import { MentionTextarea } from "../Mention/MentionTextarea";
 import { DialogSkeleton } from "./DialogSkeleton";
 import { ErrorAlert } from "../shared/ErrorAlert";
+import { ImageLightbox } from "../shared/ImageLightbox";
 import { SessionPickerPanel } from "./SessionPickerPanel";
 import { QueueSessionModePicker, QueueTargetList } from "./QueueSettingsPanel";
 import { DirectoryPicker } from "./DirectoryPicker";
@@ -170,6 +171,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string>("");
   const [isDragging, setIsDragging] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resumeSessionId, setResumeSessionId] = useState<string | undefined>(undefined);
   /**
    * `@` 멘션 참조. `MentionTextarea`가 본문에서 파싱한 토큰을 해석해 올려 준다.
@@ -341,6 +343,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   }, [pendingPreviews]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
+    // Text drags into the prompt keep their default; only files light the field up.
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
@@ -389,13 +393,6 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     if (isSubmitting) return;
     screenshotInputRef.current?.click();
   }, [isSubmitting]);
-
-  const handleDropZoneKeyDown = useCallback((e: React.KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleClickDropZone();
-    }
-  }, [handleClickDropZone]);
 
   const handleRemovePending = useCallback((index: number) => {
     setPendingPreviews((prev) => {
@@ -600,8 +597,16 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             </div>
           )}
 
-          <div className="kv2-create-field">
+          {/* Screenshots belong to the prompt: dropped anywhere on this field,
+              shown as a chip strip inside the prompt box (same as Feedback). */}
+          <div
+            className={`kv2-create-field kv2-create-prompt-field${isDragging ? ' is-dragging' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <label className="kv2-create-label" htmlFor="create-card-description-input">Prompt {promptRequired ? '*' : '(ignored)'}</label>
+            <div className={`kv2-feedback-compose kv2-create-compose${hasPendingScreenshots ? ' has-shots' : ''}`}>
             <MentionTextarea
               id="create-card-description-input"
               textareaRef={descriptionRef}
@@ -624,6 +629,60 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               projectDir={projectDir.trim() || undefined}
               onReferencesChange={setResolvedRefs}
             />
+            {hasPendingScreenshots && (
+              <div className="kv2-feedback-shot-strip" aria-label={`첨부 스크린샷 ${pendingPreviews.length}개`}>
+                {pendingPreviews.map((url, idx) => {
+                  const name = pendingFiles[idx]?.name || "pasted image";
+                  return (
+                    <div key={url} className="kv2-screenshot-item kv2-feedback-shot-chip">
+                      <button
+                        type="button"
+                        className="kv2-feedback-shot-open"
+                        onClick={() => setPreviewUrl(url)}
+                        title="크게 보기"
+                      >
+                        <img src={url} alt={name} className="kv2-screenshot-thumb" />
+                        <span className="kv2-feedback-shot-name" title={name}>{name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="kv2-feedback-shot-remove"
+                        onClick={() => handleRemovePending(idx)}
+                        disabled={isSubmitting}
+                        title="Remove screenshot"
+                        aria-label={`${name} 첨부 제거`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            </div>
+            <div className="kv2-create-attach-row">
+              <button
+                type="button"
+                className="kv2-btn kv2-btn--ghost kv2-feedback-attach kv2-create-attach"
+                onClick={handleClickDropZone}
+                disabled={isSubmitting}
+              >
+                📎 스크린샷 {hasPendingScreenshots ? `${pendingPreviews.length}` : "첨부"}
+              </button>
+              <span className="kv2-feedback-attach-hint">
+                {isDragging ? '이미지를 놓으면 추가됩니다.' : '붙여넣기(⌘V) · 끌어놓기도 됩니다'}
+              </span>
+              <input
+                ref={screenshotInputRef}
+                id="create-card-screenshot-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleScreenshotUpload}
+                disabled={isSubmitting}
+                hidden
+              />
+            </div>
             {fieldErrors.description && (
               <span id="create-card-description-error" className="kv2-create-helper kv2-create-helper--error">
                 {fieldErrors.description}
@@ -978,68 +1037,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             />
           </div>
 
-          <div className="kv2-create-field">
-            <div className="kv2-create-label">Screenshots</div>
-
-            {hasPendingScreenshots ? (
-              <div
-                role="button"
-                tabIndex={isSubmitting ? -1 : 0}
-                aria-disabled={isSubmitting}
-                className={`kv2-screenshot-grid kv2-screenshot-grid--create kv2-screenshot-grid--upload-target${isDragging ? ' kv2-screenshot-grid--dragging' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={handleClickDropZone}
-                onKeyDown={handleDropZoneKeyDown}
-              >
-                {isDragging && <span className="kv2-screenshot-drop-hint">이미지를 놓으면 추가됩니다.</span>}
-                {pendingPreviews.map((url, idx) => (
-                  <div key={url} className="kv2-screenshot-card">
-                    <img src={url} alt={pendingFiles[idx]?.name} className="kv2-screenshot-img" />
-                    <button
-                      type="button"
-                      className="kv2-screenshot-delete"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRemovePending(idx);
-                      }}
-                      title="Remove"
-                      disabled={isSubmitting}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <button
-                type="button"
-                className={`kv2-create-drop-zone kv2-screenshot-grid--upload-target${isDragging ? ' kv2-create-drop-zone--dragging kv2-screenshot-grid--dragging' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={handleClickDropZone}
-                onKeyDown={handleDropZoneKeyDown}
-                disabled={isSubmitting}
-              >
-                {isDragging ? '이미지를 놓으면 추가됩니다.' : 'Click or drop screenshots'}
-              </button>
-            )}
-
-            <input
-              ref={screenshotInputRef}
-              id="create-card-screenshot-upload"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={handleScreenshotUpload}
-              disabled={isSubmitting}
-              style={{ display: "none" }}
-            />
-
-            {uploadProgress && <div className="kv2-create-upload-progress">{uploadProgress}</div>}
-          </div>
+          {uploadProgress && <div className="kv2-create-upload-progress">{uploadProgress}</div>}
         </div>
 
         <div className="kv2-detail-divider" />
@@ -1103,6 +1101,7 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
           </div>
         </div>
       </div>
+      {previewUrl && <ImageLightbox src={previewUrl} alt="Pending screenshot" onClose={() => setPreviewUrl(null)} />}
     </DialogSkeleton>
   );
 };

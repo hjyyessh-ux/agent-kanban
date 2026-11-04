@@ -148,10 +148,9 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
     };
   }, [filters, debouncedSearch]);
 
-  // The list view never draws session groups, so "unread groups only" would
-  // just be "unread cards" there anyway.
+  // Board and list both follow `GROUP`, so "unread groups only" keeps whole sessions in either.
   const groupComplete = groupsCompleteBySession(groupMode);
-  const unreadBySession = viewMode === 'board' && groupComplete;
+  const unreadBySession = groupComplete;
   const worksIndex = useMemo(() => indexWorksBySession(works ?? []), [works]);
   const filteredCards = useMemo(() => {
     const filtered = filterBoardCards(cards, effectiveFilters);
@@ -165,20 +164,20 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
     [filteredCards, questions],
   );
 
-  // Work containers: grid view only, and only once the Works have loaded —
-  // before that `GROUP: WORKS` draws plain session groups.
+  // Work containers (board) / Work rows (list), only once the Works have
+  // loaded — before that `GROUP: WORKS` draws plain session groups.
   const worksModel = useMemo(() => (
-    viewMode === 'board' && groupMode === 'works' && works
+    groupMode === 'works' && works
       ? selectWorkFragments({ cards: filteredCards, boardCards: cards, works })
       : undefined
-  ), [cards, filteredCards, groupMode, viewMode, works]);
+  ), [cards, filteredCards, groupMode, works]);
 
   /* ── GROUP: WORKS drag & drop ─────────────────────────────── */
 
   const [workDrag, setWorkDrag] = useState<WorkDragSource | null>(null);
   const [pendingCreate, setPendingCreate] = useState<{ source: WorkDragSource; action: WorkDropAction } | null>(null);
   const dragFrameRef = useRef(0);
-  const worksDnDEnabled = !!worksModel && !!workMutations && !!works;
+  const worksDnDEnabled = viewMode === 'board' && !!worksModel && !!workMutations && !!works;
 
   const startWorkDrag = useCallback((source: WorkDragSource) => {
     // Deferred a frame: re-rendering (tray, hints) inside `dragstart` makes
@@ -444,6 +443,13 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
           onQueueOpen={onQueueOpen}
           onCreate={onCreate}
           revealRequest={revealRequest}
+          groupMode={groupMode}
+          worksModel={worksModel}
+          worksIndex={works ? worksIndex : undefined}
+          works={works}
+          onSessionOpen={onSessionOpen}
+          onWorkOpen={onWorkOpen ? (workId) => onWorkOpen(workId) : undefined}
+          onArchiveCards={onArchiveCards}
         />
       )}
     </div>

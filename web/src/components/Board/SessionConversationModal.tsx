@@ -54,6 +54,8 @@ interface SessionConversationModalProps {
    */
   onEditTurn?: (cardId: string, description: string) => Promise<void>;
   onTurnScreenshotsChanged?: () => void;
+  /** turn별 `↗ 카드` — 카드 상세를 이 모달 위에 연다. */
+  onOpenCard?: (card: KanbanCard) => void;
 }
 
 // ── 보기 설정: 모두 localStorage에 남아 다음에 열 때도 같은 모양으로 열린다 ──
@@ -294,6 +296,8 @@ interface SessionConversationTurnProps {
    */
   onEditTurn?: (cardId: string, description: string) => Promise<void>;
   onTurnScreenshotsChanged?: () => void;
+  /** 이 turn의 카드 상세를 연다(Sync·편집 등). 생략하면 `↗ 카드`를 숨긴다. */
+  onOpenCard?: (card: KanbanCard) => void;
 }
 
 const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
@@ -307,6 +311,7 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   onStartTurn,
   onEditTurn,
   onTurnScreenshotsChanged,
+  onOpenCard,
 }) => {
   const [editing, setEditing] = useState(false);
   const [promptClamped, setPromptCollapsed] = useState(true);
@@ -336,6 +341,8 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
       data-turn={turnNumber}
       className={`session-conversation-turn${isLatest ? ' is-latest' : ''}${open ? ' is-open' : ''}`}
     >
+      {/* The head is itself a button, so the card shortcut sits beside it, not inside. */}
+      <div className="session-conversation-turnHeadRow">
       <button
         type="button"
         className="session-conversation-turnHead"
@@ -367,6 +374,19 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
           duration && <span className="session-conversation-turnDuration" data-highlight-skip>{duration}</span>
         )}
       </button>
+      {onOpenCard && (
+        <button
+          type="button"
+          className="session-conversation-turnOpenCard"
+          data-highlight-skip
+          onClick={() => onOpenCard(card)}
+          title="이 turn의 카드 상세 열기 (Sync·편집)"
+          aria-label={`T${turnNumber} 카드 상세 열기`}
+        >
+          ↗ 카드
+        </button>
+      )}
+      </div>
 
       {!open && preview && <p className="session-conversation-turnPreview">{preview}</p>}
 
@@ -518,6 +538,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
   onStartTurn,
   onEditTurn,
   onTurnScreenshotsChanged,
+  onOpenCard,
 }) => {
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
   const [turnOrder, setTurnOrder] = useState<TurnOrder>(() =>
@@ -903,6 +924,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
                 onStartTurn={onStartTurn}
                 onEditTurn={onEditTurn}
                 onTurnScreenshotsChanged={onTurnScreenshotsChanged}
+                onOpenCard={onOpenCard}
                 onToggle={() =>
                   setOpenOverrides((prev) => ({
                     ...prev,

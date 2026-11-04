@@ -423,6 +423,45 @@
   cursor: pointer;
 }
 
+.session-conversation-turnHeadRow {
+  display: flex;
+  align-items: center;
+}
+
+.session-conversation-turnHeadRow > .session-conversation-turnHead {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* `↗ 카드`: always takes its slot (no layout shift), visible only on turn hover/focus. */
+.session-conversation-turnOpenCard {
+  flex: 0 0 auto;
+  margin-right: 10px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--kv2-radius-sm);
+  background: none;
+  color: var(--kv2-text-muted);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-ui-sm);
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--kv2-transition-fast);
+}
+
+.session-conversation-turn:hover .session-conversation-turnOpenCard,
+.session-conversation-turnOpenCard:focus-visible {
+  opacity: 1;
+}
+
+.session-conversation-turnOpenCard:hover,
+.session-conversation-turnOpenCard:focus-visible {
+  border-color: var(--kv2-border);
+  background: var(--kv2-surface-hover);
+  color: var(--kv2-text-primary);
+}
+
 .session-conversation-turnHead:hover .session-conversation-turnTitle {
   text-decoration: underline;
 }
@@ -749,6 +788,10 @@
   min-height: 0;
   padding: 0;
   gap: 8px;
+}
+
+.session-conversation-feedbackDock .kv2-feedback-compose {
+  flex: 1 1 auto;
 }
 
 .session-conversation-feedbackDock .kv2-mention-host {

@@ -1268,6 +1268,33 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--kv2-cyan-accent) 20%, transparent);
 }
 
+/* Prompt + screenshot chips (strip styles shared with Feedback, panels.css). */
+.kv2-create-compose.has-shots {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.kv2-create-compose.has-shots .kv2-create-textarea {
+  border-color: transparent;
+  border-radius: 0;
+}
+
+.kv2-create-prompt-field.is-dragging .kv2-create-compose {
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--kv2-cyan-accent) 45%, transparent);
+}
+
+.kv2-create-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kv2-create-prompt-field.is-dragging .kv2-feedback-attach-hint {
+  color: var(--kv2-cyan-accent);
+}
+
 .kv2-create-upload-progress {
   font-size: var(--kv2-text-xs);
   color: var(--kv2-neutral-400);

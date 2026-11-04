@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>세션 모달 · Works 단순화 목업 — Agent Kanban</title>
+<style>
+/* 목업 전용 — 다크 테마 kv2 값을 근사 복제. 실제 구현은 kanban-v2.tokens.css 토큰 사용. */
+:root {
+  color-scheme: dark;
+  --app-bg: #16181b;
+  --surface: #202326;
+  --surface-raised: #272b2f;
+  --surface-sunken: #1a1c1f;
+  --surface-hover: #2e3237;
+  --text-primary: #e8eaed;
+  --text-secondary: #b9bfc6;
+  --text-muted: #979ea6;
+  --border: #3a3f45;
+  --border-strong: #5b626a;
+  --frame: #0d0f10;
+  --complete: #ff3b6b;
+  --complete-soft: #3a2228;
+  --prompt-soft: #1f2a3a;
+  --prompt-accent: #3b82f6;
+  --work: #4a78c2;
+  --work-text: #9db8e6;
+  --work-tint: #1d2633;
+  --done: #22c55e;
+  --unread: #ff5a5a;
+  --dir-green: #2f9e6a;
+  --claude: #d97757;
+  --focus: #6aa8ff;
+  --font-sans: 'Work Sans', system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--app-bg); color: var(--text-primary); font-family: var(--font-sans); font-size: 14px; }
+code, .mono { font-family: var(--font-mono); }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 6px; }
+h3 { font-size: 14px; margin: 0 0 8px; color: var(--text-secondary); letter-spacing: .04em; text-transform: uppercase; }
+p { margin: 0; line-height: 1.55; }
+
+.page-head { padding: 20px 28px 0; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.page-head small { color: var(--text-muted); }
+.tabs { display: flex; gap: 6px; padding: 14px 28px 0; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--app-bg); z-index: 5; }
+.tabs button { background: none; border: 1px solid transparent; border-bottom: none; color: var(--text-muted); padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; border-radius: 6px 6px 0 0; }
+.tabs button[aria-selected="true"] { color: var(--text-primary); background: var(--surface); border-color: var(--border); }
+.panel { display: none; padding: 22px 28px 60px; }
+.panel.is-active { display: block; }
+.lead { color: var(--text-secondary); max-width: 920px; margin-bottom: 18px; }
+.lead b { color: var(--text-primary); }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+.compare.single { grid-template-columns: 1fr; }
+.label { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .08em; padding: 3px 8px; border-radius: 4px; margin-bottom: 10px; }
+.label--before { background: #3a2a2a; color: #ffb4b4; }
+.label--after { background: #1f3326; color: #9be3b5; }
+.notes { margin-top: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.notes li { margin: 5px 0; line-height: 1.5; color: var(--text-secondary); }
+.notes li b { color: var(--text-primary); }
+.notes table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.notes th, .notes td { border-bottom: 1px solid var(--border); padding: 7px 8px; text-align: left; vertical-align: top; }
+.notes th { color: var(--text-muted); font-weight: 600; }
+
+/* ---------- 공통 칩 ---------- */
+.dir-chip { font-size: 12px; font-weight: 700; color: #7fd8ab; background: color-mix(in srgb, var(--dir-green) 18%, var(--surface)); border: 1px solid var(--dir-green); padding: 2px 8px; border-radius: 4px; }
+.rt-chip { font-size: 10px; font-weight: 800; letter-spacing: .06em; border: 1px solid var(--border-strong); padding: 3px 8px; border-radius: 999px; color: var(--text-secondary); }
+.rt-chip::before { content: '✳ '; color: var(--claude); }
+.ghost { background: none; border: 1px solid var(--border); color: var(--text-secondary); font: 12px var(--font-mono); padding: 3px 8px; border-radius: 4px; cursor: pointer; }
+.ghost:hover { border-color: var(--border-strong); color: var(--text-primary); background: var(--surface-hover); }
+.unread { font: 700 11px var(--font-mono); color: #fff; background: var(--unread); padding: 1px 6px; border-radius: 999px; }
+.muted { color: var(--text-muted); }
+
+/* ---------- 세션 모달 프레임 ---------- */
+.modal { background: var(--surface); border: 2px solid var(--frame); border-left: 6px solid var(--complete); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 6px 6px 0 #000; }
+.m-head { padding: 14px 18px 12px; border-bottom: 3px solid var(--frame); background: var(--surface); }
+.m-top { display: flex; align-items: center; gap: 8px; }
+.m-top .spacer { flex: 1; }
+.m-session { font: 11px var(--font-mono); color: var(--text-muted); }
+.m-session b { color: var(--text-secondary); }
+.m-close { font-size: 20px; color: var(--text-secondary); margin-left: 6px; }
+.m-title { font-size: 19px; font-weight: 800; margin: 6px 0 4px; }
+.m-stats { font: 11px var(--font-mono); color: var(--text-muted); display: flex; gap: 12px; align-items: center; }
+.m-toolbar { display: flex; gap: 8px; margin-top: 10px; }
+.seg { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; font-size: 12px; }
+.seg span { padding: 5px 9px; color: var(--text-secondary); }
+.seg span.on { background: var(--surface-hover); color: var(--text-primary); font-weight: 700; }
+.search { flex: 1; border: 1px solid var(--border); border-radius: 4px; padding: 5px 10px; font-size: 12px; color: var(--text-muted); }
+
+/* 카드로 이동 — 조용한 텍스트 링크 */
+.to-card { display: inline-flex; align-items: center; gap: 4px; font: 12px var(--font-mono); color: var(--text-muted); text-decoration: none; padding: 3px 6px; border-radius: 4px; border: 1px solid transparent; }
+.to-card:hover, .to-card.is-hover { color: var(--text-primary); border-color: var(--border); background: var(--surface-hover); }
+.to-card kbd { font: 10px var(--font-mono); border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; color: var(--text-muted); }
+
+.m-body { display: flex; min-height: 0; }
+.m-toc { width: 48px; border-right: 1px solid var(--border); padding: 10px 6px; display: flex; flex-direction: column; gap: 10px; align-items: center; font: 11px var(--font-mono); color: var(--text-muted); }
+.m-toc .on { color: var(--text-primary); border: 1px solid var(--border-strong); padding: 2px 4px; border-radius: 3px; }
+.m-turns { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.turn { border: 1px solid var(--border); border-left: 4px solid var(--complete); border-radius: 4px; background: var(--surface-raised); }
+.turn-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; font-size: 13px; }
+.turn-head .t { font: 11px var(--font-mono); color: var(--text-muted); }
+.turn-head .title { font-weight: 700; flex: 1; }
+.turn-head .time { font: 11px var(--font-mono); color: var(--text-muted); }
+.turn-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .12s; }
+.turn:hover .turn-actions, .turn.is-hover .turn-actions { opacity: 1; }
+.latest { font-size: 10px; font-weight: 800; color: var(--complete); border: 1px solid var(--complete); padding: 1px 5px; border-radius: 3px; }
+.block { margin: 0 10px 10px; padding: 10px 12px; border-radius: 4px; font-size: 13px; }
+.block small { display: block; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--text-muted); margin-bottom: 6px; }
+.block--prompt { background: var(--prompt-soft); border-left: 3px solid var(--prompt-accent); }
+.block--result { background: var(--complete-soft); border-left: 3px solid var(--complete); }
+.callout { position: relative; }
+.callout::after { content: attr(data-callout); position: absolute; white-space: nowrap; font: 700 11px var(--font-sans); color: #111; background: #ffd84d; padding: 3px 7px; border-radius: 4px; box-shadow: 2px 2px 0 #000; }
+.callout--below::after { top: calc(100% + 6px); right: 0; }
+.callout--inside::after { top: 6px; right: 8px; }
+.callout--left::after { right: calc(100% + 8px); top: 50%; transform: translateY(-50%); }
+.ring { outline: 2px dashed #ffd84d; outline-offset: 3px; border-radius: 4px; }
+
+/* ---------- 피드백 독 ---------- */
+.dock { border-top: 3px solid var(--frame); padding: 10px 18px 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; position: relative; }
+.dock-fixed { height: 230px; overflow: hidden; }
+.fb-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fb-head b { font-weight: 800; }
+.fb-head .target { font-size: 11px; color: var(--text-muted); }
+.fb-head .draft { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+.textarea { border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-sunken); padding: 9px 11px; font-size: 13px; color: var(--text-primary); line-height: 1.5; }
+.ta-shrunk { flex: 1 1 auto; min-height: 56px; }
+.ta-ok { flex: 1 1 auto; min-height: 72px; }
+.fb-actions { display: flex; align-items: center; gap: 8px; }
+.attach { white-space: nowrap; border: 1.5px dashed var(--border-strong); background: none; color: var(--text-primary); font: 700 12px var(--font-sans); padding: 6px 12px; border-radius: 4px; }
+.hint { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 11px; color: var(--text-muted); margin-right: auto; }
+.btn { white-space: nowrap; border: 2px solid var(--border-strong); background: var(--surface-raised); color: var(--text-primary); font: 800 12px var(--font-sans); letter-spacing: .04em; padding: 8px 14px; border-radius: 4px; }
+.btn--primary { background: #2c4a73; border-color: #4a78c2; }
+
+/* before: 썸네일이 줄어든 독 안에서 textarea 위로 넘침 */
+.shot-grid-broken { display: flex; gap: 8px; margin-top: -62px; position: relative; z-index: 1; }
+.shot-card { width: 128px; border: 1px solid var(--border); background: var(--surface-raised); border-radius: 4px; overflow: hidden; }
+.shot-card .img { height: 70px; background: linear-gradient(135deg, #3b2730 0 45%, #22303f 45% 100%); }
+.shot-card .name { font-size: 11px; color: var(--text-secondary); padding: 4px 6px; }
+
+/* after: textarea 안쪽 하단 고정 칩 줄 */
+.compose { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--border-strong); border-radius: 4px; background: var(--surface-sunken); }
+.compose:focus-within, .compose.is-focus { border-color: var(--focus); }
+.compose .ta { flex: 1 1 auto; min-height: 48px; padding: 9px 11px; font-size: 13px; line-height: 1.5; }
+.shot-strip { flex: 0 0 auto; display: flex; gap: 6px; padding: 6px 8px; border-top: 1px dashed var(--border); overflow-x: auto; }
+.shot-chip { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface-raised); border-radius: 4px; padding: 3px 6px 3px 3px; font-size: 11px; color: var(--text-secondary); }
+.shot-chip .thumb { width: 34px; height: 24px; border-radius: 2px; background: linear-gradient(135deg, #3b2730 0 45%, #22303f 45% 100%); }
+.shot-chip .x { color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+.shot-chip .x:hover { color: var(--unread); }
+
+/* ---------- Works on board ---------- */
+.board-col { width: 360px; background: #1b1d20; border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+.col-head { display: flex; align-items: center; gap: 8px; font: 800 12px var(--font-sans); letter-spacing: .06em; padding: 4px 4px 10px; color: var(--complete); }
+/* before (현재 구조 근사) */
+.b-work { border: 2px solid var(--work); background: var(--work-tint); border-radius: 4px; padding: 10px; position: relative; margin-top: 14px; }
+.b-tab { position: absolute; top: -14px; left: -2px; font: 800 10px var(--font-mono); letter-spacing: .1em; background: #2c4a73; color: #e6eefc; padding: 2px 8px; }
+.b-work-title { font-weight: 800; display: flex; justify-content: space-between; }
+.b-meta { display: flex; gap: 6px; align-items: center; margin: 6px 0 12px; font: 11px var(--font-mono); color: var(--text-muted); flex-wrap: wrap; }
+.b-tag { border: 1px solid #7c6cd6; color: #c4b8ff; padding: 1px 6px; border-radius: 3px; }
+.b-session { border: 1px solid var(--border-strong); border-left: 4px solid var(--complete); background: var(--surface); padding: 10px; position: relative; margin-top: 14px; }
+.b-session .b-tab { background: #3a3f45; color: #e8eaed; }
+.b-row { display: flex; align-items: center; gap: 8px; }
+.b-row.sp { justify-content: space-between; }
+.b-stitle { font-size: 16px; font-weight: 800; margin: 6px 0; }
+.b-btns { display: flex; justify-content: space-between; margin-top: 10px; }
+.b-btn { border: 2px solid var(--border-strong); padding: 6px 12px; font: 800 12px var(--font-sans); border-radius: 3px; }
+.b-btn--ok { border-color: var(--done); color: #9be3b5; }
+.b-wchip { border: 1px solid var(--work); color: var(--work-text); font-size: 11px; padding: 2px 6px; display: inline-block; margin-top: 8px; }
+.b-tl { border-left: 3px solid var(--complete); margin: 12px 0 0 10px; padding-left: 14px; display: flex; flex-direction: column; gap: 10px; }
+.b-turn { border: 2px solid var(--complete); border-radius: 4px; font-size: 12px; }
+.b-turn .h { display: flex; gap: 6px; align-items: center; padding: 5px 8px; background: var(--complete-soft); font-weight: 700; }
+.b-turn .r { display: grid; grid-template-columns: 54px 1fr; gap: 6px; padding: 4px 8px; border-top: 1px solid var(--border); }
+.b-turn .r span:first-child { font: 700 10px var(--font-mono); color: var(--text-muted); }
+.new { font: 800 9px var(--font-mono); background: var(--unread); color: #fff; padding: 1px 4px; border-radius: 2px; }
+.count-pin { position: absolute; right: -10px; top: 6px; font: 800 11px var(--font-sans); background: #ffd84d; color: #111; border-radius: 999px; width: 20px; height: 20px; display: grid; place-items: center; box-shadow: 1px 1px 0 #000; }
+
+/* after (단순화) */
+.a-work { margin-top: 6px; }
+.a-work + .a-work { margin-top: 18px; }
+.a-work-head { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 2px solid var(--work); }
+.a-work-head .ic { color: var(--work-text); font-size: 13px; }
+.a-work-head .name { font-weight: 800; flex: 1; }
+.a-work-head .meta { font: 11px var(--font-mono); color: var(--text-muted); }
+.a-work-head .more { opacity: 0; color: var(--text-muted); padding: 0 4px; }
+.a-work-head:hover .more, .a-work-head.is-hover .more { opacity: 1; }
+.a-session { display: grid; grid-template-columns: 4px 1fr auto; gap: 10px; align-items: start; padding: 9px 6px 9px 0; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 4px; }
+.a-session:hover, .a-session.is-hover { background: var(--surface-hover); }
+.a-session .bar { align-self: stretch; border-radius: 2px; background: var(--complete); }
+.a-session .bar.done { background: var(--done); }
+.a-session .bar.run { background: #facc15; }
+.a-stitle { font-weight: 700; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+.a-sline { font-size: 12px; color: var(--text-secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px; }
+.a-smeta { font: 11px var(--font-mono); color: var(--text-muted); margin-top: 4px; display: flex; gap: 8px; }
+.a-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.a-hover-actions { display: flex; gap: 4px; opacity: 0; }
+.a-session:hover .a-hover-actions, .a-session.is-hover .a-hover-actions { opacity: 1; }
+.a-loose { margin-top: 18px; }
+.a-loose-head { font: 700 11px var(--font-mono); color: var(--text-muted); letter-spacing: .06em; padding: 4px; }
+.a-done-cta { margin-top: 10px; display: flex; justify-content: flex-end; }
+.a-done-cta button { background: none; border: 1px solid var(--done); color: #9be3b5; font: 700 12px var(--font-sans); padding: 5px 10px; border-radius: 4px; }
+
+.legend { width: 360px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; font-size: 13px; }
+.legend .row { display: grid; grid-template-columns: 70px 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.legend .row:last-child { border-bottom: none; }
+.legend .k { font-weight: 800; }
+.legend .eg { color: var(--text-muted); font-size: 12px; }
+.coach { margin-top: 10px; background: #2b2a1d; border: 1px solid #6b6430; border-radius: 6px; padding: 10px 12px; font-size: 12px; color: #efe6b0; }
+.coach b { color: #fff3b0; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+.row-flex { display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>세션 모아보기 · Works 단순화 목업</h1>
+  <small>2026-11-03 · 다크 테마 기준 · 노란 라벨은 설명용 주석이며 실제 UI 아님</small>
+</div>
+
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-panel="p1">① 카드로 이동 버튼</button>
+  <button role="tab" aria-selected="false" data-panel="p2">② 스크린샷 첨부 시 입력창 침범</button>
+  <button role="tab" aria-selected="false" data-panel="p3">③ 보드 Works 단순화</button>
+</div>
+
+<!-- =============================== ① =============================== -->
+<section class="panel is-active" id="p1">
+  <p class="lead">
+    헤더의 "최신 카드" 버튼은 빼고, <b>각 turn 헤더에만</b> <code>↗ 카드</code>를 둡니다.
+    평소에는 보이지 않고 그 turn에 마우스를 올리거나 키보드로 포커스했을 때만 나타납니다(T3이 hover 상태 예시).
+  </p>
+
+  <div class="compare single">
+    <div>
+      <span class="label label--after">AFTER</span>
+      <div class="modal" style="max-width: 980px;">
+        <div class="m-head">
+          <div class="m-top">
+            <span class="dir-chip">agent-kanban</span>
+            <span class="rt-chip">CLAUDE</span>
+            <span class="spacer"></span>
+            <span class="m-session">SESSION <b>#cfa0d111</b></span>
+            <button class="ghost">⏎ resume</button>
+            <span class="m-close">✕</span>
+          </div>
+          <div class="m-title">Agent-kanban - UI 개선</div>
+          <div class="m-stats"><span><b>3</b> turns</span><span>총 <b>4m 10s</b></span><span>2026-11-03 17:00 → 2026-11-03 17:30</span></div>
+          <div class="m-toolbar">
+            <div class="seg"><span class="on">↓ 최신순</span><span>↑ 오래된순</span></div>
+            <div class="seg"><span class="on">최근 2개</span><span>모두 펼침</span><span>모두 접기</span></div>
+            <div class="search">🔍 세션 내 검색 (prompt·result)</div>
+          </div>
+        </div>
+        <div class="m-body">
+          <div class="m-toc"><span>»</span><span class="on">T3</span><span>T2</span><span>T1</span></div>
+          <div class="m-turns">
+            <div class="turn is-hover">
+              <div class="turn-head">
+                <span>▾</span><span class="t">T3</span><span class="latest">LATEST</span>
+                <span class="title">기능하나 더 추가하자. 세션화면에서 카드로 바로가기…</span>
+                <span class="turn-actions">
+                  <a class="to-card is-hover ring callout callout--left" data-callout="turn hover: 이 turn의 카드 열기" href="#">↗ 카드</a>
+                </span>
+                <span class="time">11-03 17:30</span>
+              </div>
+              <div class="block block--prompt"><small>PROMPT</small>기능하나 더 추가하자. 일단 이 세션화면에서 카드로 바로가기? 버튼이 있으면 좋겠어.</div>
+              <div class="block block--result"><small>RESULT</small>세 가지 목업을 한 HTML 파일에 탭으로 나눠 만들겠습니다…</div>
+            </div>
+            <div class="turn">
+              <div class="turn-head">
+                <span>▸</span><span class="t">T2</span>
+                <span class="title">다시 빌드해야해?</span>
+                <span class="turn-actions"><a class="to-card" href="#">↗ 카드</a></span>
+                <span class="time">11-03 17:09</span>
+              </div>
+            </div>
+            <div class="turn">
+              <div class="turn-head">
+                <span>▸</span><span class="t">T1</span>
+                <span class="title">Session 모아보기 UI 랑 실제 출력된 결과물이 달라서…</span>
+                <span class="turn-actions"><a class="to-card" href="#">↗ 카드</a></span>
+                <span class="time">11-03 17:00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <ul>
+      <li><b>위치:</b> 모든 turn 헤더 오른쪽, 시각 바로 앞. 최신 turn도 같은 방식이라 별도 헤더 버튼이 필요 없습니다.</li>
+      <li><b>동작:</b> 그 turn의 카드 상세(<code>CardDetailDialog</code>)를 세션 모아보기 <b>위에 겹쳐</b> 엽니다. 닫으면 보던 스크롤 위치 그대로 세션 모아보기로 돌아옵니다.</li>
+      <li><b>눈에 덜 띄게:</b> hover/focus 전에는 <code>opacity: 0</code>, 나타나도 <code>--kv2-text-muted</code> 글자 + 얇은 테두리. 접힌 turn에서도 헤더에 있으니 펼치지 않고 바로 갈 수 있습니다.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- =============================== ② =============================== -->
+<section class="panel" id="p2">
+  <p class="lead">
+    지금은 피드백 영역 높이가 고정된 상태에서 스크린샷 그리드가 추가되면, 공간이 모자라 <b>썸네일이 입력창 위로 겹쳐</b> 그려집니다.
+    첨부 이미지를 <b>입력창 안쪽 아래의 작은 칩 줄</b>로 바꿔, 입력창과 한 덩어리로 늘고 줄게 합니다.
+  </p>
+
+  <div class="compare">
+    <div>
+      <span class="label label--before">BEFORE (현재)</span>
+      <div class="modal">
+        <div class="dock dock-fixed">
+          <div class="fb-head"><b>Feedback</b><span class="target">→ T2에 이어붙임</span><span class="draft">임시 저장됨 — 닫아도 유지 <u>비우기</u></span></div>
+          <div class="textarea ta-shrunk">기능하나 더 추가하자. 일단 이 세션화면에서 카드로 바로가기? 버튼이 있으면 좋겠어. 이 화면에서</div>
+          <div class="shot-grid-broken ring callout callout--inside" data-callout="썸네일이 입력창을 덮음">
+            <div class="shot-card"><div class="img"></div><div class="name">image.png</div></div>
+          </div>
+          <div class="fb-actions">
+            <button class="attach">📎 스크린샷 1</button><span class="hint">붙여넣기(⌘V) · 끌어놓기도 됩니다</span>
+            <button class="btn">CREATE FEEDBACK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="label label--after">AFTER</span>
+      <div class="modal">
+        <div class="dock" style="height: 230px;">
+          <div class="fb-head"><b>Feedback</b><span class="target">→ T2에 이어붙임</span><span class="draft">임시 저장됨 — 닫아도 유지 <u>비우기</u></span></div>
+          <div class="compose is-focus">
+            <div class="ta">기능하나 더 추가하자. 일단 이 세션화면에서 카드로 바로가기? 버튼이 있으면 좋겠어. 이 화면에서</div>
+            <div class="shot-strip ring callout callout--below" data-callout="입력창 안쪽 하단 칩 줄 (높이 고정 34px)">
+              <span class="shot-chip"><span class="thumb"></span>image.png<span class="x">✕</span></span>
+              <span class="shot-chip"><span class="thumb"></span>image-2.png<span class="x">✕</span></span>
+              <span class="shot-chip"><span class="thumb"></span>image-3.png<span class="x">✕</span></span>
+            </div>
+          </div>
+          <div class="fb-actions">
+            <button class="attach">📎 스크린샷 3</button><span class="hint">붙여넣기(⌘V) · 끌어놓기도 됩니다</span>
+            <button class="btn">CREATE FEEDBACK</button><button class="btn btn--primary">CREATE &amp; START</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <ul>
+      <li><b>원인(코드 기준 추정):</b> <code>.session-conversation-feedbackDock</code>은 높이가 정해진 flex column이고, 그 안의 <code>.kv2-feedback-panel</code>이 <code>min-height: 0</code>입니다. 그래서 스크린샷 그리드(<code>.kv2-feedback-screenshots</code>, 약 100px)가 들어갈 자리가 모자라면 그리드가 줄어든 칸 밖으로 넘쳐 입력창과 겹쳐 그려집니다.</li>
+      <li><b>수정안:</b> 썸네일을 입력창 테두리 <b>안쪽 아래</b>의 가로 스크롤 칩 줄(<code>flex: 0 0 auto</code>, 높이 약 34px)로 옮깁니다. 남는 높이는 항상 입력창(<code>textarea</code>)이 가져갑니다.</li>
+      <li><b>크게 보기:</b> 칩을 클릭하면 지금처럼 라이트박스로 엽니다. 이미지가 많아도 줄이 가로로 스크롤될 뿐, 세로 공간은 늘지 않습니다.</li>
+      <li><b>범위:</b> 같은 <code>FeedbackPanel</code>을 카드 상세(<code>CardDetailDialog</code>)도 쓰므로 두 화면에 함께 적용됩니다. 카드 상세 쪽에도 같은 문제가 있는지 구현할 때 함께 확인합니다.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- =============================== ③ =============================== -->
+<section class="panel" id="p3">
+  <p class="lead">
+    처음 쓰는 사람 입장에서 보면 지금 화면은 <b>상자 3겹(WORK › SESSION › 카드 타임라인)</b>, 상자마다 붙은 탭 라벨,
+    그리고 <b>버튼 5~6종(HIDE · 완료 · resume · W칩 · ⋯ · 정렬)</b>이 한 번에 다 보입니다.
+    원칙은 하나입니다: <b>보드에서는 "무엇이 있는지"만 보여주고, 자세한 내용과 조작은 세션 모아보기로 넘긴다.</b>
+  </p>
+
+  <div class="row-flex">
+    <div>
+      <span class="label label--before">BEFORE (현재 구조 근사)</span>
+      <div class="board-col">
+        <div class="col-head">● COMPLETE</div>
+        <div class="b-work">
+          <span class="b-tab">WORK</span>
+          <span class="count-pin">1</span>
+          <div class="b-work-title">GHES 마이그레이션 <span class="muted">⋯</span></div>
+          <div class="b-meta"><span class="b-tag">ghes_migration</span>2 sessions <span class="unread">● 5</span> #CcVbx2l4</div>
+          <div class="b-session">
+            <span class="b-tab">SESSION</span>
+            <span class="count-pin">2</span>
+            <div class="b-row sp"><span class="dir-chip">zanything</span><span><span class="unread">● 5</span> <span class="mono muted">#a7592bb6</span></span></div>
+            <div class="b-stitle">GHES 이관 - zanything</div>
+            <div class="b-row"><span class="rt-chip">CLAUDE</span><span class="mono">26 cards</span><button class="ghost">⏎ resume</button></div>
+            <span class="b-wchip">W GHES 마이그레이션 ▾</span>
+            <span class="count-pin" style="top:120px">3</span>
+            <div class="b-btns"><span class="b-btn">HIDE</span><span class="b-btn b-btn--ok">✓ 완료</span></div>
+            <div style="text-align:right;margin-top:10px"><span class="ghost">↓ 최신→과거 순</span></div>
+            <div class="b-tl">
+              <div class="b-turn"><div class="h"><span class="new">NEW</span>26. … <span class="muted mono">LATEST · 20:47</span> ☆</div><div class="r"><span>PROMPT</span><span>머지하고 마무리하자.</span></div><div class="r"><span>RESULT</span><span>PR 3개를 모두 머지했…</span></div></div>
+              <div class="b-turn"><div class="h"><span class="new">NEW</span>25. Feedback… <span class="muted mono">20:45</span> ☆</div><div class="r"><span>PROMPT</span><span>actions-yaml-upda…</span></div><div class="r"><span>RESULT</span><span>다시 실행한 zdd-zett…</span></div></div>
+              <div class="b-turn"><div class="h"><span class="new">NEW</span>24. Feedback… <span class="muted mono">20:35</span> ☆</div><div class="r"><span>PROMPT</span><span>커밋 후 push 하자…</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <span class="label label--after">AFTER (단순화)</span>
+      <div class="board-col">
+        <div class="col-head">● COMPLETE <span class="muted" style="margin-left:auto;font-weight:500;letter-spacing:0">7</span></div>
+
+        <div class="a-work">
+          <div class="a-work-head is-hover">
+            <span class="ic">▾ ◆</span><span class="name">GHES 마이그레이션</span>
+            <span class="meta">세션 2</span><span class="unread">5</span>
+            <span class="more">⋯</span>
+          </div>
+          <div class="a-session is-hover">
+            <span class="bar"></span>
+            <div>
+              <div class="a-stitle">GHES 이관 - zanything</div>
+              <div class="a-sline">머지하고 마무리하자. → PR 3개를 모두 머지했습니다</div>
+              <div class="a-smeta"><span>zanything</span><span>26턴</span><span>20:47</span></div>
+            </div>
+            <div class="a-right">
+              <span class="unread">5</span>
+              <span class="a-hover-actions"><button class="ghost" title="resume 명령 복사">⏎</button><button class="ghost" title="숨기기·Work 이동·완료">⋯</button></span>
+            </div>
+          </div>
+          <div class="a-session">
+            <span class="bar"></span>
+            <div>
+              <div class="a-stitle">GHES 이관 - zdd-zetta2</div>
+              <div class="a-sline">secrets 다 등록했음 → Secret 등록은 확인했…</div>
+              <div class="a-smeta"><span>zdd-zetta2</span><span>14턴</span><span>19:12</span></div>
+            </div>
+            <div class="a-right"></div>
+          </div>
+          <div class="a-done-cta"><button>✓ Work 완료</button></div>
+        </div>
+
+        <div class="a-loose">
+          <div class="a-loose-head">WORK 없음</div>
+          <div class="a-session">
+            <span class="bar"></span>
+            <div>
+              <div class="a-stitle">Agent-kanban - UI 개선</div>
+              <div class="a-sline">다시 빌드해야해? → 네, 웹만 빌드하면…</div>
+              <div class="a-smeta"><span>agent-kanban</span><span>2턴</span><span>17:09</span></div>
+            </div>
+            <div class="a-right"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div>
+        <span class="label label--after">처음 쓰는 사람용 — 용어 3개</span>
+        <div class="legend">
+          <div class="row"><span class="k">◆ Work</span><span>여러 대화를 묶은 <b>큰 작업</b><div class="eg">예: "GHES 마이그레이션"</div></span></div>
+          <div class="row"><span class="k">세션</span><span>에이전트와의 <b>대화 1개</b><div class="eg">예: "GHES 이관 - zanything"</div></span></div>
+          <div class="row"><span class="k">턴</span><span>대화 안에서 <b>주고받은 1회</b> (= 카드 1장)<div class="eg">예: "머지하고 마무리하자." → 결과</div></span></div>
+        </div>
+        <div class="coach">
+          <b>첫 Work가 없을 때만 보이는 안내</b><br>
+          세션을 끌어다 놓으면 Work로 묶을 수 있어요. 묶지 않아도 보드는 그대로 쓸 수 있습니다. <u>알겠어요</u>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <table>
+      <tr><th style="width:36px">#</th><th style="width:200px">지금 (BEFORE의 노란 번호)</th><th>바꾸는 방법</th></tr>
+      <tr><td>1</td><td>Work가 <b>테두리 상자 + WORK 탭 + ID</b></td><td>상자 대신 <b>제목 한 줄 + 아래 파란 선</b>(섹션 헤더). 접기 ▾, 세션 수, 안 읽음 수만 보이고 <code>⋯</code>(이름 변경·폐기·ID 복사)는 마우스를 올렸을 때만.</td></tr>
+      <tr><td>2</td><td>세션도 <b>상자 + SESSION 탭</b>, 디렉토리·런타임·ID·카드 수가 각각 칩</td><td>세션은 <b>한 줄짜리 항목</b>: 제목 / 최신 turn 요약(질문 → 답) / <code>디렉토리 · N턴 · 시각</code>. 왼쪽 색 띠가 상태. 클릭하면 세션 모아보기.</td></tr>
+      <tr><td>3</td><td><b>HIDE · 완료 · resume · W칩 · 정렬</b>이 늘 보임</td><td>세션 조작은 hover 때만 <code>⏎</code>(resume 복사)와 <code>⋯</code>(숨기기 · Work 이동 · 세션 완료). <b>완료는 Work 단위 하나만</b> 늘 보이게 하고 위치는 Work 맨 아래.</td></tr>
+      <tr><td>—</td><td>보드 안에 <b>turn 타임라인</b>이 펼쳐짐</td><td>보드에서는 빼고 세션 모아보기에서만 봅니다. 보드 = 목록, 세션 모아보기 = 상세. 타임라인이 빠지면 칸 높이가 대략 1/4로 줄어듭니다.</td></tr>
+      <tr><td>—</td><td>Work에 안 묶인 세션의 위치가 애매함</td><td>컬럼 맨 아래 <b>"WORK 없음"</b> 묶음으로 모읍니다. Inbox 개념을 보드에서도 같은 말로.</td></tr>
+    </table>
+    <ul style="margin-top:10px">
+      <li><b>점진적 노출:</b> 처음 설치하면 <code>GROUP</code> 기본값을 <code>SESSION</code>으로 두고, 첫 Work를 만들면 그때 <code>WORKS</code>로 바꿀지 한 번 묻습니다. Work를 모르는 사람은 Work를 볼 일이 없게.</li>
+      <li><b>용어 통일:</b> 화면에 "cards / turns / Feedback"이 섞여 있습니다(예: <code>26 cards</code>, 모달은 <code>16 turns</code>). 보드 표면에서는 <b>턴</b> 하나로 통일하고 카드라는 말은 카드 상세 안에서만 씁니다.</li>
+      <li><b>바꾸지 않는 것:</b> Work 완료 시 일괄 archive, 드래그로 Work 배정, 상태색 규칙(<code>--kv2-status-*</code>)은 그대로 둡니다. 보이는 방식만 바꿉니다.</li>
+    </ul>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('.tabs button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b === btn)));
+    document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('is-active', p.id === btn.dataset.panel));
+  });
+});
+</script>
+</body>
+</html>

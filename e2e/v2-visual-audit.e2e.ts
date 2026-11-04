@@ -280,7 +280,7 @@ test.describe('v2 visual audit', () => {
         // Done cards render inside collapsed session groups. Only expand if
         // a prior call (e.g. the light pass) hasn't already left it open.
         const doneColumn = page.locator('.kv2-column[data-status="done"]');
-        const groupTitle = doneColumn.locator('.kv2-complete-session-card-title', { hasText: title });
+        const groupTitle = doneColumn.locator(`.kv2-complete-session-turn-body[aria-label*="${title}"]`);
         if (!(await groupTitle.isVisible())) {
           await doneColumn.locator('.kv2-complete-session-toggle').first().click();
         }
@@ -453,7 +453,7 @@ test.describe('v2 visual audit', () => {
     const group = page.locator('.kv2-complete-session-group', { hasText: '[GRAPHITE]' }).first();
     const toggle = group.locator('.kv2-complete-session-toggle');
     if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
-    await group.locator('.kv2-complete-session-card-title', { hasText: 'Feedback follow-up' }).click();
+    await group.locator('.kv2-complete-session-turn-body[aria-label*="Feedback follow-up"]').click();
     const feedbackNav = page.locator('.kv2-back-btn');
     await expect(feedbackNav).toBeVisible();
     await expect(feedbackNav).toHaveCSS('background-color', 'rgb(81, 74, 50)');

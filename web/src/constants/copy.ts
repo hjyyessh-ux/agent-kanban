@@ -67,6 +67,55 @@ export const TOOLBAR_COPY = {
   groupTimelineTitle: '리스트·보드 뷰에만 적용됩니다 (타임라인은 항상 Work·세션 단위)',
 } as const;
 
+/**
+ * A session group on the board (`BoardSessionGroupCard`) — mockup
+ * `docs/mockups/works-board-option-a-refined.html` (A′).
+ */
+/** LIST view (`BoardListView`) — slim table that follows the toolbar `GROUP`. */
+export const LIST_COPY = {
+  colTitle: '제목',
+  colMeta: '프로젝트 · 런타임',
+  colTime: '시각',
+  colAction: '액션',
+  expandAll: '▾ 모두 펼치기',
+  collapseAll: '▴ 모두 접기',
+  expandAllLabel: '모든 섹션·Work·세션 펼치기',
+  collapseAllLabel: '모든 섹션·Work·세션 접기',
+  hidden: (n: number) => `${n}개 숨김`,
+  sectionToggle: (label: string, collapsed: boolean) => `${label} ${collapsed ? '펼치기' : '접기'}`,
+  groupToggle: (title: string, collapsed: boolean) => `${title} ${collapsed ? '펼치기' : '접기'}`,
+  empty: '카드 없음',
+  addTask: '＋ Add Task',
+  unassigned: 'Work 없는 세션',
+  workTag: 'WORK',
+  sessionMeta: (turns: number, duration: string | null) => (duration ? `${turns}턴 · 총 ${duration}` : `${turns}턴`),
+  workMeta: (sessions: number, duration: string | null) => (duration ? `세션 ${sessions} · 총 ${duration}` : `세션 ${sessions}`),
+  olderTurns: (n: number) => `이전 ${n}턴 더 보기`,
+  openSession: '세션 대화 열기',
+  openWork: 'Work 상세 열기',
+} as const;
+
+export const BOARD_SESSION_COPY = {
+  fold: '▴ 접기',
+  unfold: '▾ 펼치기',
+  foldLabel: '세션 turn 목록 접기',
+  unfoldLabel: '세션 turn 목록 펼치기',
+  turnCount: (count: number) => `${count}턴`,
+  lastRun: (stamp: string) => `마지막 ${stamp}`,
+  olderTurns: (hidden: number) => `이전 ${hidden}턴 보기 ›`,
+  hideOlderTurns: '이전 턴 접기 ▴',
+  noPrompt: '(프롬프트 없음)',
+  noResult: '(결과 없음)',
+  unreadTurn: '안 읽은 turn',
+  /** Native tooltip on the meta line — the exact stamps the short line abbreviates. */
+  timesHint: (last: string, first: string, duration: string | null) =>
+    [`마지막 수행 ${last}`, `시작 ${first}`, duration ? `소요 ${duration} (turn별 실행 시간 합계)` : null]
+      .filter(Boolean)
+      .join('\n'),
+  turnHint: (title: string, at: string, duration: string | null) =>
+    [title, duration ? `${at} · 실행 ${duration}` : at].join('\n'),
+} as const;
+
 /** Container tabs on board groups — sentence case, uppercased by CSS. */
 export const BOARD_GROUP_COPY = {
   sessionTab: 'Session',
@@ -80,19 +129,17 @@ export const BOARD_GROUP_COPY = {
  * `Show N more` / `N cards`; actions and hints are Korean.
  */
 export const BOARD_WORKS_COPY = {
-  sessionCount: (visible: number, total: number) => {
-    const noun = total === 1 ? 'session' : 'sessions';
-    return visible === total ? `${total} ${noun}` : `${visible} / ${total} ${noun}`;
-  },
-  showMore: (hidden: number) => `＋ Show ${hidden} more ${hidden === 1 ? 'session' : 'sessions'}`,
-  showLess: 'Show less ▴',
+  sessionCount: (visible: number, total: number) =>
+    visible === total ? `세션 ${total}` : `세션 ${visible}/${total}`,
+  showMore: (hidden: number) => `＋ 세션 ${hidden}개 더 보기`,
+  showLess: '세션 접기 ▴',
   unassignedHeading: 'Unassigned sessions',
   columnWorkCount: (count: number) => `Work ${count}`,
   collapse: 'Work 접기',
   expand: 'Work 펼치기',
-  /** Footer toggle — same `hide` / `show` face as a session group; folded, it counts the sessions it hides. */
-  toggleHide: 'hide',
-  toggleShow: (sessions: number) => `show ${sessions}`,
+  /** Header toggle — same `▴ 접기` / `▾ 펼치기` face as a session group; folded, it counts the sessions it hides. */
+  toggleHide: '▴ 접기',
+  toggleShow: (sessions: number) => `▾ 펼치기 · 세션 ${sessions}`,
   hiddenNote: (sessions: number, unread: number) => `숨긴 세션 ${sessions}${unread > 0 ? ` · unread ${unread}` : ''}`,
   titleHint: '클릭: Work 상세',
   favoriteHint: 'Work 완료 시에도 보드에 남는 즐겨찾기 카드',
@@ -170,6 +217,9 @@ export const COLUMN_MENU_COPY = {
   /** `GROUP: WORKS` — folds / unfolds every Work container in the column at once. */
   collapseWorks: '모든 Work 세션 접기',
   expandWorks: '모든 Work 세션 펼치기',
+  /** Board-wide turn order for every session group (was a per-session toggle). */
+  turnOrderOldest: '대화 순서: 과거→최신으로',
+  turnOrderNewest: '대화 순서: 최신→과거로',
 } as const;
 
 /** Card detail — reasons a panel is disabled. */
@@ -198,7 +248,8 @@ export const RESULT_SYNC_COPY = {
 export const WORK_PICKER_COPY = {
   ariaLabel: 'Work 지정',
   none: 'Work 없음',
-  planned: '예약',
+  /** Board card / session group trigger with no Work — quiet, sits in the card's top slot. */
+  add: '＋ Work',
   searchPlaceholder: 'Work 검색…',
   /** Search box placeholder after `새 Work 만들기` was picked with nothing typed. */
   namePlaceholder: '새 Work 이름 입력 후 Enter',

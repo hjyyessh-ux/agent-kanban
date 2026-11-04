@@ -2,6 +2,7 @@ import { describe, expect, test, mock } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { resolveWorkFieldChange, BoardCardWorkField } from './BoardCardWorkField';
 import type { Work } from '../../../../src/core/types';
+import { WORK_PICKER_COPY } from '../../constants/copy';
 
 function workFixture(id: string, title: string, sessionIds: string[]): Work {
   return {
@@ -82,10 +83,11 @@ describe('BoardCardWorkField', () => {
     );
     expect(html).toContain('kv2-card-work-field');
     expect(html).not.toContain('is-set');
-    expect(html).toContain('Work 없음');
+    // The board's empty trigger is the quiet `＋ Work`, not `Work 없음`.
+    expect(html).toContain(`<span class="kv2-work-picker-label">${WORK_PICKER_COPY.add}</span>`);
   });
 
-  test('marks a reservation with the planned suffix and the is-planned class', () => {
+  test('marks a reservation with the is-planned class only — no 예약 badge', () => {
     const work = workFixture('W1', 'Reserved Work', []);
     const html = renderToStaticMarkup(
       <BoardCardWorkField
@@ -98,7 +100,7 @@ describe('BoardCardWorkField', () => {
     );
     expect(html).toContain('kv2-card-work-field is-planned is-set');
     expect(html).toContain('<span class="kv2-work-picker-label">Reserved Work</span>');
-    expect(html).toContain('<span class="kv2-work-picker-state">예약</span>');
+    expect(html).not.toContain('kv2-work-picker-state');
   });
 
   test('shows a linked Work\'s plain title with no suffix', () => {

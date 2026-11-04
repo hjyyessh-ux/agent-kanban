@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보드 카드 — Work / Project 배치 옵션 — Agent Kanban</title>
+<style>
+/* 목업 전용 — Graphite 다크 테마 kv2 값을 근사 복제. 실제 구현은 kv2 토큰(--kv2-*) 사용. */
+:root {
+  color-scheme: dark;
+  --app-bg:#16181b; --col-bg:#1b1d20; --surface:#202326; --surface-raised:#272b2f; --surface-hover:#2e3237;
+  --text-primary:#e8eaed; --text-secondary:#b9bfc6; --text-muted:#979ea6; --text-faint:#6f767e;
+  --border:#3a3f45; --border-strong:#5b626a;
+  --work:#4a78c2; --work-text:#9db8e6; --work-tint:#1d2633; --work-tab-bg:#2c4a73; --work-tab-fg:#d6e4ff;
+  --danger:#ff5a5a; --star:#f5b83d; --dir-green:#2f9e6a; --claude:#d97757; --note:#ffd84d; --rec:#22c55e;
+  --font-sans:'Work Sans',system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--app-bg); color:var(--text-primary); font:14px/1.5 var(--font-sans); }
+.wrap { padding:22px 28px 80px; max-width:1280px; }
+h1 { font-size:20px; margin:0; } h2 { font-size:17px; margin:0; } h3 { font-size:13px; margin:0 0 6px; }
+p { margin:0; } code { font-family:var(--font-mono); font-size:12px; background:var(--surface-raised); padding:1px 5px; border-radius:3px; }
+.lead { color:var(--text-secondary); max-width:980px; margin:10px 0 18px; }
+.lead b, td b { color:var(--text-primary); }
+.complaint { border-left:3px solid var(--note); background:var(--surface); padding:10px 14px; color:var(--text-secondary); max-width:980px; margin-bottom:18px; font-size:13px; }
+.label { display:inline-block; font-size:11px; font-weight:800; letter-spacing:.08em; padding:3px 8px; border-radius:4px; }
+.label--before { background:#3a2a2a; color:#ffb4b4; }
+.label--opt { background:#1d2633; color:var(--work-text); }
+.label--rec { background:#173524; color:#7fe0a6; margin-left:6px; }
+.section { margin-top:44px; padding-top:22px; border-top:1px solid var(--border); }
+.section.is-rec { border-top:2px solid var(--rec); }
+.sec-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+.sub { color:var(--text-secondary); max-width:980px; margin-bottom:14px; }
+
+/* 비교표 */
+table { border-collapse:collapse; width:100%; font-size:13px; background:var(--surface); border:1px solid var(--border); }
+th, td { border-bottom:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top; line-height:1.5; color:var(--text-secondary); }
+th { color:var(--text-muted); font-weight:700; background:var(--surface-raised); }
+td.rec, th.rec { background:#14261c; }
+.ok { color:#7fe0a6; } .mid { color:#efd98a; } .bad { color:#ff9c9c; }
+
+/* 장단점 */
+.pc { display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:980px; margin-bottom:18px; }
+.pc > div { background:var(--surface); border:1px solid var(--border); padding:10px 14px; }
+.pc ul { margin:0; padding-left:18px; color:var(--text-secondary); font-size:13px; } .pc li { margin:3px 0; }
+.pc .pro h3 { color:#7fe0a6; } .pc .con h3 { color:#ff9c9c; }
+
+/* 상태 그리드 */
+.grid { display:grid; grid-template-columns:300px 380px minmax(260px,1fr); gap:14px 24px; align-items:start; }
+.grid .hd { font-size:11px; font-weight:800; letter-spacing:.08em; color:var(--text-muted); }
+.state-note { font-size:12px; color:var(--text-secondary); line-height:1.55; }
+.state-note b { color:var(--text-primary); display:block; margin-bottom:2px; }
+.hint { font-size:12px; color:var(--text-muted); margin:0 0 10px; }
+
+/* ───────── 카드 공통 ───────── */
+.card { position:relative; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:10px 12px 10px 14px; display:flex; flex-direction:column; gap:0; overflow:hidden; outline:none; }
+.card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent,var(--border-strong)); }
+.card:focus-within, .card:hover { border-color:var(--border-strong); }
+.w300 { width:300px; } .w380 { width:380px; }
+.top { display:flex; align-items:center; gap:8px; min-height:24px; min-width:0; }
+.sp { flex:1 1 auto; }
+.hm { display:flex; align-items:center; gap:4px; margin-left:auto; flex:0 0 auto; }
+.fav { color:var(--text-muted); font-size:14px; line-height:1; padding:2px 3px; }
+.idc { font:700 11px var(--font-mono); color:var(--text-secondary); border:1px solid var(--border); padding:1px 6px; border-radius:4px; white-space:nowrap; }
+.dir { font-size:12px; font-weight:700; color:#7fd8ab; background:color-mix(in srgb,var(--dir-green) 18%,var(--surface)); border:1px solid var(--dir-green); padding:1px 7px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+.dir.alt { color:#8fb7ff; background:color-mix(in srgb,#4a78c2 16%,var(--surface)); border-color:#4a78c2; }
+.title { font-weight:700; font-size:14px; line-height:1.35; margin-top:6px; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.prompt { font-size:12px; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.divider { height:1px; background:var(--border); margin:9px 0 0; }
+.meta { display:flex; align-items:center; gap:8px; min-width:0; margin-top:8px; font-size:12px; color:var(--text-muted); }
+.rt { font-size:10px; font-weight:800; letter-spacing:.06em; border:1px solid var(--border-strong); padding:2px 7px; border-radius:999px; color:var(--text-secondary); white-space:nowrap; flex:0 0 auto; }
+.rt.claude::before { content:'✳ '; color:var(--claude); }
+.time { white-space:nowrap; flex:0 0 auto; }
+.workrow { display:flex; margin-top:8px; min-width:0; }
+.actions { display:flex; align-items:center; gap:6px; margin-top:10px; }
+.btn { font:600 12px var(--font-sans); color:var(--text-secondary); background:none; border:1px solid var(--border-strong); padding:3px 10px; border-radius:4px; cursor:pointer; white-space:nowrap; }
+.btn.go { color:#7fe0a6; border-color:#2e6b49; }
+.btn:hover { background:var(--surface-hover); }
+.del { margin-left:auto; color:var(--danger); border:1px solid #6b2f2f; background:none; width:26px; height:24px; border-radius:4px; cursor:pointer; font-size:12px; }
+
+/* ───────── Work picker (kv2-work-picker 근사) ───────── */
+.wp { display:inline-flex; align-items:center; gap:6px; min-width:0; max-width:100%; padding:2px 8px 2px 4px; border:2px dashed var(--text-muted); background:transparent; color:var(--text-muted); font:600 11px var(--font-sans); cursor:pointer; text-align:left; }
+.wp:hover { background:var(--work-tint); }
+.wp i { font-style:normal; flex:0 0 auto; padding:1px 4px; background:var(--border); color:var(--text-secondary); font:800 9px/1.3 var(--font-mono); }
+.wp .lb { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wp .st { flex:0 0 auto; padding:0 5px; border:2px dashed var(--work); color:var(--work-text); font:700 9px var(--font-mono); }
+.wp b { flex:0 0 auto; font-size:9px; font-weight:400; }
+.wp.set { border-style:solid; border-color:var(--work); background:var(--work-tint); color:var(--work-text); font-weight:700; }
+.wp.set i { background:var(--work-tab-bg); color:var(--work-tab-fg); }
+.wp.set:hover { background:#243247; }
+.wp.plan { border-style:dashed; }
+/* 조용한 ＋ Work (비어 있을 때) */
+.wp.q { border-width:1px; border-color:var(--border-strong); color:var(--text-muted); padding:1px 8px; font-weight:600; }
+.wp.q:hover { color:var(--text-primary); border-color:var(--text-secondary); }
+.wp.sm { padding:1px 6px 1px 3px; }
+.wp.q.sm { padding:1px 7px; }
+
+/* hover-reveal — opacity 만 바꾼다. 자리(slot)는 항상 유지 → 레이아웃 이동 없음 */
+.hr { opacity:0; transition:opacity .14s ease; }
+.card:hover .hr, .card:focus-within .hr { opacity:1; }
+@media (hover:none) { .hr { opacity:.55; } }
+
+/* ───────── 옵션 A : 상단 컨텍스트 슬롯 (breadcrumb) ───────── */
+.ctx { display:flex; align-items:center; gap:5px; flex:1 1 auto; min-width:0; }
+.ctx .wp { flex:0 1 auto; }
+.ctx .sep { flex:0 0 auto; color:var(--text-faint); font-size:12px; }
+.ctx .dir { flex:0 3 auto; min-width:40px; }
+
+/* ───────── 옵션 B : Work 를 meta row 로 병합 ───────── */
+.b .meta .wp { margin-left:auto; flex:0 1 auto; max-width:64%; }
+.b .trow { display:flex; align-items:flex-start; gap:8px; }
+.b .trow .title { flex:1 1 auto; min-width:0; margin-top:0; }
+.b .trow .hm { margin-top:0; }
+
+/* ───────── 옵션 C : Work 머리띠 + project 는 meta row ───────── */
+.c .top .wp { flex:0 1 auto; }
+.c .meta .dir { flex:0 1 auto; max-width:46%; }
+.c .meta .dot { color:var(--text-faint); flex:0 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+    <h1>보드 카드 — Work / Project 배치 옵션</h1>
+    <small style="color:var(--text-muted)">TODO / 진행중 컬럼 카드 · 300px / 380px · Graphite 다크</small>
+  </div>
+  <div class="complaint">사용자 의견: "지금 WORKS는 이 아래 붙어있고, PROJ가 없으면 그냥 빈칸으로 보여서 뭔가 허전함. 이거 어떻게 개선하면 좋을지"</div>
+  <p class="lead">
+    문제는 두 가지입니다. <b>(1) Work 가 meta row 아래 별도 한 줄로 "붙어" 있어 카드가 길고 부차적으로 보임</b>,
+    <b>(2) projectDir 가 없으면 상단 좌측이 빈 spacer 라 <code>☆ #id</code> 만 덩그러니 남음</b>.
+    아래 3안은 모두 <b>Work picker 는 그대로 클릭 가능</b>, <b>예약(planned)은 점선 파란 pill + <code>예약</code> 태그로 구분</b>,
+    <b>새 정보 추가 없음</b>, <b>hover 시 레이아웃 이동 없음(opacity 만 변경)</b> 조건을 지킵니다. 카드를 직접 hover / Tab 포커스해 보세요.
+  </p>
+
+  <h2 style="margin-bottom:8px">한눈에 비교</h2>
+  <table>
+    <thead><tr>
+      <th style="width:150px">기준</th><th>현재</th><th>A. 상단 breadcrumb</th><th>B. meta row 병합</th><th class="rec">C. Work 머리띠 (추천)</th>
+    </tr></thead>
+    <tbody>
+      <tr><th>빈 상단 해소</th><td class="bad">안 됨 (spacer)</td><td class="ok">항상 채워짐 (<code>＋ Work</code> 폴백)</td><td class="mid">project 없으면 상단 행 제거</td><td class="rec ok">항상 채워짐 (Work 슬롯)</td></tr>
+      <tr><th>행 수</th><td>5 (top · title · meta · work · actions)</td><td class="rec ok">4 (Work 행 삭제)</td><td class="ok">4 (Work 행 삭제, project 없으면 3+)</td><td class="rec ok">4 (Work 행 삭제)</td></tr>
+      <tr><th>Work 가시성</th><td class="mid">별도 행 / 눈에 띔</td><td class="ok">제목 바로 위, 맥락 1순위</td><td class="mid">meta 우측, 부차적</td><td class="rec ok">제목 바로 위, 가장 강조</td></tr>
+      <tr><th>project 가시성</th><td class="ok">좌상단</td><td class="ok">Work 옆 breadcrumb</td><td class="ok">좌상단 유지</td><td class="rec mid">meta row 로 이동</td></tr>
+      <tr><th>빈 Work 처리</th><td>항상 <code>Work 없음 ▾</code> 점선 pill</td><td class="rec">조용한 <code>＋ Work</code> 상시 노출</td><td>hover-reveal (opacity)</td><td class="rec">조용한 <code>＋ Work</code> 상시 노출</td></tr>
+      <tr><th>300px 내성</th><td class="mid">행 분리라 여유</td><td class="mid">Work+project+☆#id 가 한 줄 — 가장 빡빡</td><td class="mid">meta 에 runtime+time+pill</td><td class="rec ok">줄마다 항목 2~3개로 분산</td></tr>
+      <tr><th>카드 높이 일관성</th><td class="rec ok">고정</td><td class="rec ok">고정</td><td class="bad">project 유무로 ±24px</td><td class="rec ok">고정</td></tr>
+      <tr><th>변경 범위</th><td>—</td><td>BoardCard 상단 + CSS</td><td>상단 분기 + meta CSS</td><td class="rec">상단/ meta 재배치 + CSS</td></tr>
+    </tbody>
+  </table>
+  <p class="hint" style="margin-top:8px">추천: <b style="color:#7fe0a6">옵션 C</b> (녹색 열). 근거는 C 섹션 하단 참고.</p>
+
+  <!-- ============ BEFORE ============ -->
+  <section class="section" id="before">
+    <div class="sec-head"><span class="label label--before">현재 (BEFORE)</span><h2>Work 는 맨 아래 별도 행, project 없으면 빈칸</h2></div>
+    <p class="sub">좌: project 없음 + 예약 Work (상단 좌측이 비어 <code>☆ #id</code> 만 우측에 남음). 우: project 있음 + Work 없음 (<code>Work 없음 ▾</code> 가 별도 행으로 붙음).</p>
+    <div class="grid" id="g-before"></div>
+  </section>
+
+  <!-- ============ A ============ -->
+  <section class="section" id="optA">
+    <div class="sec-head"><span class="label label--opt">옵션 A</span><h2>상단 컨텍스트 슬롯 — <code>W Work › project</code> breadcrumb</h2></div>
+    <p class="sub">상단 좌측 "컨텍스트 슬롯"에 Work → project 순서로 이어 붙입니다. Work 행은 삭제. 둘 다 없어도 <code>＋ Work</code> 가 자리를 채워 빈칸이 사라집니다. 폭이 모자라면 project 가 먼저 줄어듭니다(Work 우선).</p>
+    <div class="pc">
+      <div class="pro"><h3>장점</h3><ul><li>허전함(빈 spacer)과 "아래 붙음" 두 문제를 한 슬롯으로 동시 해결</li><li>카드 높이 1행 감소, 높이 일관</li><li>"어느 Work › 어느 repo" 위계가 한눈에 읽힘</li></ul></div>
+      <div class="con"><h3>단점</h3><ul><li>상단 한 줄에 Work + project + ☆ + #id 가 모여 300px 에서 가장 빡빡</li><li>예약 + project 동시일 때 Work 라벨이 짧게 잘림</li><li>project chip 위치가 "맨 왼쪽"에서 두 번째로 이동 (기존 학습 습관 변화)</li></ul></div>
+    </div>
+    <div class="grid" id="g-a"></div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="section" id="optB">
+    <div class="sec-head"><span class="label label--opt">옵션 B</span><h2>meta row 병합 — <code>runtime · time ··· Work</code></h2></div>
+    <p class="sub">Work pill 을 meta row 우측으로 올려 한 행을 줄입니다. project 가 없으면 상단 행 자체를 없애고 <code>☆ #id</code> 를 제목 줄 우측으로 옮깁니다. 빈 Work 는 hover 시에만 <code>＋ Work</code> 가 나타납니다(자리는 상시 확보).</p>
+    <div class="pc">
+      <div class="pro"><h3>장점</h3><ul><li>가장 낮은 카드 (project 없으면 3행)</li><li>빈 Work 는 시각 노이즈 0 — 보드가 깔끔</li><li>상단 project chip 위치/모양 그대로 유지</li></ul></div>
+      <div class="con"><h3>단점</h3><ul><li>project 유무로 카드 높이가 ±24px 달라져 컬럼 리듬이 들쭉날쭉</li><li>hover-only 라 Work 미배정 카드가 "할당 가능"함을 알리기 어려움 (터치 기기는 .55 상시 노출로 대체)</li><li>Work 가 meta 우측에 있어 위계상 부차적으로 보임</li></ul></div>
+    </div>
+    <div class="grid" id="g-b"></div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="section is-rec" id="optC">
+    <div class="sec-head"><span class="label label--opt">옵션 C</span><span class="label label--rec">추천</span><h2>Work 머리띠 — 상단 = Work, project = meta row</h2></div>
+    <p class="sub">상단 좌측을 Work 전용 슬롯으로 씁니다. Work 가 항상(없으면 조용한 <code>＋ Work</code>) 존재하므로 상단이 비는 일이 구조적으로 없습니다. project 는 meta row 의 <code>runtime · project · time</code> 으로 내려, 없으면 그냥 항목이 하나 빠질 뿐 빈칸이 생기지 않습니다.</p>
+    <div class="pc">
+      <div class="pro"><h3>장점</h3><ul><li>"빈칸" 문제가 구조적으로 해소 — 비어 보일 슬롯이 없음 (Work 는 항상 존재, project 는 선택 항목)</li><li>Work 가 제목 바로 위로 올라와 "묶음 소속"이 가장 강하게 읽힘</li><li>300px 에서도 줄당 항목이 2~3개로 분산되어 가장 안정적</li><li>카드 높이 고정 (4행), 행 하나 감소</li></ul></div>
+      <div class="con"><h3>단점</h3><ul><li>project chip 이 좌상단에서 meta row 로 이동 → 기존 색상 chip 의 스캔성이 약간 감소</li><li>Work 미배정 카드에도 상단에 <code>＋ Work</code> 가 상시 보임 (조용한 톤으로 완화)</li><li>상단/meta 두 곳을 재배치하므로 변경 범위가 A 보다 약간 큼</li></ul></div>
+    </div>
+    <div class="grid" id="g-c"></div>
+
+    <div style="margin-top:26px;background:#14261c;border:1px solid #2e6b49;padding:14px 18px;max-width:980px">
+      <h3 style="color:#7fe0a6;font-size:14px">최종 추천: 옵션 C</h3>
+      <p style="color:var(--text-secondary);font-size:13px">
+        사용자 불만의 두 축(Work 가 아래 붙음 / project 없을 때 빈칸)을 <b>가장 적은 트레이드오프로</b> 해결합니다.
+        A 는 같은 효과지만 300px 에서 상단이 과밀하고, B 는 카드 높이가 들쭉날쭉하며 빈 Work 가 발견되기 어렵습니다.
+        C 는 높이가 고정이고 300px 에서도 줄 단위로 여유가 있어 <b>ellipsis 로 안전하게 수렴</b>합니다.
+        project chip 위치가 바뀌는 점만 감수하면 되며, 필요하면 A 의 breadcrumb 아이디어를 넓은 폭(380px+)에서만 적용하는 하이브리드도 가능합니다.
+      </p>
+    </div>
+  </section>
+</div>
+
+<script>
+/* 목업 렌더링용 tiny vanilla JS — 카드 마크업 생성만 담당 */
+const WORK_PLAN = '[BW] From new task 1793747686844';
+const WORK_LONG = 'GHES 마이그레이션 2차 — 인증 서버 이관 및 롤백 리허설';
+const STATES = [
+  { key:'s1', name:'① project 無 · Work 예약', accent:'var(--border-strong)',
+    id:'#2fIQmL_N', title:'[BW] New task 1793747686844', prompt:'born reserved', rt:'claude', rtl:'CLAUDE', time:'2h ago', proj:null, work:{k:'plan', n:WORK_PLAN} },
+  { key:'s2', name:'② project 有 · Work 無', accent:'var(--border-strong)',
+    id:'#9Kx3aQ_f', title:'Feedback #11: ZEPETOFUL - tencent 구현 Review', prompt:'tencent 구현 Review 요청 — 리뷰 코멘트 반영', rt:'codex', rtl:'CODEX', time:'8d ago', proj:'mcp-server', work:null },
+  { key:'s3', name:'③ project 有 · Work 배정 (긴 이름)', accent:'#d9a441',
+    id:'#7bTn04_Z', title:'Telegram poller 재시도 로직 정리 — 장문 제목이 두 줄로 넘어가는 경우 확인', prompt:'backoff 와 dedupe 를 분리하고 e2e 보강', rt:'claude', rtl:'CLAUDE', time:'12m ago', proj:'agent-kanban-long-project-name', work:{k:'set', n:WORK_LONG} },
+  { key:'s4', name:'④ project 無 · Work 無 (가장 허전한 경우)', accent:'var(--border-strong)',
+    id:'#c81QpW_2', title:'로그 로테이션 점검', prompt:'cron 과 logrotate 설정 확인', rt:'codex', rtl:'CODEX', time:'3d ago', proj:null, work:null },
+];
+
+const fav = '<span class="fav" aria-hidden="true">☆</span>';
+const idc = s => `<span class="idc">${s.id}</span>`;
+const hm = s => `<div class="hm">${fav}${idc(s)}</div>`;
+const dir = (s, alt) => s.proj ? `<span class="dir${alt?' alt':''}" title="/work/${s.proj}">${s.proj}</span>` : '';
+const rt = s => `<span class="rt ${s.rt}">${s.rtl}</span>`;
+const actions = `<div class="actions"><button class="btn go">▶ 시작</button><button class="btn">큐 연결</button><button class="del" aria-label="삭제">✕</button></div>`;
+
+/* Work pill 변형 */
+function wp(w, opts = {}) {
+  const sm = opts.sm ? ' sm' : '';
+  if (!w) {
+    if (opts.legacy) return `<button class="wp${sm}" type="button"><i>W</i><span class="lb">Work 없음</span><b>▾</b></button>`;
+    return `<button class="wp q${sm}${opts.hr?' hr':''}" type="button" aria-label="Work 지정">＋ Work</button>`;
+  }
+  if (w.k === 'plan')
+    return `<button class="wp set plan${sm}" type="button" title="${w.n} (예약)"><i>W</i><span class="lb">${w.n}</span><span class="st">예약</span><b>▾</b></button>`;
+  return `<button class="wp set${sm}" type="button" title="${w.n}"><i>W</i><span class="lb">${w.n}</span><b>▾</b></button>`;
+}
+
+const surface = s => `<div class="title">${s.title}</div><div class="prompt">${s.prompt}</div><div class="divider"></div>`;
+const wrap = (cls, w, s, inner) => `<div class="card ${cls} w${w}" tabindex="0" style="--accent:${s.accent}">${inner}</div>`;
+
+const R = {
+  before: (s,w) => wrap('', w, s,
+    `<div class="top">${s.proj ? dir(s) : '<span class="sp"></span>'}${hm(s)}</div>${surface(s)}
+     <div class="meta">${rt(s)}<span class="time">${s.time}</span></div>
+     <div class="workrow">${wp(s.work,{legacy:true})}</div>${actions}`),
+
+  a: (s,w) => wrap('a', w, s,
+    `<div class="top"><div class="ctx">${wp(s.work,{sm:true})}${s.proj?`<span class="sep">›</span>${dir(s)}`:''}</div>${hm(s)}</div>${surface(s)}
+     <div class="meta">${rt(s)}<span class="time">${s.time}</span></div>${actions}`),
+
+  b: (s,w) => wrap('b', w, s,
+    (s.proj
+      ? `<div class="top">${dir(s)}${hm(s)}</div><div class="title" style="margin-top:6px">${s.title}</div>`
+      : `<div class="trow"><div class="title">${s.title}</div>${hm(s)}</div>`)
+    + `<div class="prompt">${s.prompt}</div><div class="divider"></div>
+     <div class="meta">${rt(s)}<span class="time">${s.time}</span>${wp(s.work,{sm:true,hr:true})}</div>${actions}`),
+
+  c: (s,w) => wrap('c', w, s,
+    `<div class="top">${wp(s.work,{sm:true})}${hm(s)}</div>${surface(s)}
+     <div class="meta">${rt(s)}${s.proj?`<span class="dot">·</span>${dir(s)}`:''}<span class="dot">·</span><span class="time">${s.time}</span></div>${actions}`),
+};
+
+const NOTES = {
+  before: [
+    'project 無 + 예약: 상단 좌측이 spacer → 우측 <code>☆ #id</code> 만 남아 허전. Work 는 meta 아래 별도 행.',
+    'project 有 + Work 無: Work 행 <code>Work 없음 ▾</code> 이 따로 붙어 카드가 한 행 더 김.',
+  ],
+  a: [
+    'Work 예약이 상단 좌측으로. project 가 없으니 <code>›</code> 도 생략 → 빈칸 없음. 예약은 점선 파랑 + <code>예약</code> 태그 유지.',
+    '<code>＋ Work › mcp-server</code>. 비어 있는 Work 는 조용한 회색 pill 이지만 클릭 가능.',
+    'Work 배정 + 긴 project: 폭이 모자라면 <b>project 가 먼저</b> ellipsis, Work 라벨은 그다음. 가장 빡빡한 케이스.',
+    '둘 다 없음: <code>＋ Work</code> 하나만 — 상단이 더 이상 비지 않음.',
+  ],
+  b: [
+    'project 無: 상단 행 제거, <code>☆ #id</code> 는 제목 우측. Work 예약은 meta 우측 pill. 카드가 한 행 짧아짐.',
+    'project 有 + Work 無: 상단 chip 유지. meta 우측 <code>＋ Work</code> 는 <b>hover/포커스 시에만</b> 나타남 (자리는 상시 확보, 이동 없음).',
+    'Work 배정: meta 우측 pill, 긴 이름은 최대 64% 폭에서 ellipsis.',
+    '둘 다 없음: 가장 낮은 카드. Work 는 hover 시에만 노출.',
+  ],
+  c: [
+    'Work 예약이 상단 머리띠로. project 無 → meta row 가 <code>CLAUDE · 2h ago</code> 로 자연스럽게 짧아질 뿐 빈칸 없음.',
+    '상단 <code>＋ Work</code> (조용한 톤, 클릭 가능). project 는 meta 의 <code>CODEX · mcp-server · 8d ago</code>.',
+    'Work 긴 이름은 상단에서 ellipsis, project 는 meta row 에서 최대 46% 로 ellipsis — 줄이 분리돼 둘이 경쟁하지 않음.',
+    '둘 다 없음: 상단 <code>＋ Work</code> 로 자리 확보, meta 는 runtime · time 만.',
+  ],
+};
+
+function build(id, fn, notes, states) {
+  const g = document.getElementById(id);
+  let h = '<div class="hd">300px 컬럼</div><div class="hd">380px 컬럼</div><div class="hd">상태별 동작</div>';
+  states.forEach((s, i) => {
+    h += `<div>${fn(s,300)}</div><div>${fn(s,380)}</div><div class="state-note"><b>${s.name}</b>${notes[i]}</div>`;
+  });
+  g.innerHTML = h;
+}
+build('g-before', R.before, NOTES.before, STATES.slice(0,2));
+build('g-a', R.a, NOTES.a, STATES);
+build('g-b', R.b, NOTES.b, STATES);
+build('g-c', R.c, NOTES.c, STATES);
+document.querySelectorAll('.wp, .btn, .del').forEach(b => b.addEventListener('click', e => e.preventDefault()));
+</script>
+</body>
+</html>
