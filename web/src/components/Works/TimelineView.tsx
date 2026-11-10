@@ -31,6 +31,7 @@ import {
   toDateInputValue,
   visibleColumns,
   visibleRangeLabel,
+  workSpanHeadClasses,
   DEFAULT_LABEL_WIDTH,
   LABEL_WIDTH_STEP,
   MAX_LABEL_WIDTH,
@@ -1022,6 +1023,17 @@ export function TimelineView({
     [strip, works, range, todayMs],
   );
   const rows: TimelineRow[] = strip ? stripRows : scoped ? scopeRows : boardRows;
+  // Work detail: the Work's own span is drawn on the day header, not as a row —
+  // a bar beside the session bars read as one more session inside the Work.
+  const scopeSpan = useMemo(() => {
+    if (!scoped) return null;
+    const workRow = rows.find((row): row is TimelineWorkRow => row.kind === 'work');
+    return workRow?.bar ?? null;
+  }, [scoped, rows]);
+  const drawnRows = useMemo(
+    () => (scoped ? rows.filter((row) => row.kind !== 'work') : rows),
+    [scoped, rows],
+  );
   const legend = useMemo(() => timelineLegend(rows), [rows]);
   const months = useMemo(() => monthSegments(range), [range]);
   const rangeLabel = visibleRangeLabel(range, visible);
@@ -1698,7 +1710,7 @@ export function TimelineView({
             style={{ gridRow: '1 / 3', gridColumn: 1 }}
             ref={labelHeadRef}
           >
-            {strip ? 'Work' : scoped ? 'Work · 세션' : '프로젝트 · 세션'}
+            {strip ? 'Work' : scoped ? '세션' : '프로젝트 · 세션'}
             <span
               role="separator"
               aria-orientation="vertical"
@@ -1735,6 +1747,7 @@ export function TimelineView({
               isWeekend(day) ? 'tl-head--weekend' : '',
               isToday ? 'tl-head--today' : '',
               day.getDate() === 1 ? 'tl-head--month-start' : '',
+              ...workSpanHeadClasses(scopeSpan, index),
             ].filter(Boolean).join(' ');
             return (
               <div
@@ -1752,7 +1765,7 @@ export function TimelineView({
             );
           })}
 
-          {rows.map((row, rowIndex) => {
+          {drawnRows.map((row, rowIndex) => {
             // Rows 1–2 are the month band and the day header.
             const gridRow = rowIndex + 3;
             if (row.kind === 'dir') {
@@ -1799,7 +1812,7 @@ export function TimelineView({
             );
           })}
 
-          {rows.length === 0 && (
+          {drawnRows.length === 0 && (
             <div className="tl-empty" style={{ gridRow: 3 }}>
               {busy && '불러오는 중…'}
               {/* An unanswered read must never be reported as an empty week. */}
@@ -1927,7 +1940,8 @@ export function TimelineView({
             {legend.map((item) => (
               <span key={item.key}>
                 <i className={`tl-legend-swatch tl-legend-swatch--${item.key}`} aria-hidden="true" />
-                {item.label}
+                {/* The Work's span is the tinted date row here, not a bar. */}
+                {item.key.startsWith('work-') ? `${item.label} (날짜 줄)` : item.label}
               </span>
             ))}
           </div>

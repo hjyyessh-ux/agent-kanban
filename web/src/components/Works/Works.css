@@ -1606,6 +1606,7 @@
 }
 
 /* ── 연결된 세션 ─────────────────────────────────────────────── */
+
 .work-session-list {
   display: flex;
   flex-direction: column;
@@ -1615,12 +1616,12 @@
 .work-session-item {
   display: flex;
   align-items: center;
-  gap: var(--kv2-sp-2);
-  padding: var(--kv2-sp-2) var(--kv2-sp-3);
-  border: 1px solid var(--kv2-border-muted);
-  border-left: 5px solid var(--kv2-border-strong);
+  gap: var(--kv2-sp-3);
+  padding: var(--kv2-sp-3);
+  border: 1px solid var(--kv2-border-strong);
+  border-left: 5px solid var(--kv2-work-border);
   border-radius: 8px;
-  background: var(--kv2-surface);
+  background: var(--kv2-surface-raised);
 }
 
 /* The role tints the *row*: left edge + background, the chip inside just
@@ -1647,8 +1648,8 @@
 }
 
 .work-session-title {
-  font-weight: 700;
-  font-size: var(--kv2-text-sm);
+  font-weight: 800;
+  font-size: var(--kv2-text-md);
   color: var(--kv2-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1699,14 +1700,33 @@
 
 .work-session-go {
   flex: 0 0 auto;
+  padding: 4px 10px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Newest finished turn, `질문 ↳ 답`, one line. */
+.work-session-last {
+  margin: 6px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--kv2-text-ui-sm);
   color: var(--kv2-text-muted);
-  font-family: var(--kv2-font-mono);
-  font-size: var(--kv2-text-md);
-  font-weight: 800;
+}
+
+.work-session-last b {
+  color: var(--kv2-text-primary);
+  font-weight: 700;
 }
 
 .work-session-item--open:hover .work-session-go,
 .work-session-item--open:focus-visible .work-session-go {
+  border-color: var(--kv2-work-border);
   color: var(--kv2-work-text);
 }
 

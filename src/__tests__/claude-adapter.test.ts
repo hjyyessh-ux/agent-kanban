@@ -476,6 +476,38 @@ describe('ClaudeAdapter', () => {
       const argv = JSON.parse(await Bun.file(argvPath).text()) as string[];
       expect(argv).toContain('--permission-mode');
       expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('bypassPermissions');
+      expect(argv).not.toContain('--effort');
+    });
+  });
+
+  test('card Claude effort is passed as --effort', async () => {
+    await withTempDir(async (dir) => {
+      const argvPath = join(dir, 'argv.json');
+      const fakeClaude = await createFakeClaudeBinary(dir, 'success', { argvPath });
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const card = await store.createCard({
+        title: 'Claude task',
+        description: 'Do it',
+        agentRuntime: 'claude',
+        projectDir: dir,
+        claudeOptions: { permissionMode: 'plan', effort: 'xhigh' },
+      });
+      const adapter = createClaudeAdapter({
+        store,
+        settingsStore,
+        runStore,
+        commandOverride: [fakeClaude],
+        sessionIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      await handle.done;
+
+      const argv = JSON.parse(await Bun.file(argvPath).text()) as string[];
+      expect(argv[argv.indexOf('--effort') + 1]).toBe('xhigh');
+      expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('plan');
     });
   });
 });

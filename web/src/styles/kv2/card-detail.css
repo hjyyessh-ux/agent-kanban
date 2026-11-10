@@ -1708,3 +1708,656 @@
   overflow-wrap: anywhere;
   color: var(--kv2-text-primary);
 }
+
+/* ─── NEW TASK: Work | Directory row ───────────────────────────────────
+   Picking a Work fills the Directory beside it, so the pair sits on one row. */
+.kv2-create-work-dir-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--kv2-sp-3);
+  align-items: end;
+}
+
+.kv2-create-work-dir--single .kv2-create-work-dir-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.kv2-create-work-dir-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kv2-create-label--with-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-create-dir-badge {
+  font: 700 var(--kv2-text-2xs) var(--kv2-font-mono);
+  color: var(--kv2-work-fg);
+  background: var(--kv2-work-tint);
+  border: 1px solid var(--kv2-work-border);
+  padding: 1px 6px;
+  border-radius: var(--kv2-radius-sm);
+}
+
+.kv2-create-inline-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--kv2-work-fg);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .kv2-create-work-dir-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── NEW TASK: 실행 프리셋 ─────────────────────────────────────────────
+   Fixed 3×2 favorite grid (cap 6) so the dialog never reflows; the picker is
+   an overlay anchored to the field, not a new row. */
+.kv2-run-preset {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-run-preset-head {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  min-width: 0;
+  min-height: 28px;
+}
+
+/* Fixed parts of the header never squeeze — only the 현재 선택 combo text ellipsizes. */
+.kv2-run-preset-head > .kv2-create-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.kv2-run-preset-spacer {
+  flex: 1 1 auto;
+}
+
+.kv2-run-preset-count {
+  flex: 0 0 auto;
+  font: 600 var(--kv2-text-xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-count.is-full {
+  color: var(--kv2-warn-text-strong);
+}
+
+.kv2-run-preset-temp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: 28px;
+  padding: 0 3px 0 6px;
+  border: 1px dashed var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-warn-surface-pale);
+  color: var(--kv2-text-primary);
+}
+
+.kv2-run-preset-temp-tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font: 800 var(--kv2-text-2xs) var(--kv2-font-sans);
+  color: var(--kv2-warn-text-strong);
+}
+
+.kv2-run-preset-temp-text {
+  flex: 0 1 auto;
+  min-width: 4ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 600 var(--kv2-text-xs) var(--kv2-font-mono);
+}
+
+.kv2-run-preset-temp-save {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-raised);
+  color: var(--kv2-warn-text-strong);
+  font: 700 var(--kv2-text-xs) var(--kv2-font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.kv2-run-preset-temp-save:hover:not(:disabled) {
+  background: var(--kv2-warn-surface-soft);
+}
+
+.kv2-run-preset-temp-save:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.kv2-run-preset-head-btn {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-raised);
+  color: var(--kv2-text-secondary);
+  font: 700 var(--kv2-text-xs) var(--kv2-font-sans);
+  cursor: pointer;
+}
+
+.kv2-run-preset-head-btn:hover:not(:disabled) {
+  color: var(--kv2-text-primary);
+}
+
+.kv2-run-preset-head-btn--all {
+  border-color: var(--kv2-work-border);
+  color: var(--kv2-work-fg);
+  background: var(--kv2-work-tint);
+}
+
+.kv2-run-preset-head-btn.is-on {
+  background: var(--kv2-control-selected-bg);
+  border-color: var(--kv2-control-selected-border);
+  color: var(--kv2-control-selected-fg);
+}
+
+.kv2-run-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--kv2-sp-2);
+}
+
+.kv2-run-preset-chip {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: var(--kv2-sp-2);
+  align-items: center;
+  align-content: center;
+  height: 52px;
+  padding: 6px 10px;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-raised);
+  color: var(--kv2-text-primary);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.kv2-run-preset-chip--claude {
+  box-shadow: inset 3px 0 0 var(--kv2-runtime-claude);
+}
+
+.kv2-run-preset-chip--codex {
+  box-shadow: inset 3px 0 0 var(--kv2-runtime-codex-accent);
+}
+
+.kv2-run-preset-chip:hover:not(:disabled) {
+  background: var(--kv2-surface-hover);
+}
+
+.kv2-run-preset-chip.is-on {
+  border-color: var(--kv2-control-selected-border);
+  background: var(--kv2-control-selected-bg);
+}
+
+.kv2-run-preset-chip:focus-visible,
+.kv2-run-preset-slot:focus-visible,
+.kv2-run-preset-head-btn:focus-visible,
+.kv2-run-preset-model:focus-visible,
+.kv2-run-preset-rt:focus-visible,
+.kv2-run-preset-seg-btn:focus-visible {
+  outline: 2px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+}
+
+.kv2-run-preset-name {
+  min-width: 0;
+  font-weight: 700;
+  font-size: var(--kv2-text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-run-preset-tag {
+  margin-left: 4px;
+  font: 600 var(--kv2-text-3xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-opts {
+  grid-column: 2;
+  min-width: 0;
+  font: 600 var(--kv2-text-xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-run-preset-chip.is-on .kv2-run-preset-opts {
+  color: var(--kv2-control-selected-fg);
+}
+
+.kv2-run-preset-key {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font: 600 var(--kv2-text-3xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font: 800 var(--kv2-text-2xs) var(--kv2-font-sans);
+  color: var(--kv2-surface);
+  flex: 0 0 auto;
+}
+
+.kv2-run-preset-ico--claude {
+  background: var(--kv2-runtime-claude);
+}
+
+.kv2-run-preset-ico--codex {
+  background: var(--kv2-runtime-codex-accent);
+}
+
+/* Edit mode: the chip is a div holding its own controls (no nested buttons). */
+.kv2-run-preset-chip.is-editing {
+  display: block;
+  padding: 0;
+  border-style: dashed;
+  cursor: default;
+}
+
+.kv2-run-preset-chip-main {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: var(--kv2-sp-2);
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.kv2-run-preset-ctl {
+  position: absolute;
+  top: -10px;
+  right: -6px;
+  display: flex;
+  gap: 3px;
+}
+
+.kv2-run-preset-ctl button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  font: 700 var(--kv2-text-2xs) var(--kv2-font-mono);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.kv2-run-preset-ctl button:hover:not(:disabled) {
+  color: var(--kv2-text-primary);
+}
+
+.kv2-run-preset-ctl button.is-remove:hover:not(:disabled) {
+  background: var(--kv2-danger-surface);
+  color: var(--kv2-danger-text-strong);
+}
+
+.kv2-run-preset-ctl button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.kv2-run-preset-slot {
+  height: 52px;
+  border: 2px dashed var(--kv2-border-soft);
+  border-radius: var(--kv2-radius-sm);
+  background: transparent;
+  color: var(--kv2-text-muted);
+  font: 600 var(--kv2-text-xs) var(--kv2-font-sans);
+  cursor: default;
+}
+
+.kv2-run-preset-slot.is-add {
+  border-color: var(--kv2-work-border);
+  color: var(--kv2-work-fg);
+  cursor: pointer;
+}
+
+.kv2-run-preset-slot.is-add:hover:not(:disabled) {
+  background: var(--kv2-work-tint);
+}
+
+.kv2-run-preset-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Picker overlay — covers the field (and what is below it), never adds a row. */
+.kv2-run-preset-picker {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  right: -8px;
+  z-index: 60;
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  background: var(--kv2-surface);
+  box-shadow: var(--kv2-shadow-lg);
+  overflow: hidden;
+}
+
+.kv2-run-preset-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--kv2-border);
+  font-weight: 800;
+  font-size: var(--kv2-text-sm);
+}
+
+.kv2-run-preset-picker-head kbd {
+  font: var(--kv2-text-2xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  padding: 0 5px;
+}
+
+.kv2-run-preset-two {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  height: 236px;
+}
+
+.kv2-run-preset-runtimes {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  border-right: 1px solid var(--kv2-border);
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-run-preset-rt {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--kv2-text-secondary);
+  font: 700 var(--kv2-text-sm) var(--kv2-font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kv2-run-preset-rt small {
+  margin-left: auto;
+  font: var(--kv2-text-2xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-rt.is-on {
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  box-shadow: inset 3px 0 0 var(--kv2-control-selected-border);
+}
+
+.kv2-run-preset-models {
+  overflow: auto;
+  padding-bottom: 6px;
+}
+
+.kv2-run-preset-tier {
+  padding: 8px 12px 2px;
+  font: 800 var(--kv2-text-3xs) var(--kv2-font-mono);
+  letter-spacing: 0.12em;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-model {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto 14px;
+  gap: var(--kv2-sp-2);
+  align-items: center;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--kv2-text-primary);
+  font: var(--kv2-text-sm) var(--kv2-font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kv2-run-preset-model:hover {
+  background: var(--kv2-surface-hover);
+}
+
+.kv2-run-preset-model.is-on {
+  background: var(--kv2-control-selected-bg);
+}
+
+.kv2-run-preset-model small {
+  font: var(--kv2-text-2xs) var(--kv2-font-mono);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-model-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kv2-run-preset-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--kv2-border-strong);
+  box-sizing: border-box;
+}
+
+.kv2-run-preset-model.is-on .kv2-run-preset-dot {
+  border-color: var(--kv2-control-selected-border);
+  background: var(--kv2-control-selected-border);
+}
+
+.kv2-run-preset-model-star {
+  color: var(--kv2-warn-accent);
+  font-size: var(--kv2-text-xs);
+  text-align: center;
+}
+
+.kv2-run-preset-opts-grid {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  row-gap: var(--kv2-sp-2);
+  align-items: center;
+  padding: 10px 12px 8px;
+  border-top: 1px solid var(--kv2-border);
+}
+
+.kv2-run-preset-opts-label {
+  font: 800 var(--kv2-text-3xs) var(--kv2-font-mono);
+  letter-spacing: 0.1em;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-seg {
+  display: flex;
+  width: fit-content;
+  border: 1px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-sm);
+  overflow: hidden;
+}
+
+.kv2-run-preset-seg-btn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-right: 1px solid var(--kv2-border);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-secondary);
+  font: 600 var(--kv2-text-xs) var(--kv2-font-mono);
+  cursor: pointer;
+}
+
+.kv2-run-preset-seg-btn:last-child {
+  border-right: 0;
+}
+
+.kv2-run-preset-seg-btn.is-on {
+  background: var(--kv2-control-selected-bg);
+  color: var(--kv2-control-selected-fg);
+  box-shadow: inset 0 -2px 0 var(--kv2-control-selected-border);
+}
+
+.kv2-run-preset-seg-btn.is-danger.is-on {
+  box-shadow: inset 0 -2px 0 var(--kv2-danger-accent);
+}
+
+.kv2-run-preset-replace {
+  padding: 8px 12px 10px;
+  border-top: 1px dashed var(--kv2-warn-border);
+  background: var(--kv2-warn-surface-pale);
+}
+
+.kv2-run-preset-replace-title {
+  margin-bottom: 6px;
+  font-weight: 700;
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-warn-text-strong);
+}
+
+.kv2-run-preset-replace-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.kv2-run-preset-replace-grid button {
+  padding: 5px 8px;
+  border: 1px solid var(--kv2-warn-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  font: 600 var(--kv2-text-xs) var(--kv2-font-sans);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.kv2-run-preset-replace-grid button:hover {
+  background: var(--kv2-warn-surface-soft);
+}
+
+.kv2-run-preset.is-replacing .kv2-run-preset-chip {
+  border-style: dashed;
+  border-color: var(--kv2-warn-border);
+}
+
+.kv2-run-preset-picker-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-2);
+  padding: 10px 12px;
+  border-top: 1px solid var(--kv2-border);
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-run-preset-picker-msg {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
+.kv2-run-preset-picker-msg.is-warn {
+  color: var(--kv2-warn-text-strong);
+}
+
+/* Per-task runtime switches under the presets — one row, same height for both runtimes. */
+.kv2-create-run-flags {
+  display: flex;
+  align-items: center;
+  gap: var(--kv2-sp-4);
+  min-height: 36px;
+  margin-top: var(--kv2-sp-2);
+  padding: 6px 12px;
+  border: 1px solid var(--kv2-border);
+  border-radius: var(--kv2-radius-sm);
+  background: var(--kv2-surface-sunken);
+  flex-wrap: wrap;
+}
+
+.kv2-create-run-flags.is-danger {
+  border-color: var(--kv2-danger-border);
+  box-shadow: inset 3px 0 0 var(--kv2-danger-accent);
+}
+
+.kv2-create-run-flags-label {
+  font: 800 var(--kv2-text-3xs) var(--kv2-font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-create-run-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: var(--kv2-text-sm);
+  color: var(--kv2-strong-label-color);
+  cursor: pointer;
+}
+
+.kv2-create-run-flag--danger span {
+  color: var(--kv2-danger-text);
+}

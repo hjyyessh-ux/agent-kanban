@@ -517,6 +517,7 @@ describe('TelegramPoller', () => {
     expect(modelOf('/claude_model opus5')).toBe('claude-opus-5');
     expect(modelOf('/claude_model opus5.5')).toBe('claude-opus-5-5');
     expect(modelOf('/claude_model opus4.8')).toBe('claude-opus-4-8');
+    expect(modelOf('/claude_model fable5.2')).toBe('claude-fable-5-2');
     expect(modelOf('/claude_model fable5.1')).toBe('claude-fable-5-1');
     expect(modelOf('/claude_model fable5')).toBe('claude-fable-5');
     expect(modelOf('/codex_model astra')).toBe('gpt-6-astra');

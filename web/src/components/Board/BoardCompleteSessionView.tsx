@@ -7,7 +7,7 @@ import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitCardResult } from '../Card/card-result';
 import { buildResumeCommand } from '../../utils/resume-command';
 import { dirAccentClass } from '../../utils/project-color';
-import { IdChip, ResumeCopyButton } from '../shared/IdChip';
+import { IdChip, SessionResumeChip } from '../shared/IdChip';
 import { BOARD_GROUP_COPY, BOARD_SESSION_COPY, BOARD_WORKS_COPY, CARD_ACTION_COPY } from '../../constants/copy';
 import { formatDuration, resolveRunDurationMs } from '../../utils/format-duration';
 import { useBoardTurnOrder } from './board-turn-order';
@@ -387,7 +387,29 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
   const oldestCard = group.cards[group.cards.length - 1];
   const firstAt = oldestCard ? oldestCard.startedAt ?? oldestCard.createdAt : group.startedAt;
   const lastStamp = formatRecentStamp(group.lastUpdatedAt);
-  const latestCard = group.cards[0];
+  const hasGroupAction = (status === 'complete' && !!onStatusChange) || (status === 'done' && !!onArchiveCards);
+  const shownTurns = isCollapsed ? orderedTurns.slice(0, 1) : displayTurns;
+  // Row ① holds the Work field outside a Work; with no field to draw (no
+  // mutations wired) or inside a Work, project · runtime take the slot.
+  const showWorkField = !!(workField && fieldCard && !insideWork);
+  const projectRuntimeInMeta = showWorkField;
+  const projectRuntime = (
+    <>
+      {group.projectDir && (
+        <span
+          className={`works-dir-chip kv2-project-chip kv2-complete-session-project ${dirAccentClass(group.projectDir)}`.trim()}
+          title={group.projectDir}
+        >
+          {getDirectoryProjectName(group.projectDir)}
+        </span>
+      )}
+      <ExecutionTypeBadge
+        runtime={group.agentRuntime}
+        executionKind={group.executionKind}
+        scriptName={group.scriptName}
+      />
+    </>
+  );
 
   const stop = (event: React.SyntheticEvent) => event.stopPropagation();
 
@@ -449,23 +471,27 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
         }}
       >
         <div className="kv2-complete-session-heading">
-          {/* ① what ran it (left) ··· what needs me (right). */}
+          {/* ① Same anatomy as a board card: Work slot (left) ··· what needs me + #id (right).
+              Inside a Work the container already names it, so project · runtime
+              move up into the slot instead of leaving it empty. */}
           <div className="kv2-complete-session-top">
-            {group.projectDir ? (
-              <span
-                className={`works-dir-chip kv2-project-chip kv2-complete-session-project ${dirAccentClass(group.projectDir)}`.trim()}
-                title={group.projectDir}
-              >
-                {getDirectoryProjectName(group.projectDir)}
-              </span>
-            ) : (
-              <span className="kv2-card-project-spacer" aria-hidden="true" />
+            {insideWork ? projectRuntime : (
+              showWorkField && workField && fieldCard ? (
+                <div
+                  className="kv2-card-top-work kv2-complete-session-work-row"
+                  onClick={stop}
+                  onKeyDown={stop}
+                >
+                  <BoardCardWorkField
+                    card={fieldCard}
+                    works={workField.works}
+                    linkedWork={workField.workForSession(group.sessionId)}
+                    onSetPlanned={NOOP_SET_PLANNED}
+                    onDrop={workField.run}
+                  />
+                </div>
+              ) : projectRuntime
             )}
-            <ExecutionTypeBadge
-              runtime={group.agentRuntime}
-              executionKind={group.executionKind}
-              scriptName={group.scriptName}
-            />
             <div className="kv2-complete-session-top-meta">
               {favorites.total > 0 && (
                 <span
@@ -483,6 +509,14 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
                   aria-label={`${group.unreadCount} unread`}
                 >
                   ● {group.unreadCount}
+                </span>
+              )}
+              {/* Click copies the resume command (the old `⏎ resume` button). */}
+              {group.sessionId && (
+                <span className="kv2-complete-session-id" onClick={stop} onKeyDown={stop}>
+                  {resumeCommand
+                    ? <SessionResumeChip sessionId={group.sessionId} command={resumeCommand} />
+                    : <IdChip id={group.sessionId} kind="session" />}
                 </span>
               )}
             </div>
@@ -508,6 +542,7 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
             className="kv2-complete-session-meta-row"
             title={BOARD_SESSION_COPY.timesHint(formatTimestamp(group.lastUpdatedAt), formatTimestamp(firstAt), totalDuration)}
           >
+            {projectRuntimeInMeta && <span className="kv2-complete-session-meta-chips">{projectRuntime}</span>}
             <span className="kv2-complete-session-count">
               {BOARD_SESSION_COPY.turnCount(group.cards.length)}
             </span>
@@ -515,29 +550,16 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
             {lastStamp && (
               <span className="kv2-complete-session-last">{BOARD_SESSION_COPY.lastRun(lastStamp)}</span>
             )}
-            {/* Hover-only, at the end of the roomiest row: it never squeezes the
-                project chip or the title, and its slot is kept so nothing shifts. */}
-            {group.sessionId && (
-              <span className="kv2-hover-reveal kv2-complete-session-id" onClick={stop} onKeyDown={stop}>
-                <IdChip id={group.sessionId} kind="session" />
-              </span>
-            )}
           </div>
-          {isCollapsed && latestCard && (
-            // Folded, the newest exchange still reads in one line.
-            <p className="kv2-complete-session-folded-summary">
-              <b>{getFirstLine(stripFeedbackHeader(latestCard.description ?? ''), latestCard.title)}</b>
-              {' ↳ '}
-              {getFirstLine(splitCardResult(latestCard).final, BOARD_SESSION_COPY.noResult)}
-            </p>
-          )}
         </div>
       </header>
 
-      {!isCollapsed && (
+      {/* Folded shows the newest turn in the same two-line shape (`n 질문` / `↳ 답`);
+          unfolded shows the newest five plus `이전 N턴 보기 ›`. */}
+      {shownTurns.length > 0 && (
         <div className="kv2-complete-session-timeline">
-          {oldestFirst && moreTurnsButton}
-          {displayTurns.map(({ card, turnNumber }) => {
+          {!isCollapsed && oldestFirst && moreTurnsButton}
+          {shownTurns.map(({ card, turnNumber }) => {
             const isCurrent = turnNumber === group.cards.length;
             const isUnread = isUnreadCompletion(card);
             const respondedAt = getResponseSortTimestamp(card);
@@ -588,31 +610,12 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
               </article>
             );
           })}
-          {!oldestFirst && moreTurnsButton}
+          {!isCollapsed && !oldestFirst && moreTurnsButton}
         </div>
       )}
 
+      {hasGroupAction && (
       <div className="kv2-complete-session-group-actions">
-        {resumeCommand && (
-          <ResumeCopyButton command={resumeCommand} className="kv2-complete-session-resume" />
-        )}
-        {/* Inside a Work the picker would only repeat the container's name;
-            moving out is drag-and-drop or the Work popup. */}
-        {workField && fieldCard && !insideWork && (
-          <div
-            className="kv2-card-work-row kv2-complete-session-work-row"
-            onClick={stop}
-            onKeyDown={stop}
-          >
-            <BoardCardWorkField
-              card={fieldCard}
-              works={workField.works}
-              linkedWork={workField.workForSession(group.sessionId)}
-              onSetPlanned={NOOP_SET_PLANNED}
-              onDrop={workField.run}
-            />
-          </div>
-        )}
         <span className="kv2-complete-session-actions-spacer" aria-hidden="true" />
         {status === 'complete' && onStatusChange && (
           <button
@@ -633,6 +636,7 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
           </button>
         )}
       </div>
+      )}
     </article>
   );
 };

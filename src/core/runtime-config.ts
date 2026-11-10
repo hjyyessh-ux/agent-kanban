@@ -1,9 +1,10 @@
-import type { AgentRuntime, CodexReasoningEffort, CodexSandboxMode, KanbanCard } from './types';
+import type { AgentRuntime, ClaudeEffort, CodexReasoningEffort, CodexSandboxMode, KanbanCard } from './types';
 import { PRIMARY_AGENT_CONFIGS, type PrimaryAgentConfig } from './agent-config';
 
 export const RUNTIME_MODEL_PREFERENCE_KEY = 'kanban-runtime-model-preference';
 
 export const CLAUDE_MODELS = [
+  { id: 'claude-fable-5-2', label: 'Fable 5.2', tier: 'fable' },
   { id: 'claude-fable-5-1', label: 'Fable 5.1', tier: 'fable' },
   { id: 'claude-fable-5', label: 'Fable 5', tier: 'fable' },
   { id: 'claude-opus-5-5', label: 'Opus 5.5 (1M context)', tier: 'opus' },
@@ -38,6 +39,7 @@ export type CodexModelId = typeof CODEX_MODELS[number]['id'];
 export const DEFAULT_CODEX_MODEL: CodexModelId = 'gpt-5.6-sol';
 export const CODEX_REASONING_EFFORT_VALUES: CodexReasoningEffort[] = ['low', 'medium', 'high', 'xhigh'];
 export const CODEX_SANDBOX_VALUES: CodexSandboxMode[] = ['read-only', 'workspace-write', 'danger-full-access'];
+export const CLAUDE_EFFORT_VALUES: ClaudeEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 export const DEFAULT_CODEX_REASONING_EFFORT: CodexReasoningEffort = 'medium';
 export const DEFAULT_CODEX_SANDBOX: CodexSandboxMode = 'workspace-write';
 export const CODEX_REASONING_EFFORT_SETTING_KEY = 'agent.defaults.codex.reasoning_effort';

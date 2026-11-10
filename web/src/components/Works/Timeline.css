@@ -1359,6 +1359,39 @@
   max-height: 320px;
 }
 
+/* The Work's own span lives on the day header (`workSpanHeadClasses`), not in
+   a bar row: a tint over each day + a 4px rule along the header's bottom edge.
+   `::after` is the today arrow, so the rule is an inset shadow. */
+.tl-head--work-span {
+  background-color: var(--kv2-timeline-work-span-bg);
+  box-shadow: inset 0 -4px 0 var(--kv2-timeline-work-bar);
+}
+
+.tl-head--work-span.tl-head--today {
+  background-color: var(--kv2-frame);
+}
+
+.tl-head--work-span-start {
+  box-shadow: inset 0 -4px 0 var(--kv2-timeline-work-bar), inset 3px 0 0 var(--kv2-timeline-work-bar);
+}
+
+.tl-head--work-span-end {
+  box-shadow: inset 0 -4px 0 var(--kv2-timeline-work-bar), inset -3px 0 0 var(--kv2-timeline-work-bar);
+}
+
+/* Still running: the rule fades out instead of closing with a cap. */
+.tl-head--work-span-ongoing {
+  box-shadow: none;
+  background-image: linear-gradient(90deg, var(--kv2-timeline-work-bar) 55%, transparent);
+  background-size: 100% 4px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+}
+
+.tl-head--work-span-ongoing:not(.tl-head--today) {
+  background-color: var(--kv2-timeline-work-span-bg);
+}
+
 .tl-work-error {
   margin: 0;
   font-size: var(--kv2-text-ui-sm);

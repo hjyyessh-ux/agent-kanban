@@ -397,6 +397,7 @@
   --kv2-timeline-work-bar: #2f6cb6;
   --kv2-timeline-work-bar-done: #3b8a5c; /* muted green — a finished bar reads as finished, not as draft grey */
   --kv2-timeline-work-bar-fg: #f9fafb;
+  --kv2-timeline-work-span-bg: color-mix(in srgb, var(--kv2-timeline-work-bar) 20%, transparent); /* Work detail: day-header tint over the Work's span */
   --kv2-create-column-fg: var(--kv2-frame);
   --kv2-create-column-stroke-color: var(--kv2-frame);
   --kv2-dialog-shadow-color: var(--kv2-border-strong);

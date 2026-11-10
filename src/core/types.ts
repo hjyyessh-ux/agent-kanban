@@ -9,6 +9,8 @@ export type AgentRuntime = 'opencode' | 'codex' | 'claude';
 export type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 export type ClaudePermissionMode = 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+/** `claude --effort` levels. Unset = the CLI's own default (no flag). */
+export type ClaudeEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 export type ScheduledDispatchStatus = 'scheduled' | 'dispatching' | 'dispatched' | 'failed';
 export type SchedulerEditState = 'ready' | 'edit-required';
 
@@ -55,6 +57,8 @@ export interface CodexOptions {
 export interface ClaudeOptions {
   permissionMode?: ClaudePermissionMode;
   dangerouslySkipPermissions?: boolean;
+  /** Passed as `--effort`; omitted → the flag is not sent. */
+  effort?: ClaudeEffort;
 }
 
 // ─── Quick Action Types ────────────────────────────────────────────

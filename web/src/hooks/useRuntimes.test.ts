@@ -31,6 +31,7 @@ describe("mergeRuntimeCatalog", () => {
     const claude = mergeRuntimeCatalog(remote).find((entry) => entry.runtime === "claude");
     const claudeIds = claude?.models?.map((model) => model.id) ?? [];
     expect(claudeIds).toContain("claude-fable-5-1");
+    expect(claudeIds).toContain("claude-fable-5-2");
     expect(claudeIds).toContain("claude-fable-5");
     expect(claudeIds).toContain("claude-opus-5-5");
     expect(claudeIds).toContain("claude-opus-5");

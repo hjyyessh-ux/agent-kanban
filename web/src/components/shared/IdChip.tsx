@@ -12,9 +12,14 @@ const KIND_LABEL: Record<IdKind, string> = {
 
 export const COPIED_LABEL = '✓ 복사됨';
 
-/** Keeps Enter/Space and clicks from reaching clickable parents (card, session header). */
-const stopKey = (event: React.KeyboardEvent) => {
-  event.stopPropagation();
+/**
+ * Keeps Enter/Space from reaching clickable parents (card, session header).
+ * Only those two: a dialog opens with focus on its header `IdChip` (Work
+ * detail), and swallowing every key there also swallowed Escape, so the
+ * dialog would not close until the user clicked elsewhere first.
+ */
+export const stopKey = (event: Pick<React.KeyboardEvent, 'key' | 'stopPropagation'>) => {
+  if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
 };
 
 interface IdChipProps {
@@ -28,7 +33,8 @@ interface IdChipProps {
 /**
  * The one identifier chip: `#` + 8 chars, click copies the **full raw id**,
  * `✓ 복사됨` for 1.5s. Resume commands are never copied from here — use
- * `ResumeCopyButton` next to it.
+ * `ResumeCopyButton` next to it, or `SessionResumeChip` where the session id
+ * itself is the resume control (board session groups).
  */
 export const IdChip: React.FC<IdChipProps> = ({ id, kind, showKind = false, className }) => {
   const { copied, copy } = useCopyFeedback(id);
@@ -67,6 +73,38 @@ export const IdText: React.FC<{ id: string; kind: IdKind; showKind?: boolean; cl
     <span className="kv2-id-chip-value">{formatShortId(id)}</span>
   </span>
 );
+
+export const RESUME_COPIED_LABEL = '✓ resume 복사됨';
+
+/**
+ * A session id chip whose click copies the **resume command**, not the raw id
+ * — the board session group's only resume control (the separate `⏎ resume`
+ * button was dropped there). Same look as `IdChip` plus a `⏎` mark, so it
+ * never reads as a plain id copy; the full command is in the tooltip.
+ */
+export const SessionResumeChip: React.FC<{ sessionId: string; command: string; className?: string }> = ({
+  sessionId,
+  command,
+  className,
+}) => {
+  const { copied, copy } = useCopyFeedback(command);
+  return (
+    <button
+      type="button"
+      className={['kv2-id-chip', 'kv2-id-chip--resume', copied ? 'is-copied' : '', className ?? ''].filter(Boolean).join(' ')}
+      title={`클릭: resume 명령 복사\n${command}`}
+      aria-label={`Session ${sessionId} resume 명령 복사`}
+      onKeyDown={stopKey}
+      onClick={(event) => {
+        event.stopPropagation();
+        copy(command);
+      }}
+    >
+      <span className="kv2-id-chip-value">{copied ? RESUME_COPIED_LABEL : formatShortId(sessionId)}</span>
+      {!copied && <span className="kv2-id-chip-resume" aria-hidden="true">⏎</span>}
+    </button>
+  );
+};
 
 interface ResumeCopyButtonProps {
   command: string;

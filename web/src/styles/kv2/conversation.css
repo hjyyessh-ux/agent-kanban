@@ -433,12 +433,12 @@
   min-width: 0;
 }
 
-/* `↗ 카드`: always takes its slot (no layout shift), visible only on turn hover/focus. */
+/* `↗ 카드`: always visible — a control you must hover to discover is one users never find. */
 .session-conversation-turnOpenCard {
   flex: 0 0 auto;
   margin-right: 10px;
   padding: 2px 7px;
-  border: 1px solid transparent;
+  border: 1px solid var(--kv2-border);
   border-radius: var(--kv2-radius-sm);
   background: none;
   color: var(--kv2-text-muted);
@@ -446,13 +446,6 @@
   font-size: var(--kv2-text-ui-sm);
   white-space: nowrap;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--kv2-transition-fast);
-}
-
-.session-conversation-turn:hover .session-conversation-turnOpenCard,
-.session-conversation-turnOpenCard:focus-visible {
-  opacity: 1;
 }
 
 .session-conversation-turnOpenCard:hover,
