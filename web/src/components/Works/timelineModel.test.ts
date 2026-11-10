@@ -30,6 +30,7 @@ import {
   toDateInputValue,
   visibleColumns,
   visibleRangeLabel,
+  workSpanHeadClasses,
   BUFFER_EDGE_DAYS,
   BUFFER_EXTEND_DAYS,
   DEFAULT_LABEL_WIDTH,
@@ -709,5 +710,36 @@ describe('describeWorkDateEdit', () => {
       .toContain('종료 예정일');
     expect(describeWorkDateEdit('배포 자동화', 'end', localIso(2026, 9, 5)))
       .toContain('종료일');
+  });
+});
+
+describe('workSpanHeadClasses', () => {
+  const range = weekRange(0);
+  const [ongoing] = buildBars(
+    [work({ id: 'w1', title: 'Ongoing', status: 'active', startedAt: localIso(2026, 9, 1) })],
+    range,
+    NOW,
+  );
+
+  test('no bar or a column outside the span draws nothing', () => {
+    expect(workSpanHeadClasses(null, 1)).toEqual([]);
+    expect(workSpanHeadClasses(ongoing, 0)).toEqual([]);
+    expect(workSpanHeadClasses(ongoing, 3)).toEqual([]);
+  });
+
+  test('an ongoing Work caps its start and leaves its end open', () => {
+    expect(workSpanHeadClasses(ongoing, 1)).toEqual(['tl-head--work-span', 'tl-head--work-span-start']);
+    expect(workSpanHeadClasses(ongoing, 2)).toEqual(['tl-head--work-span', 'tl-head--work-span-ongoing']);
+  });
+
+  test('a clipped edge is a cut, not a cap', () => {
+    const clipped = { ...ongoing, startIndex: 0, endIndex: 2, clippedLeft: true, clippedRight: true, ongoing: false };
+    expect(workSpanHeadClasses(clipped, 0)).toEqual(['tl-head--work-span']);
+    expect(workSpanHeadClasses(clipped, 2)).toEqual(['tl-head--work-span']);
+  });
+
+  test('a finished Work closes its end with a cap', () => {
+    const done = { ...ongoing, ongoing: false };
+    expect(workSpanHeadClasses(done, 2)).toEqual(['tl-head--work-span', 'tl-head--work-span-end']);
   });
 });

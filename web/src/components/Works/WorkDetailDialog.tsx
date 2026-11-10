@@ -12,6 +12,9 @@ import type {
 import { WORK_NOTES_MAX_LENGTH } from '../../../../src/core/types';
 import { RuntimeBadge } from '../Board/BoardCardSections';
 import { IdChip } from '../shared/IdChip';
+import { splitCardResult } from '../Card/card-result';
+import { stripFeedbackHeader } from '../../../../src/core/mention-search';
+import { previewLine } from '../../utils/text-preview';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { DirectoryPicker } from '../Card/DirectoryPicker';
 import { MoveSessionDialog } from './MoveSessionDialog';
@@ -304,8 +307,21 @@ export function WorkDetailDialog({
         // The row printed `linkedAt`, so every session in a Work assigned this
         // afternoon read as today no matter how old the work was.
         const startedAt = summary?.firstCardAt ?? boardFirstCardAt;
+        // The newest finished top-level turn still on the board, as `질문 ↳ 답`:
+        // a row that only says "카드 3" gives no reason to open it.
+        const lastCard = workCards
+          .filter((c) => c.sessionId === link.sessionId && !c.parentCardId
+            && (c.status === 'complete' || c.status === 'done'))
+          .sort((a, b) => (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt))[0];
+        const lastTurn = lastCard
+          ? {
+            prompt: previewLine(stripFeedbackHeader(lastCard.description ?? '')) || lastCard.title,
+            result: previewLine(splitCardResult(lastCard).final),
+          }
+          : null;
         return {
           link,
+          lastTurn,
           // Server first: its scan reaches the archive months this Work can
           // touch, so a completed Work's rows still carry a runtime. The board
           // lookup is the fallback for a row the detail read has not caught up
@@ -952,213 +968,6 @@ export function WorkDetailDialog({
           )}
         </section>
 
-        {/* ── 연결된 세션 ───────────────────────────────────────── */}
-        <section className="kv2-detail-primary-block work-detail-section work-detail-sessions">
-          <div className="kv2-panel-heading work-detail-heading">
-            <span className="kv2-session-title">연결된 세션</span>
-            <span className="kv2-badge kv2-badge--session">{links.length}</span>
-          </div>
-          {links.length > 0 && (
-            <div className="work-search-bar">
-              <span aria-hidden="true" className="work-search-icon">⌕</span>
-              <input
-                type="search"
-                className="kv2-input work-search-input"
-                placeholder="이 Work의 세션·카드 검색 (제목·프롬프트·결과)"
-                aria-label="세션 검색"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  // Esc clears the search first; only an empty box lets the
-                  // dialog close on the next Esc.
-                  if (e.key === 'Escape' && searchQuery) {
-                    e.stopPropagation();
-                    setSearchQuery('');
-                  }
-                }}
-              />
-              {trimmedQuery && (
-                <span className="work-search-count" role="status">
-                  {searchHitCount}개 · 세션 {searchGroups.length}
-                  {searchCards.pending > 0 && ' · 보관 카드 불러오는 중…'}
-                  {searchCards.failed > 0 && ` · ${searchCards.failed}개 세션은 보드 카드만`}
-                </span>
-              )}
-            </div>
-          )}
-          {links.length === 0 ? (
-            <p className="works-empty">연결된 세션이 없습니다.</p>
-          ) : trimmedQuery ? (
-            searchGroups.length === 0 ? (
-              <p className="works-empty work-search-empty">
-                {searchCards.pending > 0
-                  ? '보관된 카드까지 찾는 중입니다…'
-                  : `"${trimmedQuery}"와 일치하는 세션·카드가 없습니다.`}
-              </p>
-            ) : (
-              <div className="work-search-results">
-                {searchGroups.map(({ sessionId, hits }) => {
-                  const row = rowBySession.get(sessionId);
-                  const open = !collapsedGroups.has(sessionId);
-                  const showAll = expandedGroups.has(sessionId);
-                  const shown = showAll ? hits : hits.slice(0, SEARCH_HITS_PER_SESSION);
-                  return (
-                    <div key={sessionId} className={`work-search-group${open ? ' is-open' : ''}`}>
-                      <div className="work-search-group-head">
-                        <button
-                          type="button"
-                          className="work-search-group-toggle"
-                          aria-expanded={open}
-                          onClick={() => toggleSet(setCollapsedGroups, sessionId)}
-                        >
-                          <span className="work-search-caret" aria-hidden="true">▸</span>
-                          {row?.projectDir && (
-                            <span className={`works-dir-chip kv2-project-chip ${dirAccentClass(row.projectDir)}`} title={row.projectDir}>
-                              {projectDirLabel(row.projectDir)}
-                            </span>
-                          )}
-                          <span className="work-search-group-title">
-                            <Highlighted text={row?.title ?? shortSessionId(sessionId)} query={trimmedQuery} />
-                          </span>
-                        </button>
-                        <span className="work-search-turns">
-                          {hits.map((hit) => (
-                            <button
-                              key={hit.cardId}
-                              type="button"
-                              className="work-search-turn"
-                              title={`T${hit.turnNumber} 대화 열기`}
-                              onClick={() => openHit(sessionId, hit.cardId)}
-                            >
-                              T{hit.turnNumber}
-                            </button>
-                          ))}
-                        </span>
-                        <span className="work-search-group-count">{hits.length}</span>
-                      </div>
-                      {open && (
-                        <div className="work-search-hits">
-                          {shown.map((hit) => (
-                            <button
-                              key={hit.cardId}
-                              type="button"
-                              className="work-search-hit"
-                              onClick={() => openHit(sessionId, hit.cardId)}
-                            >
-                              <span className="work-search-hit-where">
-                                <b>T{hit.turnNumber}</b>
-                                <small>{WORK_SEARCH_FIELD_LABELS[hit.field]}</small>
-                              </span>
-                              <span className="work-search-hit-snippet">
-                                <Highlighted text={hit.snippet} query={trimmedQuery} />
-                              </span>
-                            </button>
-                          ))}
-                          {hits.length > SEARCH_HITS_PER_SESSION && (
-                            <button
-                              type="button"
-                              className="kv2-btn kv2-btn--small kv2-btn--ghost work-search-more"
-                              onClick={() => toggleSet(setExpandedGroups, sessionId)}
-                            >
-                              {showAll ? '접기' : `${hits.length - SEARCH_HITS_PER_SESSION}개 더`}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )
-          ) : (
-            <div className="work-session-list">
-              {sessionRows.map(({ link, title, agentRuntime, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt, projectDir }) => (
-                <div
-                  className={[
-                    'work-session-item',
-                    'work-session-item--open',
-                    // The role tints the whole row (background + left edge), not
-                    // just the chip: a list of 개발 / 리뷰 / 디버그 rows should
-                    // read as bands at a glance.
-                    link.role ? `work-session-item--role-${link.role}` : '',
-                    cardsMissingAt ? 'work-session-item--missing' : '',
-                  ].filter(Boolean).join(' ')}
-                  key={link.sessionId}
-                  role="button"
-                  tabIndex={0}
-                  title="눌러서 대화 보기"
-                  onClick={() => onOpenSession(link.sessionId)}
-                  onKeyDown={(event) => {
-                    if (event.target !== event.currentTarget) return;
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      onOpenSession(link.sessionId);
-                    }
-                  }}
-                >
-                  {link.role && (
-                    <span className={`kv2-badge works-role works-role--${link.role}`}>
-                      {ROLE_LABELS[link.role]}
-                    </span>
-                  )}
-                  <div className="work-session-body">
-                    <div className="work-session-head">
-                      <div className="work-session-title">{title}</div>
-                      {/* Copying the id must not open the conversation. */}
-                      <span className="work-session-id" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-                        <IdChip id={link.sessionId} kind="session" />
-                      </span>
-                    </div>
-                    <div className="work-session-meta">
-                      {/* Project first and in its board colour — in a Work that
-                          spans repos it is what tells two rows apart. Then the
-                          board's own runtime chip, then date and count. */}
-                      {projectDir && (
-                        <span
-                          className={`works-dir-chip kv2-project-chip work-session-project ${dirAccentClass(projectDir)}`.trim()}
-                          title={projectDir}
-                        >
-                          {projectDirLabel(projectDir)}
-                        </span>
-                      )}
-                      {agentRuntime && <RuntimeBadge runtime={agentRuntime} />}
-                      <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
-                        {formatShortDate(startedAt ?? link.linkedAt)}
-                        {startedAt ? '' : ' 연결'}
-                      </span>
-                      {` · 카드 ${sessionCardCount}`}
-                      {archived ? ' · 보관됨' : ''}
-                    </div>
-                    {cardsMissingAt && (
-                      <div className="work-session-missing">
-                        ⚠ 카드가 하나도 남아 있지 않습니다 — 이 링크는 Work의 시작일을 연결 시각으로
-                        끌어내립니다. 아래 <b>끊긴 세션 정리</b>로 제거하세요.
-                      </div>
-                    )}
-                  </div>
-                  {sessionActions && (
-                    // The menu (and its portal items, which bubble through the
-                    // React tree) must not also open the conversation.
-                    <span className="work-session-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-                      <WorkSessionMenu
-                        role={link.role}
-                        disabled={busy}
-                        onMove={() => setMoveLink(link)}
-                        onSetRole={(role) => handleSetRole(link, role)}
-                        // The unlink rejects through the shared Works error alert;
-                        // swallowing here keeps that from becoming an unhandled
-                        // rejection (same contract as `handleSetRole`).
-                        onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
-                      />
-                    </span>
-                  )}
-                  <span className="work-session-go" aria-hidden="true">›</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {!isResolved && onAddSession && <WorkSessionPicker sessions={assignableSessions} onAdd={onAddSession} />}
-        </section>
 
         {/* ── 속성 (directory + dates) — settings, not what the Work is about,
             so one folded line under the content: `▸ 속성 · zadar · 시작 10/22 ·
@@ -1290,6 +1099,222 @@ export function WorkDetailDialog({
             </div>
             {dateError && <p className="work-date-error">⚠ {dateError}</p>}
           </div>}
+        </section>
+
+        {/* ── 연결된 세션 — after Summary · 메모 · 속성: the Work's own record
+            first, then the sessions it is made of (framed rows, so the list
+            still stands out at the bottom). ── */}
+        <section className="kv2-detail-primary-block work-detail-section work-detail-sessions">
+          <div className="kv2-panel-heading work-detail-heading">
+            <span className="kv2-session-title">연결된 세션</span>
+            <span className="kv2-badge kv2-badge--session">{links.length}</span>
+          </div>
+          {links.length > 0 && (
+            <div className="work-search-bar">
+              <span aria-hidden="true" className="work-search-icon">⌕</span>
+              <input
+                type="search"
+                className="kv2-input work-search-input"
+                placeholder="이 Work의 세션·카드 검색 (제목·프롬프트·결과)"
+                aria-label="세션 검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  // Esc clears the search first; only an empty box lets the
+                  // dialog close on the next Esc.
+                  if (e.key === 'Escape' && searchQuery) {
+                    e.stopPropagation();
+                    setSearchQuery('');
+                  }
+                }}
+              />
+              {trimmedQuery && (
+                <span className="work-search-count" role="status">
+                  {searchHitCount}개 · 세션 {searchGroups.length}
+                  {searchCards.pending > 0 && ' · 보관 카드 불러오는 중…'}
+                  {searchCards.failed > 0 && ` · ${searchCards.failed}개 세션은 보드 카드만`}
+                </span>
+              )}
+            </div>
+          )}
+          {links.length === 0 ? (
+            <p className="works-empty">연결된 세션이 없습니다.</p>
+          ) : trimmedQuery ? (
+            searchGroups.length === 0 ? (
+              <p className="works-empty work-search-empty">
+                {searchCards.pending > 0
+                  ? '보관된 카드까지 찾는 중입니다…'
+                  : `"${trimmedQuery}"와 일치하는 세션·카드가 없습니다.`}
+              </p>
+            ) : (
+              <div className="work-search-results">
+                {searchGroups.map(({ sessionId, hits }) => {
+                  const row = rowBySession.get(sessionId);
+                  const open = !collapsedGroups.has(sessionId);
+                  const showAll = expandedGroups.has(sessionId);
+                  const shown = showAll ? hits : hits.slice(0, SEARCH_HITS_PER_SESSION);
+                  return (
+                    <div key={sessionId} className={`work-search-group${open ? ' is-open' : ''}`}>
+                      <div className="work-search-group-head">
+                        <button
+                          type="button"
+                          className="work-search-group-toggle"
+                          aria-expanded={open}
+                          onClick={() => toggleSet(setCollapsedGroups, sessionId)}
+                        >
+                          <span className="work-search-caret" aria-hidden="true">▸</span>
+                          {row?.projectDir && (
+                            <span className={`works-dir-chip kv2-project-chip ${dirAccentClass(row.projectDir)}`} title={row.projectDir}>
+                              {projectDirLabel(row.projectDir)}
+                            </span>
+                          )}
+                          <span className="work-search-group-title">
+                            <Highlighted text={row?.title ?? shortSessionId(sessionId)} query={trimmedQuery} />
+                          </span>
+                        </button>
+                        <span className="work-search-turns">
+                          {hits.map((hit) => (
+                            <button
+                              key={hit.cardId}
+                              type="button"
+                              className="work-search-turn"
+                              title={`T${hit.turnNumber} 대화 열기`}
+                              onClick={() => openHit(sessionId, hit.cardId)}
+                            >
+                              T{hit.turnNumber}
+                            </button>
+                          ))}
+                        </span>
+                        <span className="work-search-group-count">{hits.length}</span>
+                      </div>
+                      {open && (
+                        <div className="work-search-hits">
+                          {shown.map((hit) => (
+                            <button
+                              key={hit.cardId}
+                              type="button"
+                              className="work-search-hit"
+                              onClick={() => openHit(sessionId, hit.cardId)}
+                            >
+                              <span className="work-search-hit-where">
+                                <b>T{hit.turnNumber}</b>
+                                <small>{WORK_SEARCH_FIELD_LABELS[hit.field]}</small>
+                              </span>
+                              <span className="work-search-hit-snippet">
+                                <Highlighted text={hit.snippet} query={trimmedQuery} />
+                              </span>
+                            </button>
+                          ))}
+                          {hits.length > SEARCH_HITS_PER_SESSION && (
+                            <button
+                              type="button"
+                              className="kv2-btn kv2-btn--small kv2-btn--ghost work-search-more"
+                              onClick={() => toggleSet(setExpandedGroups, sessionId)}
+                            >
+                              {showAll ? '접기' : `${hits.length - SEARCH_HITS_PER_SESSION}개 더`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            <div className="work-session-list">
+              {sessionRows.map(({ link, title, agentRuntime, cardCount: sessionCardCount, archived, cardsMissingAt, startedAt, projectDir, lastTurn }) => (
+                <div
+                  className={[
+                    'work-session-item',
+                    'work-session-item--open',
+                    // The role tints the whole row (background + left edge), not
+                    // just the chip: a list of 개발 / 리뷰 / 디버그 rows should
+                    // read as bands at a glance.
+                    link.role ? `work-session-item--role-${link.role}` : '',
+                    cardsMissingAt ? 'work-session-item--missing' : '',
+                  ].filter(Boolean).join(' ')}
+                  key={link.sessionId}
+                  role="button"
+                  tabIndex={0}
+                  title="눌러서 대화 보기"
+                  onClick={() => onOpenSession(link.sessionId)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onOpenSession(link.sessionId);
+                    }
+                  }}
+                >
+                  {link.role && (
+                    <span className={`kv2-badge works-role works-role--${link.role}`}>
+                      {ROLE_LABELS[link.role]}
+                    </span>
+                  )}
+                  <div className="work-session-body">
+                    <div className="work-session-head">
+                      <div className="work-session-title">{title}</div>
+                      {/* Copying the id must not open the conversation. */}
+                      <span className="work-session-id" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                        <IdChip id={link.sessionId} kind="session" />
+                      </span>
+                    </div>
+                    <div className="work-session-meta">
+                      {/* Project first and in its board colour — in a Work that
+                          spans repos it is what tells two rows apart. Then the
+                          board's own runtime chip, then date and count. */}
+                      {projectDir && (
+                        <span
+                          className={`works-dir-chip kv2-project-chip work-session-project ${dirAccentClass(projectDir)}`.trim()}
+                          title={projectDir}
+                        >
+                          {projectDirLabel(projectDir)}
+                        </span>
+                      )}
+                      {agentRuntime && <RuntimeBadge runtime={agentRuntime} />}
+                      <span title={startedAt ? '이 세션의 첫 카드가 만들어진 날' : 'Work에 연결된 날'}>
+                        {formatShortDate(startedAt ?? link.linkedAt)}
+                        {startedAt ? '' : ' 연결'}
+                      </span>
+                      {` · 카드 ${sessionCardCount}`}
+                      {archived ? ' · 보관됨' : ''}
+                    </div>
+                    {lastTurn && (
+                      <p className="work-session-last" title={`${lastTurn.prompt}\n↳ ${lastTurn.result}`}>
+                        <b>{lastTurn.prompt}</b>
+                        {lastTurn.result && <span>{` ↳ ${lastTurn.result}`}</span>}
+                      </p>
+                    )}
+                    {cardsMissingAt && (
+                      <div className="work-session-missing">
+                        ⚠ 카드가 하나도 남아 있지 않습니다 — 이 링크는 Work의 시작일을 연결 시각으로
+                        끌어내립니다. 아래 <b>끊긴 세션 정리</b>로 제거하세요.
+                      </div>
+                    )}
+                  </div>
+                  {sessionActions && (
+                    // The menu (and its portal items, which bubble through the
+                    // React tree) must not also open the conversation.
+                    <span className="work-session-actions" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                      <WorkSessionMenu
+                        role={link.role}
+                        disabled={busy}
+                        onMove={() => setMoveLink(link)}
+                        onSetRole={(role) => handleSetRole(link, role)}
+                        // The unlink rejects through the shared Works error alert;
+                        // swallowing here keeps that from becoming an unhandled
+                        // rejection (same contract as `handleSetRole`).
+                        onUnlink={() => { void handleUnlink(link).catch(() => {}); }}
+                      />
+                    </span>
+                  )}
+                  <span className="work-session-go" aria-hidden="true">대화 열기 →</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {!isResolved && onAddSession && <WorkSessionPicker sessions={assignableSessions} onAdd={onAddSession} />}
         </section>
 
         {work.archivedAt && <WorkWikiArchive

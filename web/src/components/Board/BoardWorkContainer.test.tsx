@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { KanbanCard, Work } from '../../../../src/core/types';
 import { BoardWorkContainer, workFragmentSelector } from './BoardWorkContainer';
 import { selectWorkFragments } from './board-works';
-import { BOARD_GROUP_COPY, BOARD_WORKS_COPY } from '../../constants/copy';
+import { BOARD_GROUP_COPY, BOARD_SESSION_COPY, BOARD_WORKS_COPY } from '../../constants/copy';
 
 let seq = 0;
 /** A read complete turn answered at `hour` (UTC) on 10-20 — larger hour = newer. */
@@ -150,10 +150,10 @@ describe('BoardWorkContainer', () => {
     expect(html).toContain('data-session-group-key="session:s3"');
     expect(html).toContain('data-session-group-key="session:s2"');
     expect(html).not.toContain('data-session-group-key="session:s1"');
-    // Header-only: the turn timeline stays closed until the group is opened;
-    // the newest exchange still reads in the folded summary.
-    expect(html).not.toContain('kv2-complete-session-timeline');
-    expect(html).toContain('kv2-complete-session-folded-summary');
+    // Folded: one turn per group — the newest — in the regular turn shape.
+    expect(html.match(/class="kv2-complete-session-turn[ "]/g)).toHaveLength(2);
+    expect(html).not.toContain('kv2-complete-session-folded-summary');
+    expect(html).not.toContain(BOARD_SESSION_COPY.olderTurns(1));
     // Inside a Work there is no Work field and no drag tooltip — the container
     // already names it; hovering a session must not surface the Work name.
     expect(html).not.toContain('kv2-complete-session-work-row');

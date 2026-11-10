@@ -508,6 +508,24 @@ export interface TimelineSpan {
  * measures it once per drag and shifts it by however far the scroller has
  * moved since (`dragColumnLeft`), which keeps a drag exact under wheel scroll.
  */
+/**
+ * Day-header classes that draw a Work's span on the date row (Work detail).
+ *
+ * The Work detail grid used to give the Work its own bar row beside the
+ * session rows, and it read as one more session inside the Work. The span is
+ * a property of the *dates*, so it is drawn on the header instead: a tint over
+ * every day inside it, a capped start/end, and an open end while it is ongoing.
+ */
+export function workSpanHeadClasses(bar: TimelineBar | null, column: number): string[] {
+  if (!bar || column < bar.startIndex || column > bar.endIndex) return [];
+  const classes = ['tl-head--work-span'];
+  if (column === bar.startIndex && !bar.clippedLeft) classes.push('tl-head--work-span-start');
+  if (column === bar.endIndex && !bar.clippedRight) {
+    classes.push(bar.ongoing ? 'tl-head--work-span-ongoing' : 'tl-head--work-span-end');
+  }
+  return classes;
+}
+
 export function columnAtPointer(
   clientX: number,
   left: number,

@@ -94,6 +94,7 @@ async function startClaudeRun(
     resumeSessionId: input.resumeSessionId,
     permissionMode: input.card.claudeOptions?.permissionMode,
     dangerouslySkipPermissions: input.card.claudeOptions?.dangerouslySkipPermissions,
+    effort: input.card.claudeOptions?.effort,
   });
 
   let proc: ReturnType<typeof Bun.spawn>;
@@ -215,6 +216,7 @@ async function buildClaudeCommand(
     resumeSessionId?: string;
     permissionMode?: string;
     dangerouslySkipPermissions?: boolean;
+    effort?: string;
   },
 ): Promise<string[]> {
   const command = await resolveClaudeBinary();
@@ -244,6 +246,10 @@ async function buildClaudeCommand(
         'acceptEdits',
       );
     args.push('--permission-mode', permissionMode);
+  }
+
+  if (input.effort) {
+    args.push('--effort', input.effort);
   }
 
   if (input.resumeSessionId) {

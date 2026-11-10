@@ -1,5 +1,4 @@
 import { test, expect } from './fixtures/kanban';
-import { apiGetCards } from './helpers/api';
 
 function modelVisibilitySection(page: import('@playwright/test').Page) {
   return page
@@ -18,42 +17,6 @@ async function expectAgentBadge(page: import('@playwright/test').Page, label: st
 }
 
 test.describe('Agent Type Display & Editing', () => {
-  test('create modal keeps selected agent even after changing model and persists on created card', async ({ page, trackCard }) => {
-    const title = `[E2E] Create Agent Persist ${Date.now()}`;
-
-    await page.goto('/');
-    await page.locator('.kv2-create-btn').click();
-    const dialog = page.locator('.kv2-dialog--create');
-    await expect(dialog).toBeVisible();
-
-    await dialog.locator('#create-card-title-input').fill(title);
-    await dialog.locator('#create-card-description-input').fill('Ensure agent persists across model change on create');
-
-    await dialog.locator('.kv2-create-agent-chip', { hasText: 'Hephaestus' }).click();
-
-    const modelSelect = dialog.locator('#create-card-model-select');
-    const options = await modelSelect.locator('option').allTextContents();
-    const optionValues = await modelSelect.locator('option').evaluateAll(nodes =>
-      nodes.map(node => (node as HTMLOptionElement).value)
-    );
-    const selectableModel = optionValues.find(v => v !== '' && v !== 'github-copilot/claude-opus-4.6');
-    expect(selectableModel, `Expected non-default model option. Options: ${options.join(', ')}`).toBeTruthy();
-    await modelSelect.selectOption(selectableModel!);
-
-    await dialog.getByRole('button', { name: 'CREATE', exact: true }).click();
-    await expect(page.locator('.kv2-dialog-overlay')).not.toBeVisible({ timeout: 10_000 });
-
-    const cards = await apiGetCards();
-    const created = cards.find(c => c.title === title);
-    expect(created).toBeDefined();
-    trackCard(created!.id);
-    expect(created!.agentType).toBe('hephaestus');
-
-    await page.locator('.kv2-card', { hasText: title }).click();
-    await expect(page.locator('.kv2-dialog')).toBeVisible();
-    await expectAgentBadge(page, 'Hephaestus');
-  });
-
   test('card modal shows agent type when set', async ({ page, seedCardWithStatus }) => {
     await seedCardWithStatus(
       { title: '[E2E] Agent Display', description: 'Test agent display' },

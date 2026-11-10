@@ -38,6 +38,7 @@ const AGENT_RUNTIMES = new Set<AgentRuntime>(['opencode', 'codex', 'claude']);
 const CODEX_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
 const CODEX_SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
 const CLAUDE_PERMISSION_MODES = new Set(['acceptEdits', 'bypassPermissions', 'plan', 'dontAsk']);
+const CLAUDE_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 const COMMON_INPUT_KEYS = [
   'type',
@@ -153,7 +154,7 @@ function parseClaudeOptions(value: unknown): ClaudeOptions | undefined {
   const record = assertRecord(value, 'quick action claudeOptions');
   assertAllowedKeys(
     record,
-    new Set(['permissionMode', 'dangerouslySkipPermissions']),
+    new Set(['permissionMode', 'dangerouslySkipPermissions', 'effort']),
     'quick action claudeOptions',
   );
   if (
@@ -168,9 +169,16 @@ function parseClaudeOptions(value: unknown): ClaudeOptions | undefined {
   ) {
     throw new Error('quick action claudeOptions.dangerouslySkipPermissions must be a boolean');
   }
+  if (
+    record.effort !== undefined
+    && (typeof record.effort !== 'string' || !CLAUDE_EFFORTS.has(record.effort))
+  ) {
+    throw new Error('quick action claudeOptions.effort is invalid');
+  }
   return {
     permissionMode: record.permissionMode as ClaudeOptions['permissionMode'],
     dangerouslySkipPermissions: record.dangerouslySkipPermissions as boolean | undefined,
+    ...(record.effort !== undefined ? { effort: record.effort as ClaudeOptions['effort'] } : {}),
   };
 }
 

@@ -309,8 +309,9 @@ describe('BoardScreen', () => {
     expect(html).toContain('Created newer result first line');
     expect(html).not.toContain('updated newer hidden line');
     expect(html).not.toContain('created newer hidden line');
-    expect(html).toContain('Session ID');
-    expect(html).toContain('session-a');
+    // The session id chip copies the resume command (no separate resume button).
+    expect(html).toContain('aria-label="Session session-a resume 명령 복사"');
+    expect(html).not.toContain('kv2-resume-copy');
     expect(html.indexOf('aria-label="2. Updated newer prompt')).toBeLessThan(html.indexOf('aria-label="1. Created later prompt'));
     // A′ anatomy: ① project · runtime ··· #id ★ ● N, ② title, ③ `N턴 · … · 마지막 …`.
     expect(html.indexOf('Updated newer prompt')).toBeLessThan(html.indexOf(BOARD_SESSION_COPY.turnCount(2)));
@@ -433,14 +434,16 @@ describe('BoardScreen', () => {
     expect(html).toContain('Done prompt one');
     expect(html).not.toContain('Done session');
     expect(html).toContain(CARD_ACTION_COPY.archive);
-    // Folded: no timeline, only the newest exchange as a one-line summary.
-    expect(html).not.toContain('kv2-complete-session-timeline');
-    expect(html).toContain('<p class="kv2-complete-session-folded-summary"><b>Hidden prompt body</b> ↳ Hidden result body</p>');
+    // Folded: only the newest turn, in the same two-line turn shape (`n 질문` / `↳ 답`).
+    expect(html.match(/class="kv2-complete-session-turn[ "]/g)).toHaveLength(1);
+    expect(html).toContain('<span class="kv2-complete-session-card-title">Hidden prompt body</span>');
+    expect(html).toContain('<p class="kv2-complete-session-turn-result">Hidden result body</p>');
+    expect(html).not.toContain('kv2-complete-session-folded-summary');
     expect(html).not.toContain('Done prompt body');
     expect(html).not.toContain(CARD_ACTION_COPY.done);
   });
 
-  test('session group header (A′): project · runtime ··· #id, title + fold, meta line; resume in the actions row', () => {
+  test('session group header: project · runtime ··· #id⏎ in row ①, title + fold, meta line; no resume button', () => {
     const html = renderToStaticMarkup(
       <BoardScreen
         {...baseProps}
@@ -459,20 +462,21 @@ describe('BoardScreen', () => {
     expect(html).toContain('kv2-complete-session-project');
     expect(html).toContain('title="/Users/user/workspace/mcp-server"');
     expect(html).not.toContain('Proj:');
+    // No Work field wired here → project · runtime hold row ①'s left slot.
     const top = html.slice(html.indexOf('kv2-complete-session-top'), html.indexOf('kv2-complete-session-title-row'));
     expect(top).toContain('kv2-complete-session-project');
     expect(top).toContain('kv2-runtime-badge');
-    expect(top).not.toContain('kv2-id-chip');
+    // The session id is always visible on row ①, and its click copies the resume command.
+    expect(top).toContain('<span class="kv2-complete-session-id"><button type="button" class="kv2-id-chip kv2-id-chip--resume"');
+    expect(top).toContain('>#done-pro</span>');
+    expect(top).toContain("&amp;&amp; opencode session &#x27;done-proj-session&#x27;");
+    expect(html).not.toContain('kv2-hover-reveal kv2-complete-session-id');
     const titleRow = html.slice(html.indexOf('kv2-complete-session-title-row'), html.indexOf('kv2-complete-session-meta-row'));
     expect(titleRow).toContain('class="kv2-complete-session-toggle"');
-    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'), html.indexOf('kv2-complete-session-group-actions'));
+    const meta = html.slice(html.indexOf('kv2-complete-session-meta-row'), html.indexOf('kv2-complete-session-timeline'));
     expect(meta).toContain(`>${BOARD_SESSION_COPY.turnCount(1)}<`);
-    // The id is hover-only at the meta row's end — its slot stays (opacity), so hovering shifts nothing.
-    expect(meta).toContain('<span class="kv2-hover-reveal kv2-complete-session-id"><button type="button" class="kv2-id-chip');
-    expect(meta).toContain('>#done-pro</span>');
-    expect(meta).not.toContain('kv2-resume-copy');
-    const actions = html.slice(html.indexOf('kv2-complete-session-group-actions'));
-    expect(actions).toContain('kv2-resume-copy');
+    expect(meta).not.toContain('kv2-id-chip');
+    expect(html).not.toContain('kv2-resume-copy');
   });
 
   test('shows Script instead of the legacy runtime in grouped done cards', () => {
@@ -826,12 +830,20 @@ describe('BoardScreen', () => {
       <BoardScreen {...baseProps} groupMode="works" works={works} workMutations={mutations} cards={cards} />,
     );
     expect(html).toMatch(/class="kv2-complete-session-header"[^>]*draggable="true"/);
-    // An unassigned session group carries the same Work field as a card…
+    // An unassigned session group carries the same Work field as a card, in row ①…
     const unassigned = html.slice(html.indexOf('data-session-group-key="session:session-b"'));
-    expect(unassigned).toContain('kv2-complete-session-work-row');
-    // …but inside a Work it is dropped — the container already names the Work.
+    const unassignedTop = unassigned.slice(unassigned.indexOf('kv2-complete-session-top'), unassigned.indexOf('kv2-complete-session-title-row'));
+    expect(unassignedTop).toContain('kv2-complete-session-work-row');
+    // …and project · runtime move down to lead the meta line.
+    const unassignedMeta = unassigned.slice(unassigned.indexOf('kv2-complete-session-meta-row'), unassigned.indexOf('kv2-complete-session-count'));
+    expect(unassignedMeta).toContain('kv2-complete-session-meta-chips');
+    // …but inside a Work it is dropped — the container already names the Work —
+    // and project · runtime take row ①'s slot so it is not left empty.
     const inWork = html.slice(html.indexOf('data-work-id="W1"'), html.indexOf('</section>'));
     expect(inWork).not.toContain('kv2-complete-session-work-row');
+    expect(inWork).not.toContain('kv2-complete-session-meta-chips');
+    const inWorkTop = inWork.slice(inWork.indexOf('kv2-complete-session-top'), inWork.indexOf('kv2-complete-session-title-row'));
+    expect(inWorkTop).toContain('kv2-runtime-badge');
     expect(html).not.toContain('kv2-work-move-menu');
     expect(html).toMatch(/class="kv2-card[^"]*" data-id="prog-1" draggable="true"/);
 

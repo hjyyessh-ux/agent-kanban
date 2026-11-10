@@ -1414,11 +1414,12 @@
 }
 
 /* =============================================================
-   Session group — A′ (docs/mockups/works-board-option-a-refined.html)
-   ① project · runtime ··· #id(hover) ★ N ● N
+   Session group (mockups/ui-improve-5/sessions-v2.html, option A)
+   ① Work field ··· ★ N ● N #id⏎   (inside a Work: project · runtime ··· …)
    ② title ··· ▴ 접기
-   ③ N턴 · 소요 · 마지막 hh:mm   (exact stamps in the native tooltip)
-   turns: `n 질문` / `↳ 답` on a spine; actions row at the bottom.
+   ③ project · runtime · N턴 · 소요 · 마지막 hh:mm   (outside a Work)
+   turns: `n 질문` / `↳ 답` on a spine — folded shows the newest one;
+   actions row (✓ 완료 / 아카이브) at the bottom.
    Hover-only controls use `.kv2-hover-reveal` (opacity, slot kept) so
    nothing moves when the pointer enters a card.
    ============================================================= */
@@ -1545,34 +1546,66 @@
   white-space: nowrap;
 }
 
-.kv2-complete-session-meta-row > span:not(.kv2-hover-reveal) + span:not(.kv2-hover-reveal)::before {
+.kv2-complete-session-meta-row > span:not(.kv2-complete-session-meta-chips) + span::before {
   content: '·';
   margin: 0 6px;
   color: var(--kv2-text-muted);
 }
 
 .kv2-complete-session-id {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 11ch;
-  margin-left: auto;
-  padding-left: 6px;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
+/* The id never truncates (it is the resume control); the Work field on the
+   left is what gives way. */
 .kv2-complete-session-id .kv2-id-chip {
-  min-width: 0;
-  max-width: 100%;
   font-size: var(--kv2-text-caption);
-}
-
-.kv2-complete-session-id .kv2-id-chip-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kv2-complete-session-id .kv2-id-chip-icon {
   display: none;
+}
+
+/* `#id ⏎` — the session id doubles as the resume copy. */
+.kv2-id-chip-resume {
+  margin-left: 3px;
+  color: var(--kv2-text-muted);
+  font-size: var(--kv2-text-xs);
+}
+
+/* Project · runtime leading the meta line (outside a Work, where row ① holds the Work field). */
+.kv2-complete-session-meta-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* min-width stays auto: the group may shrink only down to runtime + a 6ch
+     project name, never under its own content (that overprinted the counts). */
+  flex: 0 1 auto;
+  margin-right: 8px;
+  font-family: var(--kv2-font-sans);
+}
+
+.kv2-complete-session-meta-chips > .kv2-runtime-badge {
+  flex-shrink: 0;
+}
+
+/* Only the project name gives way (ellipsis, keeps ≥ 6ch); the runtime chip
+   and the counts never shrink, so they can no longer overprint each other. */
+.kv2-complete-session-meta-chips > .kv2-project-chip {
+  flex: 0 1 auto;
+  min-width: 6ch;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kv2-complete-session-meta-row > .kv2-complete-session-count,
+.kv2-complete-session-meta-row > .kv2-complete-session-duration,
+.kv2-complete-session-meta-row > .kv2-complete-session-last {
+  flex: 0 0 auto;
 }
 
 .kv2-complete-session-count,
@@ -1604,26 +1637,7 @@
   line-height: 1.4;
 }
 
-/* Folded: the newest exchange in one line. */
-.kv2-complete-session-folded-summary {
-  margin: 4px 0 0;
-  padding: 5px 8px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--kv2-session-row-bg);
-  color: var(--kv2-session-result-text);
-  font-size: var(--kv2-text-xs);
-  line-height: 1.5;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kv2-complete-session-folded-summary b {
-  color: var(--kv2-text-primary);
-  font-weight: 700;
-}
-
-/* Bottom row — resume · Work ··· ✓ 완료. */
+/* Bottom row — ··· ✓ 완료 / 아카이브 (resume = the #id chip, Work = row ①). */
 .kv2-complete-session-group-actions {
   display: flex;
   align-items: center;
@@ -1633,10 +1647,6 @@
   border-top: 1px solid var(--kv2-border);
   background: var(--kv2-surface);
   box-shadow: inset var(--kv2-session-header-accent-width) 0 0 var(--session-strip);
-}
-
-.kv2-complete-session-group-actions .kv2-complete-session-resume {
-  flex-shrink: 0;
 }
 
 .kv2-complete-session-actions-spacer {
@@ -2442,6 +2452,11 @@
 }
 
 /* No Work: a quiet `＋ Work` — thin dashed, no `W` chip, no `▾`. */
+.kv2-card-top-work .kv2-work-picker-trigger {
+  box-sizing: border-box;
+  height: 24px;
+}
+
 .kv2-card-top-work .kv2-work-picker-trigger:not(.is-set),
 .kv2-complete-session-work-row .kv2-work-picker-trigger:not(.is-set) {
   padding: 0 6px;
@@ -3534,7 +3549,7 @@
 /* Work id: hover-only in the head (A′). A Work id is a 21-char nanoid, so
    the chip is capped and truncates (click still copies the full id). */
 .kv2-work-id {
-  flex: 0 1 auto;
+  flex: 0 100 auto; /* gives way long before the project chip does */
   min-width: 0;
   max-width: 10ch;
   margin-left: auto;
@@ -3608,14 +3623,30 @@
    chip gives way; the counts never wrap or shrink. Exact stamps: tooltip. */
 .kv2-work-meta {
   min-width: 0;
-  flex-wrap: wrap;
-  row-gap: 4px;
+  /* One line. Wrapping pushed the (hover-only, invisible) Work id onto a
+     second line whenever a project chip was present — an empty row that made
+     Works with a directory taller than the rest. Space runs out id-first,
+     then the project name ellipsizes; the stats never break. */
+  flex-wrap: nowrap;
+  overflow: hidden;
   padding-left: 12px;
   color: var(--kv2-text-muted);
 }
 
 .kv2-work-meta > .kv2-work-project {
-  flex: 0 0 auto;
+  /* Sized to the meta text (caption, 1px padding) so a Work with a directory
+     is exactly as tall as one without; inline-block so the ellipsis renders. */
+  display: inline-block;
+  flex: 0 1 auto;
+  min-width: 6ch;
+  max-width: 16ch;
+  padding: 1px 6px;
+  border-width: 1px;
+  overflow: hidden;
+  font-size: var(--kv2-text-caption);
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kv2-work-stats {
@@ -3803,8 +3834,8 @@
   pointer-events: auto;
 }
 
-/* In the bottom actions row: shrinks (the picker truncates its title) so
-   `✓ 완료` never wraps. */
+/* Row ① left slot: shrinks (the picker truncates its title) so the
+   `★ ● #id` group on the right never wraps. */
 .kv2-complete-session-work-row {
   flex: 0 1 auto;
   min-width: 0;

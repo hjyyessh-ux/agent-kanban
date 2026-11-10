@@ -40,6 +40,18 @@ async function expectDescriptionCount(description: string, count: number) {
   }).toBe(count);
 }
 
+/** NEW TASK `실행 프리셋` → `모든 모델` picker → runtime (first model) → 적용. */
+async function pickRuntimeInPresetPicker(
+  dialog: import('@playwright/test').Locator,
+  runtime: 'codex' | 'claude',
+) {
+  await dialog.getByRole('button', { name: '모든 모델 ▾' }).click();
+  const picker = dialog.locator('.kv2-run-preset-picker');
+  await picker.getByRole('radiogroup', { name: 'Runtime' }).getByRole('radio', { name: runtime === 'codex' ? /Codex/ : /Claude/ }).click();
+  await picker.getByRole('button', { name: '적용', exact: true }).click();
+  await expect(picker).toBeHidden();
+}
+
 async function createAndStartRuntimeCard(
   page: import('@playwright/test').Page,
   runtime: 'codex' | 'claude',
@@ -51,7 +63,7 @@ async function createAndStartRuntimeCard(
   const dialog = page.getByRole('dialog');
   await dialog.locator('#create-card-title-input').fill(title);
   await dialog.locator('#create-card-description-input').fill(description);
-  await dialog.getByRole('radio', { name: runtime === 'codex' ? 'Codex' : 'Claude', exact: true }).click();
+  await pickRuntimeInPresetPicker(dialog, runtime);
   await dialog.getByRole('button', { name: 'CREATE', exact: true }).click();
   await startCard(page, title);
   await expectCardInColumn(page, 'complete', title);
@@ -100,27 +112,25 @@ async function runOrganicHook(
 }
 
 test.describe('Runtime integration', () => {
-  test('New Task exposes Opencode, Codex, and Claude panels without overflow', async ({ page, request }) => {
+  test('New Task 실행 프리셋 offers Codex and Claude (no Opencode) without overflow', async ({ page, request }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     await page.getByRole('button', { name: 'Create new card' }).click();
     const dialog = page.getByRole('dialog');
 
-    await expect(dialog.getByText('Runtime', { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('radio', { name: 'Opencode', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('radio', { name: 'Codex', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('radio', { name: 'Claude', exact: true })).toBeVisible();
+    await expect(dialog.getByText('실행 프리셋', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Opencode')).toHaveCount(0);
 
-    await dialog.getByRole('radio', { name: 'Opencode', exact: true }).click();
-    await expect(dialog.getByText('Agent', { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Sisyphus/ })).toBeVisible();
+    await dialog.getByRole('button', { name: '모든 모델 ▾' }).click();
+    const picker = dialog.locator('.kv2-run-preset-picker');
+    const runtimeGroup = picker.getByRole('radiogroup', { name: 'Runtime' });
+    await expect(runtimeGroup.getByRole('radio')).toHaveCount(2);
 
-    await dialog.getByRole('radio', { name: 'Codex', exact: true }).click();
-    await expect(dialog.getByLabel('Codex reasoning effort')).toBeVisible();
-    await expect(dialog.getByLabel('Codex sandbox')).toBeVisible();
+    await runtimeGroup.getByRole('radio', { name: /Codex/ }).click();
+    await expect(picker.getByRole('radiogroup', { name: 'Sandbox' })).toBeVisible();
+    await picker.locator('[data-model="gpt-5.4-mini"]').click();
+    await picker.getByRole('button', { name: '적용', exact: true }).click();
     await expect(dialog.getByText('Skip git repo check')).toBeVisible();
-
-    await dialog.getByLabel('Model').selectOption('gpt-5.4-mini');
     await expect.poll(async () => page.evaluate(() => localStorage.getItem('kanban-runtime-model-preference'))).toContain('gpt-5.4-mini');
     await expect.poll(async () => {
       const res = await request.get('/api/settings');
@@ -128,8 +138,7 @@ test.describe('Runtime integration', () => {
       return entries.find((entry: { key: string; value: string }) => entry.key === 'agent.defaults.codex')?.value;
     }).toBe('gpt-5.4-mini');
 
-    await dialog.getByRole('radio', { name: 'Claude', exact: true }).click();
-    await expect(dialog.getByText('Claude Permissions')).toBeVisible();
+    await pickRuntimeInPresetPicker(dialog, 'claude');
     await expect(dialog.getByText('Dangerously skip permissions')).toBeVisible();
 
     const overflowing = await page.locator('.kv2-dialog--create *').evaluateAll((nodes) =>
@@ -144,7 +153,7 @@ test.describe('Runtime integration', () => {
     expect(overflowing.filter(Boolean)).toHaveLength(0);
   });
 
-  test('server runtime defaults restore New Task controls when local preference is empty', async ({ page, request }) => {
+  test('server runtime defaults restore the New Task selection when local preference is empty', async ({ page, request }) => {
     await request.put(`/api/settings/by-key/${encodeURIComponent('agent.defaults.runtime')}`, {
       data: { value: 'claude', description: 'Default for runtime', category: 'agent.defaults', masked: false },
     });
@@ -157,14 +166,41 @@ test.describe('Runtime integration', () => {
 
     await page.addInitScript(() => {
       localStorage.removeItem('kanban-runtime-model-preference');
+      localStorage.removeItem('kanban-run-presets');
     });
     await page.goto('/');
     await page.getByRole('button', { name: 'Create new card' }).click();
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('radio', { name: 'Claude', exact: true })).toHaveClass(/kv2-create-agent-chip--active/);
-    await expect(dialog.getByLabel('Model')).toHaveValue('claude-sonnet-4-6');
-    await expect(dialog.locator('.kv2-create-field', { hasText: 'Claude Permissions' }).locator('select')).toHaveValue('plan');
+    // Not a favorite yet → the header shows it as the 임시 selection.
+    await expect(dialog.locator('.kv2-run-preset-temp')).toContainText('Claude · Sonnet 4.6 · plan');
+    await dialog.getByRole('button', { name: '모든 모델 ▾' }).click();
+    const picker = dialog.locator('.kv2-run-preset-picker');
+    await expect(picker.locator('[data-model="claude-sonnet-4-6"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(picker.getByRole('radiogroup', { name: 'Permission' }).getByRole('radio', { name: 'plan' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('New Task Claude effort from the picker reaches the created card', async ({ page, trackCard }) => {
+    const title = `[E2E] New Task Claude Effort ${Date.now()}`;
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create new card' }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.locator('#create-card-title-input').fill(title);
+    await dialog.locator('#create-card-description-input').fill('Claude effort should be stored on the card');
+    await dialog.getByRole('button', { name: '모든 모델 ▾' }).click();
+    const picker = dialog.locator('.kv2-run-preset-picker');
+    await picker.getByRole('radiogroup', { name: 'Runtime' }).getByRole('radio', { name: /Claude/ }).click();
+    await picker.getByRole('radiogroup', { name: 'Effort' }).getByRole('radio', { name: 'xhigh' }).click();
+    await picker.getByRole('button', { name: '적용', exact: true }).click();
+    await dialog.getByRole('button', { name: 'CREATE', exact: true }).click();
+    await expect(page.locator('.kv2-dialog-overlay')).not.toBeVisible({ timeout: 10_000 });
+
+    const cards = await apiGetCards();
+    const created = cards.find((card) => card.title === title);
+    expect(created).toBeDefined();
+    trackCard(created!.id);
+    expect(created!.agentRuntime).toBe('claude');
+    expect(created!.claudeOptions?.effort).toBe('xhigh');
   });
 
   test('New Task create and start keeps one Codex and Claude card per prompt', async ({ page, trackCard }) => {

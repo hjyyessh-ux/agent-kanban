@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { uploadScreenshot } from "../../hooks/useKanbanApi";
-import { KanbanCard, CreateCardInput, QueueSessionMode, AgentRuntime, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode, CreateWorkInput, Work } from "../../../../src/core/types";
+import { KanbanCard, CreateCardInput, QueueSessionMode, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode, CreateWorkInput, Work } from "../../../../src/core/types";
 import {
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_SANDBOX,
 } from "../../../../src/core/runtime-config";
 import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
-import { AGENT_CONFIGS } from "../../constants/agents";
 import {
   getCommandHint,
   getFilteredCommandsForRuntime,
@@ -27,7 +26,11 @@ import { WorkPicker } from "../Works/WorkPicker";
 import { directoryAfterWorkPick } from "./work-directory";
 import { CARD_WORK_COPY } from "../../constants/copy";
 import { useDirectoryHistory } from "../../hooks/useDirectoryHistory";
-import { RuntimeModelFields } from "../shared/RuntimeModelFields";
+import { RunPresetField, type PresetRuntimeEntry } from "./RunPresetField";
+import { PRESET_RUNTIMES, type ClaudePresetEffort, type PresetRuntime, type RunPreset } from "./runPresets";
+import { useRunPresets } from "../../hooks/useRunPresets";
+import { isModelVisible, readEnabledSet } from "../../hooks/useModelCatalog";
+import { useRuntimes } from "../../hooks/useRuntimes";
 import {
   buildDefaultScheduleInput,
   ScheduledDispatchEditor,
@@ -135,7 +138,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const [launchTiming, setLaunchTiming] = useState<CreateLaunchTiming>("later");
   const [scheduledAtInput, setScheduledAtInput] = useState(() => buildDefaultScheduleInput(new Date()));
   const [currentNow, setCurrentNow] = useState(() => new Date());
-  const [agentType, setAgentType] = useState("sisyphus");
+  // NEW TASK offers Claude/Codex only (`실행 프리셋`); opencode agent type is never sent from here.
+  const agentType = "sisyphus";
   const {
     prefs,
     setCodexReasoningEffort: saveCodexReasoningEffortDefault,
@@ -144,7 +148,9 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     setClaudePermissionMode,
     setClaudeDangerouslySkipPermissions,
   } = useRuntimeDefaults();
-  const [runtime, setRuntime] = useState<AgentRuntime>(prefs.runtime ?? "opencode");
+  const [runtime, setRuntime] = useState<PresetRuntime>(prefs.runtime === "codex" ? "codex" : "claude");
+  const { presets: runPresets, claudeEffort: savedClaudeEffort, setPresets: setRunPresets, setClaudeEffort: saveClaudeEffort } = useRunPresets();
+  const [claudeEffort, setClaudeEffort] = useState<ClaudePresetEffort>(savedClaudeEffort);
   const [codexReasoningEffort, setCodexReasoningEffort] = useState<CodexReasoningEffort>(
     prefs.codexReasoningEffort ?? DEFAULT_CODEX_REASONING_EFFORT
   );
@@ -200,11 +206,69 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
     persistRuntimeSelection,
     persistModelSelection,
   } = useRuntimeModelSelection(runtime, agentType);
+  const { runtimes: runtimeCatalog } = useRuntimes();
+
+  /** Claude/Codex with their visible models — what `실행 프리셋` and its picker offer. */
+  const presetRuntimes = useMemo<PresetRuntimeEntry[]>(() => {
+    const enabled = readEnabledSet();
+    return PRESET_RUNTIMES.flatMap((presetRuntime) => {
+      const entry = runtimeCatalog.find((candidate) => candidate.runtime === presetRuntime);
+      if (!entry || entry.disabled || entry.available === false) return [];
+      const models = (entry.models ?? []).filter((m) => isModelVisible(m.id, enabled));
+      return models.length > 0 ? [{ runtime: presetRuntime, label: entry.label, models }] : [];
+    });
+  }, [runtimeCatalog]);
+
+  const runSelection = useMemo<RunPreset>(() => (
+    runtime === "codex"
+      ? { runtime, model, permission: codexSandbox, effort: codexReasoningEffort }
+      : { runtime, model, permission: claudePermissionMode, effort: claudeEffort }
+  ), [claudeEffort, claudePermissionMode, codexReasoningEffort, codexSandbox, model, runtime]);
+
+  /** One chip / picker apply sets all four values and remembers them as the next default. */
+  const applyRunSelection = useCallback((next: RunPreset) => {
+    runtimeTouchedRef.current = true;
+    setRuntime(next.runtime);
+    persistRuntimeSelection(next.runtime);
+    setModel(next.model);
+    if (next.model) persistModelSelection(next.runtime, next.model, agentType);
+    if (next.runtime === "codex") {
+      codexSandboxTouchedRef.current = true;
+      codexReasoningTouchedRef.current = true;
+      setCodexSandbox(next.permission);
+      saveCodexSandboxDefault(next.permission);
+      setCodexReasoningEffort(next.effort);
+      saveCodexReasoningEffortDefault(next.effort);
+    } else {
+      claudePermissionsTouchedRef.current = true;
+      setLocalClaudePermissionMode(next.permission);
+      setClaudePermissionMode(next.permission);
+      setClaudeEffort(next.effort);
+      saveClaudeEffort(next.effort);
+    }
+  }, [
+    agentType,
+    persistModelSelection,
+    persistRuntimeSelection,
+    saveClaudeEffort,
+    saveCodexReasoningEffortDefault,
+    saveCodexSandboxDefault,
+    setClaudePermissionMode,
+  ]);
 
   useEffect(() => {
     if (!prefs.runtime || runtimeTouchedRef.current) return;
-    setRuntime(prefs.runtime);
+    setRuntime(prefs.runtime === "codex" ? "codex" : "claude");
   }, [prefs.runtime]);
+
+  // Server defaults can arrive after the first render filled the catalog's first model —
+  // until the user picks something, follow the saved default model.
+  const serverDefaultModel = runtime === "codex" ? prefs.codex : prefs.claude;
+  useEffect(() => {
+    if (!serverDefaultModel || runtimeTouchedRef.current) return;
+    if (!isModelAvailableForRuntime(serverDefaultModel, runtime, agentType)) return;
+    setModel(serverDefaultModel);
+  }, [agentType, isModelAvailableForRuntime, runtime, serverDefaultModel]);
 
   useEffect(() => {
     if (!prefs.claudePermissionMode || claudePermissionsTouchedRef.current) return;
@@ -438,8 +502,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         claudeOptions: runtime === "claude" ? {
           permissionMode: claudePermissionMode,
           dangerouslySkipPermissions: claudeDangerouslySkipPermissions,
+          ...(claudeEffort !== "auto" ? { effort: claudeEffort } : {}),
         } : undefined,
-        agentType: runtime === "opencode" ? agentType || undefined : undefined,
         command: command || undefined,
         arguments: commandArguments.trim() || undefined,
         resumeSessionId: resumeSessionId || undefined,
@@ -525,6 +589,12 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
+  const selectedWorkDir = works?.find((work) => work.id === plannedWorkId)?.projectDir?.trim() ?? "";
+  const dirFromWork = Boolean(autoDirRef.current) && projectDir.trim() === autoDirRef.current;
+  // Typed paths are never overwritten — offer the Work's project as a one-click swap instead.
+  const workDirSuggestion = selectedWorkDir && projectDir.trim() && projectDir.trim() !== selectedWorkDir ? selectedWorkDir : "";
+  const runFlagsDanger = runtime === "codex" ? codexBypassApprovalsAndSandbox : claudeDangerouslySkipPermissions;
+
   const hasPendingScreenshots = pendingPreviews.length > 0;
   const promptRequired = !command || isCommandWithPrompt;
   const commandPanelId = "create-card-command-panel";
@@ -571,31 +641,6 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               </span>
             )}
           </div>
-
-          {works && (
-            <div className="kv2-create-field">
-              <span className="kv2-create-label" id="create-card-work-label">{CARD_WORK_COPY.label}</span>
-              <WorkPicker
-                variant="input"
-                value={plannedWorkId}
-                works={works}
-                planned
-                ariaLabel={CARD_WORK_COPY.label}
-                boundarySelector=".kv2-dialog"
-                disabled={isSubmitting}
-                onChange={(next) => pickWork(next, works.find((candidate) => candidate.id === next))}
-                onCreateNew={onCreateWork
-                  ? (name) => {
-                    // The new Work takes the Directory typed so far; a failed create is on the Works alert.
-                    onCreateWork({ title: name, projectDir: projectDir.trim() || undefined })
-                      .then((work) => pickWork(work.id, work))
-                      .catch(() => undefined);
-                  }
-                  : undefined}
-              />
-              <span className="kv2-create-helper">{CARD_WORK_COPY.createHint}</span>
-            </div>
-          )}
 
           {/* Screenshots belong to the prompt: dropped anywhere on this field,
               shown as a chip strip inside the prompt box (same as Feedback). */}
@@ -700,168 +745,138 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             )}
           </div>
 
-          <div className="kv2-create-field">
-            <label className="kv2-create-label" htmlFor="create-card-directory-input">Directory</label>
-            <DirectoryPicker
-              id="create-card-directory-input"
-              value={projectDir}
-              onChange={setProjectDir}
-              disabled={isSubmitting}
-            />
-            <span className="kv2-create-helper">Recent directories are saved in this browser after use.</span>
+          {/* Work | Directory — one row: picking a Work fills the Directory next to it. */}
+          <div className={`kv2-create-field kv2-create-work-dir${works ? "" : " kv2-create-work-dir--single"}`}>
+            <div className="kv2-create-work-dir-row">
+              {works && (
+                <div className="kv2-create-work-dir-cell">
+                  <span className="kv2-create-label" id="create-card-work-label">{CARD_WORK_COPY.label}</span>
+                  <WorkPicker
+                    variant="input"
+                    value={plannedWorkId}
+                    works={works}
+                    planned
+                    ariaLabel={CARD_WORK_COPY.label}
+                    boundarySelector=".kv2-dialog"
+                    disabled={isSubmitting}
+                    onChange={(next) => pickWork(next, works.find((candidate) => candidate.id === next))}
+                    onCreateNew={onCreateWork
+                      ? (name) => {
+                        // The new Work takes the Directory typed so far; a failed create is on the Works alert.
+                        onCreateWork({ title: name, projectDir: projectDir.trim() || undefined })
+                          .then((work) => pickWork(work.id, work))
+                          .catch(() => undefined);
+                      }
+                      : undefined}
+                  />
+                </div>
+              )}
+              <div className="kv2-create-work-dir-cell">
+                <span className="kv2-create-label kv2-create-label--with-badge">
+                  <label htmlFor="create-card-directory-input">Directory</label>
+                  {dirFromWork && <span className="kv2-create-dir-badge">← Work 프로젝트</span>}
+                </span>
+                <DirectoryPicker
+                  id="create-card-directory-input"
+                  value={projectDir}
+                  onChange={setProjectDir}
+                  disabled={isSubmitting}
+                />
+              </div>
+            </div>
+            <span className="kv2-create-helper">
+              {workDirSuggestion ? (
+                <>
+                  Work 프로젝트: <code>{workDirSuggestion}</code> ·{" "}
+                  <button
+                    type="button"
+                    className="kv2-create-inline-link"
+                    onClick={() => {
+                      setProjectDir(workDirSuggestion);
+                      autoDirRef.current = workDirSuggestion;
+                    }}
+                    disabled={isSubmitting}
+                  >
+                    이걸로 바꾸기
+                  </button>
+                </>
+              ) : works ? (
+                `${CARD_WORK_COPY.createHint} 최근 Directory는 이 브라우저에 저장됩니다.`
+              ) : (
+                "Recent directories are saved in this browser after use."
+              )}
+            </span>
           </div>
 
-          <RuntimeModelFields
-            runtime={runtime}
-            model={model}
-            orderedRuntimes={orderedRuntimes}
-            displayedModels={displayedModels}
-            runtimeInputId="create-card-runtime-group"
-            modelInputId="create-card-model-select"
-            disabled={isSubmitting}
-            selectorVariant="cards"
-            onRuntimeChange={(nextRuntime) => {
-              runtimeTouchedRef.current = true;
-              setRuntime(nextRuntime);
-              persistRuntimeSelection(nextRuntime);
-              setModel(getDefaultModelForRuntime(nextRuntime, agentType));
-            }}
-            onModelChange={(nextModel) => {
-              setModel(nextModel);
-              if (nextModel) {
-                persistModelSelection(runtime, nextModel, agentType);
-              }
-            }}
-          />
-
-          {runtime === "opencode" && (
           <div className="kv2-create-field">
-            <div className="kv2-create-label">Agent</div>
-            <div className="kv2-create-agent-row">
-              {AGENT_CONFIGS.map((agent) => (
-                <button
-                  key={agent.key}
-                  type="button"
-                  className={`kv2-create-agent-chip ${agentType === agent.key ? "kv2-create-agent-chip--active" : ""}`}
-                  onClick={() => {
-                    setAgentType(agent.key);
-                    setModel(getDefaultModelForRuntime("opencode", agent.key));
-                  }}
-                  disabled={isSubmitting}
-                >
-                  {agent.emoji} {agent.label}
-                </button>
-              ))}
+            {presetRuntimes.length > 0 ? (
+              <RunPresetField
+                value={runSelection}
+                onChange={applyRunSelection}
+                runtimes={presetRuntimes}
+                presets={runPresets}
+                onPresetsChange={setRunPresets}
+                defaults={{
+                  claudePermission: prefs.claudePermissionMode ?? "acceptEdits",
+                  claudeEffort,
+                  codexSandbox: prefs.codexSandbox ?? DEFAULT_CODEX_SANDBOX,
+                  codexEffort: prefs.codexReasoningEffort ?? DEFAULT_CODEX_REASONING_EFFORT,
+                }}
+                disabled={isSubmitting}
+              />
+            ) : (
+              <span className="kv2-create-helper kv2-create-helper--warning">사용 가능한 Claude/Codex runtime이 없습니다.</span>
+            )}
+            {/* Danger switches stay per-task and are never saved into a preset. */}
+            <div
+              className={`kv2-create-run-flags${runFlagsDanger ? " is-danger" : ""}`}
+              role="group"
+              aria-label={runtime === "codex" ? "Codex Options" : "Claude Options"}
+            >
+              <span className="kv2-create-run-flags-label">{runtime === "codex" ? "Codex" : "Claude"}</span>
+              {runtime === "codex" ? (
+                <>
+                  <label className="kv2-create-run-flag">
+                    <input
+                      type="checkbox"
+                      checked={codexSkipGitRepoCheck}
+                      onChange={(e) => setCodexSkipGitRepoCheck(e.target.checked)}
+                      disabled={isSubmitting}
+                    />
+                    <span>Skip git repo check</span>
+                  </label>
+                  <label className="kv2-create-run-flag kv2-create-run-flag--danger">
+                    <input
+                      type="checkbox"
+                      checked={codexBypassApprovalsAndSandbox}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        codexBypassTouchedRef.current = true;
+                        setLocalCodexBypassApprovalsAndSandbox(checked);
+                        setCodexBypassApprovalsAndSandbox(checked);
+                      }}
+                      disabled={isSubmitting}
+                    />
+                    <span>Bypass approvals and sandbox</span>
+                  </label>
+                </>
+              ) : (
+                <label className="kv2-create-run-flag kv2-create-run-flag--danger">
+                  <input
+                    type="checkbox"
+                    checked={claudeDangerouslySkipPermissions}
+                    onChange={(e) => {
+                      claudePermissionsTouchedRef.current = true;
+                      setLocalClaudeDangerouslySkipPermissions(e.target.checked);
+                      setClaudeDangerouslySkipPermissions(e.target.checked);
+                    }}
+                    disabled={isSubmitting}
+                  />
+                  <span>Dangerously skip permissions</span>
+                </label>
+              )}
             </div>
           </div>
-          )}
-
-          {runtime === "codex" && (
-            <div className="kv2-create-field">
-              <div className="kv2-create-label">Codex Options</div>
-              <div className="kv2-create-input-row">
-                <select
-                  className="kv2-create-select"
-                  value={codexReasoningEffort}
-                  onChange={(e) => {
-                    const value = e.target.value as CodexReasoningEffort;
-                    codexReasoningTouchedRef.current = true;
-                    setCodexReasoningEffort(value);
-                    saveCodexReasoningEffortDefault(value);
-                  }}
-                  disabled={isSubmitting}
-                  aria-label="Codex reasoning effort"
-                >
-                  <option value="low">Reasoning: low</option>
-                  <option value="medium">Reasoning: medium</option>
-                  <option value="high">Reasoning: high</option>
-                  <option value="xhigh">Reasoning: xhigh</option>
-                </select>
-                <select
-                  className="kv2-create-select"
-                  value={codexSandbox}
-                  onChange={(e) => {
-                    const value = e.target.value as CodexSandboxMode;
-                    codexSandboxTouchedRef.current = true;
-                    setCodexSandbox(value);
-                    saveCodexSandboxDefault(value);
-                  }}
-                  disabled={isSubmitting}
-                  aria-label="Codex sandbox"
-                >
-                  <option value="read-only">Sandbox: read-only</option>
-                  <option value="workspace-write">Sandbox: workspace-write</option>
-                  <option value="danger-full-access">Sandbox: danger-full-access</option>
-                </select>
-              </div>
-              <label className="kv2-create-radio-label">
-                <input
-                  type="checkbox"
-                  checked={codexSkipGitRepoCheck}
-                  onChange={(e) => setCodexSkipGitRepoCheck(e.target.checked)}
-                  disabled={isSubmitting}
-                />
-                <div>
-                  <div className="kv2-create-radio-title">Skip git repo check</div>
-                </div>
-              </label>
-              <label className="kv2-create-radio-label">
-                <input
-                  type="checkbox"
-                  checked={codexBypassApprovalsAndSandbox}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    codexBypassTouchedRef.current = true;
-                    setLocalCodexBypassApprovalsAndSandbox(checked);
-                    setCodexBypassApprovalsAndSandbox(checked);
-                  }}
-                  disabled={isSubmitting}
-                />
-                <div>
-                  <div className="kv2-create-radio-title">Bypass approvals and sandbox</div>
-                </div>
-              </label>
-            </div>
-          )}
-
-          {runtime === "claude" && (
-            <div className="kv2-create-field">
-              <div className="kv2-create-label">Claude Permissions</div>
-              <div className="kv2-create-input-row">
-                <select
-                  className="kv2-create-select"
-                  value={claudePermissionMode}
-                  onChange={(e) => {
-                    const value = e.target.value as ClaudePermissionMode;
-                    claudePermissionsTouchedRef.current = true;
-                    setLocalClaudePermissionMode(value);
-                    setClaudePermissionMode(value);
-                  }}
-                  disabled={isSubmitting || claudeDangerouslySkipPermissions}
-                >
-                  <option value="acceptEdits">Accept edits</option>
-                  <option value="bypassPermissions">Bypass permissions</option>
-                  <option value="plan">Plan</option>
-                  <option value="dontAsk">Do not ask</option>
-                </select>
-              </div>
-              <label className="kv2-create-radio-label">
-                <input
-                  type="checkbox"
-                  checked={claudeDangerouslySkipPermissions}
-                  onChange={(e) => {
-                    claudePermissionsTouchedRef.current = true;
-                    setLocalClaudeDangerouslySkipPermissions(e.target.checked);
-                    setClaudeDangerouslySkipPermissions(e.target.checked);
-                  }}
-                  disabled={isSubmitting}
-                />
-                <div>
-                  <div className="kv2-create-radio-title">Dangerously skip permissions</div>
-                </div>
-              </label>
-            </div>
-          )}
 
           <div className="kv2-create-field kv2-create-field--command">
             <button
