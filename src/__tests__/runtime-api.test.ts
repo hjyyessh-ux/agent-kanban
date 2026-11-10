@@ -44,6 +44,7 @@ describe('runtime API', () => {
       expect(codex?.models?.length).toBeGreaterThan(0);
       expect(codex?.models?.map((model) => model.id)).toContain('gpt-6-astra');
       expect(claude?.models?.map((model) => model.id)).toContain('claude-fable-5-1');
+      expect(claude?.models?.map((model) => model.id)).toContain('claude-fable-5-2');
       expect(claude?.models?.map((model) => model.id)).toContain('claude-fable-5');
       expect(claude?.models?.map((model) => model.id)).toContain('claude-opus-5-5');
       expect(claude?.models?.map((model) => model.id)).toContain('claude-opus-5');

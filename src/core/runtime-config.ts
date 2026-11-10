@@ -4,6 +4,7 @@ import { PRIMARY_AGENT_CONFIGS, type PrimaryAgentConfig } from './agent-config';
 export const RUNTIME_MODEL_PREFERENCE_KEY = 'kanban-runtime-model-preference';
 
 export const CLAUDE_MODELS = [
+  { id: 'claude-fable-5-2', label: 'Fable 5.2', tier: 'fable' },
   { id: 'claude-fable-5-1', label: 'Fable 5.1', tier: 'fable' },
   { id: 'claude-fable-5', label: 'Fable 5', tier: 'fable' },
   { id: 'claude-opus-5-5', label: 'Opus 5.5 (1M context)', tier: 'opus' },
