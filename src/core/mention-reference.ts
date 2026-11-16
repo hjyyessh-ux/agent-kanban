@@ -1,4 +1,11 @@
 import type { AgentRuntime, WorkStatus } from './types';
+import type {
+  SkillInvocation,
+  SkillMentionScope,
+  SkillRuntime,
+  SkillUnavailableReason,
+} from './mention-skills';
+import { SKILL_UNAVAILABLE_LABEL } from './mention-skills';
 
 /**
  * `@` 멘션 참조 — 토큰 파서와 참조 블록 렌더러 (순수 함수).
@@ -13,14 +20,17 @@ import type { AgentRuntime, WorkStatus } from './types';
  * 소유하면 안 된다.
  */
 
-export type MentionKind = 'session' | 'work' | 'doc';
+export type MentionKind = 'session' | 'work' | 'doc' | 'skill';
 
 /**
  * 본문에 박히는 토큰. 전역 플래그가 붙어 있으므로 `exec` 루프에 그대로 쓰지
  * 말 것 — `lastIndex`가 호출자 사이에 새어 나간다. `parseMentionTokens`는
  * 매번 복제본을 만든다.
+ *
+ * id 안의 `:`는 **사이에만** 허용한다(`@skill:egm:egm-review`). 끝에 붙은 `:`는
+ * 토큰이 아니라 문장 부호다 — `@skill:consensus: 로 검증` 같은 본문이 흔하다.
  */
-export const MENTION_TOKEN_RE = /@(session|work|doc):([A-Za-z0-9_\-./%]+)/g;
+export const MENTION_TOKEN_RE = /@(session|work|doc|skill):([A-Za-z0-9_\-./%]+(?::[A-Za-z0-9_\-./%]+)*)/g;
 
 /** 한 본문이 실어 보낼 수 있는 참조 개수. 초과분은 렌더에서 잘린다. */
 export const MAX_REFERENCES = 8;
@@ -84,7 +94,11 @@ export interface ResolvedReference {
   id: string;
   raw: string;
   title: string;
-  unresolved?: 'not_found' | 'ambiguous';
+  /**
+   * `unavailable` — skill 전용. 스킬은 존재하지만 이 카드(runtime × projectDir ×
+   * 입력 위치)에서는 호출되지 않는다. 이유는 `skillUnavailable`.
+   */
+  unresolved?: 'not_found' | 'ambiguous' | 'unavailable';
   // session (소유 카드의 메타를 함께 싣는다)
   sessionId?: string;
   cardId?: string;
@@ -112,11 +126,45 @@ export interface ResolvedReference {
   // doc
   docPath?: string;      // vault 상대
   docAbsPath?: string;
+  // skill
+  skillRuntime?: SkillRuntime;
+  skillScope?: SkillMentionScope;
+  skillPlugin?: string;
+  skillInvocation?: SkillInvocation;
+  /** SKILL.md 절대경로. 블록에는 싣지 않는다 — 스킬은 경로가 아니라 이름으로 부른다. */
+  skillPath?: string;
+  /** 스킬 소속 프로젝트(project scope일 때). */
+  skillProjectDir?: string;
+  /**
+   * `unresolved === 'unavailable'`의 이유. `SkillUnavailableReason`에 더해
+   * `launch_only` — claude 첫 줄 실행 전용 스킬을 본문 토큰으로 넣은 경우(E2b·E3b:
+   * 모델이 호출을 거부하므로 블록 지시로는 실행되지 않는다).
+   */
+  skillUnavailable?: SkillUnavailableReason | 'launch_only';
+}
+
+/**
+ * 첫 줄 실행 라인(`/name`)의 검증 결과. 토큰이 아니라 본문 첫 줄이라 참조 목록과
+ * 따로 돈다. `ok === false`인 채로 보내면 claude는 오류 없이 평문으로 받아
+ * 스킬 없이 진행한다(E2f) — 그래서 UI가 제출을 막는 근거가 이 값이다.
+ */
+export interface SkillLaunchStatus {
+  name: string;
+  ok: boolean;
+  /** `ok === false`일 때. `not_found`는 어디에서도 찾지 못한 이름. */
+  reason?: SkillUnavailableReason | 'not_found' | 'not_launch';
+  invocation?: SkillInvocation;
+  scope?: SkillMentionScope;
+  description?: string;
+  /** `other_project`일 때 그 스킬이 있는 프로젝트. */
+  projectDir?: string;
 }
 
 /** `GET /api/mentions/resolve` 응답. */
 export interface MentionResolveResponse {
   references: ResolvedReference[];
+  /** `launch` 쿼리를 보냈을 때만. */
+  launch?: SkillLaunchStatus;
 }
 
 /**
@@ -188,16 +236,22 @@ export function parseMentionTokens(text: string): MentionToken[] {
   while (match !== null) {
     const start = match.index;
     const previous = start > 0 ? text[start - 1] : '';
-    const id = decodeId(match[2]);
-    const key = `${match[1]}:${id}`;
+    const kind = match[1] as MentionKind;
+    // skill 이름은 `.`으로 끝나지 않는다 — 문장 끝 마침표(`@skill:consensus.`)를
+    // id로 먹으면 존재하지 않는 스킬이 된다. 다른 kind는 기존 동작 그대로(doc은
+    // `.md`로 끝나는 게 정상이다).
+    const rawId = kind === 'skill' ? match[2].replace(/\.+$/, '') : match[2];
+    const raw = `@${kind}:${rawId}`;
+    const id = decodeId(rawId);
+    const key = `${kind}:${id}`;
     if ((!previous || TOKEN_BOUNDARY_RE.test(previous)) && id && !seen.has(key)) {
       seen.add(key);
       tokens.push({
-        kind: match[1] as MentionKind,
+        kind,
         id,
-        raw: match[0],
+        raw,
         start,
-        end: start + match[0].length,
+        end: start + raw.length,
       });
     }
     match = scanner.exec(text);
@@ -285,14 +339,57 @@ function heading(ref: ResolvedReference): string {
   return title ? `### ${tokenText(ref)} — ${title}` : `### ${tokenText(ref)}`;
 }
 
+/** 스킬을 이 세션에서 쓸 수 없는 이유 — 블록·칩이 같은 문구를 쓴다. */
+export function skillUnavailableText(reason: ResolvedReference['skillUnavailable']): string {
+  if (reason === 'launch_only') return '첫 줄 실행 전용 스킬이라 참조로는 호출되지 않습니다';
+  if (reason) return SKILL_UNAVAILABLE_LABEL[reason];
+  return '이 세션에서 사용할 수 없습니다';
+}
+
 function renderUnresolved(ref: ResolvedReference): string {
+  if (ref.unresolved === 'unavailable') {
+    // 스킬은 있지만 이 세션에서는 보이지 않는다. 없는 스킬을 부르면 claude는
+    // 평문으로 흘려보내고(E2f) codex는 이름이 비슷한 다른 스킬을 실행한 사례가
+    // 있다(C10) — 그래서 "흉내 내지 말라"를 명시한다.
+    return [
+      heading(ref),
+      `- kind: skill · **이 세션에서 사용할 수 없는 스킬입니다** — ${skillUnavailableText(ref.skillUnavailable)}.`,
+      '- 호출하거나 비슷한 이름의 다른 스킬로 대신하지 말고, 이 사실을 사용자에게 보고하세요.',
+    ].join('\n');
+  }
   const reason = ref.unresolved === 'ambiguous'
     ? '**접두사가 여러 항목에 매칭됩니다** — 더 긴 접두사가 필요합니다'
-    : '**참조 대상을 찾지 못했습니다** — 현재 보드에 없습니다';
+    : ref.kind === 'skill'
+      ? '**스킬을 찾지 못했습니다** — 이 세션의 스킬 목록에 없습니다. 비슷한 이름의 다른 스킬로 대신하지 마세요'
+      : '**참조 대상을 찾지 못했습니다** — 현재 보드에 없습니다';
   return [
     heading(ref),
     `- kind: ${ref.kind} · ${reason}. 이 사실을 사용자에게 보고하세요.`,
   ].join('\n');
+}
+
+/**
+ * 스킬 항목. 런타임마다 호출 문법이 다르다:
+ *
+ * - codex: `$name`을 본문에 적으면 위치·개수와 무관하게 스킬 본문이 주입된다
+ *   (C6 3/3, C7). 지시 문장 안에 `$name`을 그대로 싣는 것이 곧 호출이다.
+ * - claude: `Skill` 도구 호출 지시 (E5 3/3). 첫 줄 실행 전용(`launch`)은 여기 오지
+ *   않는다 — 해석 단계에서 `unavailable`로 떨어진다.
+ */
+function renderSkill(ref: ResolvedReference): string {
+  const meta = ['kind: skill'];
+  if (ref.skillRuntime) meta.push(`runtime: ${ref.skillRuntime}`);
+  if (ref.skillScope) meta.push(`scope: ${ref.skillPlugin ? `plugin(${ref.skillPlugin})` : ref.skillScope}`);
+  if (ref.skillInvocation) meta.push(`invocation: ${ref.skillInvocation}`);
+
+  const lines = [heading(ref), `- ${meta.join(' · ')}`];
+  if (ref.skillRuntime === 'codex') {
+    lines.push(`- 호출: 이 작업에 \`$${ref.id}\` 스킬을 사용하세요.`);
+  } else {
+    lines.push(`- 호출: 이 작업의 해당 단계에서 \`Skill\` 도구로 \`${ref.id}\` 스킬을 호출하고 그 지시를 따르세요.`);
+    lines.push('- 호출이 거부되면 같은 절차를 다른 방법으로 흉내 내지 말고 그 사실을 보고하세요.');
+  }
+  return lines.join('\n');
 }
 
 function renderSession(ref: ResolvedReference): string {
@@ -376,8 +473,19 @@ function renderReference(ref: ResolvedReference): string {
   if (ref.unresolved) return renderUnresolved(ref);
   if (ref.kind === 'work') return renderWork(ref);
   if (ref.kind === 'doc') return renderDoc(ref);
+  if (ref.kind === 'skill') return renderSkill(ref);
   return renderSession(ref);
 }
+
+/**
+ * 스킬이 섞인 블록에만 붙는 머리말 보충. 기존 머리말은 "경로를 열어 읽어라"라서
+ * 스킬 항목을 파일로 착각하지 않게 한 줄 구분해 준다. 스킬이 없는 블록은 기존과
+ * 바이트 단위로 같다.
+ */
+const SKILL_HEADER_NOTE = [
+  '',
+  '**`kind: skill` 항목은 읽을 파일이 아니라 사용할 스킬입니다** — 각 항목의 호출 지시를 따르세요.',
+].join('\n');
 
 /**
  * 참조 블록 문자열. `MAX_REFERENCES`를 넘는 참조는 잘린다(칩 쪽에서 경고).
@@ -387,7 +495,8 @@ export function renderReferenceBlock(refs: ResolvedReference[]): string {
   const kept = refs.slice(0, MAX_REFERENCES);
   if (!kept.length) return '';
   const sections = kept.map(renderReference);
-  return [REFERENCE_BLOCK_OPEN, BLOCK_HEADER, '', sections.join('\n\n'), REFERENCE_BLOCK_CLOSE].join('\n');
+  const header = kept.some((ref) => ref.kind === 'skill') ? `${BLOCK_HEADER}${SKILL_HEADER_NOTE}` : BLOCK_HEADER;
+  return [REFERENCE_BLOCK_OPEN, header, '', sections.join('\n\n'), REFERENCE_BLOCK_CLOSE].join('\n');
 }
 
 /**
@@ -439,11 +548,11 @@ export interface ReferenceBlockEntry {
   title: string;
   /** 칩 옆에 붙는 짧은 메타 — `세션 3개 · 카드 45개`, `812.0KB` 등. */
   meta?: string;
-  unresolved?: 'not_found' | 'ambiguous';
+  unresolved?: 'not_found' | 'ambiguous' | 'unavailable';
   transcriptMissing?: boolean;
 }
 
-const BLOCK_HEADING_RE = /^### @(session|work|doc):(.+)$/;
+const BLOCK_HEADING_RE = /^### @(session|work|doc|skill):(.+)$/;
 const TITLE_SEPARATOR = ' — ';
 
 /**
@@ -475,7 +584,13 @@ export function parseReferenceBlock(block: string): ReferenceBlockEntry[] {
     const trimmed = line.trim();
     if (trimmed.startsWith('- kind:')) {
       if (trimmed.includes('**참조 대상을 찾지 못했습니다**')) current.unresolved = 'not_found';
+      else if (trimmed.includes('**스킬을 찾지 못했습니다**')) current.unresolved = 'not_found';
+      else if (trimmed.includes('**이 세션에서 사용할 수 없는 스킬입니다**')) current.unresolved = 'unavailable';
       else if (trimmed.includes('**접두사가 여러 항목에 매칭됩니다**')) current.unresolved = 'ambiguous';
+      if (current.kind === 'skill') {
+        const scope = /scope: ([^ ]+)/.exec(trimmed);
+        if (scope) current.meta = scope[1];
+      }
       const docTitle = /title: "([^"]*)"/.exec(trimmed);
       if (docTitle && !current.title) current.title = docTitle[1];
       if (current.kind === 'work') {

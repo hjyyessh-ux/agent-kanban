@@ -21,6 +21,7 @@ const KIND_ICON: Record<MentionKind, string> = {
   session: '🧵',
   work: '🗂',
   doc: '📄',
+  skill: '🧩',
 };
 
 interface SavedChip {
@@ -42,6 +43,7 @@ export function buildSavedChips(body: string, block: string): SavedChip[] {
     let warning: string | undefined;
     if (entry.unresolved === 'not_found') warning = '저장 당시 대상을 찾지 못해 메타데이터 없이 전달됨';
     else if (entry.unresolved === 'ambiguous') warning = '저장 당시 ID 접두사가 여러 항목에 걸려 전달되지 않음';
+    else if (entry.unresolved === 'unavailable') warning = '저장 당시 이 세션에서 쓸 수 없는 스킬이라 호출되지 않음';
     else if (entry.transcriptMissing) warning = 'transcript 없음 — 메타데이터만 전달됨';
     return {
       key: entry.key,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   MAX_REFERENCES,
   renderReferenceBlock,
+  skillUnavailableText,
   type MentionKind,
   type MentionToken,
   type ResolvedReference,
@@ -20,11 +21,18 @@ const KIND_ICON: Record<MentionKind, string> = {
   session: '🧵',
   work: '🗂',
   doc: '📄',
+  skill: '🧩',
 };
 
 /** 참조가 덜 실려 나가는 상태 — 칩을 앰버로 돌린다. */
 function degradeReason(reference: ResolvedReference | undefined): string | null {
   if (!reference) return null;
+  if (reference.unresolved === 'unavailable') {
+    return `${skillUnavailableText(reference.skillUnavailable)} — 호출되지 않습니다`;
+  }
+  if (reference.unresolved === 'not_found' && reference.kind === 'skill') {
+    return '이 디렉토리·런타임에서 찾을 수 없는 스킬입니다 — 호출되지 않습니다';
+  }
   if (reference.unresolved === 'not_found') return '대상을 찾을 수 없습니다 — 이 참조는 전달되지 않습니다';
   if (reference.unresolved === 'ambiguous') return 'ID 접두사가 여러 세션에 걸립니다 — 더 긴 접두사를 쓰세요';
   if (reference.transcriptMissing) return 'transcript 없음 — 메타데이터만 전달됩니다';

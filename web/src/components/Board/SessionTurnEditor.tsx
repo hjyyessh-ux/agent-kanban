@@ -4,6 +4,7 @@ import { deleteScreenshot, getScreenshotUrl, uploadScreenshot } from '../../hook
 import { appendReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
 import { resolveReferencesForSubmit } from '../../hooks/useMentionReferences';
 import { MentionTextarea } from '../Mention/MentionTextarea';
+import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 
 /** `[Feedback for: …]` 헤더는 그대로 두고 본문만 바꾼 description. */
 export function joinFeedbackPrompt(header: string, body: string): string {
@@ -74,7 +75,10 @@ export const SessionTurnEditor: React.FC<{
     }
     setSaving(true);
     setError(null);
-    resolveReferencesForSubmit(draft.trim(), referencesRef.current)
+    resolveReferencesForSubmit(draft.trim(), referencesRef.current, {
+      runtime: resolveAgentRuntime(card),
+      projectDir: card.projectDir,
+    })
       .then((refs) => onSave(card.id, joinFeedbackPrompt(header, appendReferenceBlock(draft.trim(), refs))))
       .then(onClose)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : '저장하지 못했습니다'))
@@ -104,6 +108,7 @@ export const SessionTurnEditor: React.FC<{
         }}
         boundarySelector=".kv2-dialog"
         projectDir={card.projectDir}
+        agentRuntime={resolveAgentRuntime(card)}
         excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
         onPaste={(event) => {
           const files = imageFiles(Array.from(event.clipboardData?.items ?? [])
