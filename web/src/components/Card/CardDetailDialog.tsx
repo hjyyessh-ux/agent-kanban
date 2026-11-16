@@ -26,6 +26,12 @@ import { DialogSkeleton } from "./DialogSkeleton";
 import { CardMetaPanel, CommandMetaRow, EditingField } from "./CardMetaPanel";
 import { CardWorkLine } from "./CardWorkLine";
 import { CardPhases } from "./CardPhases";
+import {
+  appendReferenceBlock,
+  stripReferenceBlock,
+  type ResolvedReference,
+} from "../../../../src/core/mention-reference";
+import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
 import { QueueSettingsPanel } from "./QueueSettingsPanel";
 import { ScheduleSettingsPanel } from "./ScheduleSettingsPanel";
 import { SessionPickerPanel } from "./SessionPickerPanel";
@@ -413,7 +419,8 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
           setEditValue(card.title);
           break;
         case "description":
-          setEditValue(card.description);
+          // 자동 생성 참조 블록은 편집 대상이 아니다 — 본문만 열고, 저장 때 다시 붙인다.
+          setEditValue(stripReferenceBlock(card.description ?? ""));
           break;
         case "projectDir":
           setEditValue(card.projectDir ?? "");
@@ -432,8 +439,45 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
     [canEdit, isTodo, card]
   );
 
+  /** `MentionTextarea`가 올려 주는 해석 결과. 렌더에 안 쓰므로 state가 아니라 ref. */
+  const descriptionRefsRef = useRef<ResolvedReference[]>([]);
+  const handleDescriptionReferencesChange = useCallback((refs: ResolvedReference[]) => {
+    descriptionRefsRef.current = refs;
+  }, []);
+  /** blur와 Save 클릭이 겹쳐도 PATCH는 한 번만. */
+  const savingDescriptionRef = useRef(false);
+
+  /**
+   * 프롬프트 저장 — New Task와 같은 규칙: 본문의 토큰을 **지금** 다시 해석해
+   * 참조 블록을 새로 붙인다(`appendReferenceBlock`은 기존 블록을 교체). 그래야
+   * 토큰을 지우면 블록에서도 빠지고, 새로 넣으면 블록에도 실린다.
+   * 본문이 그대로면 아무것도 보내지 않는다 — 열었다 닫기만 해도 블록이
+   * 재생성(transcript 크기 갱신)되는 건 의도가 아니다.
+   */
+  const saveDescriptionEdit = useCallback(async () => {
+    if (!onUpdate || savingDescriptionRef.current) return;
+    const cardId = card.id;
+    const body = editValue.trim();
+    if (body === stripReferenceBlock(card.description ?? "").trim()) {
+      setEditingField(null);
+      return;
+    }
+    savingDescriptionRef.current = true;
+    try {
+      const refs = await resolveReferencesForSubmit(body, descriptionRefsRef.current);
+      onUpdate(cardId, { description: appendReferenceBlock(body, refs) });
+    } finally {
+      savingDescriptionRef.current = false;
+    }
+    setEditingField(null);
+  }, [onUpdate, card.id, card.description, editValue]);
+
   const saveEdit = useCallback(() => {
     if (!editingField || !onUpdate) return;
+    if (editingField === "description") {
+      void saveDescriptionEdit();
+      return;
+    }
     const trimmed = editValue.trim();
 
     if (editingField === "title" && !trimmed) {
@@ -445,9 +489,6 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
     switch (editingField) {
       case "title":
         if (trimmed !== card.title) updates.title = trimmed;
-        break;
-      case "description":
-        if (trimmed !== card.description) updates.description = trimmed;
         break;
       case "projectDir":
         if (trimmed !== (card.projectDir ?? "")) updates.projectDir = trimmed;
@@ -471,7 +512,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
       onUpdate(card.id, updates);
     }
     setEditingField(null);
-  }, [editingField, editValue, onUpdate, card]);
+  }, [editingField, editValue, onUpdate, card, saveDescriptionEdit]);
 
   const saveProjectDirEdit = useCallback((nextValue: string) => {
     if (!onUpdate) return;
@@ -765,6 +806,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
         cancelEdit={cancelEdit}
         handleTextareaKeyDown={handleTextareaKeyDown}
         onDescriptionPaste={handleDescriptionPaste}
+        onDescriptionReferencesChange={handleDescriptionReferencesChange}
         collapsedPhases={collapsedPhases}
         togglePhase={togglePhase}
         resultSync={resultSync}

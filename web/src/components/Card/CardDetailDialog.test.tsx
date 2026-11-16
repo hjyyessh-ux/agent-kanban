@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { KanbanCard, KanbanStatus } from "../../../../src/core/types";
 import { CardDetailDialog } from "./CardDetailDialog";
 import { CARD_ACTION_COPY, CARD_DETAIL_COPY, RESULT_SYNC_COPY } from "../../constants/copy";
+import { appendReferenceBlock } from "../../../../src/core/mention-reference";
 
 function makeCard(status: KanbanStatus): KanbanCard {
   return {
@@ -27,6 +28,34 @@ function renderDialog(card: KanbanCard): string {
 }
 
 describe("CardDetailDialog", () => {
+  test("renders @ references as chips instead of the generated block", () => {
+    const description = appendReferenceBlock("배치가 느려 @work:iq1nfBkv 확인해줘", [{
+      kind: "work",
+      id: "iq1nfBkv",
+      raw: "@work:iq1nfBkv",
+      title: "Asset 2018 삭제 배치",
+      workStatus: "active",
+      sessionCount: 3,
+      cardCount: 45,
+    }]);
+    const html = renderDialog({ ...makeCard("todo"), description });
+
+    // 본문 토큰은 하이라이트, 칩은 저장된 블록의 제목·메타로.
+    expect(html).toContain('class="kv2-ref-token kv2-ref-kind-work"');
+    expect(html).toContain("kv2-ref-strip--saved");
+    expect(html).toContain("Asset 2018 삭제 배치");
+    expect(html).toContain("세션 3개 · 카드 45개");
+    // 에이전트용 지시문은 접혀 있다 — 기본 렌더에 나오지 않는다.
+    expect(html).not.toContain("Referenced context");
+    expect(html).toContain("전송된 참조 블록 보기");
+  });
+
+  test("flags a body token that never made it into the sent block", () => {
+    const html = renderDialog({ ...makeCard("todo"), description: "@session:abcd1234 이거 봐줘" });
+    expect(html).toContain("kv2-ref-kind-unresolved");
+    expect(html).toContain("참조 블록에 없음");
+  });
+
   test("offers ↻ Sync on a claude/codex session card — with an empty Result when nothing was captured", () => {
     const lost = renderDialog({ ...makeCard("in_progress"), agentRuntime: "claude", sessionId: "sess-1" });
     expect(lost).toContain(RESULT_SYNC_COPY.action);

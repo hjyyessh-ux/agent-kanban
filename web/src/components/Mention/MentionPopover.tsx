@@ -7,6 +7,7 @@ import type {
 import { RuntimeBadge } from '../Board/BoardCardSections';
 import { dirAccentClass } from '../../utils/project-color';
 import { IdText } from '../shared/IdChip';
+import { useResizablePopover } from './useResizablePopover';
 
 /**
  * `@` 멘션 팝오버 — 탭 4개 · 그룹 리스트 · 스니펫.
@@ -161,11 +162,13 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
     return totals.docs;
   };
 
+  const { size, handleProps } = useResizablePopover(popoverRef);
+
   return (
     <div
       ref={popoverRef}
-      className="kv2-mention-pop"
-      style={style}
+      className={`kv2-mention-pop${size ? ' is-sized' : ''}`}
+      style={size ? { ...style, width: size.width, height: size.height } : style}
       role="dialog"
       aria-label="참조 검색"
       // 행을 클릭해도 textarea가 포커스를 잃지 않아야 캐럿이 살아 있다.
@@ -302,6 +305,12 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
             );
           })}
       </div>
+      <span
+        className="kv2-mention-resize"
+        aria-hidden="true"
+        title="드래그해서 크기 조절 · 더블클릭으로 기본 크기"
+        {...handleProps}
+      />
     </div>
   );
 };

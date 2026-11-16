@@ -1,6 +1,9 @@
 import React, { useRef, useState } from 'react';
 import type { KanbanCard } from '../../../../src/core/types';
 import { deleteScreenshot, getScreenshotUrl, uploadScreenshot } from '../../hooks/useKanbanApi';
+import { appendReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
+import { resolveReferencesForSubmit } from '../../hooks/useMentionReferences';
+import { MentionTextarea } from '../Mention/MentionTextarea';
 
 /** `[Feedback for: …]` 헤더는 그대로 두고 본문만 바꾼 description. */
 export function joinFeedbackPrompt(header: string, body: string): string {
@@ -17,7 +20,8 @@ function imageFiles(files: Iterable<File | null>): File[] {
  * 안 함)으로 만든 turn을 카드 상세로 나가지 않고 다듬은 뒤 `▶ 지금 실행`.
  *
  * 본문만 편집한다: 피드백 헤더(`[Feedback for: …]` + `---`)는 접혀 있던 그대로
- * 앞에 다시 붙는다. 이미지는 카드 상세와 같은 screenshots API로 바로 올리고
+ * 앞에 다시 붙고, `@` 참조 블록은 저장 때 본문 토큰으로 다시 만들어 뒤에 붙는다
+ * (`body`는 블록을 걷어낸 본문이어야 한다). 이미지는 카드 상세와 같은 screenshots API로 바로 올리고
  * 지우며(붙여넣기 · `＋ 이미지` · ×), 저장 버튼과 무관하게 즉시 반영된다.
  */
 export const SessionTurnEditor: React.FC<{
@@ -34,6 +38,7 @@ export const SessionTurnEditor: React.FC<{
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const referencesRef = useRef<ResolvedReference[]>([]);
   const screenshots = card.screenshots ?? [];
 
   const upload = async (files: File[]) => {
@@ -62,14 +67,15 @@ export const SessionTurnEditor: React.FC<{
 
   const save = () => {
     if (!draft.trim() || saving) return;
-    const description = joinFeedbackPrompt(header, draft);
-    if (description === (card.description ?? '')) {
+    // 본문이 그대로면 저장하지 않는다 — 블록만 재생성(transcript 크기 갱신)되는 건 의도가 아니다.
+    if (draft.trim() === body.trim()) {
       onClose();
       return;
     }
     setSaving(true);
     setError(null);
-    onSave(card.id, description)
+    resolveReferencesForSubmit(draft.trim(), referencesRef.current)
+      .then((refs) => onSave(card.id, joinFeedbackPrompt(header, appendReferenceBlock(draft.trim(), refs))))
       .then(onClose)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : '저장하지 못했습니다'))
       .finally(() => setSaving(false));
@@ -85,14 +91,20 @@ export const SessionTurnEditor: React.FC<{
         void upload(imageFiles(Array.from(event.dataTransfer.files)));
       }}
     >
-      <textarea
+      <MentionTextarea
         className="kv2-textarea session-turn-editor-input"
-        aria-label="Prompt 편집"
+        ariaLabel="Prompt 편집"
         value={draft}
         rows={Math.min(14, Math.max(4, draft.split('\n').length + 1))}
         autoFocus
         disabled={saving}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={setDraft}
+        onReferencesChange={(refs) => {
+          referencesRef.current = refs;
+        }}
+        boundarySelector=".kv2-dialog"
+        projectDir={card.projectDir}
+        excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
         onPaste={(event) => {
           const files = imageFiles(Array.from(event.clipboardData?.items ?? [])
             .filter((item) => item.kind === 'file')
