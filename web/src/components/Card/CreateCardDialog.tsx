@@ -13,7 +13,7 @@ import {
   type CommandId,
 } from "../../constants/commands";
 import { appendReferenceBlock, type ResolvedReference } from "../../../../src/core/mention-reference";
-import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
+import { checkLaunchForSubmit, resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
 import { MentionTextarea } from "../Mention/MentionTextarea";
 import { DialogSkeleton } from "./DialogSkeleton";
 import { ErrorAlert } from "../shared/ErrorAlert";
@@ -312,6 +312,9 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
   const selectedCommandMode = selectedCommandMeta?.executionMode;
   const isCommandOnly = selectedCommandMode === 'command_only';
   const isCommandWithPrompt = selectedCommandMode === 'command_with_prompt';
+  // 첫 줄 실행 스킬은 claude 카드 + command 미선택일 때만. command가 있으면 dispatch가
+  // `/command`를 먼저 붙여 실행 라인이 둘째 줄로 밀린다(E4d: 둘째 줄은 1/4만 실행).
+  const skillLaunchAllowed = runtime === "claude" && !command;
 
   const commandArgumentPlaceholder = command
     ? getCommandHint(command)?.argumentPlaceholder || "No arguments required"
@@ -479,9 +482,28 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
 
     // 디바운스된 해석이 아직 안 돌아왔을 수 있다 — 고르자마자 CREATE를 누르면
     // 사람이 이긴다. 본문을 다시 읽어 확정한다.
+    const mentionContext = { runtime, projectDir: projectDir.trim() || undefined };
     const submitRefs = isCommandOnly
       ? []
-      : await resolveReferencesForSubmit(description, resolvedRefs);
+      : await resolveReferencesForSubmit(description, resolvedRefs, mentionContext);
+
+    // 첫 줄 `/name` 실행 스킬 검증. 이 디렉토리·런타임에서 안 보이는 스킬을 그대로
+    // 보내면 claude는 오류 없이 평문으로 받아 스킬 없이 진행한다(E2f) — 조용한
+    // 실패라 여기서 막는다. 검증 요청 자체가 실패하면(null) 막지 않는다.
+    if (skillLaunchAllowed) {
+      const launch = await checkLaunchForSubmit(description, mentionContext);
+      if (launch && !launch.ok) {
+        setSubmitError({
+          title: `/${launch.name} 스킬을 실행할 수 없습니다`,
+          message: launch.reason === 'other_project' && launch.projectDir
+            ? `이 스킬은 ${launch.projectDir} 전용입니다. 디렉토리를 바꾸거나 첫 줄의 실행 라인을 지우세요.`
+            : '현재 디렉토리·런타임에서 찾을 수 없는 스킬입니다. 첫 줄의 실행 라인을 지우거나 디렉토리를 확인하세요.',
+        });
+        setIsSubmitting(false);
+        setSubmitMode(null);
+        return;
+      }
+    }
 
     let newCard: KanbanCard;
     try {
@@ -675,6 +697,8 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
               // 팝오버가 다이얼로그 아래로 삐져나가지 않게 가둔다.
               boundarySelector=".kv2-dialog"
               projectDir={projectDir.trim() || undefined}
+              agentRuntime={runtime}
+              allowSkillLaunch={skillLaunchAllowed}
               onReferencesChange={setResolvedRefs}
             />
             {hasPendingScreenshots && (

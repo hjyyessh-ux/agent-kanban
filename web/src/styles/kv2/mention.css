@@ -30,6 +30,11 @@
   --kv2-ref-ink: var(--kv2-ref-doc-text);
 }
 
+.kv2-ref-kind-skill {
+  --kv2-ref-accent: var(--kv2-ref-skill);
+  --kv2-ref-ink: var(--kv2-ref-skill-text);
+}
+
 /* Unresolved: the token survived but its target did not (deleted card, missing
    transcript). Amber replaces the kind hue so "this one carries less" is read
    before the label is. */
@@ -527,4 +532,109 @@
   .kv2-ref-chip {
     max-width: 100%;
   }
+}
+
+/* =============================================================
+   Skills (.kv2-skill-badge / .kv2-skill-launch)
+   ============================================================= */
+/*
+ * Invocation badges on skill rows. The three modes mean different things to
+ * the user — "/ 실행 전용" moves to the launch bar instead of becoming a chip,
+ * "$ 명시 전용" is codex-only — so each reads distinctly, but all stay inside
+ * the ref-skill / warn / neutral families rather than inventing new hues.
+ */
+.kv2-skill-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1.5px solid var(--kv2-border);
+  border-radius: 2px;
+  font-size: var(--kv2-text-2xs);
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  color: var(--kv2-text-secondary);
+}
+
+.kv2-skill-badge--model {
+  border-color: var(--kv2-ref-skill);
+  color: var(--kv2-ref-skill-text);
+}
+
+.kv2-skill-badge--launch,
+.kv2-skill-badge--explicit {
+  border-color: var(--kv2-ref-skill);
+  background: color-mix(in srgb, var(--kv2-ref-skill) 12%, transparent);
+  color: var(--kv2-ref-skill-text);
+}
+
+.kv2-skill-badge--scope {
+  background: var(--kv2-surface-sunken);
+}
+
+.kv2-skill-badge--unavailable {
+  border-color: var(--kv2-danger-border);
+  background: var(--kv2-danger-surface);
+  color: var(--kv2-danger-text);
+}
+
+/*
+ * Launch bar — the visual for a description whose first line is `/name`. It is
+ * a render of the body text, not state: ✕ deletes that first line. Red when the
+ * name does not resolve in this runtime × directory, because claude would take
+ * the unknown slash as plain text and run without the skill.
+ */
+.kv2-skill-launch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border: 2px solid var(--kv2-ref-skill);
+  background: color-mix(in srgb, var(--kv2-ref-skill) 8%, var(--kv2-surface));
+  font-size: var(--kv2-text-xs);
+}
+
+.kv2-skill-launch.is-failed {
+  border-color: var(--kv2-danger-border);
+  background: var(--kv2-danger-surface);
+}
+
+.kv2-skill-launch-play,
+.kv2-skill-launch-label {
+  font-weight: 800;
+  color: var(--kv2-ref-skill-text);
+}
+
+.kv2-skill-launch.is-failed .kv2-skill-launch-play,
+.kv2-skill-launch.is-failed .kv2-skill-launch-label,
+.kv2-skill-launch.is-failed .kv2-skill-launch-detail {
+  color: var(--kv2-danger-text);
+}
+
+.kv2-skill-launch-name {
+  font-weight: 700;
+  color: var(--kv2-text-primary);
+}
+
+.kv2-skill-launch-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--kv2-text-muted);
+}
+
+.kv2-skill-launch-remove {
+  border: 0;
+  background: transparent;
+  color: var(--kv2-text-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.kv2-skill-launch-remove:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }

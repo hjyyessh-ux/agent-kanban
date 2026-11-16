@@ -168,7 +168,7 @@ describe('Works affinity palette luminance axis', () => {
  * differ per kind for the same reason the directory slots' do: how far a hue
  * has to travel toward the ink to land on 4.5:1 depends on the hue.
  */
-const REF_KINDS = ['session', 'work', 'doc'] as const;
+const REF_KINDS = ['session', 'work', 'doc', 'skill'] as const;
 
 describe('mention reference kind text tokens meet WCAG AA', () => {
   for (const theme of [{ label: 'light', tokens: light }, { label: 'dark', tokens: dark }]) {

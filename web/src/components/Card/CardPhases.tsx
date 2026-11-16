@@ -5,6 +5,7 @@ import { CardMarkdown } from './CardMarkdown';
 import { splitCardResult } from './card-result';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
+import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 import { MentionTextarea } from '../Mention/MentionTextarea';
 import { SavedReferences } from '../Mention/SavedReferences';
 import type { CardResultSyncControl } from '../../hooks/useCardResultSync';
@@ -402,6 +403,10 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
               onReferencesChange={onDescriptionReferencesChange}
               boundarySelector=".kv2-dialog"
               projectDir={card.projectDir}
+              agentRuntime={resolveAgentRuntime(card)}
+              // 프롬프트 본문이 그대로 dispatch 첫 줄이 된다 — 단, command가 있으면
+              // `/command`가 먼저 붙어 실행 라인이 둘째 줄로 밀린다(E4d).
+              allowSkillLaunch={resolveAgentRuntime(card) === 'claude' && !card.command}
               excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
               rows={8}
               placeholder="Enter task description... (@ 로 세션·Work·문서 참조)"

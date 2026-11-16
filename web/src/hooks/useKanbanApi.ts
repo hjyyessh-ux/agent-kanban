@@ -283,6 +283,8 @@ export async function fetchMentions(
     limit?: number;
     projectDir?: string;
     excludeSessionIds?: string[];
+    /** 스킬 후보는 카드 런타임마다 다르다 — 없으면 서버가 claude로 본다. */
+    runtime?: AgentRuntime;
   },
   signal?: AbortSignal,
 ): Promise<MentionSearchResponse> {
@@ -290,6 +292,7 @@ export async function fetchMentions(
   if (params.q) query.set('q', params.q);
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   if (params.projectDir) query.set('projectDir', params.projectDir);
+  if (params.runtime) query.set('runtime', params.runtime);
   for (const sessionId of params.excludeSessionIds ?? []) {
     query.append('excludeSession', sessionId);
   }
@@ -308,11 +311,34 @@ export async function fetchMentions(
 export async function resolveMentions(
   tokens: string[],
   signal?: AbortSignal,
+  context?: MentionResolveContext,
 ): Promise<ResolvedReference[]> {
   if (tokens.length === 0) return [];
+  const body = await fetchMentionResolve(tokens, context, signal);
+  return body.references;
+}
+
+/**
+ * 스킬 해석 컨텍스트. skill 토큰은 카드가 실행될 runtime × projectDir에서만 의미가
+ * 있고, `launch`는 본문 첫 줄 `/name`을 검증해 달라는 요청이다.
+ */
+export interface MentionResolveContext {
+  runtime?: AgentRuntime;
+  projectDir?: string;
+  launch?: string;
+}
+
+/** 토큰 해석 + (선택) 첫 줄 실행 검증을 한 번에. */
+export async function fetchMentionResolve(
+  tokens: string[],
+  context?: MentionResolveContext,
+  signal?: AbortSignal,
+): Promise<MentionResolveResponse> {
   const query = new URLSearchParams();
   for (const token of tokens) query.append('token', token);
+  if (context?.runtime) query.set('runtime', context.runtime);
+  if (context?.projectDir) query.set('projectDir', context.projectDir);
+  if (context?.launch) query.set('launch', context.launch);
   const res = await fetch(`${BASE_URL}/mentions/resolve?${query.toString()}`, { signal });
-  const body = await handleResponse<MentionResolveResponse>(res);
-  return body.references;
+  return handleResponse<MentionResolveResponse>(res);
 }

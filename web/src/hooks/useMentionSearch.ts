@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { MentionSearchResponse } from '../../../src/core/mention-search';
+import type { AgentRuntime } from '../../../src/core/types';
 import { fetchMentions } from './useKanbanApi';
 
 /**
@@ -25,6 +26,8 @@ export interface UseMentionSearchInput {
   projectDir?: string;
   /** 자기 참조로 막을 세션들. 후보에는 남고 선택만 불가로 표시된다. */
   excludeSessionIds?: string[];
+  /** 카드 런타임 — Skills 탭 후보가 이 값에 따라 달라진다. */
+  runtime?: AgentRuntime;
 }
 
 export interface UseMentionSearchResult {
@@ -40,6 +43,7 @@ export function useMentionSearch({
   query,
   projectDir,
   excludeSessionIds = EMPTY_EXCLUDES,
+  runtime,
 }: UseMentionSearchInput): UseMentionSearchResult {
   const [data, setData] = useState<MentionSearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -72,6 +76,7 @@ export function useMentionSearch({
           limit: MENTION_PAGE_SIZE,
           projectDir,
           excludeSessionIds: excludeKey ? excludeKey.split(',') : undefined,
+          runtime,
         },
         controller.signal,
       )
@@ -93,7 +98,7 @@ export function useMentionSearch({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [enabled, query, projectDir, excludeKey]);
+  }, [enabled, query, projectDir, excludeKey, runtime]);
 
   return { data, loading, error };
 }
