@@ -508,6 +508,9 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
         arguments: commandArguments.trim() || undefined,
         resumeSessionId: resumeSessionId || undefined,
         plannedWorkId: plannedWorkId || undefined,
+        // 웹에서 직접 만드는 카드는 항상 사용자가 요청자이고 경로는 web — docs/kanban-board.md 참고.
+        requestedBy: 'user',
+        originChannel: 'web',
         scheduledDispatch: mode === "schedule" && scheduleValidation.scheduledAtUtc
           ? { scheduledAt: scheduleValidation.scheduledAtUtc }
           : undefined,

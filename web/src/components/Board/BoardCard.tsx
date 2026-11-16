@@ -1,7 +1,7 @@
 import React from 'react';
 import type { KanbanStatus } from '../../../../src/core/types';
 import type { V2CardViewModel } from './board-selectors';
-import { CardActions, ExecutionTypeBadge, FavoriteToggleButton, NestedChildAccordion, OriginExecutionBadges, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
+import { CardActions, DotsBadge, ExecutionTypeBadge, FavoriteToggleButton, NestedChildAccordion, OriginExecutionBadges, ScheduledMetaBadge, SchedulerBadge, TelegramBadge } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { formatDuration, formatElapsedKo, formatRelativeTime, resolveRunDurationMs } from '../../utils/format-duration';
 import { dirAccentClass } from '../../utils/project-color';
@@ -170,6 +170,7 @@ export const BoardCard: React.FC<BoardCardProps> = ({
             <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} />
           )}
           {vm.originChannel === 'telegram' && <TelegramBadge />}
+          {vm.requestedBy === 'dots' && <DotsBadge />}
           <OriginExecutionBadges
             originChannel={vm.originChannel}
             quickActionId={vm.quickActionId}

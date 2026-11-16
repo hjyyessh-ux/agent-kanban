@@ -47,6 +47,7 @@ describe('KanbanCard type', () => {
         updatedAt: '2026-07-17T00:00:00.000Z',
       },
       originChannel: 'scheduler',
+      requestedBy: 'user',
       schedulerId: 'scheduler-1',
       schedulerRunId: 'run-1',
       schedulerName: 'Morning sync',
@@ -71,6 +72,23 @@ describe('KanbanCard type', () => {
     expect(card.supersededByCardId).toBe('card-newest');
     expect(card.scheduledDispatch?.status).toBe('scheduled');
     expect(card.originChannel).toBe('scheduler');
+    expect(card.requestedBy).toBe('user');
+  });
+
+  test('requestedBy is independent of agentRuntime and originChannel', () => {
+    const card: KanbanCard = {
+      id: 'requester-card',
+      title: 'API-created card',
+      description: 'Registered by an external client',
+      status: 'todo',
+      agentRuntime: 'codex',
+      requestedBy: 'dots',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    expect(card.agentRuntime).toBe('codex');
+    expect(card.requestedBy).toBe('dots');
+    expect(card.originChannel).toBeUndefined();
   });
 
   test('accepts quick action provenance', () => {

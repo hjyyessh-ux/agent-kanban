@@ -260,3 +260,27 @@ describe('turnTitle', () => {
     expect(turnTitle({ title: 'Feedback #1: X', description: '[Feedback for: X]\n---\n' })).toBe('Feedback #1: X');
   });
 });
+
+describe('SessionConversationModal — turn request origin', () => {
+  const html = render(makeGroup([
+    makeTurn('c3', '2026-10-03T00:00:00.000Z', { requestedBy: 'user' }),
+    makeTurn('c2', '2026-10-02T00:00:00.000Z', { originChannel: 'telegram' }),
+    makeTurn('c1', '2026-10-01T00:00:00.000Z', { requestedBy: 'dots' }),
+  ]));
+  /** Markup of each turn article, keyed by its T-number. */
+  const turns = new Map(
+    html.split('<article data-turn="').slice(1).map((chunk) => [Number(chunk.slice(0, chunk.indexOf('"'))), chunk.slice(0, chunk.indexOf('</article>'))]),
+  );
+
+  test('Dots on the dots turn, Telegram on the telegram turn, nothing on a direct turn', () => {
+    expect(turns.get(1)).toContain('aria-label="Dots"');
+    expect(turns.get(2)).toContain('aria-label="Telegram"');
+    expect(turns.get(3)).not.toContain('kv2-dots-badge');
+    expect(turns.get(3)).not.toContain('kv2-telegram-badge');
+  });
+
+  test('the badges appear only in turn headers — once each across the dialog', () => {
+    expect(html.match(/kv2-dots-badge/g)).toHaveLength(1);
+    expect(html.match(/kv2-telegram-badge/g)).toHaveLength(1);
+  });
+});

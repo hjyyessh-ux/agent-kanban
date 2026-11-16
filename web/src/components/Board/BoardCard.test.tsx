@@ -80,6 +80,7 @@ function makeVm(overrides: Partial<V2CardViewModel> = {}): V2CardViewModel {
     parentCardId: undefined,
     sourceContext: undefined,
     originChannel: undefined,
+    requestedBy: undefined,
     schedulerName: undefined,
     telegramMessageId: undefined,
     telegramChatId: undefined,
@@ -176,6 +177,50 @@ describe('BoardCard scheduled metadata', () => {
     expect(html).toContain('Script execution · Deploy service');
     expect(html).not.toContain('OPENCODE');
     expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
+  });
+
+  test('renders the Dots badge when requestedBy is dots, alongside the Telegram badge, independent of origin/runtime badges', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({
+          requestedBy: 'dots',
+          originChannel: 'telegram',
+        })}
+        draggable={false}
+        onClick={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).toContain('kv2-dots-badge');
+    expect(html).toContain('aria-label="Dots"');
+    expect(html).toContain('kv2-telegram-badge');
+    expect(html).toMatch(/<img[^>]*src="[^"]*dots-felipe[^"]*"[^>]*class="kv2-dots-icon"/);
+  });
+
+  test('omits the Dots badge when requestedBy is user', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({ requestedBy: 'user' })}
+        draggable={false}
+        onClick={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).not.toContain('kv2-dots-badge');
+    expect(html).not.toContain('요청자');
+  });
+
+  test('omits the Dots badge when requestedBy is unspecified', () => {
+    const html = renderToStaticMarkup(
+      <BoardCard
+        vm={makeVm({ requestedBy: undefined })}
+        draggable={false}
+        onClick={mock(() => undefined)}
+      />,
+    );
+
+    expect(html).not.toContain('kv2-dots-badge');
+    expect(html).not.toContain('요청자');
   });
 });
 

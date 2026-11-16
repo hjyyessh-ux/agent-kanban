@@ -8,7 +8,7 @@ import { FeedbackPanel } from '../Card/FeedbackPanel';
 import { CardMarkdown } from '../Card/CardMarkdown';
 import { PhaseAside, PhaseBody, ProgressSteps } from '../Card/CardPhases';
 import { splitCardResult } from '../Card/card-result';
-import { ExecutionTypeBadge } from './BoardCardSections';
+import { ExecutionTypeBadge, TurnOriginBadges } from './BoardCardSections';
 import { BoardCardTimeMeta } from './BoardCard';
 import { getDirectoryProjectName } from './directory-display';
 import { buildResumeCommand } from '../../utils/resume-command';
@@ -356,6 +356,8 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
       >
         <span className="session-conversation-turnCaret" aria-hidden="true">▸</span>
         <span className="session-conversation-turnNo" data-highlight-skip>T{turnNumber}</span>
+        {/* Request origin of this turn's card only — never on the dialog header or the T-outline. */}
+        <TurnOriginBadges originChannel={card.originChannel} requestedBy={card.requestedBy} />
         {isLatest && <span className="session-conversation-turnLatestTag" data-highlight-skip>latest</span>}
         {isRunning && <span className="session-conversation-turnRunning" data-highlight-skip>실행 중</span>}
         {isQueued && <span className="session-conversation-turnRunning is-queued" data-highlight-skip>대기 중</span>}

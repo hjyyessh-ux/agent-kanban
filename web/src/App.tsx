@@ -345,6 +345,8 @@ export default function App() {
       model: originalCard?.model,
       codexOptions: originalCard?.codexOptions,
       feedbackForCardId: cardId,
+      requestedBy: 'user',
+      originChannel: 'web',
     });
 
     if (screenshots && screenshots.length > 0) {

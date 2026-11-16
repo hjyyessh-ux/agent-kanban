@@ -157,6 +157,8 @@ RESPONSE=$(curl -sf "${KANBAN_AUTH[@]}" -X POST "${KANBAN_API}/api/cards" \
       projectDir: $projectDir,
       sourceContext: $sourceContext,
       agentRuntime: "claude",
+      requestedBy: "user",
+      originChannel: "cli",
       model: (if $model != "" then $model else null end)
     } + (if $forkedFrom != "" then { forkedFromSessionId: $forkedFrom } else {} end)'
   )" 2>/dev/null) || exit 0

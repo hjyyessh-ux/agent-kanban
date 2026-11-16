@@ -115,6 +115,25 @@ describe('selectColumns — nested child tree', () => {
       scriptName: 'Deploy service',
     });
   });
+
+  test('carries requestedBy through independently of agentRuntime/originChannel', () => {
+    const vm = getTodoCard([
+      makeCard('requested', {
+        agentRuntime: 'codex',
+        originChannel: 'scheduler',
+        requestedBy: 'dots',
+      }),
+    ], 'requested');
+
+    expect(vm.requestedBy).toBe('dots');
+    expect(vm.agentRuntime).toBe('codex');
+    expect(vm.originChannel).toBe('scheduler');
+  });
+
+  test('requestedBy is undefined for cards that never set it', () => {
+    const vm = getTodoCard([makeCard('unspecified')], 'unspecified');
+    expect(vm.requestedBy).toBeUndefined();
+  });
 });
 
 describe('selectColumns — board summary', () => {

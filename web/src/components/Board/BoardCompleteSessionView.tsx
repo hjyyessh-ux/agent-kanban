@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentRuntime, CardExecutionKind, KanbanCard, KanbanStatus } from '../../../../src/core/types';
-import { ExecutionTypeBadge, FavoriteToggleButton } from './BoardCardSections';
+import { ExecutionTypeBadge, FavoriteToggleButton, TurnOriginBadges } from './BoardCardSections';
 import { getDirectoryProjectName } from './directory-display';
 import { countUnread, isUnreadCompletion } from './board-selectors';
 import { stripFeedbackHeader } from '../../../../src/core/mention-search';
@@ -593,6 +593,7 @@ export const BoardSessionGroupCard: React.FC<BoardSessionGroupCardProps> = ({
                 >
                   <div className="kv2-complete-session-turn-header">
                     <span className="kv2-complete-session-turn-no">{turnNumber}</span>
+                    <TurnOriginBadges originChannel={card.originChannel} requestedBy={card.requestedBy} />
                     <span className="kv2-complete-session-card-title">{prompt}</span>
                     {stamp && <span className="kv2-complete-session-turn-stamp">{stamp}</span>}
                     {onFavoriteToggle && (

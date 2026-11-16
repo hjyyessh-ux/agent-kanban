@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { KanbanCard, KanbanStatus, Work } from '../../../../src/core/types';
 import type { V2CardViewModel, V2ColumnViewModel } from './board-selectors';
 import { isUnreadCompletion, selectCardById } from './board-selectors';
-import { ExecutionTypeBadge, FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, ScheduledMetaBadge, SchedulerBadge } from './BoardCardSections';
+import { DotsBadge, ExecutionTypeBadge, FavoriteToggleButton, OriginExecutionBadges, QueueTargetChip, ScheduledMetaBadge, SchedulerBadge, TurnOriginBadges } from './BoardCardSections';
 import { BoardListRowAction } from './BoardListRowAction';
 import { BoardCardTimeMeta } from './BoardCard';
 import {
@@ -307,6 +307,7 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
             {vm.originChannel === 'scheduler' && (
               <SchedulerBadge title={vm.schedulerName ? `Scheduler origin · ${vm.schedulerName}` : 'Scheduler origin'} size={16} />
             )}
+            {vm.requestedBy === 'dots' && <DotsBadge size={16} />}
             <OriginExecutionBadges originChannel={vm.originChannel} quickActionId={vm.quickActionId} />
             <span className="kv2-list-title-text">{vm.title}</span>
           </button>
@@ -385,6 +386,7 @@ export const BoardListView: React.FC<BoardListViewProps> = ({
               aria-label={`${numberOf(card)}. ${card.title}${unread ? ` · ${BOARD_SESSION_COPY.unreadTurn}` : ''}`}
             >
               <span className="kv2-list-turn-no">{numberOf(card)}</span>
+              <TurnOriginBadges originChannel={card.originChannel} requestedBy={card.requestedBy} size={16} />
               {unread && <span className="kv2-list-unread-dot" aria-hidden="true" />}
               <span className="kv2-list-title-text">{prompt}</span>
             </button>

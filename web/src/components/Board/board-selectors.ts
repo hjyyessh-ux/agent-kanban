@@ -1,4 +1,4 @@
-import type { AgentRuntime, CardOriginChannel, KanbanCard, KanbanStatus, QueueSessionMode, ScheduledDispatchStatus } from '../../../../src/core/types';
+import type { AgentRuntime, CardOriginChannel, CardRequester, KanbanCard, KanbanStatus, QueueSessionMode, ScheduledDispatchStatus } from '../../../../src/core/types';
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
 import { stripFeedbackHeader } from '../../../../src/core/mention-search';
 import { getAgentConfig } from '../../constants/agents';
@@ -49,6 +49,7 @@ export interface V2CardViewModel {
   parentCardId: string | undefined;
   sourceContext: string | undefined;
   originChannel: CardOriginChannel | undefined;
+  requestedBy: CardRequester | undefined;
   executionKind?: KanbanCard['executionKind'];
   quickActionId?: string;
   scriptName?: string;
@@ -177,6 +178,7 @@ function toCardViewModel(
     parentCardId: card.parentCardId,
     sourceContext: card.sourceContext,
     originChannel: card.originChannel,
+    requestedBy: card.requestedBy,
     executionKind: card.executionKind,
     quickActionId: card.quickActionId,
     scriptName: card.scriptName,

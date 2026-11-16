@@ -47,6 +47,8 @@
 - `queueSessionMode`
 - `resumeSessionId`
 - `telegramChatId`
+- `originChannel` (`web` | `cli`, optional) — 카드를 만든 경로. 이 두 값만 받고 `telegram`/`scheduler`/`quick_action` 등은 무시(각 파이프라인이 서버에서 기록).
+- `requestedBy` (`user` | `dots`, optional) — 생성 시점에만 기록되는 요청자. 생략하면 미지정. 예전 값 `samjun`·`junyeong`은 `dots`·`user`로 바꿔 저장. 알 수 없는 값은 `400`.
 
 ### `GET /api/cards/:id`
 

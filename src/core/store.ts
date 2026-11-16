@@ -19,7 +19,7 @@ import type {
   WikiArchiveCardStatusFilter,
   DispatchResult,
 } from './types';
-import { WIKI_INTERNAL_MARKER } from './types';
+import { normalizeCardRequester, WIKI_INTERNAL_MARKER } from './types';
 import { FileLock } from './filelock';
 import { resolveDir } from './data-dir';
 import { normalizeAgentType } from './agent-type';
@@ -61,6 +61,10 @@ function migrateCardStatus(card: KanbanCard): KanbanCard {
     agentRuntime: card.agentRuntime ?? 'opencode',
     scheduledDispatch: normalizeScheduledDispatchState(card.scheduledDispatch),
   };
+  // Legacy requester names (`junyeong` → `user`, `samjun` → `dots`); the next write persists it.
+  if (card.requestedBy !== undefined) {
+    migrated.requestedBy = normalizeCardRequester(card.requestedBy);
+  }
   if ((migrated.status as string) === 'opencode_complete') {
     return { ...migrated, status: 'complete' };
   }
@@ -182,6 +186,7 @@ function buildCard(input: CreateCardInput, now: string): KanbanCard {
     dispatchType: input.dispatchType,
     telegramChatId: input.telegramChatId,
     originChannel: input.originChannel,
+    requestedBy: input.requestedBy,
     executionKind: input.executionKind,
     quickActionId: input.quickActionId,
     quickActionRequestId: input.quickActionRequestId,
