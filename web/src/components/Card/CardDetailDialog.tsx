@@ -43,7 +43,7 @@ import { formatDuration } from "../../utils/format-duration";
 import { getAgentConfig } from "../../constants/agents";
 import { CARD_ACTION_COPY, CARD_DETAIL_COPY } from "../../constants/copy";
 import { primaryActionFor, secondaryActionFor } from "../../constants/card-actions";
-import { FavoriteToggleButton, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
+import { DotsBadge, FavoriteToggleButton, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
 import { formatScheduledKstLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
 import { IdChip, ResumeCopyButton } from "../shared/IdChip";
@@ -844,6 +844,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                   : undefined,
               }}
             />
+            {card.requestedBy === 'dots' && <DotsBadge />}
             <OriginExecutionBadges
               originChannel={card.originChannel}
               quickActionId={card.quickActionId}
@@ -1070,6 +1071,13 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
               {completedLabel && <span>Completed: {completedLabel}</span>}
               {durationLabel && <span>Duration: {durationLabel}</span>}
               <span>Updated: {updatedLabel}</span>
+            </div>
+            {/* The four origin axes, raw — who asked / which pipe / what runs / free-form context. */}
+            <div className="kv2-dialog-footer-meta kv2-dialog-footer-meta--origin" data-testid="card-origin-meta">
+              <span>Requested by: {card.requestedBy ?? '—'}</span>
+              <span>Channel: {card.originChannel ?? '—'}</span>
+              <span>Runtime: {card.agentRuntime ?? '—'}</span>
+              <span>Source: {card.sourceContext ?? '—'}</span>
             </div>
           </div>
         )}

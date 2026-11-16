@@ -438,6 +438,13 @@
   color: var(--kv2-neutral-400);
 }
 
+/* Origin axes row under the timestamps: left-aligned, so four short values do not spread across the dialog. */
+.kv2-dialog-footer-meta--origin {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 4px 28px;
+}
+
 .kv2-dialog-actions-rail {
   display: flex;
   align-items: center;

@@ -86,6 +86,7 @@ describe('BoardListView', () => {
         parentCardId: undefined,
         sourceContext: undefined,
         originChannel: undefined,
+        requestedBy: undefined,
         schedulerName: undefined,
         telegramMessageId: undefined,
         telegramChatId: undefined,
@@ -148,5 +149,90 @@ describe('BoardListView', () => {
     expect(html).toContain('Quick Action origin · qa-deploy');
     expect(html).not.toContain('OPENCODE');
     expect(html.match(/>SCRIPT<\/span>/g)).toHaveLength(1);
+  });
+
+  test('shows the Dots badge in the list row when requestedBy is dots', () => {
+    const card: KanbanCard = {
+      id: 'requested-card',
+      title: 'API registered card',
+      description: 'Registered by Dot',
+      status: 'todo',
+      agentRuntime: 'codex',
+      requestedBy: 'dots',
+      createdAt: '2026-07-17T00:00:00.000Z',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    };
+
+    const html = renderToStaticMarkup(
+      React.createElement(BoardListView, {
+        columns: selectColumns([card]),
+        allCards: [card],
+        onCardClick: mock(() => undefined),
+        onStatusChange: mock(() => undefined),
+        onFavoriteToggle: mock(() => undefined),
+      }),
+    );
+
+    expect(html).toContain('kv2-dots-badge');
+    expect(html).toContain('aria-label="Dots"');
+    expect(html).toMatch(/<img[^>]*src="[^"]*dots-felipe[^"]*"[^>]*class="kv2-dots-icon"/);
+  });
+
+  test('omits the Dots badge in the list row when requestedBy is user or unspecified', () => {
+    const userCard: KanbanCard = {
+      id: 'user-card',
+      title: 'Web-created card',
+      description: 'Created via the new-card form',
+      status: 'todo',
+      agentRuntime: 'codex',
+      requestedBy: 'user',
+      createdAt: '2026-07-17T00:00:00.000Z',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    };
+    const unspecifiedCard: KanbanCard = {
+      id: 'unspecified-card',
+      title: 'Legacy card',
+      description: 'No requester set',
+      status: 'todo',
+      agentRuntime: 'codex',
+      createdAt: '2026-07-17T00:00:00.000Z',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    };
+    const cards = [userCard, unspecifiedCard];
+
+    const html = renderToStaticMarkup(
+      React.createElement(BoardListView, {
+        columns: selectColumns(cards),
+        allCards: cards,
+        onCardClick: mock(() => undefined),
+        onStatusChange: mock(() => undefined),
+        onFavoriteToggle: mock(() => undefined),
+      }),
+    );
+
+    expect(html).not.toContain('kv2-dots-badge');
+    expect(html).not.toContain('요청자');
+  });
+
+  test('a folded SESSION row carries no request-origin badge (turn rows do)', () => {
+    const at = (hour: number) => `2026-11-15T${String(hour).padStart(2, '0')}:00:00.000Z`;
+    const base = { status: 'complete' as const, sessionId: 'sess-list', agentRuntime: 'claude' as const };
+    const cards: KanbanCard[] = [
+      { ...base, id: 'l-dots', title: 'Dots turn', description: 'p1', requestedBy: 'dots', createdAt: at(3), updatedAt: at(3), completedAt: at(3) },
+      { ...base, id: 'l-tg', title: 'Telegram turn', description: 'p2', originChannel: 'telegram', createdAt: at(2), updatedAt: at(2), completedAt: at(2) },
+    ];
+    const html = renderToStaticMarkup(
+      React.createElement(BoardListView, {
+        columns: selectColumns(cards),
+        allCards: cards,
+        groupMode: 'session',
+        onCardClick: mock(() => undefined),
+        onStatusChange: mock(() => undefined),
+        onFavoriteToggle: mock(() => undefined),
+      }),
+    );
+    expect(html).toContain('kv2-list-row--session');
+    expect(html).not.toContain('kv2-dots-badge');
+    expect(html).not.toContain('kv2-telegram-badge');
   });
 });

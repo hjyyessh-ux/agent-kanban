@@ -24,6 +24,7 @@ Event-driven glue between opencode sessions and kanban cards. Handles card creat
 ## CONVENTIONS
 
 - `chat-message.ts` sanitizes system markers before creating cards.
+- Cards minted from an organic `chat.message` prompt carry `requestedBy: 'user'` and `originChannel: 'cli'` — the same stamps as the Claude/Codex `on-prompt.sh` hooks (asserted in `plugin-hooks.test.ts`).
 - `messageID` dedup is the first guard; dispatch-tracker dedup is the second guard.
 - Prompts containing `WIKI_INTERNAL_MARKER` (from `wiki/wiki-prompts.ts`) are skipped — the wiki worker's one-shot codex/claude calls must never become cards (else they re-archive into the wiki queue, a feedback loop). Legacy marker cards minted before this guard are swept off the board at boot by `sweepWikiInternalCards` (`wiki/wiki-sweep.ts`), which soft-deletes them so they also stay out of archive + the wiki queue via the `isActiveCard` filter chain.
 - Known subagents are whitelist-based; unknown agent types stay top-level until added intentionally.

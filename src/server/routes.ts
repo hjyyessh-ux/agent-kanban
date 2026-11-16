@@ -116,7 +116,7 @@ import type {
   WorksConfigInput,
   TimelineSnapshot,
 } from '../core/types';
-import { QUICK_ACTION_ICON_ERRORS, WORK_NOTES_MAX_LENGTH } from '../core/types';
+import { normalizeCardRequester, PUBLIC_ORIGIN_CHANNELS, QUICK_ACTION_ICON_ERRORS, WORK_NOTES_MAX_LENGTH } from '../core/types';
 import { RUNTIME_CATALOG, resolveAgentRuntime, DEFAULT_CODEX_REASONING_EFFORT, type RuntimeCatalogEntry } from '../core/runtime-config';
 import { getRuntimeCommandDefinition, setDynamicSkillCommands } from '../core/commands';
 import { extractAgentThread } from '../core/subagent-transcript';
@@ -2576,6 +2576,7 @@ export function createRouteHandler(
           queuePosition?: number;
           queueSessionMode?: import('../core/types').QueueSessionMode;
           plannedWorkId?: string;
+          requestedBy?: string;
         } & Record<string, unknown>;
         const agentRuntime: import('../core/types').AgentRuntime = (
           body.agentRuntime === 'opencode'
@@ -2609,8 +2610,17 @@ export function createRouteHandler(
           if (!plannedWork) return errorResponse('Work not found', 404);
           if (plannedWork.status !== 'active') return errorResponse('Work is not active', 400);
         }
+        let requestedBy: import('../core/types').CardRequester | undefined;
+        if (body.requestedBy !== undefined) {
+          // Legacy names (`samjun`, `junyeong`) are still accepted and stored as `dots` / `user`.
+          requestedBy = normalizeCardRequester(body.requestedBy);
+          if (!requestedBy) {
+            return errorResponse('Invalid requestedBy value', 400);
+          }
+        }
         const {
           originChannel: _originChannel,
+          requestedBy: _requestedBy,
           executionKind: _executionKind,
           quickActionId: _quickActionId,
           quickActionRequestId: _quickActionRequestId,
@@ -2625,6 +2635,10 @@ export function createRouteHandler(
           title: body.title,
           description: body.description ?? '',
           scheduledDispatch,
+          requestedBy,
+          // Only `web` / `cli` are client-settable; pipeline channels (telegram,
+          // scheduler, quick_action) are still dropped from public input.
+          originChannel: PUBLIC_ORIGIN_CHANNELS.find((channel) => channel === body.originChannel),
         });
         return json(card, 201);
       } catch (e: unknown) {
@@ -3134,6 +3148,7 @@ export function createRouteHandler(
           }
           const {
             originChannel: _originChannel,
+            requestedBy: _requestedBy,
             executionKind: _executionKind,
             quickActionId: _quickActionId,
             quickActionRequestId: _quickActionRequestId,

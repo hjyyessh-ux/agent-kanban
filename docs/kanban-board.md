@@ -172,7 +172,8 @@ unread 판정은 `board-selectors.ts`의 `isUnreadCompletion` 하나뿐이다(`c
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `originChannel` | `quick_action \| scheduler \| ...` (선택) | 카드를 만든 실행 경로다. Quick Action 카드는 `quick_action`을 기록한다. |
+| `originChannel` | `web \| cli \| telegram \| scheduler \| quick_action` (선택) | 카드를 만든 경로다. 웹 "새 작업"·피드백 폼은 `web`, 터미널 CLI 프롬프트 hook(Claude Code·Codex `on-prompt.sh`, opencode `chat.message`)은 `cli`, Telegram·Scheduler·Quick Action 카드는 각자 파이프라인이 기록한다. `POST /api/cards`로는 `web`/`cli`만 지정할 수 있고 나머지 값은 무시된다. |
+| `requestedBy` | `user \| dots` (선택) | 누가 이 카드를 요청했는지. **실행 주체(`agentRuntime`)·실행 경로(`originChannel`)와는 별개 축이다.** 웹 "새 작업" 폼·피드백 작성과 터미널 CLI 프롬프트 hook은 `user`를 기록하고, API 클라이언트는 `POST /api/cards` 본문에 명시적으로 `requestedBy`를 지정해 `dots`를 기록할 수 있다(Dots 에이전트가 등록한 카드). 예전 값 `samjun`·`junyeong`도 입력으로 받지만 각각 `dots`·`user`로 저장하며, 디스크에 남은 예전 값도 읽을 때 바뀐다. 값을 생략하면 미지정으로 남고, 생성 시점에만 기록되며 `PATCH /api/cards/:id`로는 바꿀 수 없다. 이 필드가 생기기 전에 만들어진 카드는 영구히 미지정이다 — 소급 채움 없음. |
 | `quickActionId` | `string` (선택) | 원본 Quick Action id다. |
 | `executionKind` | `agent \| script` (선택) | agent dispatch인지 로컬 Script process인지 구분한다. |
 | `scriptName` / `scriptRunId` | `string` (선택) | Script 실행 시점의 이름 snapshot과 실행 이력 id다. |

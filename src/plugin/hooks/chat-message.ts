@@ -462,6 +462,9 @@ export function createChatMessageHook(
       agentType: normalizedAgentType,
       command: tracked?.command,
       sourceContext: tracked ? `${tracked.command} ${tracked.arguments}`.trim() : undefined,
+      // An organic prompt typed into the opencode TUI — same axes as the Claude/Codex prompt hooks.
+      requestedBy: 'user',
+      originChannel: 'cli',
     });
     debugLog(`CREATED card=${card.id} title=${title.slice(0,40)} parent=${parentCardId ?? 'none'} agent=${agentStr ?? 'primary'}`);
 

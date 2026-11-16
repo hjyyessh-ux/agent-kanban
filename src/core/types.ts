@@ -2,7 +2,39 @@
 export type KanbanStatus = 'todo' | 'in_progress' | 'complete' | 'done';
 export type QueueSessionMode = 'new_session' | 'continue_queued_after_session';
 export type CardResolution = 'completed' | 'superseded' | 'failed';
-export type CardOriginChannel = 'telegram' | 'scheduler' | 'quick_action';
+/**
+ * Which pipe created the card. `web` = the board UI (new-task / feedback forms),
+ * `cli` = an interactive terminal session minted by a prompt hook (Claude Code,
+ * Codex, opencode). Only `web`/`cli` may be set through `POST /api/cards`; the
+ * others are stamped server-side by their own pipelines.
+ */
+export type CardOriginChannel = 'telegram' | 'scheduler' | 'quick_action' | 'web' | 'cli';
+/** `originChannel` values a public `POST /api/cards` body may set. */
+export const PUBLIC_ORIGIN_CHANNELS: readonly CardOriginChannel[] = ['web', 'cli'];
+/**
+ * Who asked for this card to exist — distinct from `agentRuntime` (what executes
+ * it) and `originChannel` (which pipe created it). Only stamped where the asker
+ * is actually known: the web forms and the interactive CLI prompt hooks stamp
+ * `user`, and API clients may pass `dots` explicitly. Telegram, scheduler, quick
+ * actions, agent-created cards and all pre-existing cards leave it unset —
+ * never backfilled.
+ */
+export type CardRequester = 'user' | 'dots';
+/**
+ * Legacy on-disk / API spellings (personal names, renamed for the open-source
+ * build). Read paths and `POST /api/cards` map them to the canonical value.
+ */
+export const LEGACY_CARD_REQUESTERS: Readonly<Record<string, CardRequester>> = {
+  junyeong: 'user',
+  samjun: 'dots',
+};
+
+/** Maps any accepted requester spelling to its canonical value; `undefined` for unknown input. */
+export function normalizeCardRequester(value: unknown): CardRequester | undefined {
+  if (value === 'user' || value === 'dots') return value;
+  if (typeof value === 'string' && Object.hasOwn(LEGACY_CARD_REQUESTERS, value)) return LEGACY_CARD_REQUESTERS[value];
+  return undefined;
+}
 export type CardExecutionKind = 'agent' | 'script';
 export type TelegramReplyStatus = 'pending' | 'sent' | 'failed' | 'skipped';
 export type AgentRuntime = 'opencode' | 'codex' | 'claude';
@@ -462,6 +494,7 @@ export interface KanbanCard {
   dispatchType?: 'instant' | 'manual';  // instant = auto-dispatch on creation (e.g., from Telegram)
   telegramChatId?: number;              // Telegram chat ID for response messages
   originChannel?: CardOriginChannel;
+  requestedBy?: CardRequester;          // who asked for this card; unset = unspecified (see CardRequester)
   executionKind?: CardExecutionKind;
   quickActionId?: string;
   quickActionRequestId?: string;
@@ -672,6 +705,7 @@ export interface CreateCardInput {
   dispatchType?: 'instant' | 'manual';
   telegramChatId?: number;
   originChannel?: CardOriginChannel;
+  requestedBy?: CardRequester;
   executionKind?: CardExecutionKind;
   quickActionId?: string;
   quickActionRequestId?: string;

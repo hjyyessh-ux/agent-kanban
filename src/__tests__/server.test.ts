@@ -41,6 +41,115 @@ describe('HTTP API Server', () => {
       expect(card.id).toBeTruthy();
       expect(card.title).toBe('Test task');
       expect(card.status).toBe('todo');
+      expect(card.requestedBy).toBeUndefined();
+    });
+  });
+
+  test('POST /api/cards accepts an explicit requestedBy value', async () => {
+    await withTestServer(async (url) => {
+      const res = await fetch(`${url}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Dot registered', description: 'Desc', requestedBy: 'dots' }),
+      });
+      expect(res.status).toBe(201);
+      const card = await res.json();
+      expect(card.requestedBy).toBe('dots');
+    });
+  });
+
+  test('POST /api/cards maps legacy requestedBy names to their canonical values', async () => {
+    await withTestServer(async (url) => {
+      for (const [legacy, canonical] of [['samjun', 'dots'], ['junyeong', 'user']]) {
+        const res = await fetch(`${url}/api/cards`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: `Legacy ${legacy}`, description: 'Desc', requestedBy: legacy }),
+        });
+        expect(res.status).toBe(201);
+        expect((await res.json()).requestedBy).toBe(canonical);
+      }
+    });
+  });
+
+  test('POST /api/cards accepts originChannel web/cli but drops pipeline channels', async () => {
+    await withTestServer(async (url) => {
+      const post = (originChannel: string) => fetch(`${url}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: `Channel ${originChannel}`, description: 'Desc', originChannel }),
+      }).then((res) => res.json());
+      expect((await post('web')).originChannel).toBe('web');
+      expect((await post('cli')).originChannel).toBe('cli');
+      expect((await post('telegram')).originChannel).toBeUndefined();
+      expect((await post('quick_action')).originChannel).toBeUndefined();
+    });
+  });
+
+  test('POST /api/cards rejects an unknown requestedBy value', async () => {
+    await withTestServer(async (url) => {
+      const res = await fetch(`${url}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Bad requester', description: 'Desc', requestedBy: 'someone-else' }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  test('PATCH /api/cards/:id cannot set or change requestedBy', async () => {
+    await withTestServer(async (url) => {
+      const createRes = await fetch(`${url}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Locked requester', description: 'Desc', requestedBy: 'user' }),
+      });
+      const card = await createRes.json();
+
+      const patchRes = await fetch(`${url}/api/cards/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestedBy: 'dots' }),
+      });
+      expect(patchRes.status).toBe(200);
+      const patched = await patchRes.json();
+      expect(patched.requestedBy).toBe('user');
+    });
+  });
+
+  test('a dots-requested card keeps requestedBy through status update, archive, and archived GET', async () => {
+    await withTestServer(async (url) => {
+      const createRes = await fetch(`${url}/api/cards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'Dot via API', description: 'Desc', requestedBy: 'dots' }),
+      });
+      const card = await createRes.json();
+
+      await fetch(`${url}/api/cards/${card.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'done' }),
+      });
+
+      const archiveRes = await fetch(`${url}/api/archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cardIds: [card.id] }),
+      });
+      expect(archiveRes.status).toBe(200);
+      const archiveResult = await archiveRes.json();
+      expect(archiveResult.archivedCount).toBe(1);
+
+      // Gone from the live board...
+      const liveRes = await fetch(`${url}/api/cards/${card.id}`);
+      expect(liveRes.status).toBe(404);
+
+      // ...but still resolvable from the archive, with requestedBy intact.
+      const archivedRes = await fetch(`${url}/api/cards/${card.id}?include_archived=true`);
+      expect(archivedRes.status).toBe(200);
+      const archived = await archivedRes.json();
+      expect(archived.requestedBy).toBe('dots');
     });
   });
 

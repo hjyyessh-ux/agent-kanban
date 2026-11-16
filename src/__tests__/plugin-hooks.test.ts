@@ -103,6 +103,8 @@ describe('chat.message hook', () => {
       expect(cards).toHaveLength(1);
       expect(cards[0].title).toContain('Implement login feature');
       expect(cards[0].status).toBe('in_progress');
+      expect(cards[0].requestedBy).toBe('user');
+      expect(cards[0].originChannel).toBe('cli');
       expect(cards[0].sessionId).toBe('session-abc');
     });
   });

@@ -2571,6 +2571,24 @@
   height: 21px;
 }
 
+.kv2-dots-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 0;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+
+.kv2-dots-badge img {
+  display: block;
+  width: 21px;
+  height: 21px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
 .kv2-scheduler-badge {
   display: inline-flex;
   align-items: center;
@@ -4350,4 +4368,13 @@
   color: var(--kv2-text-secondary);
   font-size: var(--kv2-text-ui-sm);
   font-weight: 700;
+}
+
+/* Turn-row request origin (Telegram / Dots) — the turn header aligns on the
+   text baseline, which drops a line-height:0 badge; center it instead. */
+.kv2-complete-session-turn-header > .kv2-telegram-badge,
+.kv2-complete-session-turn-header > .kv2-dots-badge,
+.kv2-list-turn-open > .kv2-telegram-badge,
+.kv2-list-turn-open > .kv2-dots-badge {
+  align-self: center;
 }

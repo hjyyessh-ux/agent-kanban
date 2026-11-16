@@ -92,6 +92,8 @@ RESPONSE=$(curl -sf "${KANBAN_AUTH[@]}" -X POST "${KANBAN_API}/api/cards" \
       projectDir: (if $projectDir != "" then $projectDir else null end),
       sourceContext: $sourceContext,
       agentRuntime: "codex",
+      requestedBy: "user",
+      originChannel: "cli",
       model: (if $model != "" then $model else null end)
     }'
   )" 2>/dev/null) || exit 0

@@ -2,6 +2,8 @@ import { describe, test, expect } from 'bun:test';
 import { KanbanStore } from '../core/store';
 import { setDynamicSkillCommands } from '../core/commands';
 import { withTempDir } from './setup';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 const FUTURE_SCHEDULED_AT_UTC = (() => {
   const date = new Date(Date.now() + 60 * 60 * 1000);
@@ -34,6 +36,109 @@ describe('KanbanStore', () => {
       const loaded = await store.getCard(card.id);
       expect(loaded).not.toBeNull();
       expect(loaded!.title).toBe('Test Task');
+    });
+  });
+
+  test('createCard leaves requestedBy unspecified unless the input sets it', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'No requester', description: 'Desc' });
+      expect(card.requestedBy).toBeUndefined();
+    });
+  });
+
+  for (const [legacy, canonical] of [['samjun', 'dots'], ['junyeong', 'user']] as const) {
+    test(`a legacy on-disk requestedBy "${legacy}" loads as "${canonical}"`, async () => {
+      await withTempDir(async (dir) => {
+        const store = new KanbanStore(dir);
+        const card = await store.createCard({ title: 'Legacy requester', description: 'Desc', requestedBy: canonical });
+        const activePath = join(dir, 'active.json');
+        const raw = await readFile(activePath, 'utf8');
+        await writeFile(activePath, raw.replace(`"requestedBy": "${canonical}"`, `"requestedBy": "${legacy}"`));
+        expect(await readFile(activePath, 'utf8')).toContain(`"${legacy}"`);
+
+        const reloaded = new KanbanStore(dir);
+        expect((await reloaded.getCard(card.id))!.requestedBy).toBe(canonical);
+      });
+    });
+  }
+
+  test('createCard stamps requestedBy from input and persists it across reload', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({
+        title: 'API registered',
+        description: 'Desc',
+        requestedBy: 'dots',
+      });
+      expect(card.requestedBy).toBe('dots');
+
+      const loaded = await store.getCard(card.id);
+      expect(loaded!.requestedBy).toBe('dots');
+    });
+  });
+
+  test('a requester-less card stays unspecified through unrelated updates and reloads', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Legacy card', description: 'Desc' });
+      expect(card.requestedBy).toBeUndefined();
+
+      await store.updateCard(card.id, { status: 'in_progress', progressSummary: 'Working' });
+      await store.updateCard(card.id, { status: 'complete', result: 'Done' });
+
+      const afterUpdates = await store.getCard(card.id);
+      expect(afterUpdates!.requestedBy).toBeUndefined();
+
+      await store.updateCard(card.id, { status: 'done' });
+      await store.archiveCards([card.id]);
+
+      const afterArchive = await store.getCard(card.id, { includeArchived: true });
+      expect(afterArchive).not.toBeNull();
+      expect(afterArchive!.requestedBy).toBeUndefined();
+    });
+  });
+
+  test('a dots-requested card keeps requestedBy through status transitions, queueing, archive, and restore', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({
+        title: 'Dot registered card',
+        description: 'Desc',
+        requestedBy: 'dots',
+      });
+      const target = await store.createCard({ title: 'Queue target', description: 'Desc' });
+
+      // Status transitions (todo -> in_progress -> complete -> done).
+      await store.updateCard(card.id, { status: 'in_progress' });
+      await store.updateCard(card.id, { status: 'complete', result: 'Done' });
+      let current = await store.getCard(card.id);
+      expect(current!.requestedBy).toBe('dots');
+
+      // Queue update and clear.
+      await store.updateCard(card.id, { queuedAfterCardId: target.id, queuePosition: 1 });
+      current = await store.getCard(card.id);
+      expect(current!.requestedBy).toBe('dots');
+      await store.updateCard(card.id, { queuedAfterCardId: null, queuePosition: null });
+      current = await store.getCard(card.id);
+      expect(current!.requestedBy).toBe('dots');
+
+      // Soft-delete + restore.
+      await store.deleteCard(card.id);
+      const restored = await store.restoreCard(card.id);
+      expect(restored.requestedBy).toBe('dots');
+
+      // Archive + fetch through includeArchived.
+      await store.updateCard(card.id, { status: 'done' });
+      const { archivedCount } = await store.archiveCards([card.id]);
+      expect(archivedCount).toBe(1);
+
+      const archived = await store.getCard(card.id, { includeArchived: true });
+      expect(archived).not.toBeNull();
+      expect(archived!.requestedBy).toBe('dots');
+
+      const viaGetCards = await store.getCards({ includeArchived: true });
+      expect(viaGetCards.find(c => c.id === card.id)?.requestedBy).toBe('dots');
     });
   });
 

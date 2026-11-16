@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import type { AgentRuntime, CardExecutionKind, KanbanStatus } from '../../../../src/core/types';
+import type { AgentRuntime, CardExecutionKind, KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import codexIconUrl from '../../assets/codex-icon-transparent.png';
+import dotsFelipeUrl from '../../assets/dots-felipe.webp';
 import { ScheduledDispatchBadge } from '../shared/ScheduledDispatchUi';
 import type { ChildItem, V2CardViewModel } from './board-selectors';
 import { CARD_ACTION_COPY } from '../../constants/copy';
@@ -47,6 +48,40 @@ export const SchedulerBadge: React.FC<{ title?: string; size?: number }> = ({ ti
   <span className="kv2-scheduler-badge" title={title} role="img" aria-label="Scheduler">
     <SchedulerIcon size={size} />
   </span>
+);
+
+const DotsIcon: React.FC<{ size?: number }> = ({ size = 21 }) => (
+  <img
+    src={dotsFelipeUrl}
+    width={size}
+    height={size}
+    alt=""
+    aria-hidden="true"
+    className="kv2-dots-icon"
+  />
+);
+
+/** Shown only for `requestedBy === 'dots'` (cards registered by the Dots agent) — distinct from `originChannel`/`agentRuntime`. */
+export const DotsBadge: React.FC<{ title?: string; size?: number }> = ({ title = 'Dots origin', size = 21 }) => (
+  <span className="kv2-dots-badge" title={title} role="img" aria-label="Dots">
+    <DotsIcon size={size} />
+  </span>
+);
+
+/**
+ * Request origin of a single card inside a session group (turn rows only — never
+ * on WORK/SESSION group headers). Telegram follows `originChannel`, Dots follows
+ * `requestedBy === 'dots'`; directly created cards render nothing.
+ */
+export const TurnOriginBadges: React.FC<{
+  originChannel?: KanbanCard['originChannel'];
+  requestedBy?: KanbanCard['requestedBy'];
+  size?: number;
+}> = ({ originChannel, requestedBy, size }) => (
+  <>
+    {originChannel === 'telegram' && <TelegramBadge size={size} />}
+    {requestedBy === 'dots' && <DotsBadge size={size} />}
+  </>
 );
 
 export const OriginExecutionBadges: React.FC<{

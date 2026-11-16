@@ -174,6 +174,46 @@ describe("CardDetailDialog", () => {
     expect(done).not.toContain(CARD_ACTION_COPY.done);
   });
 
+  test("shows the Dots badge in the hero row when requestedBy is dots", () => {
+    const html = renderDialog({ ...makeCard("todo"), requestedBy: "dots" });
+    expect(html).toContain("kv2-dots-badge");
+    expect(html).toContain('aria-label="Dots"');
+    expect(html).toMatch(/<img[^>]*src="[^"]*dots-felipe[^"]*"[^>]*class="kv2-dots-icon"/);
+  });
+
+  test("prints the origin axes in the footer, with — for unset values", () => {
+    const html = renderDialog({
+      ...makeCard("complete"),
+      requestedBy: "user",
+      originChannel: "cli",
+      agentRuntime: "claude",
+      sourceContext: "claude-code",
+    });
+    const row = html.slice(html.indexOf('data-testid="card-origin-meta"'));
+    expect(row).toContain("Requested by: user");
+    expect(row).toContain("Channel: cli");
+    expect(row).toContain("Runtime: claude");
+    expect(row).toContain("Source: claude-code");
+
+    const bare = renderDialog({ ...makeCard("todo"), requestedBy: undefined, originChannel: undefined, sourceContext: undefined });
+    const bareRow = bare.slice(bare.indexOf('data-testid="card-origin-meta"'));
+    expect(bareRow).toContain("Requested by: —");
+    expect(bareRow).toContain("Channel: —");
+    expect(bareRow).toContain("Source: —");
+  });
+
+  test("omits the Dots badge when requestedBy is user", () => {
+    const html = renderDialog({ ...makeCard("todo"), requestedBy: "user" });
+    expect(html).not.toContain("kv2-dots-badge");
+    expect(html).not.toContain("요청자");
+  });
+
+  test("omits the Dots badge when requestedBy is unspecified", () => {
+    const html = renderDialog(makeCard("todo"));
+    expect(html).not.toContain("kv2-dots-badge");
+    expect(html).not.toContain("요청자");
+  });
+
   test("shows Script execution metadata and Quick Action provenance", () => {
     const html = renderDialog({
       ...makeCard("complete"),
