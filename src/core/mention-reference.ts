@@ -410,6 +410,94 @@ export function stripReferenceBlock(text: string): string {
 }
 
 /**
+ * 본문과 참조 블록을 나눈다. 블록은 주석 쌍을 포함한 원문 그대로(여러 개면
+ * 빈 줄로 이어 붙인다), 본문은 `stripReferenceBlock`과 같은 결과다.
+ *
+ * 카드 상세처럼 **저장된** 프롬프트를 다시 보여 주는 화면이 쓴다 — 사람이 쓴
+ * 본문과 에이전트가 받은 지시문을 따로 렌더하기 위해서다.
+ */
+export function splitReferenceBlock(text: string): { body: string; block: string } {
+  const blocks: string[] = [];
+  let from = 0;
+  for (;;) {
+    const open = text.indexOf(REFERENCE_BLOCK_OPEN, from);
+    if (open < 0) break;
+    const close = text.indexOf(REFERENCE_BLOCK_CLOSE, open);
+    const end = close < 0 ? text.length : close + REFERENCE_BLOCK_CLOSE.length;
+    blocks.push(text.slice(open, end).trim());
+    from = end;
+  }
+  return { body: stripReferenceBlock(text), block: blocks.join('\n\n') };
+}
+
+/** 저장된 블록의 한 항목 — 칩 하나를 그리는 데 필요한 만큼만. */
+export interface ReferenceBlockEntry {
+  kind: MentionKind;
+  id: string;
+  /** `parseMentionTokens`의 `kind:id`와 같은 키(디코딩된 id). */
+  key: string;
+  title: string;
+  /** 칩 옆에 붙는 짧은 메타 — `세션 3개 · 카드 45개`, `812.0KB` 등. */
+  meta?: string;
+  unresolved?: 'not_found' | 'ambiguous';
+  transcriptMissing?: boolean;
+}
+
+const BLOCK_HEADING_RE = /^### @(session|work|doc):(.+)$/;
+const TITLE_SEPARATOR = ' — ';
+
+/**
+ * `renderReferenceBlock`이 만든 블록을 역으로 읽는다 (저장 당시 스냅샷).
+ *
+ * 렌더러와 같은 파일에 두는 이유: 헤딩·메타 줄 형식을 바꾸면 이 파서도 같이
+ * 고쳐야 한다. 모르는 줄은 무시하므로, 형식이 조금 어긋나도 칩은 토큰과
+ * 제목만으로 그려진다.
+ */
+export function parseReferenceBlock(block: string): ReferenceBlockEntry[] {
+  const entries: ReferenceBlockEntry[] = [];
+  let current: ReferenceBlockEntry | null = null;
+
+  for (const line of block.split('\n')) {
+    const heading = BLOCK_HEADING_RE.exec(line.trim());
+    if (heading) {
+      const kind = heading[1] as MentionKind;
+      const rest = heading[2].trim();
+      // doc은 제목을 헤딩에 싣지 않는다(경로가 곧 id이고 공백을 품을 수 있다).
+      const separator = kind === 'doc' ? -1 : rest.indexOf(TITLE_SEPARATOR);
+      const id = separator < 0 ? rest : rest.slice(0, separator).trim();
+      const title = separator < 0 ? '' : rest.slice(separator + TITLE_SEPARATOR.length).trim();
+      current = { kind, id, key: `${kind}:${id}`, title };
+      entries.push(current);
+      continue;
+    }
+    if (!current) continue;
+
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- kind:')) {
+      if (trimmed.includes('**참조 대상을 찾지 못했습니다**')) current.unresolved = 'not_found';
+      else if (trimmed.includes('**접두사가 여러 항목에 매칭됩니다**')) current.unresolved = 'ambiguous';
+      const docTitle = /title: "([^"]*)"/.exec(trimmed);
+      if (docTitle && !current.title) current.title = docTitle[1];
+      if (current.kind === 'work') {
+        const counts = trimmed.split(' · ').filter((part) => /^(세션|카드) \d+개$/.test(part));
+        if (counts.length) current.meta = counts.join(' · ');
+      }
+    } else if (current.kind === 'session' && trimmed.startsWith('- transcript:')) {
+      if (trimmed.startsWith('- transcript: 없음')) {
+        current.transcriptMissing = true;
+      } else {
+        const size = /\((\d+(?:\.\d+)?(?:B|KB|MB)) — /.exec(trimmed);
+        if (size) current.meta = size[1];
+      }
+    } else if (current.kind === 'doc' && trimmed.startsWith('- path:') && !current.title) {
+      const path = /`([^`]+)`/.exec(trimmed);
+      if (path) current.title = path[1].split('/').pop() ?? path[1];
+    }
+  }
+  return entries;
+}
+
+/**
  * strip 후 append. `refs`가 비면 strip만 수행한다.
  *
  * 멱등이다 — 같은 참조로 다시 부르면 앞 블록을 걷어내고 같은 결과를 만든다.

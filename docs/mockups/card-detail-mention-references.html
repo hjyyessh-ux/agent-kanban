@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>카드 상세 — @ 참조 표시/편집 목업</title>
+<style>
+/* 목업 전용 — kv2 토큰 값을 근사 복제. 실제 구현은 mention.css / panels.css 재사용. */
+:root {
+  --bg: #FFF8E7; --surface: #fff; --sunken: #f8fafc; --hover: #f3f4f6;
+  --text: #1A1A2E; --text-2: #536074; --muted: #8190a8;
+  --border: #D7DCE6; --strong: #1f2233; --subtle: #e2e8f0;
+  --shadow: rgba(31,34,51,.85);
+  --ref-session: #1668e8; --ref-work: #8b5cf0; --ref-doc: #0d9488; --warn: #b45309; --warn-bg: #fef3c7;
+  --primary: #1668e8; --ok: #16a34a; --bad: #dc2626;
+  --mono: 'Source Code Pro', ui-monospace, Menlo, monospace;
+  --sans: 'Work Sans', system-ui, -apple-system, sans-serif;
+}
+:root[data-theme="dark"] {
+  --bg: #1b1d20; --surface: #272a2e; --sunken: #202327; --hover: #30343a;
+  --text: #d4d7db; --text-2: #a3a8ae; --muted: #737a82;
+  --border: #34383d; --strong: #454a50; --subtle: #30343a;
+  --shadow: rgba(0,0,0,.6);
+  --ref-session: #5b9cf5; --ref-work: #a78bfa; --ref-doc: #2dd4bf; --warn: #fbbf24; --warn-bg: #3a2f12;
+  --primary: #5b9cf5; --ok: #4ade80; --bad: #f87171;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 28px 32px 80px; background: var(--bg); color: var(--text); font: 14px/1.55 var(--sans); }
+h1 { margin: 0 0 4px; font-size: 22px; }
+h2 { margin: 40px 0 6px; font-size: 18px; border-bottom: 2px solid var(--strong); padding-bottom: 6px; }
+.lead { color: var(--text-2); margin: 0 0 12px; }
+.topbar { display: flex; align-items: center; gap: 12px; }
+.topbar button { margin-left: auto; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+.col-label { font-weight: 800; font-size: 12px; letter-spacing: .8px; text-transform: uppercase; margin: 0 0 8px; }
+.col-label.before { color: var(--bad); }
+.col-label.after { color: var(--ok); }
+
+/* 다이얼로그 조각 */
+.dialog { background: var(--surface); border: 3px solid var(--strong); border-radius: 12px; box-shadow: 6px 6px 0 var(--shadow); overflow: hidden; }
+.dialog-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 2px solid var(--subtle); }
+.dialog-head .title { font-weight: 700; }
+.badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); }
+.badge.todo { color: #3b82f6; border-color: #3b82f6; }
+.dialog-body { padding: 16px; }
+
+.phase { border: 2px solid var(--border); border-left: 5px solid var(--primary); border-radius: 8px; background: var(--surface); }
+.phase-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--subtle); }
+.phase-head .name { font-weight: 800; font-size: 13px; }
+.phase-head .actions { margin-left: auto; display: flex; gap: 4px; }
+.btn { font: inherit; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 6px; border: 2px solid var(--strong); background: var(--surface); color: var(--text); cursor: pointer; }
+.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn.ghost { border-color: var(--border); color: var(--text-2); }
+.phase-body { padding: 12px 14px; }
+.md p { margin: 0 0 8px; }
+.md h2 { all: unset; display: block; font-weight: 800; font-size: 16px; margin: 10px 0 6px; }
+.md h3 { font-size: 14px; margin: 10px 0 4px; }
+.md ul { margin: 0 0 6px; padding-left: 18px; }
+.md li { margin: 1px 0; }
+.md code { background: var(--hover); padding: 0 4px; border-radius: 4px; }
+.faded { opacity: .9; }
+.scroll-hint { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0 0; }
+
+.tok { font-family: var(--mono); font-size: 12.5px; font-weight: 700; padding: 0 4px; border-radius: 4px; }
+.tok.session { color: var(--ref-session); background: color-mix(in srgb, var(--ref-session) 14%, transparent); }
+.tok.work { color: var(--ref-work); background: color-mix(in srgb, var(--ref-work) 14%, transparent); }
+.tok.doc { color: var(--ref-doc); background: color-mix(in srgb, var(--ref-doc) 14%, transparent); }
+
+/* References 스트립 — 기존 MentionChips 룩 */
+.ref-strip { margin-top: 12px; border: 2px dashed var(--border); border-radius: 8px; padding: 10px 12px; background: var(--sunken); }
+.ref-strip-head { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: var(--text-2); }
+.ref-count { font-size: 11px; padding: 0 6px; border-radius: 999px; background: var(--hover); }
+.ref-toggle { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 12px; color: var(--text-2); background: none; border: 0; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px; border: 2px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-size: 12.5px; }
+.chip.session { --accent: var(--ref-session); }
+.chip.work { --accent: var(--ref-work); }
+.chip.doc { --accent: var(--ref-doc); }
+.chip.warn { --accent: var(--warn); }
+.chip .ct { font-family: var(--mono); font-size: 11.5px; color: var(--accent); }
+.chip .cl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.chip .cm { font-size: 11px; color: var(--muted); }
+.chip .x { border: 0; background: none; color: var(--text-2); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px; }
+.chip.clickable { cursor: pointer; }
+.chip.clickable:hover { background: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.preview { margin: 10px 0 0; padding: 10px 12px; max-height: 220px; overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; color: var(--text-2); }
+.preview-note { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+/* 편집 */
+.ta { width: 100%; min-height: 150px; resize: vertical; padding: 10px 12px; font: 13.5px/1.6 var(--sans); color: var(--text); background: var(--sunken); border: 2px solid var(--primary); border-radius: 8px; white-space: pre-wrap; position: relative; }
+.ta .caret { display: inline-block; width: 1.5px; height: 1.1em; vertical-align: -2px; background: var(--text); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.ta.raw { border-color: var(--border); font-family: var(--mono); font-size: 12px; color: var(--text-2); max-height: 300px; overflow: hidden; }
+.edit-foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.edit-foot .sp { flex: 1; }
+.kbd { font-family: var(--mono); font-size: 11px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--hover); }
+
+.pop { margin-top: 6px; width: 460px; max-width: 100%; border: 3px solid var(--strong); border-radius: 10px; box-shadow: 6px 6px 0 var(--shadow); background: var(--surface); overflow: hidden; }
+.pop-tabs { display: flex; gap: 4px; padding: 8px 8px 0; background: var(--sunken); border-bottom: 2px solid var(--subtle); }
+.pop-tab { padding: 5px 10px; font-size: 12px; font-weight: 700; color: var(--text-2); border: 2px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; }
+.pop-tab.on { background: var(--surface); color: var(--text); border-color: var(--strong); margin-bottom: -2px; padding-bottom: 7px; }
+.pop-q { display: flex; gap: 8px; padding: 6px 12px; font-size: 12px; color: var(--text-2); background: var(--sunken); border-bottom: 2px solid var(--subtle); }
+.pop-q b { font-family: var(--mono); color: var(--text); }
+.pop-grp { padding: 8px 12px 2px; font-size: 10.5px; font-weight: 800; letter-spacing: .9px; color: var(--muted); text-transform: uppercase; }
+.pop-row { display: flex; gap: 8px; align-items: center; padding: 6px 12px; font-size: 13px; border-left: 3px solid transparent; }
+.pop-row.on { background: var(--hover); border-left-color: var(--primary); }
+.pop-row .k { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* 저장 흐름 */
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+.step { border: 2px solid var(--border); border-radius: 8px; background: var(--surface); padding: 10px 12px; font-size: 13px; }
+.step b { display: block; margin-bottom: 4px; }
+.step .n { display: inline-block; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); color: #fff; text-align: center; font-size: 12px; font-weight: 800; line-height: 20px; margin-right: 6px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; background: var(--surface); border: 2px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--subtle); vertical-align: top; font-size: 13px; }
+th { background: var(--sunken); font-size: 12px; color: var(--text-2); }
+.no { color: var(--bad); font-weight: 700; }
+.yes { color: var(--ok); font-weight: 700; }
+.note { margin-top: 10px; padding: 10px 12px; border-left: 4px solid var(--warn); background: var(--warn-bg); border-radius: 4px; font-size: 13px; }
+.callout { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.callout::before { content: "▲ "; color: var(--primary); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>카드 상세 — <code>@</code> 참조 표시 / 편집 목업</h1>
+    <p class="lead">대상: <code>CardPhases</code> Prompt 블록 (+ 같은 렌더를 쓰는 <code>SessionConversationModal</code>). 데이터 모델·dispatch 변경 없음.</p>
+  </div>
+  <button class="btn" onclick="const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark'">테마 전환</button>
+</div>
+
+<!-- ============================================================ -->
+<h2>① 보기 모드</h2>
+<p class="lead">본문에서 자동 생성 블록을 걷어내고(<code>stripReferenceBlock</code>), 그 아래 New Task와 같은 References 스트립을 <b>읽기 전용</b>으로 붙인다. 실제 전송된 원문은 접어 둔다.</p>
+
+<div class="cols">
+  <div>
+    <p class="col-label before">Before — 지금</p>
+    <div class="dialog">
+      <div class="dialog-head"><span class="badge todo">TODO</span><span class="title">Asset 2018 삭제 배치 속도 개선</span></div>
+      <div class="dialog-body">
+        <div class="phase">
+          <div class="phase-head"><span class="name">Prompt</span><div class="actions"><button class="btn ghost">Edit</button></div></div>
+          <div class="phase-body md faded">
+            <p>@work:iq1nfBkvBs4JdO74X2-TR<br>이 세션에 내용 확인해줘.<br>이게 좀 느려 지금 1200만개 아직도 한참 남아서 156시간이 남았다고 뜨는데…</p>
+            <h2>Referenced context — 작업 시작 전 반드시 읽을 것</h2>
+            <p>사용자가 @ 멘션으로 <b>명시적으로 지정한 참조</b>입니다. 본문은 이 블록에 포함돼 있지 않습니다. 아래 각 항목의 경로를 <b>직접 열어 읽은 뒤에</b> 본 작업을 시작하세요…</p>
+            <p>경로는 절대경로이며 현재 작업 디렉토리 밖일 수 있습니다(의도된 동작)…</p>
+            <p><b>읽기 전략</b> — 각 transcript 줄 옆에 파일 크기가 적혀 있습니다.</p>
+            <ul><li><b>2MB 이하</b> → <code>Read</code>로 그대로 열어도 됩니다.</li><li><b>2MB 초과</b> → <code>Read</code> 금지…</li></ul>
+            <h3>@work:iq1nfBkvBs4JdO74X2-TR — Asset 2018 실제 삭제 배치 구성</h3>
+            <ul>
+              <li>kind: work · status: active · 세션 3개 · 카드 45개</li>
+              <li>sessions:<ul>
+                <li><code>d80bd70d-…</code> → <code>/Users/…/.claude/projects/…/d80bd70d….jsonl</code> (claude · 4.1MB — Read 금지, jq 선행)</li>
+                <li><code>5f532571-…</code> → <code>/Users/…/5f532571….jsonl</code> (claude · 812KB — Read 가능)</li>
+                <li>…</li></ul></li>
+            </ul>
+          </div>
+        </div>
+        <p class="callout">사용자 프롬프트보다 에이전트용 지시문이 더 크게 보인다</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="col-label after">After — 제안</p>
+    <div class="dialog">
+      <div class="dialog-head"><span class="badge todo">TODO</span><span class="title">Asset 2018 삭제 배치 속도 개선</span></div>
+      <div class="dialog-body">
+        <div class="phase">
+          <div class="phase-head"><span class="name">Prompt</span><div class="actions"><button class="btn ghost">Edit</button></div></div>
+          <div class="phase-body md">
+            <p><span class="tok work">@work:iq1nfBkvBs4JdO74X2-TR</span> <span class="tok session">@session:5f532571</span><br>이 세션에 내용 확인해줘.<br>이게 좀 느려 지금 1200만개 아직도 한참 남아서 156시간이 남았다고 뜨는데, 이걸 언제 다 수행할거야. 급한건 아니긴하지만 암튼 이거 너무 느려…</p>
+
+            <div class="ref-strip">
+              <div class="ref-strip-head">
+                <span>References</span><span class="ref-count">2</span>
+                <button class="ref-toggle" onclick="const p=document.getElementById('sent1');p.hidden=!p.hidden;this.textContent=p.hidden?'전송된 참조 블록 보기 ▸':'전송된 참조 블록 숨기기 ▾'">전송된 참조 블록 보기 ▸</button>
+              </div>
+              <div class="chips">
+                <span class="chip work clickable" title="클릭 시 Work 상세로 이동"><span>🗂</span><span class="ct">work:iq1nfBkv</span><span class="cl">Asset 2018 실제 삭제 배치 구성</span><span class="cm">세션 3 · 카드 45</span></span>
+                <span class="chip session clickable" title="클릭 시 세션 대화 모달"><span>🧵</span><span class="ct">session:5f532571</span><span class="cl">ZEPETOFUL - CMA에도 Co…</span><span class="cm">812KB</span></span>
+              </div>
+              <pre class="preview" id="sent1" hidden>&lt;!-- agent-kanban:references v1 — 자동 생성. 수정하지 마세요 --&gt;
+## Referenced context — 작업 시작 전 반드시 읽을 것
+…
+### @work:iq1nfBkvBs4JdO74X2-TR — Asset 2018 실제 삭제 배치 구성
+- kind: work · status: active · 세션 3개 · 카드 45개
+- sessions:
+  - `d80bd70d-…` → `/Users/…/d80bd70d….jsonl` (claude · 4.1MB — **Read 금지, jq 선행**)
+  …
+&lt;!-- /agent-kanban:references --&gt;</pre>
+            </div>
+          </div>
+        </div>
+        <p class="callout">칩 라벨은 <b>저장된 블록에서 파싱</b> (네트워크 X, 저장 당시 스냅샷 = 실제로 에이전트가 받은 것)</p>
+        <p class="callout">본문 속 토큰은 종류 색으로 하이라이트 · 칩 클릭 시 해당 Work/세션으로 이동</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>② 편집 모드 (TODO 카드, Edit 클릭)</h2>
+<p class="lead">편집기를 <code>MentionTextarea</code>로 교체. 편집값은 <b>블록을 걷어낸 본문만</b>. <code>@</code> 팝오버·칩 스트립·<code>×</code> 삭제가 New Task와 똑같이 동작.</p>
+
+<div class="cols">
+  <div>
+    <p class="col-label before">Before — 지금</p>
+    <div class="dialog">
+      <div class="dialog-body">
+        <div class="phase">
+          <div class="phase-head"><span class="name">Prompt</span><div class="actions"><button class="btn primary">Save</button><button class="btn ghost">Cancel</button></div></div>
+          <div class="phase-body">
+            <div class="ta raw">@work:iq1nfBkvBs4JdO74X2-TR
+이 세션에 내용 확인해줘. 이게 좀 느려…
+
+&lt;!-- agent-kanban:references v1 — 자동 생성. 수정하지 마세요 --&gt;
+## Referenced context — 작업 시작 전 반드시 읽을 것
+
+사용자가 @ 멘션으로 **명시적으로 지정한 참조**입니다…
+### @work:iq1nfBkvBs4JdO74X2-TR — Asset 2018 …
+- kind: work · status: active · 세션 3개 · 카드 45개
+- sessions:
+  - `d80bd70d-…` → `/Users/…` …
+@<span class="caret"></span></div>
+            <p class="callout">자동 블록이 그대로 편집 대상 · <code>@</code> 눌러도 아무 반응 없음</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="col-label after">After — 제안 (<code>@doc</code> 입력 중)</p>
+    <div class="dialog">
+      <div class="dialog-body">
+        <div class="phase">
+          <div class="phase-head"><span class="name">Prompt</span><div class="actions"><button class="btn primary">Save</button><button class="btn ghost">Cancel</button></div></div>
+          <div class="phase-body">
+            <div class="ta">@work:iq1nfBkvBs4JdO74X2-TR @session:5f532571
+이 세션에 내용 확인해줘. 이게 좀 느려 지금 1200만개 아직도 한참 남아서…
+배치 설계 문서도 같이 봐줘 @배치<span class="caret"></span></div>
+
+            <div class="pop">
+              <div class="pop-tabs"><span class="pop-tab">All</span><span class="pop-tab">Sessions</span><span class="pop-tab">Works</span><span class="pop-tab on">Docs</span></div>
+              <div class="pop-q">검색 <b>배치</b><span style="margin-left:auto"><span class="kbd">↑↓</span> <span class="kbd">Tab</span> <span class="kbd">⏎</span> <span class="kbd">Esc</span></span></div>
+              <div class="pop-grp">Docs</div>
+              <div class="pop-row on">📄 <span>Asset 삭제 배치 설계</span><span class="k">AI_GENERATED/2026-11-02</span></div>
+              <div class="pop-row">📄 <span>배치 처리량 튜닝 노트</span><span class="k">Wiki/batch</span></div>
+            </div>
+
+            <div class="ref-strip">
+              <div class="ref-strip-head"><span>References</span><span class="ref-count">2</span><button class="ref-toggle">전송 프롬프트 미리보기 ▸</button></div>
+              <div class="chips">
+                <span class="chip work"><span>🗂</span><span class="ct">work:iq1nfBkv</span><span class="cl">Asset 2018 실제 삭제 배치 구성</span><button class="x" title="본문에서 이 토큰 삭제">×</button></span>
+                <span class="chip session"><span>🧵</span><span class="ct">session:5f532571</span><span class="cl">ZEPETOFUL - CMA에도 Co…</span><button class="x">×</button></span>
+              </div>
+            </div>
+
+            <div class="edit-foot"><span class="kbd">⌘⏎</span> 저장 <span class="kbd">Esc</span> 취소 (팝오버 열려 있으면 팝오버만 닫힘)<span class="sp"></span>참조 다시 해석 후 저장</div>
+          </div>
+        </div>
+        <p class="callout">칩 <code>×</code> 클릭이 blur → 자동 저장으로 편집이 끝나지 않도록 처리 (blur 저장 대상에서 strip 영역 제외)</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>③ 저장 동작</h2>
+<div class="flow">
+  <div class="step"><b><span class="n">1</span>Edit 진입</b><code>stripReferenceBlock(card.description)</code> → 본문만 편집값으로</div>
+  <div class="step"><b><span class="n">2</span>편집</b><code>MentionTextarea</code>가 토큰 파싱·해석 (300ms debounce)</div>
+  <div class="step"><b><span class="n">3</span>Save</b><code>resolveReferencesForSubmit(body, refs)</code> — debounce 안 기다리고 최신 본문 기준 재해석</div>
+  <div class="step"><b><span class="n">4</span>PATCH</b><code>description = appendReferenceBlock(body, refs)</code> — 기존 블록 교체, 쌓이지 않음</div>
+</div>
+
+<table>
+  <thead><tr><th>편집 시나리오</th><th>지금</th><th>제안 후</th></tr></thead>
+  <tbody>
+    <tr><td>본문에서 <code>@session:5f532571</code> 삭제</td><td class="no">블록에 남아 에이전트가 계속 읽음</td><td class="yes">블록에서도 제거</td></tr>
+    <tr><td>새 <code>@doc:…</code> 추가</td><td class="no">블록 미생성 → 경로 전달 안 됨</td><td class="yes">블록에 추가</td></tr>
+    <tr><td>본문 산문만 수정</td><td>그대로 저장</td><td class="yes">블록 재생성 (transcript 크기 등 최신화)</td></tr>
+    <tr><td>참조 해석 API 실패</td><td>—</td><td class="yes">기존 해석값으로 진행, 저장 자체는 막지 않음</td></tr>
+    <tr><td>참조 없는 기존 카드</td><td>—</td><td class="yes">변화 없음 (strip/append 모두 no-op)</td></tr>
+  </tbody>
+</table>
+
+<div class="note"><b>확인 필요한 결정 2개</b><br>
+1. 보기 모드 칩 라벨 출처 — <b>(A) 저장된 블록에서 파싱</b>(제안: 에이전트가 실제 받은 스냅샷, 요청 0) vs (B) 열 때마다 <code>/api/mentions/resolve</code> 재호출(최신 상태, 삭제된 대상은 경고 칩).<br>
+2. 칩 클릭 시 이동 — 넣을지, 이번엔 읽기 전용 칩만 할지.
+</div>
+
+</body>
+</html>

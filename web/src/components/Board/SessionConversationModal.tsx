@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KanbanCard } from '../../../../src/core/types';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
+import { splitReferenceBlock } from '../../../../src/core/mention-reference';
+import { SavedReferences } from '../Mention/SavedReferences';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { FeedbackPanel } from '../Card/FeedbackPanel';
 import { CardMarkdown } from '../Card/CardMarkdown';
@@ -324,7 +326,9 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   const duration = formatDurationMs(cardDurationMs(card));
   const { earlier, final } = splitCardResult(card);
   const result = final.trim();
-  const { header: feedbackHeader, body: promptBody } = splitFeedbackHeader(card.description ?? '');
+  const { header: feedbackHeader, body: promptWithBlock } = splitFeedbackHeader(card.description ?? '');
+  // 참조 블록은 에이전트용 지시문 — 본문과 떼어 칩 + 접힌 원문으로 보여 준다.
+  const { body: promptBody, block: referenceBlock } = splitReferenceBlock(promptWithBlock);
   const prompt = promptBody.trim();
   const preview = previewLine(result) || previewLine(prompt);
   const subagents = card.childCards ? [...card.childCards].sort(compareOldestCardFirst) : [];
@@ -436,7 +440,8 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
               />
             ) : (
               <PhaseBody collapsed={promptCollapsed} onExpand={() => setPromptCollapsed(false)}>
-                {prompt ? <CardMarkdown text={prompt} /> : <p>(no prompt)</p>}
+                {prompt ? <CardMarkdown text={prompt} highlightMentions /> : <p>(no prompt)</p>}
+                <SavedReferences body={prompt} block={referenceBlock} />
               </PhaseBody>
             )}
           </section>

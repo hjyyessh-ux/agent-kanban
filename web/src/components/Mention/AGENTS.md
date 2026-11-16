@@ -14,6 +14,7 @@ Design note: `docs/mockups/mention-reference-mockup.html` (the look) and the 설
 | `MentionTextarea.tsx` | The drop-in. Owns caret detection, open/close, keyboard, selection, and the chip strip. Everything else here is presentation. |
 | `MentionPopover.tsx` | Tabs (All/Sessions/Works/Docs), grouped list, snippets, highlight. Also exports `buildMentionRows`, the single flattener that makes screen order and `↑↓` order the same list. |
 | `MentionChips.tsx` | References strip: one chip per **token parsed from the body**, labels filled in from the resolved references, plus the sent-block preview. |
+| `SavedReferences.tsx` | Read-only strip for an **already saved** prompt (card detail, session modal): chips come from the stored block via `parseReferenceBlock` (no network — the snapshot the agent actually got), body tokens missing from the block show amber. The raw block is folded behind a toggle. |
 | `mentionCaret.ts` | Pure string surgery — `findActiveMention` / `replaceActiveMention` / `removeMentionToken` / `buildMentionToken`. No React. |
 | `mentionCaret.test.ts` | The four stop conditions, caret placement, token encoding round-trip through the core parser. |
 
@@ -22,6 +23,7 @@ Hooks: `hooks/useMentionSearch.ts` (`GET /api/mentions`, 150ms debounce) and `ho
 ## For AI Agents
 ### Invariants
 - **The body text is the single source of truth.** There is no `references[]` state anywhere. Chips are a render of `parseMentionTokens(value)`, and a chip's `×` deletes the token *from the body*. Do not add a selected-references array "for convenience" — that is exactly the desync this design removes.
+- **Saved prompts are edited body-only.** Card detail (`CardPhases`) and the session modal (`SessionTurnEditor`) open `stripReferenceBlock(description)` in `MentionTextarea` and on save re-resolve + `appendReferenceBlock`, so removing/adding a token updates the block. Unchanged body → no PATCH.
 - **dispatch is untouched.** References become part of `card.description` when the *call site* runs `appendReferenceBlock` just before submit. Nothing in `src/plugin/` knows this feature exists; keep it that way.
 - **Keyboard contract** (`MentionTextarea.handleKeyDown`): `↑↓`/`Tab`/`Enter` call `preventDefault` (otherwise the caret moves, focus escapes, or a newline lands); `Escape` additionally calls **`stopPropagation`**, because `DialogSkeleton`'s own `onKeyDown` would otherwise close the whole dialog. `Enter` with no selectable row deliberately falls through to a normal newline.
 - **`onPaste` must be passed through.** Both call sites attach clipboard-image handlers to it; dropping the prop silently kills screenshot attachment.

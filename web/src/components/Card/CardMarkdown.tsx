@@ -3,15 +3,59 @@ import ReactMarkdown from 'react-markdown';
 import type { Components, Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import type { Parent, PhrasingContent, Root } from 'mdast';
+import { parseMentionTokens } from '../../../../src/core/mention-reference';
 
 interface CardMarkdownProps {
   text: string;
+  /** `@session:…` 같은 멘션 토큰을 종류 색으로 하이라이트 (프롬프트 렌더용). */
+  highlightMentions?: boolean;
 }
 
 // Agents write ranges like "1~4번" constantly; GFM's default single-tilde
 // strikethrough turns "1~4번과 5~8번" into a struck-through span. Only "~~x~~"
 // should strike.
 const remarkPlugins = [[remarkGfm, { singleTilde: false }], remarkBreaks] satisfies Options['remarkPlugins'];
+
+/**
+ * text 노드 안의 멘션 토큰을 `<span class="kv2-ref-token">`으로 감싼다.
+ * 코드(`inlineCode`/`code`)는 text 노드가 아니므로 자연히 건드리지 않는다.
+ * 토큰 판정은 core `parseMentionTokens` 그대로 — 이메일 오인 가드도 같다.
+ */
+function wrapMentionTokens(parent: Parent): void {
+  const next: Parent['children'] = [];
+  let changed = false;
+  for (const child of parent.children) {
+    if (child.type !== 'text') {
+      if ('children' in child) wrapMentionTokens(child);
+      next.push(child);
+      continue;
+    }
+    const tokens = parseMentionTokens(child.value);
+    if (tokens.length === 0) {
+      next.push(child);
+      continue;
+    }
+    changed = true;
+    let cursor = 0;
+    for (const token of tokens) {
+      if (token.start > cursor) next.push({ type: 'text', value: child.value.slice(cursor, token.start) });
+      const wrapped: PhrasingContent = {
+        type: 'emphasis',
+        data: { hName: 'span', hProperties: { className: ['kv2-ref-token', `kv2-ref-kind-${token.kind}`] } },
+        children: [{ type: 'text', value: token.raw }],
+      };
+      next.push(wrapped);
+      cursor = token.end;
+    }
+    if (cursor < child.value.length) next.push({ type: 'text', value: child.value.slice(cursor) });
+  }
+  if (changed) parent.children = next;
+}
+
+const remarkMentionTokens = () => (tree: Root) => wrapMentionTokens(tree);
+
+const mentionRemarkPlugins = [...remarkPlugins, remarkMentionTokens] satisfies Options['remarkPlugins'];
 
 const components: Components = {
   h1: ({ children }) => <h1 className="kv2-markdown-heading">{children}</h1>,
@@ -53,10 +97,10 @@ const components: Components = {
   ),
 };
 
-export const CardMarkdown: React.FC<CardMarkdownProps> = ({ text }) => {
+export const CardMarkdown: React.FC<CardMarkdownProps> = ({ text, highlightMentions = false }) => {
   return (
     <div className="kv2-markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>
+      <ReactMarkdown remarkPlugins={highlightMentions ? mentionRemarkPlugins : remarkPlugins} components={components}>
         {text}
       </ReactMarkdown>
     </div>

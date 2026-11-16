@@ -67,6 +67,7 @@ export const MentionChips: React.FC<MentionChipsProps> = ({
         <button
           type="button"
           className="kv2-ref-strip-toggle"
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setPreviewOpen((open) => !open)}
           aria-expanded={previewOpen}
         >
@@ -95,6 +96,9 @@ export const MentionChips: React.FC<MentionChipsProps> = ({
               <button
                 type="button"
                 className="kv2-ref-chip-remove"
+                // 포커스를 textarea에 남긴다 — 카드 상세 편집기는 blur에 저장하므로
+                // 여기서 포커스를 뺏기면 칩 하나 지우는 순간 편집이 끝나 버린다.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => onRemove(token.raw)}
                 disabled={disabled}
                 aria-label={`${token.raw} 참조 제거`}

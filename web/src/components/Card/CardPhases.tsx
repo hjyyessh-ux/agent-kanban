@@ -4,6 +4,9 @@ import { EditingField } from './CardMetaPanel';
 import { CardMarkdown } from './CardMarkdown';
 import { splitCardResult } from './card-result';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
+import { splitReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
+import { MentionTextarea } from '../Mention/MentionTextarea';
+import { SavedReferences } from '../Mention/SavedReferences';
 import type { CardResultSyncControl } from '../../hooks/useCardResultSync';
 import { RESULT_SYNC_COPY } from '../../constants/copy';
 
@@ -20,6 +23,8 @@ interface CardPhasesProps {
   cancelEdit: () => void;
   handleTextareaKeyDown: (e: React.KeyboardEvent) => void;
   onDescriptionPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  /** 편집기(`MentionTextarea`)가 해석한 참조 — 저장 때 블록을 다시 만든다. */
+  onDescriptionReferencesChange?: (references: ResolvedReference[]) => void;
   collapsedPhases: Record<string, boolean>;
   togglePhase: (phase: string) => void;
   /** ↻ Sync for claude/codex session cards; null hides it. */
@@ -298,7 +303,9 @@ const PhaseCard: React.FC<PhaseCardProps> = ({
             </button>
           )}
           {isEditing && onSave && onCancel && (
-            <div className="kv2-phase-edit-actions">
+            // mousedown 기본 동작을 막아 편집기 포커스를 유지한다. 안 막으면 클릭
+            // 전에 blur 저장이 먼저 돌아 Cancel이 "저장 후 닫기"가 되고, Save는 두 번 저장한다.
+            <div className="kv2-phase-edit-actions" onMouseDown={(e) => e.preventDefault()}>
               <button type="button" className="kv2-phase-action" onClick={onCancel}>
                 Cancel
               </button>
@@ -340,6 +347,7 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
   cancelEdit,
   handleTextareaKeyDown,
   onDescriptionPaste,
+  onDescriptionReferencesChange,
   collapsedPhases,
   togglePhase,
   resultSync,
@@ -350,11 +358,16 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
   const { earlier: earlierResult, final: finalResult } = splitCardResult(card);
   // A feedback card's prompt starts with a generated header block; the body below
   // it is the actual instruction, so that is what the phase leads with.
-  const { header: feedbackHeader, body: promptBody } = splitFeedbackHeader(card.description ?? '');
+  const { header: feedbackHeader, body: promptWithBlock } = splitFeedbackHeader(card.description ?? '');
+  // `@` 참조 블록은 에이전트용 지시문이다. 본문과 떼어 칩 + 접힌 원문으로 보여 준다.
+  const { body: promptBody, block: referenceBlock } = splitReferenceBlock(promptWithBlock);
 
   useEffect(() => {
     if (editingField === 'description') {
-      editTextareaRef.current?.focus();
+      const element = editTextareaRef.current;
+      element?.focus();
+      // 캐럿을 끝으로 — 이어서 쓰거나 `@`를 붙이는 게 가장 흔한 편집이다.
+      element?.setSelectionRange(element.value.length, element.value.length);
     }
   }, [editingField]);
 
@@ -378,16 +391,21 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
           onToggle={() => togglePhase('prompt')}
         >
           {editingField === 'description' ? (
-            <textarea
-              ref={editTextareaRef}
+            <MentionTextarea
+              textareaRef={editTextareaRef}
               className="kv2-input kv2-phase-edit-textarea"
               value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
+              onChange={setEditValue}
               onKeyDown={handleTextareaKeyDown}
               onPaste={onDescriptionPaste}
               onBlur={saveEdit}
+              onReferencesChange={onDescriptionReferencesChange}
+              boundarySelector=".kv2-dialog"
+              projectDir={card.projectDir}
+              excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
               rows={8}
-              placeholder="Enter task description..."
+              placeholder="Enter task description... (@ 로 세션·Work·문서 참조)"
+              ariaLabel="Prompt 편집"
             />
           ) : (
             <PhaseBody
@@ -403,7 +421,8 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
                   onToggle={() => setShowFeedbackHeader((next) => !next)}
                 />
               )}
-              {card.description ? <CardMarkdown text={promptBody} /> : '(no description)'}
+              {card.description ? <CardMarkdown text={promptBody} highlightMentions /> : '(no description)'}
+              <SavedReferences body={promptBody} block={referenceBlock} />
             </PhaseBody>
           )}
         </PhaseCard>

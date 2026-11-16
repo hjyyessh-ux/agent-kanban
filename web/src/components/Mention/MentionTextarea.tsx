@@ -57,6 +57,19 @@ export interface MentionTextareaProps {
    * 훅을 한 번 더 돌리면 요청이 두 배가 되기 때문이다.
    */
   onReferencesChange?: (references: ResolvedReference[]) => void;
+  /**
+   * 호출부 키 처리(예: 카드 상세의 `⌘⏎` 저장 / `Esc` 취소). 팝오버가 키를
+   * **소비한 경우에는 불리지 않는다** — 팝오버가 열린 채 `Esc`를 누르면 팝오버만
+   * 닫히고 편집은 계속된다.
+   */
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  /**
+   * 포커스 이탈 훅(카드 상세의 blur 저장). 팝오버 행과 칩 버튼은 mousedown에서
+   * 기본 동작을 막아 포커스를 뺏지 않으므로, 그 클릭으로는 불리지 않는다.
+   */
+  onBlur?: (e: React.FocusEvent<HTMLTextAreaElement>) => void;
+  autoFocus?: boolean;
+  ariaLabel?: string;
   ariaInvalid?: boolean;
   ariaDescribedBy?: string;
 }
@@ -77,6 +90,10 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
   onPaste,
   textareaRef,
   onReferencesChange,
+  onKeyDown,
+  onBlur,
+  autoFocus,
+  ariaLabel,
   ariaInvalid,
   ariaDescribedBy,
 }) => {
@@ -237,7 +254,10 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (!isOpen) return;
+      if (!isOpen) {
+        onKeyDown?.(e);
+        return;
+      }
 
       switch (e.key) {
         case 'ArrowDown':
@@ -258,7 +278,11 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
           const candidate = rowsModel.candidates[activeIndex];
           // 고를 게 없으면 평소대로 개행한다. 이때 구간에 개행이 들어가므로
           // `findActiveMention`이 null을 돌려주고 팝오버는 저절로 닫힌다.
-          if (!candidate || candidate.disabledReason === 'self') return;
+          // `⌘⏎`는 고를 게 있어도 호출부(저장)로 보낸다.
+          if (e.metaKey || e.ctrlKey || !candidate || candidate.disabledReason === 'self') {
+            onKeyDown?.(e);
+            return;
+          }
           e.preventDefault();
           select(candidate);
           return;
@@ -272,9 +296,10 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
           dismiss();
           return;
         default:
+          onKeyDown?.(e);
       }
     },
-    [isOpen, moveSelection, cycleTab, rowsModel, activeIndex, select, dismiss],
+    [isOpen, moveSelection, cycleTab, rowsModel, activeIndex, select, dismiss, onKeyDown],
   );
 
   const handleRemove = useCallback(
@@ -316,7 +341,12 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
         onKeyUp={(e) => syncActive(e.currentTarget)}
         onClick={(e) => syncActive(e.currentTarget)}
         onPaste={onPaste}
-        onBlur={() => setActive(null)}
+        onBlur={(e) => {
+          setActive(null);
+          onBlur?.(e);
+        }}
+        autoFocus={autoFocus}
+        aria-label={ariaLabel}
         placeholder={placeholder}
         rows={rows}
         disabled={disabled}

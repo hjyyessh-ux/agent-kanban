@@ -7,7 +7,9 @@ import {
   TRANSCRIPT_READ_LIMIT_BYTES,
   appendReferenceBlock,
   parseMentionTokens,
+  parseReferenceBlock,
   renderReferenceBlock,
+  splitReferenceBlock,
   stripReferenceBlock,
   type ResolvedReference,
 } from './mention-reference';
@@ -392,5 +394,49 @@ describe('appendReferenceBlock', () => {
     const refs = Array.from({ length: MAX_REFERENCES + 2 }, (_, i) => sessionRef(`s${i}`));
     const result = appendReferenceBlock('본문', refs);
     expect(result.match(/^### /gm)?.length).toBe(MAX_REFERENCES);
+  });
+});
+
+describe('splitReferenceBlock', () => {
+  test('separates the typed body from the generated block', () => {
+    const body = '폴러 고쳐줘 @session:kx9f2a1b';
+    const { body: typed, block } = splitReferenceBlock(appendReferenceBlock(body, [SESSION_REF]));
+    expect(typed).toBe(body);
+    expect(block.startsWith(REFERENCE_BLOCK_OPEN)).toBe(true);
+    expect(block.endsWith(REFERENCE_BLOCK_CLOSE)).toBe(true);
+  });
+
+  test('no block → empty block, body untouched', () => {
+    expect(splitReferenceBlock('그냥 본문')).toEqual({ body: '그냥 본문', block: '' });
+  });
+});
+
+describe('parseReferenceBlock', () => {
+  test('reads back kind, id, title and chip meta from a rendered block', () => {
+    const block = renderReferenceBlock([SESSION_REF, WORK_REF, DOC_REF]);
+    expect(parseReferenceBlock(block)).toEqual([
+      { kind: 'session', id: 'kx9f2a1b', key: 'session:kx9f2a1b', title: SESSION_REF.title, meta: '1.2MB' },
+      { kind: 'work', id: 'wTg4hN2', key: 'work:wTg4hN2', title: WORK_REF.title, meta: '세션 4개 · 카드 11개' },
+      { kind: 'doc', id: DOC_REF.id, key: `doc:${DOC_REF.id}`, title: DOC_REF.title },
+    ]);
+  });
+
+  test('marks unresolved and transcript-less entries', () => {
+    const block = renderReferenceBlock([
+      { kind: 'session', id: 'gone1234', raw: '@session:gone1234', title: 'gone1234', unresolved: 'not_found' },
+      { ...SESSION_REF, transcriptPath: undefined, transcriptMissing: 'file_missing' },
+    ]);
+    const [missing, noTranscript] = parseReferenceBlock(block);
+    expect(missing.unresolved).toBe('not_found');
+    expect(noTranscript.transcriptMissing).toBe(true);
+    expect(noTranscript.meta).toBeUndefined();
+  });
+
+  test('keys line up with parseMentionTokens for percent-encoded doc ids', () => {
+    const id = 'Wiki/배치 노트.md';
+    const raw = `@doc:${encodeURIComponent(id)}`;
+    const block = renderReferenceBlock([{ kind: 'doc', id, raw, title: '배치 노트', docAbsPath: `/v/${id}` }]);
+    const [token] = parseMentionTokens(`참고 ${raw}`);
+    expect(parseReferenceBlock(block)[0].key).toBe(`${token.kind}:${token.id}`);
   });
 });
