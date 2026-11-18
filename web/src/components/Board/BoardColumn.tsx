@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { KanbanCard, KanbanStatus, Work } from '../../../../src/core/types';
 import { BoardColumnHeader } from './BoardColumnHeader';
 import { setBoardTurnOrder, useBoardTurnOrder } from './board-turn-order';
@@ -14,7 +14,7 @@ import { workForCard, type WorkDragSource, type WorkDropTarget, type WorksColumn
 import { useBoardWorkDnD, workDropTargetProps, writeWorkDragData } from './board-work-dnd';
 import { BoardCardWorkField } from './BoardCardWorkField';
 import type { WorkDetailIntent } from '../Works/WorkDetailDialog';
-import { BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
+import { BOARD_SESSION_COPY, BOARD_WORKS_COPY, COLUMN_MENU_COPY } from '../../constants/copy';
 
 /** `BoardCardWorkField` defaults when a caller omits its mutation props — e.g. a test rendering `works` alone. */
 const NOOP_SET_PLANNED = () => {};
@@ -69,8 +69,8 @@ interface BoardColumnProps {
   revealRequest?: CardRevealRequest | null;
   /**
    * `GROUP: WORKS` (board-works.ts `selectWorkFragments`, this column's slice).
-   * A session-grouped column draws its Work fragments, then the UNASSIGNED
-   * zone; a flat column tags each card with its Work via `worksIndex`.
+   * A session-grouped column draws the UNASSIGNED zone above its Work fragments.
+   * A flat column tags each card with its Work via `worksIndex`.
    */
   worksColumn?: WorksColumnModel;
   worksIndex?: Map<string, Work>;
@@ -120,6 +120,35 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
   const [hideAllSessionGroupsToken, setHideAllSessionGroupsToken] = useState(0);
   const [completeSessionsCollapsed, setCompleteSessionsCollapsed] = useState(false);
   const [worksCollapse, setWorksCollapse] = useState<WorkCollapseRequest>({ collapsed: false, token: 0 });
+  const unassignedStorageKey = `kanban.board.unassignedCollapsed.${status}`;
+  const [unassignedCollapsed, setUnassignedCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(unassignedStorageKey) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const unassignedId = useId();
+  const unassignedGroups = worksColumn?.unassigned;
+  const appliedUnassignedReveal = useRef(0);
+  useEffect(() => {
+    if (!revealRequest || revealRequest.token === appliedUnassignedReveal.current) return;
+    if (!unassignedGroups?.some((group) => group.key === revealRequest.groupKey)) return;
+
+    // Reveal the unread target for this visit while keeping the saved preference.
+    appliedUnassignedReveal.current = revealRequest.token;
+    setUnassignedCollapsed(false);
+  }, [revealRequest, unassignedGroups]);
+
+  const toggleUnassigned = () => {
+    const collapsed = !unassignedCollapsed;
+    setUnassignedCollapsed(collapsed);
+    try {
+      window.localStorage.setItem(unassignedStorageKey, String(collapsed));
+    } catch {
+      // The toggle still works when browser storage is unavailable.
+    }
+  };
   const sessionViewCards = cards
     .map((vm) => selectCardById(allCards, vm.id))
     .filter((card): card is KanbanCard => !!card);
@@ -289,7 +318,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
         onDragOver={isDndEnabled ? handleDragOver : undefined}
         onDragLeave={isDndEnabled ? handleDragLeave : undefined}
         onDrop={isDndEnabled ? handleDrop : undefined}
-        role="listbox"
+        role={sessionGrouped && worksColumn ? 'group' : 'listbox'}
         aria-label={`${column.label} cards`}
       >
         {sessionGrouped && worksColumn ? (
@@ -300,14 +329,29 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
                 zone goes through the tray's `⊘ Work에서 빼기`. */}
             {worksColumn.unassigned.length > 0 && (
               <>
-                <div className="kv2-works-unassigned-head">
+                <div
+                  className={`kv2-works-unassigned-head${unassignedCollapsed && unassignOk ? ' is-drop-target' : ''}`}
+                  {...(unassignedCollapsed ? unassignDropProps : {})}
+                >
                   <span>{BOARD_WORKS_COPY.unassignedHeading}</span>
                   <span className="kv2-works-unassigned-count">{worksColumn.unassigned.length}</span>
+                  <button
+                    type="button"
+                    className="kv2-complete-session-toggle"
+                    aria-label={unassignedCollapsed ? BOARD_WORKS_COPY.unassignedUnfold : BOARD_WORKS_COPY.unassignedFold}
+                    aria-expanded={!unassignedCollapsed}
+                    aria-controls={unassignedId}
+                    onClick={toggleUnassigned}
+                  >
+                    {unassignedCollapsed ? BOARD_SESSION_COPY.unfold : BOARD_SESSION_COPY.fold}
+                  </button>
                 </div>
                 <div
-                  className={`kv2-works-unassigned${unassignOk ? ' is-drop-target' : ''}`}
+                  id={unassignedId}
+                  hidden={unassignedCollapsed}
+                  className={`kv2-works-unassigned${!unassignedCollapsed && unassignOk ? ' is-drop-target' : ''}`}
                   data-status={status}
-                  {...unassignDropProps}
+                  {...(!unassignedCollapsed ? unassignDropProps : {})}
                 >
                   <BoardCompleteSessionView
                     cards={[]}

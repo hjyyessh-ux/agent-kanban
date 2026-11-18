@@ -339,6 +339,94 @@ test.describe('Board GROUP: WORKS — filters', () => {
   });
 });
 
+test.describe('Board GROUP: WORKS — Unassigned sessions', () => {
+  test('folds only the selected column, brings the Work into view, and remembers the setting', async ({ page, seedCardWithStatus, seedWork }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    for (let i = 0; i < 8; i += 1) {
+      await seedSession(seedCardWithStatus, `bw-fold-loose-${i}`, `[BW] Loose ${i}`);
+    }
+    await seedSession(seedCardWithStatus, 'bw-fold-done', '[BW] Loose done', 'done');
+    await seedSession(seedCardWithStatus, 'bw-fold-assigned', '[BW] Assigned');
+    const work = await seedWork({ title: '[BW] Work below loose sessions' });
+    await apiAddWorkSession(work.id, { sessionId: 'bw-fold-assigned' });
+
+    await page.goto('/');
+    const panel = page.locator(unassignedZone('complete'));
+    const header = page.locator('.kv2-column[data-status="complete"] .kv2-works-unassigned-head');
+    const toggle = header.getByRole('button');
+    const workTitle = page.locator(workIn(work.id, 'complete')).getByRole('button', { name: work.title, exact: true });
+    await expect(toggle).toHaveAccessibleName(BOARD_WORKS_COPY.unassignedFold);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel).toBeVisible();
+    await expect(panel).toHaveAttribute('id', /.+/);
+    await expect(toggle).toHaveAttribute('aria-controls', await panel.evaluate((element) => element.id));
+    await expect(workTitle).not.toBeInViewport();
+
+    await toggle.click();
+    await expect(toggle).toHaveAccessibleName(BOARD_WORKS_COPY.unassignedUnfold);
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(panel).toBeHidden();
+    await expect(header.getByText(BOARD_WORKS_COPY.unassignedHeading, { exact: true })).toBeVisible();
+    await expect(header.getByText('8', { exact: true })).toBeVisible();
+    await expect(page.locator(unassignedZone('done'))).toBeVisible();
+    await expect(workTitle).toBeInViewport();
+
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(workTitle).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog', { name: work.title, exact: true });
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeHidden();
+    await toggle.dblclick();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(panel).toBeVisible();
+  });
+
+  test('a folded group accepts an unlink and opens temporarily for an unread jump', async ({ page, seedCardWithStatus, seedWork }) => {
+    const unread = 'bw-fold-unread';
+    const assigned = 'bw-fold-unlink';
+    await seedSession(seedCardWithStatus, unread, '[BW] Unread loose', 'complete', { unread: true });
+    await seedSession(seedCardWithStatus, assigned, '[BW] Unlink from Work');
+    const work = await seedWork({ title: '[BW] Source for folded unlink' });
+    await apiAddWorkSession(work.id, { sessionId: assigned });
+
+    await page.goto('/');
+    const column = '.kv2-column[data-status="complete"]';
+    const headerSelector = `${column} .kv2-works-unassigned-head`;
+    const header = page.locator(headerSelector);
+    const toggle = header.getByRole('button');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(await dragTo(page, headerOf(assigned), headerSelector)).toBe(true);
+    await expect.poll(() => linkedSessions(work.id)).not.toContain(assigned);
+    await expect(header.getByText('2', { exact: true })).toBeVisible();
+    await expect(page.locator(unassignedZone('complete'))).toBeHidden();
+
+    await page.locator(column).getByRole('button', { name: /unread.*jump to next/ }).click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator(`article[data-session-group-key="session:${unread}"] .kv2-unread-focus`)).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await page.locator(column).getByRole('button', { name: /unread.*jump to next/ }).click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
 test.describe('Board GROUP: WORKS — ⋯ 세션 접기', () => {
   test('folds a Work to header + meta, and opening it again shows the newest two before Show more', async ({ page, seedCardWithStatus, seedWork }) => {
     const run = Date.now();

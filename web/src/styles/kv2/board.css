@@ -4199,17 +4199,17 @@
 }
 
 .kv2-work.is-drop-target,
-.kv2-works-unassigned.is-drop-target {
+:is(.kv2-works-unassigned, .kv2-works-unassigned-head).is-drop-target {
   outline: 3px dashed color-mix(in srgb, var(--kv2-work-border) 45%, transparent);
   outline-offset: 4px;
 }
 
-.kv2-works-unassigned.is-drop-target {
+:is(.kv2-works-unassigned, .kv2-works-unassigned-head).is-drop-target {
   outline-color: var(--kv2-text-muted);
 }
 
 .kv2-work.is-drop-target.is-drop-over,
-.kv2-works-unassigned.is-drop-target.is-drop-over {
+:is(.kv2-works-unassigned, .kv2-works-unassigned-head).is-drop-target.is-drop-over {
   outline-style: solid;
   outline-color: var(--kv2-work-border);
 }
@@ -4220,7 +4220,7 @@
   background: var(--kv2-work-drop-over-face);
 }
 
-.kv2-works-unassigned.is-drop-target.is-drop-over {
+:is(.kv2-works-unassigned, .kv2-works-unassigned-head).is-drop-target.is-drop-over {
   outline-color: var(--kv2-text-secondary);
 }
 

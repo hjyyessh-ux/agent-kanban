@@ -134,6 +134,8 @@ export const BOARD_WORKS_COPY = {
   showMore: (hidden: number) => `＋ 세션 ${hidden}개 더 보기`,
   showLess: '세션 접기 ▴',
   unassignedHeading: 'Unassigned sessions',
+  unassignedFold: 'Unassigned sessions 접기',
+  unassignedUnfold: 'Unassigned sessions 펼치기',
   columnWorkCount: (count: number) => `Work ${count}`,
   collapse: 'Work 접기',
   expand: 'Work 펼치기',
