@@ -280,6 +280,16 @@ export const SETTINGS_COPY = {
   edit: '✎ 편집',
 } as const;
 
+export const RESPONSE_GUIDELINES_COPY = {
+  title: '공통 응답 지침',
+  description: 'Claude·Codex 카드 실행(새 실행·재개·피드백)에 함께 전달됩니다. 각 도구의 사용자·프로젝트 지침은 그대로 유지되며, 카드 제목·내용·히스토리에는 표시되지 않습니다. 비워 두면 꺼집니다.',
+  on: '켜짐', off: '꺼짐',
+  placeholderPrefix: '비어 있으면 꺼짐 · 제안: ',
+  useSuggestion: '제안 문구 넣기', clear: '비우기', save: '저장', saving: '저장 중…',
+  savedOn: '저장했습니다. 다음 실행부터 적용됩니다.', savedOff: '비활성화했습니다. 다음 실행부터 전달하지 않습니다.',
+  saveFailed: '저장하지 못했습니다.',
+} as const;
+
 export const SCHEDULER_COPY = {
   deleteConfirm: (name: string) => `"${name}" 스케줄을 삭제할까요? 되돌릴 수 없습니다.`,
 } as const;

@@ -21,6 +21,7 @@ import { parseCodexJsonlLine } from './codex-jsonl-parser';
 import { joinResultSegments, lastResultSegment } from './result-segments';
 import { captureGitEndAndUsage } from './git-capture';
 import { withSpawnLock } from './spawn-lock';
+import { planCodexGuidelineDelivery } from './codex-response-guidelines';
 import { notifyTelegramCompletion } from '../telegram-completion';
 
 const DEFAULT_THREAD_ID_TIMEOUT_MS = 30_000;
@@ -90,7 +91,15 @@ async function startCodexRun(
   await Bun.write(run.eventsPath, '');
   await Bun.write(run.stderrPath, '');
 
-  const argv = await buildCodexCommand(deps, run, input, model);
+  // prompt.md above keeps the user's original words; only stdin carries a
+  // guideline prefix (resume / config fallback) — see codex-response-guidelines.
+  const guidelines = await planCodexGuidelineDelivery({
+    settingsStore: deps.settingsStore,
+    cwd: input.cwd,
+    prompt: input.prompt,
+    resumeSessionId: input.resumeSessionId,
+  });
+  const argv = await buildCodexCommand(deps, run, input, model, guidelines.configArgs);
 
   let proc: ReturnType<typeof Bun.spawn>;
   try {
@@ -124,7 +133,7 @@ async function startCodexRun(
   });
 
   const stdin = getWritableStdin(proc.stdin);
-  stdin.write(input.prompt);
+  stdin.write(guidelines.stdinPrompt);
   stdin.end();
 
   input.abortSignal?.addEventListener('abort', () => proc.kill(), { once: true });
@@ -198,6 +207,7 @@ async function buildCodexCommand(
   run: RuntimeRun,
   input: AdapterStartInput,
   model: string,
+  guidelineConfigArgs: string[] = [],
 ): Promise<string[]> {
   const command = deps.commandOverride ?? ['codex'];
   const sandbox = await resolveCodexSandbox(deps, input);
@@ -218,6 +228,7 @@ async function buildCodexCommand(
     input.cwd,
   );
   args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
+  args.push(...guidelineConfigArgs);
   if (skipGitRepoCheck) {
     args.push('--skip-git-repo-check');
   }

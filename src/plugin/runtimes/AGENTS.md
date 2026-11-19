@@ -89,3 +89,10 @@ Runtime dispatch is one of the high-risk areas tracked in `docs/invariants.md` (
 - Node `node:fs`, `node:fs/promises`, `node:path` — run artifact I/O
 
 <!-- MANUAL: -->
+
+## Common response guidelines
+
+- Settings key `agent.response_guidelines` (blank = off), helpers in `src/core/response-guidelines.ts`.
+- Claude: `--append-system-prompt` + `--system-prompt-snapshot off` on every launch (snapshot `on` would replay the first launch's text on `--resume`).
+- Codex: new thread → `-c developer_instructions` = existing config value + block (`codex-response-guidelines.ts`); `exec resume` ignores it, so every resume receives the current nonblank Settings as a plain stdin prefix. No version comparison, override/reset instructions, or dedup bookkeeping; blank injects nothing.
+- `prompt.md` / card fields stay the user's verbatim words; rollout readers strip the leading block. Evidence: `docs/reports/2026-11-19-response-guidelines.md`.

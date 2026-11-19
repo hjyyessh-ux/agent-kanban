@@ -175,6 +175,7 @@ import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
 import { detectPlaintextSecret } from '../core/secret-detect';
+import { RESPONSE_GUIDELINES_SETTING_KEY, normalizeResponseGuidelines, validateResponseGuidelines } from '../core/response-guidelines';
 
 // The web UI is served from the same origin as the API, so no cross-origin
 // access is ever required by a legitimate client. We therefore emit NO
@@ -3393,6 +3394,17 @@ export function createRouteHandler(
         const body = await req.json();
         if (typeof body.value !== 'string') {
           return errorResponse('value (string) is required', 400);
+        }
+        if (key === RESPONSE_GUIDELINES_SETTING_KEY) {
+          // Blank = disabled. Stored unmasked so the Settings panel can show it.
+          const invalid = validateResponseGuidelines(body.value);
+          if (invalid) return errorResponse(invalid, 400);
+          const entry = await settingsStore.upsertByKey(key, normalizeResponseGuidelines(body.value), {
+            description: 'Common response guidelines appended to every Claude/Codex run (blank = off)',
+            category: 'agent',
+            masked: false,
+          });
+          return json(redactSetting(entry));
         }
         const entry = await settingsStore.upsertByKey(key, body.value, {
           description: typeof body.description === 'string' ? body.description : undefined,

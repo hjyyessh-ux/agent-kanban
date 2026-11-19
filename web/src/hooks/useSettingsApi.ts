@@ -85,6 +85,16 @@ export async function updateSetting(id: string, input: UpdateSettingsInput): Pro
   return handleResponse<SettingsEntry>(res);
 }
 
+/** Upsert a well-known setting by key (server applies key-specific validation). */
+export async function upsertSettingByKey(key: string, value: string): Promise<SettingsEntry> {
+  const res = await fetch(`${BASE_URL}/settings/by-key/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  });
+  return handleResponse<SettingsEntry>(res);
+}
+
 export async function deleteSetting(id: string): Promise<void> {
   const res = await fetch(`${BASE_URL}/settings/${encodeURIComponent(id)}`, {
     method: 'DELETE',

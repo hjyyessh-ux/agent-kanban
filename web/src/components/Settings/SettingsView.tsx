@@ -9,6 +9,8 @@ import { useFontScale } from '../../hooks/useFontScale';
 import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import { SettingsEntryModal } from './SettingsEntryModal';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
+import { ResponseGuidelinesPanel } from './ResponseGuidelinesPanel';
+import { RESPONSE_GUIDELINES_SETTING_KEY } from '../../../../src/core/response-guidelines';
 import { toggleLanFullAccess } from './lanAccess';
 import { ErrorAlert } from '../shared/ErrorAlert';
 import type { UiAlert } from '../../hooks/uiAlert';
@@ -242,7 +244,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Separate network_exposed / lan_full_access from generic entries
   const networkEntry = entries.find(e => e.key === 'network_exposed');
   const lanFullAccessEntry = entries.find(e => e.key === 'lan_full_access');
-  const genericEntries = entries.filter(e => e.key !== 'network_exposed' && e.key !== 'lan_full_access');
+  const guidelinesEntry = entries.find(e => e.key === RESPONSE_GUIDELINES_SETTING_KEY);
+  const genericEntries = entries.filter(e => e.key !== 'network_exposed' && e.key !== 'lan_full_access'
+    && e.key !== RESPONSE_GUIDELINES_SETTING_KEY);
 
   // Sort by category (grouped), then by key alphabetically
   const sortedEntries = [...genericEntries].sort((a, b) => {
@@ -349,6 +353,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
       )}
+
+      <ResponseGuidelinesPanel entry={guidelinesEntry} onSaved={onRefresh} />
 
       <SettingsMaintenancePanel />
 

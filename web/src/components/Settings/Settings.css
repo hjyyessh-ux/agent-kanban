@@ -253,6 +253,36 @@
   margin: 4px 0 0 0;
 }
 
+/* ── Response Guidelines ────────────────────────────────────── */
+.settings-guidelines-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 88px;
+}
+
+.settings-guidelines-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-guidelines-count {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-secondary);
+}
+
+.settings-guidelines-count--over,
+.settings-guidelines-error {
+  color: var(--kv2-danger-text-deep);
+}
+
+.settings-guidelines-error {
+  font-size: var(--kv2-text-xs);
+  margin: 0;
+}
+
 /* ── Toggle Switch ──────────────────────────────────────────── */
 .settings-toggle-switch {
   position: relative;

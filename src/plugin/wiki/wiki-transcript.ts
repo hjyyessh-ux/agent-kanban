@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { KanbanCard } from '../../core/types';
+import { stripResponseGuidelinePrefix } from '../../core/response-guidelines';
 
 const HEAD_CHARS = 4_000;
 const TAIL_CHARS = 8_000;
@@ -221,7 +222,9 @@ function codexTurns(raw: string): string[] {
     if (entry.payload?.type !== 'message') continue;
     const role = entry.payload.role;
     if (role !== 'user' && role !== 'assistant') continue;
-    const text = textFromContent(entry.payload.content);
+    const raw = textFromContent(entry.payload.content);
+    // Dispatched resumes may prefix the user turn with response guidelines.
+    const text = role === 'user' ? stripResponseGuidelinePrefix(raw) : raw;
     if (text.trim()) parts.push(`[${role}] ${text.trim()}`);
   }
   return parts;
