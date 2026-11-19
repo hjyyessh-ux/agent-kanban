@@ -2827,6 +2827,23 @@
   padding: 0 var(--kv2-sp-3) var(--kv2-sp-3) calc(var(--kv2-sp-3) + 1.5em);
 }
 
+.work-search-hit-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--kv2-sp-1);
+}
+
+.work-search-hit-row > .work-search-hit {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.work-search-hit-row .work-search-hit-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
 .work-search-hit {
   display: grid;
   grid-template-columns: 3.5rem minmax(0, 1fr);

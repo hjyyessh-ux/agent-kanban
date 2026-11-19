@@ -1,6 +1,7 @@
 import type { KanbanCard } from '../../../../src/core/types';
 import { orderSessionTurns } from '../Board/SessionConversationModal';
 import type { TimelineHighlight } from './timelineRows';
+import type { DeepLinkMessageRole } from '../../utils/deep-link';
 
 /** Which part of a turn the query was found in — the result row's label. */
 export type WorkSearchHitField = 'title' | 'prompt' | 'result' | 'subagent';
@@ -11,6 +12,17 @@ export const WORK_SEARCH_FIELD_LABELS: Record<WorkSearchHitField, string> = {
   result: 'Result',
   subagent: 'Subagent',
 };
+
+/**
+ * The conversation message a hit points at: the turn's request (title/prompt)
+ * or its answer (result). A subagent hit has no top-level message of its own —
+ * it links to the turn.
+ */
+export function searchHitMessageRole(field: WorkSearchHitField): DeepLinkMessageRole | undefined {
+  if (field === 'title' || field === 'prompt') return 'user';
+  if (field === 'result') return 'assistant';
+  return undefined;
+}
 
 export interface WorkSearchHit {
   cardId: string;

@@ -42,11 +42,13 @@ import type { TimelineHighlight } from './timelineRows';
 import {
   WORK_SEARCH_FIELD_LABELS,
   searchHighlight,
+  searchHitMessageRole,
   searchWorkSessions,
   splitOnQuery,
   type WorkSearchGroup,
 } from './workSessionSearch';
 import { useWorkSearchCards } from '../../hooks/useWorkSearchCards';
+import { buildDeepLinkSearch, type DeepLinkMessageRole } from '../../utils/deep-link';
 import './Works.css';
 
 interface WorkDetailDialogProps {
@@ -162,6 +164,8 @@ export type WorkDetailIntent = 'rename' | 'merge' | 'complete';
 export interface WorkSessionFocus {
   query?: string;
   cardId?: string;
+  /** With `cardId`: the exact message — the turn's Prompt (`user`) or Result (`assistant`). */
+  role?: DeepLinkMessageRole;
 }
 
 /** Hits shown per session before its "N개 더" toggle. */
@@ -392,8 +396,8 @@ export function WorkDetailDialog({
       return next;
     });
   };
-  const openHit = (sessionId: string, cardId?: string) => {
-    onOpenSession(sessionId, { query: trimmedQuery || undefined, cardId });
+  const openHit = (sessionId: string, cardId?: string, role?: DeepLinkMessageRole) => {
+    onOpenSession(sessionId, { query: trimmedQuery || undefined, cardId, role });
   };
 
   const runAction = (action: () => Promise<void>) => {
@@ -1189,22 +1193,47 @@ export function WorkDetailDialog({
                       </div>
                       {open && (
                         <div className="work-search-hits">
-                          {shown.map((hit) => (
-                            <button
-                              key={hit.cardId}
-                              type="button"
-                              className="work-search-hit"
-                              onClick={() => openHit(sessionId, hit.cardId)}
-                            >
-                              <span className="work-search-hit-where">
-                                <b>T{hit.turnNumber}</b>
-                                <small>{WORK_SEARCH_FIELD_LABELS[hit.field]}</small>
-                              </span>
-                              <span className="work-search-hit-snippet">
-                                <Highlighted text={hit.snippet} query={trimmedQuery} />
-                              </span>
-                            </button>
-                          ))}
+                          {shown.map((hit) => {
+                            const role = searchHitMessageRole(hit.field);
+                            // Ids only — the query and the snippet never go into the link.
+                            const href = buildDeepLinkSearch('', {
+                              kind: 'session',
+                              sessionId,
+                              message: role ? { cardId: hit.cardId, role } : undefined,
+                            });
+                            return (
+                              <div key={hit.cardId} className="work-search-hit-row">
+                                <button
+                                  type="button"
+                                  className="work-search-hit"
+                                  onClick={() => openHit(sessionId, hit.cardId, role)}
+                                >
+                                  <span className="work-search-hit-where">
+                                    <b>T{hit.turnNumber}</b>
+                                    <small>{WORK_SEARCH_FIELD_LABELS[hit.field]}</small>
+                                  </span>
+                                  <span className="work-search-hit-snippet">
+                                    <Highlighted text={hit.snippet} query={trimmedQuery} />
+                                  </span>
+                                </button>
+                                <a
+                                  className="kv2-resume-copy work-search-hit-link"
+                                  href={href}
+                                  title={`T${hit.turnNumber} ${role === 'assistant' ? 'Result' : role === 'user' ? 'Prompt' : ''} 링크 (새 탭: Ctrl/⌘+클릭)`}
+                                  aria-label={`T${hit.turnNumber} ${WORK_SEARCH_FIELD_LABELS[hit.field]} 메시지 링크`}
+                                  onClick={(event) => {
+                                    // A plain click navigates in place like the row does;
+                                    // modified clicks keep the browser's new-tab/copy behaviour.
+                                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                                    event.preventDefault();
+                                    openHit(sessionId, hit.cardId, role);
+                                  }}
+                                >
+                                  🔗
+                                </a>
+                              </div>
+                            );
+                          })}
                           {hits.length > SEARCH_HITS_PER_SESSION && (
                             <button
                               type="button"

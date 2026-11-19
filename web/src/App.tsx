@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BoardFilterBar } from './components/Board/BoardFilterBar';
 import { BoardProjectSwitcher } from './components/Board/BoardProjectSwitcher';
 import { BoardScreen, type UnreadJumpRequest } from './components/Board/BoardScreen';
@@ -51,10 +51,15 @@ import {
   filterCardsByWork,
   indexWorksBySession,
   resolveWorkFilter,
+  workForCard,
   type BoardWorkFilter,
 } from './components/Board/board-works';
 import { BOARD_GROUP_MODE_STORAGE_KEY, parseBoardGroupMode, type BoardGroupMode } from './components/Board/board-group-mode';
-import { fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
+import { ApiError, fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
+import { useDeepLinkHistory } from './hooks/useDeepLinkHistory';
+import { DeepLinkNotice, type DeepLinkNoticeState } from './components/shared/DeepLinkNotice';
+import { splitCardResult } from './components/Card/card-result';
+import type { DeepLinkMessage, DeepLinkTarget } from './utils/deep-link';
 import { useQuickActions } from './hooks/useQuickActions';
 import { BOARD_WORKS_COPY, CARD_DETAIL_COPY, TOOLBAR_COPY } from './constants/copy';
 import { QuickActionsDrawer } from './components/QuickActions/QuickActionsDrawer';
@@ -124,6 +129,38 @@ function getStoredBoardGroupMode(): BoardGroupMode {
 }
 
 const APP_TITLE = 'Agent Kanban';
+
+const SESSION_KEY_PREFIX = 'session:';
+
+function sessionIdFromKey(key: string): string | null {
+  return key.startsWith(SESSION_KEY_PREFIX) ? key.slice(SESSION_KEY_PREFIX.length) : null;
+}
+
+function focusMessage(focus: WorkSessionFocus | undefined): DeepLinkMessage | undefined {
+  return focus?.cardId && focus.role ? { cardId: focus.cardId, role: focus.role } : undefined;
+}
+
+/**
+ * Why a link's read failed, without guessing: 401/403 is the server refusing
+ * this client (the install token only goes to loopback clients) and is
+ * reported as such — never retried another way; 404 is handled by callers.
+ */
+function linkFailureNotice(error: unknown, what: '카드' | '세션'): DeepLinkNoticeState {
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+    return {
+      tone: 'error',
+      reason: 'access-denied',
+      title: `${what}에 접근할 수 없습니다`,
+      message: `서버가 이 요청을 거부했습니다 (HTTP ${error.status}). 링크를 만든 PC의 Agent Kanban에서 직접 열었는지 확인하세요.`,
+    };
+  }
+  return {
+    tone: 'error',
+    reason: 'load-failed',
+    title: `${what}${what === '카드' ? '를' : '을'} 불러오지 못했습니다`,
+    message: error instanceof Error ? error.message : '알 수 없는 오류',
+  };
+}
 
 export default function App() {
   const { cards, loading, error, updateCard, deleteCard, refreshCards, archiveCards, completeAllCards, dispatchCard, createCard, queueCard, unqueueCard, scheduleCard, cancelCardSchedule, reorderCards, setResumeSession, clearResumeSession, markCompletionSeen, markCompletionSeenMany, clearError, showError } = useKanbanBoard();
@@ -231,6 +268,8 @@ export default function App() {
   const [bulkAssignSessions, setBulkAssignSessions] = useState<WorkInboxSession[] | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
+  const deepLink = useDeepLinkHistory();
+  const [deepLinkNotice, setDeepLinkNotice] = useState<DeepLinkNoticeState | null>(null);
   useEffect(() => {
     setSelectedCard((prev) => {
       if (!prev) return prev;
@@ -382,13 +421,34 @@ export default function App() {
     });
   };
 
+  /** The session layer as a link target — what the URL shows while no card is on top. */
+  const sessionLinkTarget = (): DeepLinkTarget | null => {
+    const sessionId = selectedSession ? sessionIdFromKey(selectedSession.key) : null;
+    return sessionId
+      ? { kind: 'session', sessionId, message: focusMessage(selectedSession?.focus) }
+      : null;
+  };
+
   const handleOpenSession = (group: CompleteSessionGroup) => {
     const status = group.cards[0]?.status === 'done' ? 'done' : 'complete';
+    const sessionId = sessionIdFromKey(group.key);
+    // A card-keyed group (no session id yet) has no stable session to link to.
+    if (sessionId) {
+      const target: DeepLinkTarget = { kind: 'session', sessionId };
+      if (selectedSession) deepLink.replace(target);
+      else deepLink.push(target);
+    }
     setSelectedSession({ key: group.key, status });
     markCardsSeen(group.cards);
   };
 
-  const handleOpenCard = (card: KanbanCard, options?: { archived?: boolean }) => {
+  const handleOpenCard = (card: KanbanCard, options?: { archived?: boolean; fromLink?: boolean }) => {
+    if (!options?.fromLink) {
+      // Swapping the card in an open detail replaces; a new detail on top pushes.
+      const target: DeepLinkTarget = { kind: 'card', cardId: card.id };
+      if (selectedCard) deepLink.replace(target);
+      else deepLink.push(target);
+    }
     setSelectedCard(card);
     setSelectedCardArchived(options?.archived === true);
 
@@ -494,6 +554,7 @@ export default function App() {
    */
   const handleOpenWorkSession = (sessionId: string, focus?: WorkSessionFocus) => {
     const key = `session:${sessionId}`;
+    const linkMode = selectedSession ? 'replace' : 'push';
     void fetchSessionCards(sessionId)
       .then((fetched) => {
         if (fetched.length === 0) {
@@ -506,6 +567,9 @@ export default function App() {
         }
         setArchivedSessionCards({ key, cards: fetched });
         markCardsSeen(cards.filter((card) => card.sessionId === sessionId));
+        const target: DeepLinkTarget = { kind: 'session', sessionId, message: focusMessage(focus) };
+        if (linkMode === 'replace') deepLink.replace(target);
+        else deepLink.push(target);
         setSelectedSession({
           key,
           status: fetched.some((card) => card.status === 'done') ? 'done' : 'complete',
@@ -517,6 +581,194 @@ export default function App() {
         showError(createUiAlert('대화를 열 수 없습니다', message, 'Refresh board'));
       });
   };
+
+  // ── Deep links (?card= / ?session=&msg=) ────────────────────────────────
+  // Resolved only after the first board read: whether a card is "archived" is
+  // decided by its absence from the board, and a tab opened from a link must
+  // not report "not found" just because the poll had not answered yet.
+  // The Works list is read too, so a card in another Work can be revealed.
+  const boardReady = (!loading || cards.length > 0) && !works.loading;
+  const linkResolution = useRef({ handledSeq: -1, seq: 0 });
+  const latestForLink = useRef({ cards, selectedCard, selectedSession, works: works.works, worksGroupActive, effectiveWorkFilter });
+  latestForLink.current = { cards, selectedCard, selectedSession, works: works.works, worksGroupActive, effectiveWorkFilter };
+  const handleOpenCardRef = useRef(handleOpenCard);
+  handleOpenCardRef.current = handleOpenCard;
+  const markCardsSeenRef = useRef(markCardsSeen);
+  markCardsSeenRef.current = markCardsSeen;
+
+  const replaceLink = deepLink.replace;
+  const closeLinkedLayers = useCallback(() => {
+    setSelectedCard(null);
+    setSelectedCardArchived(false);
+    setSelectedSession(null);
+    setArchivedSessionCards(null);
+  }, []);
+
+  /**
+   * A card in another Work than the board's `WORK:` filter shows would sit
+   * behind its detail with no row of its own — point the filter at the card's
+   * Work (or clear it when that Work is no longer active).
+   */
+  const revealCardWork = useCallback((card: KanbanCard) => {
+    const { works: allWorks, worksGroupActive: groupedByWork, effectiveWorkFilter: filter } = latestForLink.current;
+    const owner = workForCard(card, indexWorksBySession(allWorks));
+    if (!groupedByWork || filter === 'all') return owner;
+    const hidden = filter === 'unassigned' ? Boolean(owner) : owner?.id !== filter.workId;
+    if (hidden) setBoardWorkFilter(owner?.status === 'active' ? { workId: owner.id } : 'all');
+    return owner;
+  }, []);
+
+  const resolveCardLink = useCallback(async (cardId: string, seq: number) => {
+    const isStale = () => linkResolution.current.seq !== seq;
+    const { cards: boardCards, selectedCard: openCard, selectedSession: openSession } = latestForLink.current;
+    if (openCard?.id === cardId) return;
+
+    let card = boardCards.find((candidate) => candidate.id === cardId);
+    let archived = false;
+    if (!card) {
+      try {
+        card = await fetchCard(cardId, { includeArchived: true });
+        archived = true;
+      } catch (error: unknown) {
+        if (isStale()) return;
+        if (!(error instanceof ApiError && error.status === 404)) {
+          setDeepLinkNotice(linkFailureNotice(error, '카드'));
+          return;
+        }
+        // Older shared links may carry the 8-char short id the UI displays.
+        // Accept it only when it names exactly one board card, then correct
+        // the URL to the full id so the next share is canonical.
+        const matches = cardId.length >= 8 ? boardCards.filter((candidate) => candidate.id.startsWith(cardId)) : [];
+        if (matches.length !== 1) {
+          closeLinkedLayers();
+          setDeepLinkNotice({
+            tone: 'error',
+            reason: 'card-not-found',
+            title: '카드를 찾을 수 없습니다',
+            message: `ID ${cardId}인 카드가 보드와 아카이브 어디에도 없습니다. 삭제되었거나 다른 PC의 카드일 수 있습니다.`,
+          });
+          return;
+        }
+        card = matches[0];
+        replaceLink({ kind: 'card', cardId: card.id });
+      }
+    }
+    if (isStale() || !card) return;
+
+    // The session dialog stays under the card only when the card is one of its turns.
+    if (openSession && (!card.sessionId || openSession.key !== `${SESSION_KEY_PREFIX}${card.sessionId}`)) {
+      setSelectedSession(null);
+      setArchivedSessionCards(null);
+    }
+    const owner = revealCardWork(card);
+    handleOpenCardRef.current(card, { archived, fromLink: true });
+    if (archived) {
+      setDeepLinkNotice({
+        tone: 'info',
+        reason: 'archived',
+        title: '아카이브된 카드입니다',
+        message: owner
+          ? `Work "${owner.title}"의 카드로, 보드에서는 아카이브되어 보이지 않습니다.`
+          : '보드에서는 아카이브되어 보이지 않는 카드입니다.',
+      });
+    }
+  }, [closeLinkedLayers, replaceLink, revealCardWork]);
+
+  const resolveSessionLink = useCallback(async (sessionId: string, message: DeepLinkMessage | undefined, seq: number) => {
+    const isStale = () => linkResolution.current.seq !== seq;
+    const key = `${SESSION_KEY_PREFIX}${sessionId}`;
+    const { selectedSession: openSession } = latestForLink.current;
+    const openMessage = focusMessage(openSession?.focus);
+    if (
+      openSession?.key === key
+      && openMessage?.cardId === message?.cardId
+      && openMessage?.role === message?.role
+    ) {
+      // Back from a card opened over this session: the session is already showing.
+      setSelectedCard(null);
+      setSelectedCardArchived(false);
+      return;
+    }
+
+    let fetched: KanbanCard[];
+    try {
+      fetched = await fetchSessionCards(sessionId);
+    } catch (error: unknown) {
+      if (!isStale()) setDeepLinkNotice(linkFailureNotice(error, '세션'));
+      return;
+    }
+    if (isStale()) return;
+    if (fetched.length === 0) {
+      closeLinkedLayers();
+      setDeepLinkNotice({
+        tone: 'error',
+        reason: 'session-not-found',
+        title: '세션을 찾을 수 없습니다',
+        message: `세션 ${sessionId}에 해당하는 카드가 보드와 아카이브 어디에도 없습니다.`,
+      });
+      return;
+    }
+
+    const liveIds = new Set(latestForLink.current.cards.map((card) => card.id));
+    const archived = !fetched.some((card) => liveIds.has(card.id));
+    let focus: WorkSessionFocus | undefined;
+    let notice: DeepLinkNoticeState | null = archived
+      ? {
+        tone: 'info',
+        reason: 'archived',
+        title: '아카이브된 세션입니다',
+        message: '이 세션의 카드는 모두 보드에서 아카이브되었습니다. 보관된 기록을 엽니다.',
+      }
+      : null;
+    if (message) {
+      // Only a top-level turn is a message; a subagent child folds into its parent.
+      const turn = fetched.find((card) => card.id === message.cardId && !card.parentCardId);
+      const exists = Boolean(turn) && (message.role === 'user' || Boolean(turn && splitCardResult(turn).final.trim()));
+      if (exists) {
+        focus = { cardId: message.cardId, role: message.role };
+      } else {
+        notice = {
+          tone: 'error',
+          reason: 'message-not-found',
+          title: '메시지를 찾을 수 없습니다',
+          message: `세션은 열었지만 ${message.role === 'user' ? 'Prompt' : 'Result'} 메시지(${message.cardId})가 이 세션에 없습니다.${archived ? ' (아카이브된 세션)' : ''}`,
+        };
+      }
+    }
+
+    setSelectedCard(null);
+    setSelectedCardArchived(false);
+    setArchivedSessionCards({ key, cards: fetched });
+    setSelectedSession({
+      key,
+      status: fetched.some((card) => card.status === 'done') ? 'done' : 'complete',
+      focus,
+    });
+    markCardsSeenRef.current(latestForLink.current.cards.filter((card) => card.sessionId === sessionId));
+    setDeepLinkNotice(notice);
+  }, [closeLinkedLayers]);
+
+  useEffect(() => {
+    if (!boardReady) return;
+    const { link, seq } = deepLink.request;
+    if (linkResolution.current.handledSeq === seq) return;
+    linkResolution.current = { handledSeq: seq, seq };
+    if (link.kind === 'none') {
+      // Back/forward to a plain board URL closes whatever a link had opened.
+      if (seq > 0) {
+        closeLinkedLayers();
+        setDeepLinkNotice(null);
+      }
+      return;
+    }
+    setDeepLinkNotice(null);
+    if (link.kind === 'invalid') {
+      setDeepLinkNotice({ tone: 'error', reason: 'invalid', title: '링크를 열 수 없습니다', message: link.reason });
+      return;
+    }
+    if (link.kind === 'card') void resolveCardLink(link.cardId, seq);
+    else void resolveSessionLink(link.sessionId, link.message, seq);
+  }, [boardReady, deepLink.request, closeLinkedLayers, resolveCardLink, resolveSessionLink]);
 
   const handleAssignAll = () => {
     setBulkAssignSessions(works.inbox);
@@ -1027,6 +1279,10 @@ export default function App() {
         />
       )}
 
+      {deepLinkNotice && (
+        <DeepLinkNotice notice={deepLinkNotice} onDismiss={() => setDeepLinkNotice(null)} />
+      )}
+
       {/* Rendered *after* WorkDetailDialog on purpose. Every DialogSkeleton
           overlay shares one z-index, so DOM order decides the stack — and 대화
           on a Work's session row opens this modal *from* that dialog, so it
@@ -1034,12 +1290,13 @@ export default function App() {
           from inside the conversation.) */}
       {selectedSession && selectedSessionGroup && (
         <SessionConversationModal
-          key={`${selectedSession.key}:${selectedSession.focus?.cardId ?? ''}:${selectedSession.focus?.query ?? ''}`}
+          key={`${selectedSession.key}:${selectedSession.focus?.cardId ?? ''}:${selectedSession.focus?.role ?? ''}:${selectedSession.focus?.query ?? ''}`}
           group={selectedSessionGroup}
           liveCards={selectedSessionLiveCards}
           status={selectedSession.status}
           initialQuery={selectedSession.focus?.query}
           focusCardId={selectedSession.focus?.cardId}
+          focusRole={selectedSession.focus?.role}
           onStartTurn={dispatchCard}
           onEditTurn={(cardId, description) => updateCard(cardId, { description })}
           onTurnScreenshotsChanged={() => { void refreshCards(); }}
@@ -1051,6 +1308,7 @@ export default function App() {
           onClose={() => {
             setSelectedSession(null);
             setArchivedSessionCards(null);
+            deepLink.close(null);
           }}
           onCreateFeedback={handleCreateFeedback}
         />
@@ -1063,6 +1321,7 @@ export default function App() {
           onClose={() => {
             setSelectedCard(null);
             setSelectedCardArchived(false);
+            deepLink.close(sessionLinkTarget());
           }}
           onStatusChange={(id, status) => {
              return updateCard(id, { status })
@@ -1076,6 +1335,7 @@ export default function App() {
             return deleteCard(id)
               .then(() => {
                 setSelectedCard(null);
+                deepLink.close(sessionLinkTarget());
                 return true;
               })
               .catch(() => false);
