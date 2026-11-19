@@ -2,6 +2,7 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import type { SettingsStore } from '../../core/settings-store';
 import { getSettingValueOrDefault } from '../../core/settings-store';
+import { buildClaudeAppendSystemPrompt, loadResponseGuidelines } from '../../core/response-guidelines';
 import type { DispatchResult } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
 import { DEFAULT_CLAUDE_MODEL, isClaudeModelValid } from '../../core/runtime-config';
@@ -250,6 +251,18 @@ async function buildClaudeCommand(
 
   if (input.effort) {
     args.push('--effort', input.effort);
+  }
+
+  // Common response guidelines (Settings). `--append-system-prompt` keeps the
+  // default system prompt and CLAUDE.md intact. Snapshot `off` makes every
+  // launch — new or `--resume` — render the system prompt fresh, so a resumed
+  // session gets the LATEST saved text, and the guideline is never written into
+  // the transcript's user turns (so it cannot pile up). With the default
+  // snapshot `on`, a resume would replay the text recorded at first launch.
+  const guidelines = await loadResponseGuidelines(deps.settingsStore);
+  if (guidelines) {
+    args.push('--append-system-prompt', buildClaudeAppendSystemPrompt(guidelines));
+    args.push('--system-prompt-snapshot', 'off');
   }
 
   if (input.resumeSessionId) {

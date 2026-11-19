@@ -1,4 +1,5 @@
 import type { AgentRuntime } from '../../core/types';
+import { stripResponseGuidelinePrefix } from '../../core/response-guidelines';
 import { parseClaudeStreamLine } from './claude-stream-parser';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
 import { joinResultSegments, lastResultSegment } from './result-segments';
@@ -368,7 +369,13 @@ function codexItems(entries: JsonRecord[]): CodexItem[] {
     }
     if (entry.type !== 'response_item' || payload.type !== 'message') continue;
     if (payload.role === 'user') {
+      // A dispatched resume may carry a response-guideline prefix on stdin;
+      // strip it so the slice matches the user's original prompt.md.
       const texts = codexMessageTexts(payload, 'input_text')
+        .flatMap((text) => {
+          const stripped = stripResponseGuidelinePrefix(text);
+          return stripped !== text && !stripped.trim() ? [] : [stripped];
+        })
         .filter(text => !CODEX_INJECTED_PREFIXES.some(prefix => text.trimStart().startsWith(prefix)));
       if (texts.length > 0) items.push({ kind: 'prompt', texts, at: timeOf(entry.timestamp), timestamp: entry.timestamp });
     } else if (payload.role === 'assistant') {
