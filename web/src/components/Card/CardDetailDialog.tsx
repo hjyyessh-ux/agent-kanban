@@ -46,7 +46,8 @@ import { primaryActionFor, secondaryActionFor } from "../../constants/card-actio
 import { DotsBadge, FavoriteToggleButton, OriginExecutionBadges, ScheduledMetaBadge, TelegramBadge } from "../Board/BoardCardSections";
 import { formatScheduledKstLabel } from "../shared/ScheduledDispatchUi";
 import { buildResumeCommand } from "../../utils/resume-command";
-import { IdChip, ResumeCopyButton } from "../shared/IdChip";
+import { CopyLinkButton, IdChip, ResumeCopyButton } from "../shared/IdChip";
+import { buildDeepLinkUrl, linkLocation } from "../../utils/deep-link";
 
 const AGENT_ROW_COLORS: Record<string, { border: string; bg: string }> = {
   explore:              { border: "var(--kv2-agent-explore)", bg: "var(--kv2-info-surface-pale)" },
@@ -850,6 +851,11 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
               quickActionId={card.quickActionId}
             />
             <IdChip id={card.id} kind="card" showKind className="kv2-card-detail-id" />
+            <CopyLinkButton
+              url={buildDeepLinkUrl(linkLocation(), { kind: "card", cardId: card.id })}
+              subject="카드"
+              className="kv2-card-detail-link"
+            />
             <button
               type="button"
               className="kv2-dialog-close"

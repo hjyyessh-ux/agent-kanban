@@ -25,6 +25,7 @@ Playwright browser test specs covering the shipped React SPA end-to-end. Tests r
 | `deck-capture.e2e.ts` | Screenshot capture flow used to produce presentation deck assets |
 | `dialog-position.e2e.ts` | Dialog/modal positioning behavior |
 | `dispatch.e2e.ts` | Card dispatch to a runtime session |
+| `deep-link.e2e.ts` | `?card=` / `?session=&msg=` links: fresh-tab entry, reload, delayed board read, back/forward/close, legacy short id, card in another Work (WORK filter follows), Works search hit → exact Prompt/Result highlight, missing / archived / 403·401 (route-mocked) notices |
 | `error-handling.e2e.ts` | API/form error-path UI behavior |
 | `foldable-ui.e2e.ts` | Foldable/collapsible UI section behavior |
 | `polling.e2e.ts` | Board polling / eventual-consistency assertions |

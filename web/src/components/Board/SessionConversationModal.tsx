@@ -16,7 +16,8 @@ import { dirAccentClass } from '../../utils/project-color';
 import { getScreenshotUrl } from '../../hooks/useKanbanApi';
 import { useCardProgress } from '../../hooks/useCardProgress';
 import { useCopyFeedback } from '../../hooks/useCopyFeedback';
-import { COPIED_LABEL, IdChip, ResumeCopyButton } from '../shared/IdChip';
+import { COPIED_LABEL, CopyLinkButton, IdChip, ResumeCopyButton } from '../shared/IdChip';
+import { buildDeepLinkUrl, formatMessageId, linkLocation, type DeepLinkMessageRole } from '../../utils/deep-link';
 import { ImageLightbox } from '../shared/ImageLightbox';
 import { formatDuration, resolveRunDurationMs } from '../../utils/format-duration';
 import { applyTextHighlight, clearTextHighlight } from '../../utils/text-highlight';
@@ -47,6 +48,11 @@ interface SessionConversationModalProps {
   initialQuery?: string;
   /** Open with this turn unfolded and scrolled into view. Read once, on mount. */
   focusCardId?: string;
+  /**
+   * With `focusCardId`: scroll to that turn's Prompt (`user`) or Result
+   * (`assistant`) and mark it — a shared message link lands here. Read once.
+   */
+  focusRole?: DeepLinkMessageRole;
   /** 대기 중 turn의 `▶ 지금 실행` — 피드백을 실행 없이 만들어 둔 뒤 나중에 시작한다. */
   onStartTurn?: (cardId: string) => Promise<void>;
   /**
@@ -300,6 +306,10 @@ interface SessionConversationTurnProps {
   onTurnScreenshotsChanged?: () => void;
   /** 이 turn의 카드 상세를 연다(Sync·편집 등). 생략하면 `↗ 카드`를 숨긴다. */
   onOpenCard?: (card: KanbanCard) => void;
+  /** 링크로 연 메시지 — 그 Prompt/Result를 펼치고 강조한다. */
+  linkTarget?: DeepLinkMessageRole;
+  /** 메시지 링크 URL. 세션 ID가 없으면(세션 없는 단독 카드) 생략 — 링크 버튼을 숨긴다. */
+  messageUrl?: (role: DeepLinkMessageRole) => string;
 }
 
 const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
@@ -314,12 +324,14 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
   onEditTurn,
   onTurnScreenshotsChanged,
   onOpenCard,
+  linkTarget,
+  messageUrl,
 }) => {
   const [editing, setEditing] = useState(false);
   const [promptClamped, setPromptCollapsed] = useState(true);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
-  const promptCollapsed = promptClamped && !searchHit;
+  const promptCollapsed = promptClamped && !searchHit && linkTarget !== 'user';
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [headerOpen, setHeaderOpen] = useState(false);
   const { copied, copy } = useCopyFeedback(card.id);
@@ -399,9 +411,21 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
       {open && (
         <div id={bodyId} className="session-conversation-turnBody">
           {/* 대화 순서 그대로: 요청(Prompt) → 결과(Result). 긴 Prompt는 클램프로 줄인다. */}
-          <section className="session-conversation-part session-conversation-part--prompt">
+          <section
+            className={`session-conversation-part session-conversation-part--prompt${linkTarget === 'user' ? ' is-link-target' : ''}`}
+            data-message-id={formatMessageId({ cardId: card.id, role: 'user' })}
+            data-link-target={linkTarget === 'user' || undefined}
+          >
             <div className="session-conversation-partHead" data-highlight-skip>
               <span className="session-conversation-partName">Prompt</span>
+              {messageUrl && (
+                <CopyLinkButton
+                  url={messageUrl('user')}
+                  subject={`T${turnNumber} Prompt`}
+                  label="🔗"
+                  className="session-conversation-partAction"
+                />
+              )}
               {canEdit && !isEditing && (
                 <button
                   type="button"
@@ -451,9 +475,21 @@ const SessionConversationTurn: React.FC<SessionConversationTurnProps> = ({
           {isRunning && <TurnLiveProgress card={card} />}
 
           {result ? (
-            <section className="session-conversation-part session-conversation-part--result">
+            <section
+              className={`session-conversation-part session-conversation-part--result${linkTarget === 'assistant' ? ' is-link-target' : ''}`}
+              data-message-id={formatMessageId({ cardId: card.id, role: 'assistant' })}
+              data-link-target={linkTarget === 'assistant' || undefined}
+            >
               <div className="session-conversation-partHead" data-highlight-skip>
                 <span className="session-conversation-partName">Result</span>
+                {messageUrl && (
+                  <CopyLinkButton
+                    url={messageUrl('assistant')}
+                    subject={`T${turnNumber} Result`}
+                    label="🔗"
+                    className="session-conversation-partAction"
+                  />
+                )}
                 <button
                   type="button"
                   className="kv2-btn kv2-btn--ghost kv2-btn--small session-conversation-partAction"
@@ -542,6 +578,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
   onCreateFeedback,
   initialQuery,
   focusCardId,
+  focusRole,
   onStartTurn,
   onEditTurn,
   onTurnScreenshotsChanged,
@@ -637,10 +674,22 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
     // (보드 poll) cleanup이 프레임을 취소하고 다음 실행이 다시 시도한다.
     const frame = requestAnimationFrame(() => {
       focusedRef.current = true;
-      scrollToTurn(index + 1);
+      const root = scrollRef.current;
+      const message = focusRole
+        ? root?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(formatMessageId({ cardId: focusCardId, role: focusRole }))}"]`)
+        : null;
+      if (!root || !message) {
+        scrollToTurn(index + 1);
+        return;
+      }
+      // 메시지 링크는 turn 머리가 아니라 그 Prompt/Result 자체를 맨 위에 둔다.
+      jumpLockRef.current = true;
+      setActiveTurn(index + 1);
+      const top = root.scrollTop + message.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
+      root.scrollTo({ top, behavior: 'smooth' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [focusCardId, orderedTurns, scrollToTurn]);
+  }, [focusCardId, focusRole, orderedTurns, scrollToTurn]);
 
   const changeOrder = useCallback((next: TurnOrder) => {
     setTurnOrder(next);
@@ -753,6 +802,17 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
   const resumeCommand = group.sessionId
     ? buildResumeCommand(group.agentRuntime, group.sessionId, group.projectDir)
     : '';
+  const linkedSessionId = group.sessionId;
+  const messageUrl = useMemo(
+    () => linkedSessionId
+      ? (cardId: string) => (role: DeepLinkMessageRole) => buildDeepLinkUrl(linkLocation(), {
+        kind: 'session',
+        sessionId: linkedSessionId,
+        message: { cardId, role },
+      })
+      : undefined,
+    [linkedSessionId],
+  );
 
   return (
     <DialogSkeleton
@@ -779,6 +839,10 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
           {group.sessionId && (
             <span className="session-conversation-ids">
               <IdChip id={group.sessionId} kind="session" showKind />
+              <CopyLinkButton
+                url={buildDeepLinkUrl(linkLocation(), { kind: 'session', sessionId: group.sessionId })}
+                subject="세션"
+              />
               {resumeCommand && <ResumeCopyButton command={resumeCommand} />}
             </span>
           )}
@@ -932,6 +996,8 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
                 onEditTurn={onEditTurn}
                 onTurnScreenshotsChanged={onTurnScreenshotsChanged}
                 onOpenCard={onOpenCard}
+                linkTarget={focusRole && card.id === focusCardId ? focusRole : undefined}
+                messageUrl={messageUrl?.(card.id)}
                 onToggle={() =>
                   setOpenOverrides((prev) => ({
                     ...prev,

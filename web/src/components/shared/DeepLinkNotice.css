@@ -1,0 +1,48 @@
+/* Shared-link outcome bar. Above dialogs (overlay is z-index 1000, the Works
+   notice 1500) because an archived/missing-message caveat is read *while* the
+   linked dialog is open. Top-centre so it never covers a dialog's footer. */
+.deep-link-notice {
+  position: fixed;
+  top: var(--kv2-sp-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1600;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--kv2-sp-3);
+  max-width: min(640px, calc(100vw - 2 * var(--kv2-sp-3)));
+  padding: var(--kv2-sp-2) var(--kv2-sp-3);
+  border: 2px solid var(--kv2-border-strong);
+  border-radius: var(--kv2-radius-md);
+  box-shadow: 4px 6px 0 var(--kv2-dialog-shadow-color);
+  font-size: var(--kv2-text-xs);
+}
+
+.deep-link-notice--error {
+  background: var(--kv2-danger-surface);
+  color: var(--kv2-danger-text-strong);
+}
+
+.deep-link-notice--info {
+  background: var(--kv2-info-surface);
+  color: var(--kv2-info-text-strong);
+}
+
+.deep-link-notice-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kv2-sp-1);
+  min-width: 0;
+}
+
+.deep-link-notice-title {
+  font-weight: 700;
+}
+
+.deep-link-notice-message {
+  overflow-wrap: anywhere;
+}
+
+.deep-link-notice-dismiss {
+  flex-shrink: 0;
+}

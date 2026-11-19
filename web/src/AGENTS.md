@@ -55,6 +55,7 @@ web/src/
 - Board and questions poll every 3 seconds; scheduler, scripts, and settings poll every 10 seconds when their tab is active.
 - Styling stays in plain CSS; kv2 primitives and layout-only local component CSS files are the norm.
 - No router: tab state in `App.tsx` drives all navigation.
+- Shareable links without a router: `utils/deep-link.ts` owns the URL shape (`?card=<id>`, `?session=<id>&msg=<cardId>:user|assistant` — ids only, never query/prompt text), `hooks/useDeepLinkHistory.ts` the push/replace/back rules, and `App.tsx` resolves a link only after the first board + Works read. Opening a layer on top pushes, swapping the open layer replaces, closing pops what it pushed. Failures surface through `components/shared/DeepLinkNotice` (`data-reason`).
 
 ## ANTI-PATTERNS
 

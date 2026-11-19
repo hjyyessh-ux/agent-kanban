@@ -130,3 +130,35 @@ export const ResumeCopyButton: React.FC<ResumeCopyButtonProps> = ({ command, cla
     </button>
   );
 };
+
+export const LINK_COPIED_LABEL = '✓ 링크 복사됨';
+
+interface CopyLinkButtonProps {
+  /** Absolute URL (`buildDeepLinkUrl`) — ids only, never content. */
+  url: string;
+  /** What the link opens, for the accessible name: `카드`, `세션`, `T3 Prompt`. */
+  subject: string;
+  label?: string;
+  className?: string;
+}
+
+/** Copies a shareable deep link. Same chrome as `ResumeCopyButton`. */
+export const CopyLinkButton: React.FC<CopyLinkButtonProps> = ({ url, subject, label = '🔗 링크', className }) => {
+  const { copied, copy } = useCopyFeedback(url);
+  return (
+    <button
+      type="button"
+      className={['kv2-resume-copy', copied ? 'is-copied' : '', className ?? ''].filter(Boolean).join(' ')}
+      title={`${subject} 링크 복사: ${url}`}
+      aria-label={`${subject} 링크 복사`}
+      data-link-url={url}
+      onKeyDown={stopKey}
+      onClick={(event) => {
+        event.stopPropagation();
+        copy(url);
+      }}
+    >
+      {copied ? LINK_COPIED_LABEL : label}
+    </button>
+  );
+};

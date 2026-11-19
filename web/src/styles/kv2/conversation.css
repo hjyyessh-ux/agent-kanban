@@ -564,6 +564,13 @@
   box-shadow: inset 4px 0 0 var(--kv2-phase-prompt-accent);
 }
 
+/* 메시지 링크(?session=…&msg=…)로 연 Prompt/Result — 새로고침해도 같은 자리가 강조된다. */
+.session-conversation-part.is-link-target {
+  outline: 3px solid var(--kv2-focus-ring);
+  outline-offset: 2px;
+  scroll-margin-top: 8px;
+}
+
 /* 실행 중 turn의 진행 단계 (TurnLiveProgress) — 카드 상세 Progress 단계와 같은 톤 */
 .session-conversation-part--progress {
   background: var(--kv2-phase-progress-bg);
