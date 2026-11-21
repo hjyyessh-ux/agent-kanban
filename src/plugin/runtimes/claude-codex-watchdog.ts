@@ -47,6 +47,10 @@ export class ClaudeCodexWatchdog {
       // back to todo. Only 'codex' / 'claude-code' sourceContext is hook-set.
       if (card.sourceContext === 'codex' || card.sourceContext === 'claude-code') continue;
 
+      // Native children are owned by the parent runtime run, not a separately
+      // dispatched card run. Their lifecycle and restart cleanup own the status.
+      if (card.linkKind === 'subagent' && card.parentCardId && card.childRunId && card.childTaskId) continue;
+
       const activeRun = await this.runStore.findActiveRunByCard(card.id);
       if (!activeRun) {
         if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) {

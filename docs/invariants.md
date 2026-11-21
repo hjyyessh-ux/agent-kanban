@@ -88,6 +88,13 @@
 
 ### Runtime dispatch
 
+- Native Claude and Codex child recovery replays started/progress/completion in recorded order. Terminal child output does not regress on delayed progress or repeated completion.
+- Restart cleanup only supersedes children owned by the reconciled `childRunId`; it preserves saved result and `agentMessages`, recording interruption in `progressSummary`. A started-only TODO child is also closed as superseded, not successful.
+- Native child creation validates the active parent and reserves its tuple under the board dual lock. Deleted child tuples are not resurrected by started replay. Restart and Claude parent failure cleanup share run-scoped, payload-preserving board mutation.
+- Child identity is `(parentCardId, childRunId, childTaskId)`: same-run replay reuses its child; a distinct run with a reused task label creates a separately owned child under the same parent. No cross-run continuation is inferred.
+- Codex exec registers only successful native spawn events attributed to the active parent thread. Status comes from the spawned receiver, not from successful completion of its wait call. The watchdog leaves parent-run-owned native children to their event and recovery handlers.
+- These guarantees do not infer task identity across runs, attach arbitrary cross-runtime subprocesses, or collect missing peer transcripts.
+
 - `agentRuntime`이 없는 legacy card는 항상 `opencode`로 취급한다.
 - `sessionId`는 runtime별 actual continuation id만 저장한다.
 - Codex/Claude는 actual id를 얻기 전까지 `sessionId`를 저장하거나 반환하면 안 된다.

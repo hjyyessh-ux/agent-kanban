@@ -7,6 +7,8 @@ import { FileLock } from '../../core/filelock';
 import { resolveDir } from '../../core/data-dir';
 import { parseClaudeStreamLine } from './claude-stream-parser';
 import type { ChildLinker } from './child-linker';
+import { parseCodexJsonlLine } from './codex-jsonl-parser';
+import { codexChildEvents } from './codex-child-events';
 
 export type RuntimeRunStatus = 'starting' | 'running' | 'completed' | 'failed' | 'aborted';
 
@@ -19,6 +21,7 @@ export interface RuntimeRun {
   status: RuntimeRunStatus;
   startedAt: string;
   finishedAt?: string;
+  restartReconcilePending?: boolean;
   exitCode?: number;
   model?: string;
   cwd: string;
@@ -147,7 +150,12 @@ export class RuntimeRunStore {
     await this.withDualLock(async () => {
       const state = await this.loadUnsafe();
       for (const run of state.runs) {
+        if (run.restartReconcilePending) {
+          staleRuns.push({ ...run });
+          continue;
+        }
         if (run.status !== 'starting' && run.status !== 'running') continue;
+        run.restartReconcilePending = true;
         run.status = 'failed';
         run.finishedAt = now;
         run.error = run.error ?? 'Runtime run was reconciled after restart';
@@ -160,49 +168,57 @@ export class RuntimeRunStore {
     });
 
     for (const run of staleRuns) {
-      // Step 1: Re-parse eventsPath to idempotently restore any missing child cards
+      // Step 1: Replay the runtime's recorded lifecycle before interrupted-child cleanup.
       if (childLinker && existsSync(run.eventsPath)) {
         try {
           const text = await Bun.file(run.eventsPath).text();
+          let threadId = run.sessionId;
           for (const line of text.split('\n')) {
             if (!line.trim()) continue;
+            if (run.runtime === 'codex') {
+              const event = parseCodexJsonlLine(line);
+              if (!event) continue;
+              if (event.type === 'thread_started') threadId ??= event.threadId;
+              for (const child of codexChildEvents(event, threadId)) {
+                await childLinker.onChildEvent(run.cardId, run.runId, child, 'codex');
+              }
+              continue;
+            }
+            if (run.runtime !== 'claude') continue;
             const event = parseClaudeStreamLine(line);
-            if (event?.type === 'subagent_started') {
-              await childLinker.onChildEvent(run.cardId, run.runId, event).catch(() => undefined);
+            if (event?.type === 'subagent_started' || event?.type === 'subagent_updated' || event?.type === 'subagent_completed') {
+              await childLinker.onChildEvent(run.cardId, run.runId, event);
             }
           }
         } catch {
-          // swallow — corrupted eventsPath must not abort reconcile
+          // Keep the pending marker for the next boot; other runs may still recover.
+          continue;
         }
       }
 
-      // Step 2: Close stuck in_progress subagent children before returning parent to todo
-      const allCards = await store.getCards();
-      const stuckChildren = allCards.filter(
-        c =>
-          c.parentCardId === run.cardId &&
-          c.linkKind === 'subagent' &&
-          c.status === 'in_progress',
-      );
-      await Promise.allSettled(
-        stuckChildren.map(child =>
-          store.updateCard(child.id, {
-            status: 'complete',
-            resolution: 'superseded',
-            result: '[parent run reconciled after restart]',
-          }),
-        ),
-      );
+      // Step 2: Atomically close only this run's interrupted native children.
+      try {
+        await store.supersedeNativeChildren(run.cardId, run.runId, '[parent run reconciled after restart]');
+      } catch {
+        continue;
+      }
 
-      // Step 3: Return parent card to todo
+      // Return the parent to todo only if this is still its newest run.
+      const parentRuns = (await this.listRuns()).filter(candidate => candidate.cardId === run.cardId);
+      const hasNewerRun = parentRuns.at(-1)?.runId !== run.runId;
       const card = await store.getCard(run.cardId);
-      if (card?.status !== 'in_progress') continue;
-      await store.updateCard(run.cardId, {
-        status: 'todo',
-        progressSummary: `[reconciled] ${run.runtime} run ${run.runId} was marked failed after restart`,
-        staleStatus: null,
-        staleDetectedAt: null,
-      });
+      if (!hasNewerRun && card?.status === 'in_progress') {
+        await store.updateCard(run.cardId, {
+          status: 'todo',
+          progressSummary: `[reconciled] ${run.runtime} run ${run.runId} was marked failed after restart`,
+          staleStatus: null,
+          staleDetectedAt: null,
+        });
+      }
+
+      // If this process stops before completing replay, the next boot retries
+      // the same idempotent child events instead of losing the linkage.
+      await this.updateRun(run.runId, { restartReconcilePending: undefined });
     }
 
     return staleRuns;

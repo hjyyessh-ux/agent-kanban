@@ -45,6 +45,24 @@ if (scenario === 'timeout') {
   process.exit(1);
 }
 emit({ type: 'thread.started', thread_id: emittedThreadId });
+if (scenario === 'children') {
+  const collab = (tool, sender, receiver, states, prompt, status = 'completed') => emit({
+    type: 'item.completed',
+    item: { id: 'spawn-fixture', type: 'collab_tool_call', tool, status, sender_thread_id: sender,
+      receiver_thread_ids: [receiver, receiver], agents_states: states, prompt },
+  });
+  // Upstream exec emits the same item id first without a receiver, then
+  // completed with the real receiver. A tool item is not itself a child id.
+  emit({ type: 'item.started', item: { id: 'spawn-fixture', type: 'collab_tool_call',
+    tool: 'spawn_agent', status: 'in_progress', sender_thread_id: emittedThreadId,
+    receiver_thread_ids: [], agents_states: {}, prompt: 'child request' } });
+  collab('spawn_agent', emittedThreadId, 'child-codex', {'child-codex': {status: 'running'}}, 'child request');
+  collab('spawn_agent', emittedThreadId, 'child-codex', {}, 'duplicate request');
+  collab('spawn_agent', 'wrong-parent', 'alien', {}, 'unrelated');
+  collab('spawn_agent', emittedThreadId, 'failed-spawn', {}, 'failed', 'failed');
+  collab('wait', emittedThreadId, 'not-spawned', {'not-spawned': {status: 'completed', message: 'unrelated'}});
+  collab('wait', emittedThreadId, 'child-codex', {'child-codex': {status: 'completed', message: 'child result'}});
+}
 if (scenario === 'failure') {
   process.stderr.write(configuredStderr);
   process.exit(1);
@@ -65,6 +83,27 @@ process.exit(0);
 }
 
 describe('CodexCliAdapter', () => {
+  test('records only native children of this thread and keeps their result separate', async () => {
+    await withTempDir(async dir => {
+      const command = await createFakeCodexBinary(dir, 'children');
+      const store = new KanbanStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      const parent = await store.createCard({ title: 'parent', description: 'run', agentRuntime: 'codex' });
+      const adapter = createCodexCliAdapter({ store, runStore, commandOverride: [command] });
+      const handle = await adapter.start({ card: parent, cwd: dir, prompt: 'run' });
+      await handle.done;
+      const child = await store.findByChildLink(parent.id, handle.runId, 'child-codex');
+      expect((await store.getCards())).toHaveLength(2);
+      expect(child?.agentRuntime).toBe('codex');
+      expect(child?.sessionId).toBe('child-codex');
+      expect(child?.parentCardId).toBe(parent.id);
+      expect(child?.status).toBe('complete');
+      expect(child?.description).toBe('child request');
+      expect(child?.result).toBe('child result');
+      expect((await store.getCard(parent.id))?.result).toBe('codex final result');
+    });
+  });
+
   test('dispatch success captures thread_id, completes the card, and returns dispatch schema', async () => {
     await withTempDir(async (dir) => {
       const fakeCodex = await createFakeCodexBinary(dir, 'success', { output: 'done' });

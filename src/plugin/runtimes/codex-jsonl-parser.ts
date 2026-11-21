@@ -1,6 +1,8 @@
 export type CodexJsonlEvent =
   | { type: 'thread_started'; threadId: string }
   | { type: 'turn_completed' }
+  | { type: 'collab_tool_call'; senderThreadId: string; tool: string; receivers: string[];
+      prompt?: string; states: { threadId: string; status: string; message?: string }[] }
   | { type: 'agent_message'; text: string }
   | { type: 'error'; message?: string }
   | { type: 'unknown' };
@@ -73,6 +75,21 @@ export function parseCodexJsonlLine(line: string): CodexJsonlEvent | null {
 
   if (type === 'turn.completed' || method === 'turn/completed') {
     return { type: 'turn_completed' };
+  }
+
+  if (item?.type === 'collab_tool_call') {
+    const senderThreadId = firstString(item.sender_thread_id);
+    const tool = firstString(item.tool);
+    if (type !== 'item.completed' || item.status !== 'completed' || !senderThreadId
+      || !tool || !Array.isArray(item.receiver_thread_ids)) return { type: 'unknown' };
+    const receivers = item.receiver_thread_ids.filter((id): id is string => typeof id === 'string' && Boolean(id.trim()));
+    const states = Object.entries(asRecord(item.agents_states) ?? {}).flatMap(([threadId, rawState]) => {
+      const state = asRecord(rawState);
+      const status = firstString(state?.status);
+      return status ? [{ threadId, status, message: asString(state?.message) }] : [];
+    });
+    return { type: 'collab_tool_call', senderThreadId, tool, receivers,
+      prompt: asString(item.prompt), states };
   }
 
   const text = extractAgentText(raw, message, item, data);

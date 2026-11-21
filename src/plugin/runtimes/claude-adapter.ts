@@ -468,7 +468,7 @@ async function handleClaudeCompletion(input: {
     staleStatus: null,
     staleDetectedAt: null,
   });
-  await finalizeChildrenOnParentFail(input.input.card.id, input.deps.store).catch(() => undefined);
+  await input.deps.store.supersedeNativeChildren(input.input.card.id, input.run.runId, '[parent run failed]').catch(() => undefined);
 
   return {
     outcome: aborted ? 'aborted' : 'failed',
@@ -494,25 +494,6 @@ async function updateCardIfPresent(
   const existing = await store.getCard(cardId, { includeDeleted: true });
   if (!existing) return;
   await store.updateCard(cardId, input);
-}
-
-async function finalizeChildrenOnParentFail(parentCardId: string, store: KanbanStore): Promise<void> {
-  const cards = await store.getCards();
-  const stuckChildren = cards.filter(
-    c =>
-      c.parentCardId === parentCardId &&
-      c.linkKind === 'subagent' &&
-      c.status === 'in_progress',
-  );
-  await Promise.allSettled(
-    stuckChildren.map(child =>
-      store.updateCard(child.id, {
-        status: 'complete',
-        resolution: 'superseded',
-        result: '[parent run failed]',
-      }),
-    ),
-  );
 }
 
 async function readTail(path: string): Promise<string> {
