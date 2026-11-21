@@ -13,6 +13,7 @@ import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { createClaudeBinaryResolver } from './claude-binary';
 import { parseClaudeStreamLine } from './claude-stream-parser';
+import { completeTrackedRuntimeCard, updateFailedRuntimeCard } from './runtime-restart-sync';
 import { joinResultSegments, lastResultSegment } from './result-segments';
 import type { ClaudeStreamEvent } from './claude-stream-parser';
 import { withSpawnLock } from './spawn-lock';
@@ -157,6 +158,17 @@ async function startClaudeRun(
       }
     : undefined;
 
+  if (input.resumeSessionId) {
+    await deps.store.updateCard(input.card.id, {
+      status: 'in_progress',
+      startedAt: run.startedAt,
+      progressSummary: undefined,
+      sessionId: input.resumeSessionId,
+      staleStatus: null,
+      staleDetectedAt: null,
+    });
+  }
+
   const stdoutDone = readClaudeStdout(getReadableStream(proc.stdout), run, state, async (sessionId) => {
     if (state.sessionResolved) return;
     state.sessionId = sessionId;
@@ -165,6 +177,8 @@ async function startClaudeRun(
     await deps.runStore.updateRun(run.runId, { sessionId });
     await deps.store.updateCard(input.card.id, {
       status: 'in_progress',
+      startedAt: run.startedAt,
+      progressSummary: undefined,
       sessionId,
       staleStatus: null,
       staleDetectedAt: null,
@@ -180,15 +194,6 @@ async function startClaudeRun(
     stdoutDone,
     stderrDone,
   });
-
-  if (input.resumeSessionId) {
-    await deps.store.updateCard(input.card.id, {
-      status: 'in_progress',
-      sessionId: input.resumeSessionId,
-      staleStatus: null,
-      staleDetectedAt: null,
-    });
-  }
 
   const sessionId = await waitForSessionId({
     sessionPromise,
@@ -409,33 +414,11 @@ async function handleClaudeCompletion(input: {
   }
 
   if (exitCode === 0 && input.state.sessionId) {
-    await input.deps.runStore.finishRun(input.run.runId, {
-      status: 'completed',
-      exitCode,
-    });
-    // If the parent card was archived mid-run, archive wins: don't resurrect the
-    // card or fire completion side effects (status write, Telegram, queue dispatch).
-    const parentStillPresent = await input.deps.store.getCard(input.input.card.id, {
-      includeDeleted: true,
-    });
-    if (!parentStillPresent) {
-      return { outcome: 'completed', result: joinedResult, durationMs };
-    }
-    await input.deps.store.updateCard(input.input.card.id, {
-      status: 'complete',
-      resolution: 'completed',
-      sessionId: input.state.sessionId,
-      result: joinedResult || '(no output)',
-      finalResult: finalSegment || undefined,
-      responseAt: new Date().toISOString(),
-      progressSummary: undefined,
-      staleStatus: null,
-      staleDetectedAt: null,
-      queuedAfterCardId: null,
-      queuePosition: null,
-      queueSessionMode: null,
-      resumeSessionId: null,
-    });
+    const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
+    const completed = await completeTrackedRuntimeCard(
+      input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
+    );
+    if (!completed) return { outcome: 'completed', result: joinedResult, durationMs };
     await notifyTelegramCompletion({
       store: input.deps.store,
       settingsStore: input.deps.settingsStore,
@@ -460,7 +443,7 @@ async function handleClaudeCompletion(input: {
     exitCode,
     error: message,
   });
-  await updateCardIfPresent(input.deps.store, input.input.card.id, {
+  const failed = await updateFailedRuntimeCard(input.deps.store, input.deps.runStore, input.run, input.input.card, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
     result: joinedResult || message,
@@ -468,7 +451,7 @@ async function handleClaudeCompletion(input: {
     staleStatus: null,
     staleDetectedAt: null,
   });
-  await input.deps.store.supersedeNativeChildren(input.input.card.id, input.run.runId, '[parent run failed]').catch(() => undefined);
+  if (failed) await input.deps.store.supersedeNativeChildren(input.input.card.id, input.run.runId, '[parent run failed]').catch(() => undefined);
 
   return {
     outcome: aborted ? 'aborted' : 'failed',

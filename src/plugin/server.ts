@@ -98,6 +98,7 @@ export class ServerMonitor {
     quickActionStore?: QuickActionStore,
     scriptExecutionService?: ScriptExecutionService,
     workStore?: WorkStore,
+    private readonly onListening?: () => void,
   ) {
     this.store = store;
     this.input = input;
@@ -127,6 +128,17 @@ export class ServerMonitor {
 
     // Read initial hostname from settings
     this.hostname = undefined; // will be resolved in start()
+  }
+
+  isListening(): boolean {
+    return this.server !== null;
+  }
+
+  private listen(): number {
+    const { server, port } = this.createServerInstance(this.hostname);
+    this.server = server;
+    this.onListening?.();
+    return port;
   }
 
   /** Single place that assembles the createServer() dependency list. */
@@ -174,10 +186,9 @@ export class ServerMonitor {
     }
 
     try {
-      const result = this.createServerInstance(this.hostname);
-      this.server = result.server;
+      const port = this.listen();
       this.startMonitoring();
-      return result.port;
+      return port;
     } catch {
       // Port likely in use by another opencode process — start monitoring
       this.startMonitoring();
@@ -195,8 +206,7 @@ export class ServerMonitor {
     }
     // Recreate with new hostname immediately to prevent port theft
     try {
-      const result = this.createServerInstance(hostname);
-      this.server = result.server;
+      this.listen();
     } catch {
       // Failed to restart — will be recovered by monitor on next poll
     }
@@ -234,13 +244,12 @@ export class ServerMonitor {
     }
 
     try {
-      const result = this.createServerInstance(this.hostname);
-      this.server = result.server;
+      const port = this.listen();
 
       // Notify user if possible
       try {
         this.input?.client?.tui?.showToast({
-          body: { message: `Kanban board recovered at http://localhost:${result.port}`, variant: 'info' },
+          body: { message: `Kanban board recovered at http://localhost:${port}`, variant: 'info' },
         });
       } catch {
         // Toast not available

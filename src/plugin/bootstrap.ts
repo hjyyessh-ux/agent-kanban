@@ -28,6 +28,8 @@ import { createPlannedWorkLinker } from './works/work-planned-link';
 import { appendRuntimeDebugLog } from './debug-log';
 import type { QuestionMonitor } from './question-monitor';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
+import { ChildLinker } from './runtimes/child-linker';
+import { syncInterruptedCards } from './runtimes/runtime-restart-sync';
 import { ScriptExecutionService } from './script-execution-service';
 
 /** Owner-gated background service started/stopped with the singleton runtime. */
@@ -217,6 +219,28 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
 
   const questionMonitor = options.createQuestionMonitor?.(stores, isRuntimeOwner);
 
+  const { runStore } = dispatch;
+  const bootCards = runStore ? await store.getCards({ status: 'in_progress' }) : [];
+  const bootRuns = await runStore?.listRuns().catch(error => {
+    appendRuntimeDebugLog('runtime.restartSync.unreadable', { error: String(error) });
+    return undefined;
+  });
+  let restartSync: Promise<void> | undefined;
+  const syncOnStartup = () => {
+    if (!isRuntimeOwner || !monitor.isListening() || !runStore) return;
+    restartSync ??= (async () => {
+      if (bootRuns) await runStore.reconcileStale(store, new ChildLinker(store), bootRuns);
+      if (!isRuntimeOwner || !monitor.isListening()) return;
+      await syncInterruptedCards(store, runStore, bootCards, bootRuns, cardId => {
+        if (!isRuntimeOwner || !monitor.isListening()) throw new Error('restart sync owner changed');
+        return dispatch.dispatchCard(cardId);
+      });
+    })().catch(error => {
+      appendRuntimeDebugLog('runtime.restartSync.failed', { error: String(error) });
+    });
+    return restartSync;
+  };
+
   // Start server with auto-recovery monitoring
   const monitor = new ServerMonitor(
     store,
@@ -240,6 +264,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     quickActionStore,
     scriptExecutionService,
     workStore,
+    () => { void syncOnStartup(); },
   );
   const port = await monitor.start();
   if (port) {
@@ -270,6 +295,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
 
   const startSingleton = async (): Promise<void> => {
     if (singletonStarted) return;
+    await syncOnStartup();
     appendRuntimeDebugLog(`${options.debugLabel}.start`, { owner: true });
     // One-shot repair for links whose session lost every card while nothing was
     // watching — card deletion predates the `cardsMissingAt` stamp, and a

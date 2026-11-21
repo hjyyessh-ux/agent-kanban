@@ -594,6 +594,22 @@ export class KanbanStore {
   }
 
   async updateCard(id: string, input: UpdateCardInput): Promise<KanbanCard> {
+    return (await this.writeCardUpdate(id, input))!;
+  }
+
+  async updateCardIf(
+    id: string,
+    input: UpdateCardInput,
+    matches: (card: KanbanCard) => boolean,
+  ): Promise<KanbanCard | undefined> {
+    return this.writeCardUpdate(id, input, matches);
+  }
+
+  private async writeCardUpdate(
+    id: string,
+    input: UpdateCardInput,
+    matches?: (card: KanbanCard) => boolean,
+  ): Promise<KanbanCard | undefined> {
     // Pre-build the partial update outside the lock
     const updates = {
       ...input,
@@ -610,8 +626,10 @@ export class KanbanStore {
       const board = await this.load();
       const index = board.cards.findIndex(c => c.id === id);
       if (index === -1) {
+        if (matches) return;
         throw new Error(`Card not found: ${id}`);
       }
+      if (matches && !matches(board.cards[index])) return;
       const previousSessionId = board.cards[index].sessionId;
       // Separate null (=delete) fields from normal updates
       const {
@@ -898,7 +916,7 @@ export class KanbanStore {
       updatedCard = (await this.getCard(id)) ?? updatedCard;
     }
 
-    return updatedCard!;
+    return updatedCard;
   }
 
   async scheduleCardDispatch(id: string, scheduledAt: string): Promise<KanbanCard> {

@@ -107,8 +107,10 @@
 - 카드 `finalResult`는 같은 run의 **마지막 assistant text 블록**이다(`lastResultSegment()`). `result`(전체 누적)와 항상 같은 `updateCard` 호출에서 함께 쓰며, 한쪽만 갱신하면 안 된다 — 두 필드가 서로 다른 run을 가리키게 된다. 읽는 쪽은 `result`가 `finalResult`로 끝날 때만 앞부분을 중간 산출물로 분리한다(`web/src/components/Card/card-result.ts`).
 - opencode dispatch 순서 `store.updateCard -> trackDispatch -> promptAsync`는 `OpencodeAdapter` 안에서 보존한다.
 - `StaleCardChecker`의 opencode native session list 검사는 legacy/opencode card에만 적용한다.
-- Codex/Claude stale run은 `RuntimeRunStore.reconcileStale(store)`가 처리한다.
-- `ClaudeCodexWatchdog`의 "active run 없음 → todo 복귀" 판정은 RuntimeRunStore로 시작한 보드 dispatch 카드에만 적용한다. `.codex/hooks/on-prompt.sh` / `.claude/hooks/on-prompt.sh`가 만든 organic CLI 카드(`sourceContext=codex` 또는 `claude-code`)는 run artifact가 없으므로 watchdog orphan으로 되돌리면 안 된다. 해당 카드는 Stop hook이 `complete`로 닫는다.
+- 서버 재시작 시 `RuntimeRunStore.reconcileStale()`은 이전 `starting`/`running` 실행의 추적 상태를 `interrupted`로 기록한다. 카드의 `status`, `sessionId`, `startedAt`과 실행의 `runId`는 유지한다.
+- HTTP 서버가 뜨면 singleton runtime owner가 부팅 때 `in_progress`였던 Claude/Codex 카드의 최신 실행을 한 번 확인한다. 해당 실행의 `events.jsonl`에 명시적 성공 종료가 있으면 결과와 완료 시각을 한 번에 기록하고 카드를 `complete`(검토 대기)로 전환한다. 예를 들어 같은 세션에서 같은 프롬프트를 다시 실행해도 이전 실행의 성공 기록은 사용하지 않는다.
+- 최신 실행이 실패했거나 성공 기록을 검증할 수 없으면 카드를 `in_progress`로 유지하고 추적 상태를 표시한다. `ClaudeCodexWatchdog`도 활성 실행을 찾을 수 없으면 상태를 표시한다. 인터랙티브 CLI 카드(`sourceContext=codex` 또는 `claude-code`)는 카드별 실행 기록 없이 생성되며 정상 Stop hook으로 완료된다.
+- 부팅 복구와 adapter 완료는 저장 시점에 최신 실행 및 현재 카드 상태를 함께 검사한다. 먼저 `complete`를 저장한 쪽이 큐 후속 실행을 호출한다.
 - queue helper는 성공 완료 콜백에서만 호출하고, 실패 흔적이 있는 `todo` card는 자동 재dispatch하지 않는다.
 
 ### 카드 결과 Resync (`POST /api/cards/:id/resync`)
