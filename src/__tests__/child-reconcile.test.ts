@@ -76,18 +76,9 @@ describe('reconcileStale with ChildLinker', () => {
       // First reconcile
       await runStore.reconcileStale(store, childLinker);
 
-      // Simulate a second restart: parent is back to in_progress, create another stale run
-      await store.updateCard(parent.id, { status: 'in_progress' });
-      const run2 = await runStore.createRun({
-        cardId: parent.id,
-        runtime: 'claude',
-        sessionId: 'sess-recon',
-        cwd: dir,
-      });
-      await Bun.write(run2.eventsPath, `${TASK_STARTED_LINE}\n`);
-
-      // Second reconcile
-      await runStore.reconcileStale(store, childLinker);
+      // Repeat startup without a distinct run; the same persisted run must not be replayed twice.
+      const restarted = new RuntimeRunStore(dir);
+      await restarted.reconcileStale(new KanbanStore(dir), new ChildLinker(new KanbanStore(dir)));
 
       const all = await store.getCards();
       const children = all.filter(c => c.parentCardId === parent.id && c.linkKind === 'subagent');
@@ -109,21 +100,21 @@ describe('reconcileStale with ChildLinker', () => {
       });
       await store.updateCard(parent.id, { status: 'in_progress' });
 
+      const run = await runStore.createRun({
+        cardId: parent.id,
+        runtime: 'claude',
+        cwd: dir,
+      });
+
       const child = await store.createCard({
         title: 'Child Subagent',
         description: 'c',
         parentCardId: parent.id,
         linkKind: 'subagent',
         childTaskId: 'task-stuck-001',
-        childRunId: 'run-old',
+        childRunId: run.runId,
       });
       await store.updateCard(child.id, { status: 'in_progress' });
-
-      await runStore.createRun({
-        cardId: parent.id,
-        runtime: 'claude',
-        cwd: dir,
-      });
 
       await runStore.reconcileStale(store, childLinker);
 
@@ -158,6 +149,24 @@ describe('ClaudeCodexWatchdog', () => {
       const updated = await store.getCard(card.id);
       expect(updated?.status).toBe('in_progress');
       expect(updated?.staleStatus).toBe('orphan');
+    });
+  });
+
+  test('does not mistake a native child for an orphan while its parent runtime owns it', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const runs = new RuntimeRunStore(dir);
+      const linker = new ChildLinker(store);
+      const parent = await store.createCard({title: 'parent', description: '', agentRuntime: 'codex'});
+      const run = await runs.createRun({cardId: parent.id, runtime: 'codex', cwd: dir});
+      await linker.onChildEvent(parent.id, run.runId, {
+        type: 'subagent_started', taskType: 'local_agent', taskId: 'child',
+      }, 'codex');
+      await linker.onChildEvent(parent.id, run.runId, {
+        type: 'subagent_updated', status: 'in_progress', taskId: 'child',
+      }, 'codex');
+      await new ClaudeCodexWatchdog(store, runs).check();
+      expect((await store.findByChildLink(parent.id, run.runId, 'child'))?.status).toBe('in_progress');
     });
   });
 

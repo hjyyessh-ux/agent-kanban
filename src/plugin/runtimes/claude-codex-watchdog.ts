@@ -44,6 +44,10 @@ export class ClaudeCodexWatchdog {
       // Interactive CLI cards are tracked by their prompt and stop hooks.
       if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) continue;
 
+      // Native children are owned by the parent runtime run, not a separately
+      // dispatched card run. Their lifecycle and restart cleanup own the status.
+      if (card.linkKind === 'subagent' && card.parentCardId && card.childRunId && card.childTaskId) continue;
+
       const activeRun = await this.runStore.findActiveRunByCard(card.id);
       const matches = (current: typeof card) =>
         matchesInProgressExecution(current, card) && current.updatedAt === card.updatedAt;

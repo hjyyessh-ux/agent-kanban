@@ -19,6 +19,9 @@ import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
 import { completeTrackedRuntimeCard, updateFailedRuntimeCard } from './runtime-restart-sync';
+import { codexChildEvents } from './codex-child-events';
+import { ChildLinker } from './child-linker';
+import type { ClaudeStreamEvent } from './claude-stream-parser';
 import { joinResultSegments, lastResultSegment } from './result-segments';
 import { captureGitEndAndUsage } from './git-capture';
 import { withSpawnLock } from './spawn-lock';
@@ -162,6 +165,7 @@ async function startCodexRun(
     });
   }
 
+  const childLinker = new ChildLinker(deps.store);
   const stdoutDone = readCodexStdout(getReadableStream(proc.stdout), run, state, async (threadId) => {
     if (state.threadResolved) return;
     state.threadId = threadId;
@@ -176,7 +180,7 @@ async function startCodexRun(
       staleStatus: null,
       staleDetectedAt: null,
     });
-  });
+  }, event => childLinker.onChildEvent(input.card.id, run.runId, event, 'codex').catch(() => undefined));
   const stderrDone = readCodexStderr(getReadableStream(proc.stderr), run.stderrPath);
   const done = handleCodexCompletion({
     deps,
@@ -309,6 +313,7 @@ async function readCodexStdout(
   run: RuntimeRun,
   state: CodexRunState,
   onThreadId: (threadId: string) => Promise<void>,
+  onChild: (event: ClaudeStreamEvent) => Promise<void>,
 ): Promise<void> {
   const decoder = new TextDecoder();
   let buffer = '';
@@ -319,13 +324,13 @@ async function readCodexStdout(
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
-      await processCodexLine(run, state, line, onThreadId);
+      await processCodexLine(run, state, line, onThreadId, onChild);
       newlineIndex = buffer.indexOf('\n');
     }
   }
   const rest = `${buffer}${decoder.decode()}`;
   if (rest.trim()) {
-    await processCodexLine(run, state, rest, onThreadId);
+    await processCodexLine(run, state, rest, onThreadId, onChild);
   }
 }
 
@@ -334,6 +339,7 @@ async function processCodexLine(
   state: CodexRunState,
   line: string,
   onThreadId: (threadId: string) => Promise<void>,
+  onChild: (event: ClaudeStreamEvent) => Promise<void>,
 ): Promise<void> {
   if (!line.trim()) return;
   await appendFile(run.eventsPath, `${line}\n`);
@@ -343,6 +349,7 @@ async function processCodexLine(
     await onThreadId(event.threadId);
     return;
   }
+  for (const child of codexChildEvents(event, state.threadId)) await onChild(child);
   if (event.type === 'agent_message') {
     state.resultSegments.push(event.text);
   }
@@ -415,6 +422,11 @@ async function handleCodexCompletion(input: {
       durationMs,
     };
   }
+
+  // A child lacking a terminal log is not a verified success, even if its parent finished.
+  await input.deps.store.supersedeNativeChildren(
+    input.input.card.id, input.run.runId, '[parent run exited without a recorded child completion]',
+  ).catch(() => undefined);
 
   const joinedResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
   const finalSegment = lastResultSegment(input.state.resultSegments);

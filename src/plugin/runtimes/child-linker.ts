@@ -1,5 +1,5 @@
 import type { KanbanStore } from '../../core/store';
-import type { KanbanStatus } from '../../core/types';
+import type { AgentRuntime, KanbanStatus } from '../../core/types';
 import type { ClaudeStreamEvent } from './claude-stream-parser';
 
 const CHILD_STATUS_MAP: Partial<Record<string, KanbanStatus>> = {
@@ -10,7 +10,7 @@ const CHILD_STATUS_MAP: Partial<Record<string, KanbanStatus>> = {
 export class ChildLinker {
   constructor(private readonly store: KanbanStore) {}
 
-  async onChildEvent(parentCardId: string, runId: string, ev: ClaudeStreamEvent): Promise<void> {
+  async onChildEvent(parentCardId: string, runId: string, ev: ClaudeStreamEvent, runtime: AgentRuntime = 'claude'): Promise<void> {
     // Once the parent card is archived it is physically removed from the active
     // board, but its runtime may still be streaming subagent events. Without this
     // guard those late events would recreate child cards (subagent_started) or
@@ -29,11 +29,11 @@ export class ChildLinker {
 
       const existing = await this.store.findByChildLink(parentCardId, runId, ev.taskId);
       if (existing) return;
-      // Cross-run dedup: after a restart a child may exist under a different runId (reconcile path)
-      const allCards = await this.store.getCards();
-      if (allCards.some(c => c.parentCardId === parentCardId && c.childTaskId === ev.taskId)) return;
+      // Task labels are local to a run. A distinct run owns a distinct child;
+      // only replay of this exact run/task tuple is deduplicated above.
+      // Never infer continuation or rebind from a reused task label.
 
-      await this.store.createCard({
+      await this.store.reserveNativeChild({
         title: ev.description ?? `Subagent (${ev.agentType ?? 'unknown'})`,
         description: ev.prompt ?? '',
         parentCardId,
@@ -42,30 +42,25 @@ export class ChildLinker {
         childToolUseId: ev.toolUseId,
         childRunId: runId,
         agentType: ev.agentType,
-        agentRuntime: 'claude',
+        agentRuntime: runtime,
+        // Claude task ids are not continuation ids. A Codex native receiver
+        // is explicitly a thread, so its id can link that child's session.
+        ...(runtime === 'codex' ? { sessionId: ev.taskId } : {}),
       });
       return;
     }
 
     if (ev.type === 'subagent_updated') {
-      const card = await this.store.findByChildLink(parentCardId, runId, ev.taskId);
-      if (!card) return;
-
-      const newStatus = ev.status ? CHILD_STATUS_MAP[ev.status] : undefined;
-      if (newStatus && newStatus !== card.status) {
-        await this.store.updateCard(card.id, { status: newStatus });
+      const status = ev.status ? CHILD_STATUS_MAP[ev.status] : undefined;
+      if (status === 'in_progress' || status === 'complete') {
+        await this.store.advanceNativeChild(parentCardId, runId, ev.taskId, { status });
       }
       return;
     }
 
     if (ev.type === 'subagent_completed') {
-      const card = await this.store.findByChildLink(parentCardId, runId, ev.taskId);
-      if (!card) return;
-
-      await this.store.updateCard(card.id, {
-        status: 'complete',
-        result: ev.summary,
-        ...(ev.usage?.durationMs !== undefined ? { durationMs: ev.usage.durationMs } : {}),
+      await this.store.advanceNativeChild(parentCardId, runId, ev.taskId, {
+        status: 'complete', terminal: true, summary: ev.summary, durationMs: ev.usage?.durationMs,
       });
     }
   }

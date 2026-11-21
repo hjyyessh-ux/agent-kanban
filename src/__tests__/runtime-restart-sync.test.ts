@@ -7,6 +7,7 @@ import { createKanbanApp } from '../plugin/bootstrap';
 import { dispatchNextQueuedTodoCard } from '../plugin/hooks/event-handler';
 import { resyncCardResult } from '../plugin/runtimes/card-result-resync';
 import { createStandaloneRuntimeHost } from '../plugin/runtimes/runtime-host';
+import { ChildLinker } from '../plugin/runtimes/child-linker';
 import { RuntimeRunStore } from '../plugin/runtimes/runtime-run-store';
 import { completeTrackedRuntimeCard, syncInterruptedCards } from '../plugin/runtimes/runtime-restart-sync';
 import { createRouteHandler } from '../server/routes';
@@ -48,7 +49,7 @@ async function seedRun(
 async function syncBoot(store: KanbanStore, runs: RuntimeRunStore, dispatches: string[] = []) {
   const bootCards = await store.getCards({ status: 'in_progress' });
   const bootRuns = await runs.listRuns();
-  await runs.reconcileStale(store, undefined, bootRuns);
+  await runs.reconcileStale(store, new ChildLinker(store), bootRuns);
   await syncInterruptedCards(store, runs, bootCards, bootRuns, testDispatch(dispatches));
 }
 
@@ -62,6 +63,57 @@ async function closeApp(app: Awaited<ReturnType<typeof createKanbanApp>>) {
 }
 
 describe('runtime restart Sync', () => {
+  test('replays linked Codex children while verifying the parent, then dispatches the queue once', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const runs = new RuntimeRunStore(dir);
+      const event = (tool: string, receiver: string, states: object) => ({
+        type: 'item.completed', item: { type: 'collab_tool_call', status: 'completed', tool,
+          sender_thread_id: SESSION, receiver_thread_ids: [receiver], agents_states: states },
+      });
+      const { card, run } = await seedRun(store, runs, dir, 'codex', encode(
+        { type: 'thread.started', thread_id: SESSION },
+        event('spawn_agent', 'child', {}), event('wait', 'child', {child:{status:'completed',message:'Saved child reply'}}),
+        codexAnswer('Saved parent reply'), codexSuccess));
+      const queued = await store.createCard({title:'Queued',description:'Next'});
+      await store.updateCard(queued.id, { queuedAfterCardId: card.id, queuePosition: 1 });
+      const calls: string[] = [];
+      await syncBoot(store, runs, calls);
+      await syncBoot(new KanbanStore(dir), new RuntimeRunStore(dir), calls);
+      expect(await store.getCard(card.id)).toMatchObject({status:'complete',result:'Saved parent reply'});
+      expect(await store.findByChildLink(card.id, run.runId, 'child')).toMatchObject({
+        parentCardId:card.id, status:'complete',result:'Saved child reply',
+      });
+      expect(await store.getCards()).toHaveLength(3);
+      expect(calls).toEqual([queued.id]);
+    });
+  });
+
+  test('retries a persisted child replay with no active runs while the unverified parent stays in progress', async () => {
+    await withTempDir(async dir => {
+      const store = new KanbanStore(dir);
+      const runs = new RuntimeRunStore(dir);
+      const { card, run } = await seedRun(store, runs, dir, 'claude', encode(
+        {type:'system',subtype:'task_started',task_id:'child',task_type:'local_agent'},
+        {type:'system',subtype:'task_notification',task_id:'child',summary:'Saved child reply'}));
+      const other = await store.createCard({title:'Other',description:'Other run',
+        parentCardId:card.id,linkKind:'subagent',childRunId:'other-run'});
+      await store.updateCard(other.id,{status:'in_progress'});
+      const fail = new ChildLinker(store);
+      const broken = spyOn(fail,'onChildEvent').mockImplementationOnce(async () => { throw new Error('simulated replay interruption'); });
+      try { await runs.reconcileStale(store, fail); } finally { broken.mockRestore(); }
+      expect(await runs.getRun(run.runId)).toMatchObject({status:'interrupted',restartReconcilePending:true});
+      expect(await store.findByChildLink(card.id,run.runId,'child')).toBeNull();
+      const next = new RuntimeRunStore(dir);
+      await syncBoot(store,next);
+      expect(await next.getRun(run.runId)).toMatchObject({status:'interrupted'});
+      expect((await next.getRun(run.runId))?.restartReconcilePending).toBeUndefined();
+      expect(await store.findByChildLink(card.id,run.runId,'child')).toMatchObject({parentCardId:card.id,result:'Saved child reply'});
+      expect((await store.getCard(card.id))?.status).toBe('in_progress');
+      expect((await store.getCard(other.id))?.status).toBe('in_progress');
+    });
+  });
+
   test('recovers a run after listening, leaves TODO alone and advances the queue once across restarts', async () => {
     await withTempDir(async dir => {
       const store = new KanbanStore(dir);
@@ -239,7 +291,7 @@ describe('runtime restart Sync', () => {
       const dispatch = testDispatch(dispatches);
       const bootCards = [card];
       const bootRuns = await runs.listRuns();
-      await runs.reconcileStale(store, undefined, bootRuns);
+      await runs.reconcileStale(store, new ChildLinker(store), bootRuns);
       const lateStore = new KanbanStore(dir);
       const lateRuns = new RuntimeRunStore(dir);
 
@@ -285,7 +337,7 @@ describe('runtime restart Sync', () => {
       const runs = new RuntimeRunStore(dir);
       const { card } = await seedRun(store, runs, dir, 'claude', encode(claudeAnswer('Old result'), claudeSuccess));
       const bootRuns = await runs.listRuns();
-      await runs.reconcileStale(store, undefined, bootRuns);
+      await runs.reconcileStale(store, new ChildLinker(store), bootRuns);
       const commit = runs.withLatestRun.bind(runs);
       const gate = spyOn(runs, 'withLatestRun').mockImplementationOnce(async (...args) => {
         // The re-dispatch has reserved a new run, even before it has updated the card.

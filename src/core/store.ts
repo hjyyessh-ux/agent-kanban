@@ -338,6 +338,85 @@ export class KanbanStore {
     return card;
   }
 
+  /** Internal native-child reservation: parent existence and tuple dedup share the board lock. */
+  async reserveNativeChild(input: CreateCardInput & { parentCardId: string; childRunId: string; childTaskId: string }): Promise<KanbanCard | null> {
+    if (!input.childRunId.trim() || !input.childTaskId.trim() || isWikiInternalCard(input)) return null;
+    return this.withDualLock(async () => {
+      const board = await this.load();
+      if (!board.cards.some(c => isActiveCard(c) && c.id === input.parentCardId)) return null;
+      const existing = board.cards.find(c => c.parentCardId === input.parentCardId
+        && c.childRunId === input.childRunId && c.childTaskId === input.childTaskId);
+      // A tombstone also consumes its tuple: replay must not resurrect user-deleted work.
+      if (existing) return isActiveCard(existing) ? existing : null;
+      const now = new Date().toISOString();
+      const card = buildCard({ ...input, linkKind: 'subagent' }, now);
+      board.cards.push(card);
+      board.lastModified = now;
+      await this.save(board);
+      return card;
+    });
+  }
+
+  /** Apply lifecycle updates without a read/write race with archive, deletion or replay. */
+  async advanceNativeChild(parentId: string, runId: string, taskId: string, event: {
+    status: 'in_progress' | 'complete';
+    terminal?: boolean;
+    summary?: string;
+    durationMs?: number;
+  }): Promise<void> {
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      if (!board.cards.some(card => card.id === parentId && isActiveCard(card))) return;
+      const card = board.cards.find(c => isActiveCard(c) && c.linkKind === 'subagent'
+        && c.parentCardId === parentId && c.childRunId === runId && c.childTaskId === taskId);
+      if (!card || card.status === 'done') return;
+      if (card.status === 'complete' && (!event.terminal || card.finalResult !== undefined)) return;
+      if (card.status === event.status && !event.terminal) return;
+      const now = new Date().toISOString();
+      if (event.status === 'in_progress') card.startedAt ??= now;
+      if (event.status === 'complete' && card.status !== 'complete') {
+        card.completedAt = now;
+        const elapsed = card.startedAt ? Date.parse(now) - Date.parse(card.startedAt) : NaN;
+        if (Number.isFinite(elapsed) && elapsed >= 0) card.durationMs = elapsed;
+      }
+      card.status = event.status;
+      if (event.terminal) {
+        delete card.resolution;
+        if (event.summary !== undefined) {
+          card.result = event.summary;
+          card.finalResult = event.summary;
+        }
+        if (event.durationMs !== undefined) card.durationMs = event.durationMs;
+      }
+      card.updatedAt = now;
+      board.lastModified = now;
+      await this.save(board);
+    });
+  }
+
+  /** End only interrupted native children of this run without replacing their saved payload. */
+  async supersedeNativeChildren(parentCardId: string, runId: string, reason: string): Promise<void> {
+    await this.withDualLock(async () => {
+      const board = await this.load();
+      const now = new Date().toISOString();
+      let changed = false;
+      for (const card of board.cards) {
+        if (!isActiveCard(card) || card.parentCardId !== parentCardId || card.childRunId !== runId
+          || card.linkKind !== 'subagent' || !['todo', 'in_progress'].includes(card.status)) continue;
+        card.status = 'complete';
+        card.completedAt = now;
+        const start = card.startedAt ? new Date(card.startedAt).getTime() : NaN;
+        const end = new Date(now).getTime();
+        if (Number.isFinite(start) && end >= start) card.durationMs = end - start;
+        card.resolution = 'superseded';
+        card.progressSummary = reason;
+        card.updatedAt = now;
+        changed = true;
+      }
+      if (changed) { board.lastModified = now; await this.save(board); }
+    });
+  }
+
   async findQuickActionCard(quickActionId: string, clientRequestId: string): Promise<KanbanCard | null> {
     const board = await this.load();
     return board.cards.find((card) => (
