@@ -18,6 +18,7 @@ import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle 
 import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
+import { completeTrackedRuntimeCard, updateFailedRuntimeCard } from './runtime-restart-sync';
 import { joinResultSegments, lastResultSegment } from './result-segments';
 import { captureGitEndAndUsage } from './git-capture';
 import { withSpawnLock } from './spawn-lock';
@@ -150,6 +151,17 @@ async function startCodexRun(
     if (input.resumeSessionId) resolve(input.resumeSessionId);
   });
 
+  if (input.resumeSessionId) {
+    await deps.store.updateCard(input.card.id, {
+      status: 'in_progress',
+      startedAt: run.startedAt,
+      progressSummary: undefined,
+      sessionId: input.resumeSessionId,
+      staleStatus: null,
+      staleDetectedAt: null,
+    });
+  }
+
   const stdoutDone = readCodexStdout(getReadableStream(proc.stdout), run, state, async (threadId) => {
     if (state.threadResolved) return;
     state.threadId = threadId;
@@ -158,6 +170,8 @@ async function startCodexRun(
     await deps.runStore.updateRun(run.runId, { sessionId: threadId });
     await deps.store.updateCard(input.card.id, {
       status: 'in_progress',
+      startedAt: run.startedAt,
+      progressSummary: undefined,
       sessionId: threadId,
       staleStatus: null,
       staleDetectedAt: null,
@@ -173,15 +187,6 @@ async function startCodexRun(
     stdoutDone,
     stderrDone,
   });
-
-  if (input.resumeSessionId) {
-    await deps.store.updateCard(input.card.id, {
-      status: 'in_progress',
-      sessionId: input.resumeSessionId,
-      staleStatus: null,
-      staleDetectedAt: null,
-    });
-  }
 
   const sessionId = await waitForThreadId({
     threadPromise,
@@ -415,25 +420,11 @@ async function handleCodexCompletion(input: {
   const finalSegment = lastResultSegment(input.state.resultSegments);
 
   if (exitCode === 0 && input.state.threadId) {
-    await input.deps.runStore.finishRun(input.run.runId, {
-      status: 'completed',
-      exitCode,
-    });
-    await input.deps.store.updateCard(input.input.card.id, {
-      status: 'complete',
-      resolution: 'completed',
-      sessionId: input.state.threadId,
-      result: joinedResult || '(no output)',
-      finalResult: finalSegment || undefined,
-      responseAt: new Date().toISOString(),
-      progressSummary: undefined,
-      staleStatus: null,
-      staleDetectedAt: null,
-      queuedAfterCardId: null,
-      queuePosition: null,
-      queueSessionMode: null,
-      resumeSessionId: null,
-    });
+    const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
+    const completed = await completeTrackedRuntimeCard(
+      input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
+    );
+    if (!completed) return { outcome: 'completed', result: joinedResult, durationMs };
     await notifyTelegramCompletion({
       store: input.deps.store,
       settingsStore: input.deps.settingsStore,
@@ -465,7 +456,7 @@ async function handleCodexCompletion(input: {
     exitCode,
     error: message,
   });
-  await input.deps.store.updateCard(input.input.card.id, {
+  await updateFailedRuntimeCard(input.deps.store, input.deps.runStore, input.run, input.input.card, {
     status: 'todo',
     progressSummary: `[${aborted ? 'aborted' : 'failed'}] runId=${input.run.runId} exit=${exitCode} ${message.slice(0, 500)}`,
     result: joinedResult || message,

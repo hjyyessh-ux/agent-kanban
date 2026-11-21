@@ -13,7 +13,7 @@ describe('RuntimeRunStore', () => {
         description: 'Do work',
         agentRuntime: 'codex',
       });
-      await store.updateCard(card.id, { status: 'in_progress', sessionId: 'thread-old' });
+      const started = await store.updateCard(card.id, { status: 'in_progress', sessionId: 'thread-old' });
 
       const run = await runStore.createRun({
         cardId: card.id,
@@ -31,12 +31,11 @@ describe('RuntimeRunStore', () => {
       expect(reconciled).toHaveLength(1);
 
       const updatedRun = await runStore.getRun(run.runId);
-      expect(updatedRun?.status).toBe('failed');
-      expect(updatedRun?.finishedAt).toBeTruthy();
+      expect(updatedRun?.status).toBe('interrupted');
+      expect(updatedRun?.finishedAt).toBeUndefined();
 
       const updatedCard = await store.getCard(card.id);
-      expect(updatedCard?.status).toBe('todo');
-      expect(updatedCard?.progressSummary).toStartWith('[reconciled]');
+      expect(updatedCard).toEqual(started);
     });
   });
 });

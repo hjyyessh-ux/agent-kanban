@@ -8,7 +8,7 @@ import { resolveDir } from '../../core/data-dir';
 import { parseClaudeStreamLine } from './claude-stream-parser';
 import type { ChildLinker } from './child-linker';
 
-export type RuntimeRunStatus = 'starting' | 'running' | 'completed' | 'failed' | 'aborted';
+export type RuntimeRunStatus = 'starting' | 'running' | 'interrupted' | 'completed' | 'failed' | 'aborted';
 
 export interface RuntimeRun {
   runId: string;
@@ -104,7 +104,7 @@ export class RuntimeRunStore {
   }
 
   async finishRun(runId: string, input: {
-    status: Exclude<RuntimeRunStatus, 'starting' | 'running'>;
+    status: 'completed' | 'failed' | 'aborted';
     exitCode?: number;
     error?: string;
   }): Promise<RuntimeRun> {
@@ -140,21 +140,42 @@ export class RuntimeRunStore {
     );
   }
 
-  async reconcileStale(store: KanbanStore, childLinker?: ChildLinker): Promise<RuntimeRun[]> {
+  // Acquire the run lock before the board lock so no new run can be inserted
+  // between checking the latest run and committing a conditional card update.
+  async withLatestRun<T>(
+    cardId: string,
+    runId: string | undefined,
+    commit: (run: RuntimeRun | undefined) => Promise<T>,
+  ): Promise<T | undefined> {
+    return this.withDualLock(async () => {
+      const { runs } = await this.loadUnsafe();
+      const latest = runs.findLast(run => run.cardId === cardId);
+      if (latest?.runId === runId) return commit(latest);
+    });
+  }
+
+  async reconcileStale(
+    store: KanbanStore,
+    childLinker?: ChildLinker,
+    bootRuns?: RuntimeRun[],
+  ): Promise<RuntimeRun[]> {
     const staleRuns: RuntimeRun[] = [];
-    const now = new Date().toISOString();
+    const activeIds = new Set((bootRuns ?? await this.listRuns())
+      .filter(run => run.status === 'starting' || run.status === 'running')
+      .map(run => run.runId));
+    if (activeIds.size === 0) return staleRuns;
 
     await this.withDualLock(async () => {
       const state = await this.loadUnsafe();
       for (const run of state.runs) {
+        if (!activeIds.has(run.runId)) continue;
         if (run.status !== 'starting' && run.status !== 'running') continue;
-        run.status = 'failed';
-        run.finishedAt = now;
-        run.error = run.error ?? 'Runtime run was reconciled after restart';
+        // The monitor was lost. The runtime outcome is still unknown.
+        run.status = 'interrupted';
         staleRuns.push({ ...run });
       }
       if (staleRuns.length > 0) {
-        state.lastModified = now;
+        state.lastModified = new Date().toISOString();
         await this.saveUnsafe(state);
       }
     });
@@ -176,7 +197,7 @@ export class RuntimeRunStore {
         }
       }
 
-      // Step 2: Close stuck in_progress subagent children before returning parent to todo
+      // Step 2: Close stuck in_progress subagent children.
       const allCards = await store.getCards();
       const stuckChildren = allCards.filter(
         c =>
@@ -193,16 +214,6 @@ export class RuntimeRunStore {
           }),
         ),
       );
-
-      // Step 3: Return parent card to todo
-      const card = await store.getCard(run.cardId);
-      if (card?.status !== 'in_progress') continue;
-      await store.updateCard(run.cardId, {
-        status: 'todo',
-        progressSummary: `[reconciled] ${run.runtime} run ${run.runId} was marked failed after restart`,
-        staleStatus: null,
-        staleDetectedAt: null,
-      });
     }
 
     return staleRuns;
@@ -232,7 +243,11 @@ export class RuntimeRunStore {
       mkdirSync(this.rootDir, { recursive: true });
     }
     if (existsSync(this.runsPath)) {
-      return JSON.parse(await Bun.file(this.runsPath).text()) as RuntimeRunState;
+      const state = JSON.parse(await Bun.file(this.runsPath).text()) as RuntimeRunState | null;
+      if (!Array.isArray(state?.runs) || state.runs.some(run => !run?.runId || !run.cardId)) {
+        throw new Error('Invalid runtime run store');
+      }
+      return state;
     }
     return {
       version: 1,

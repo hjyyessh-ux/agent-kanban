@@ -47,7 +47,7 @@ describe('reconcileStale with ChildLinker', () => {
       expect(children[0].childTaskId).toBe('task-recon-001');
 
       const updated = await store.getCard(parent.id);
-      expect(updated?.status).toBe('todo');
+      expect(updated?.status).toBe('in_progress');
     });
   });
 
@@ -95,7 +95,7 @@ describe('reconcileStale with ChildLinker', () => {
     });
   });
 
-  test('order: in_progress subagent children closed (superseded) before parent returns to todo', async () => {
+  test('closes interrupted subagent children and preserves parent status', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const runStore = new RuntimeRunStore(dir);
@@ -132,13 +132,13 @@ describe('reconcileStale with ChildLinker', () => {
       expect(updatedChild?.resolution).toBe('superseded');
 
       const updatedParent = await store.getCard(parent.id);
-      expect(updatedParent?.status).toBe('todo');
+      expect(updatedParent?.status).toBe('in_progress');
     });
   });
 });
 
 describe('ClaudeCodexWatchdog', () => {
-  test('moves orphaned in_progress claude card (no active run) back to todo', async () => {
+  test('flags an orphaned Claude card and keeps it in progress', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const runStore = new RuntimeRunStore(dir);
@@ -156,7 +156,8 @@ describe('ClaudeCodexWatchdog', () => {
       await watchdog.check();
 
       const updated = await store.getCard(card.id);
-      expect(updated?.status).toBe('todo');
+      expect(updated?.status).toBe('in_progress');
+      expect(updated?.staleStatus).toBe('orphan');
     });
   });
 
@@ -188,7 +189,7 @@ describe('ClaudeCodexWatchdog', () => {
     });
   });
 
-  test('still returns dispatched Codex orphan cards without active runs to todo', async () => {
+  test('keeps dispatched Codex orphan cards in progress and flags missing tracking', async () => {
     await withTempDir(async (dir) => {
       const store = new KanbanStore(dir);
       const runStore = new RuntimeRunStore(dir);
@@ -204,8 +205,8 @@ describe('ClaudeCodexWatchdog', () => {
       await watchdog.check();
 
       const updated = await store.getCard(card.id);
-      expect(updated?.status).toBe('todo');
-      expect(updated?.progressSummary).toContain('no active codex run');
+      expect(updated?.status).toBe('in_progress');
+      expect(updated?.progressSummary).toContain('No active codex run');
     });
   });
 

@@ -1,6 +1,7 @@
 import type { KanbanStore } from '../../core/store';
 import { resolveAgentRuntime } from '../../core/runtime-config';
 import type { RuntimeRunStore } from './runtime-run-store';
+import { matchesInProgressExecution } from './runtime-restart-sync';
 
 const CHECK_INTERVAL = 30_000;
 const STUCK_THRESHOLD_MS = 30 * 60 * 1000;
@@ -40,26 +41,20 @@ export class ClaudeCodexWatchdog {
       const runtime = resolveAgentRuntime(card);
       if (runtime !== 'claude' && runtime !== 'codex') continue;
 
-      // Organic CLI cards (created by codex/claude prompt hooks) share the same
-      // agentRuntime as daemon dispatches but never open a run in the run store —
-      // their lifecycle is owned by the prompt/stop hooks. Skip them so the
-      // watchdog doesn't mistake them for orphaned dispatch runs and yank them
-      // back to todo. Only 'codex' / 'claude-code' sourceContext is hook-set.
-      if (card.sourceContext === 'codex' || card.sourceContext === 'claude-code') continue;
+      // Interactive CLI cards are tracked by their prompt and stop hooks.
+      if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) continue;
 
       const activeRun = await this.runStore.findActiveRunByCard(card.id);
+      const matches = (current: typeof card) =>
+        matchesInProgressExecution(current, card) && current.updatedAt === card.updatedAt;
       if (!activeRun) {
-        if (card.sourceContext && ORGANIC_CLI_SOURCE_CONTEXTS.has(card.sourceContext)) {
-          continue;
+        if (card.staleStatus !== 'orphan') {
+          await this.store.updateCardIf(card.id, {
+            progressSummary: `[watchdog] No active ${runtime} run found. Completion could not be verified.`,
+            staleStatus: 'orphan',
+            staleDetectedAt: card.staleDetectedAt ?? new Date().toISOString(),
+          }, matches);
         }
-
-        // Orphaned: in_progress with no active run → move back to todo
-        await this.store.updateCard(card.id, {
-          status: 'todo',
-          progressSummary: `[watchdog] no active ${runtime} run found; card returned to todo`,
-          staleStatus: null,
-          staleDetectedAt: null,
-        }).catch(() => undefined);
         continue;
       }
 
@@ -67,16 +62,16 @@ export class ClaudeCodexWatchdog {
       const lastUpdate = new Date(card.updatedAt).getTime();
       if (now - lastUpdate > STUCK_THRESHOLD_MS) {
         if (card.staleStatus !== 'stuck') {
-          await this.store.updateCard(card.id, {
+          await this.store.updateCardIf(card.id, {
             staleStatus: 'stuck',
             staleDetectedAt: card.staleDetectedAt ?? new Date().toISOString(),
-          }).catch(() => undefined);
+          }, matches);
         }
       } else if (card.staleStatus) {
-        await this.store.updateCard(card.id, {
+        await this.store.updateCardIf(card.id, {
           staleStatus: null,
           staleDetectedAt: null,
-        }).catch(() => undefined);
+        }, matches);
       }
     }
   }

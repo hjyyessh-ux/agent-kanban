@@ -52,7 +52,6 @@ export interface StandaloneRuntimeHostOptions {
 export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHostOptions): Promise<RuntimeHost> {
   const runStore = new RuntimeRunStore(options.dataDir);
   const childLinker = new ChildLinker(options.store);
-  await runStore.reconcileStale(options.store, childLinker);
   const watchdog = new ClaudeCodexWatchdog(options.store, runStore);
   let dispatchCard: (cardId: string) => Promise<DispatchResult>;
   const registry = createRuntimeRegistry([

@@ -249,7 +249,6 @@ const plugin: Plugin = async (input) => {
     createDispatch: async ({ store, settingsStore }) => {
       const runtimeRunStore = new RuntimeRunStore(kanbanDataDir);
       const childLinker = new ChildLinker(store);
-      await runtimeRunStore.reconcileStale(store, childLinker);
       const claudeCodexWatchdog = new ClaudeCodexWatchdog(store, runtimeRunStore);
       const staleChecker = new StaleCardChecker(store, input);
 
