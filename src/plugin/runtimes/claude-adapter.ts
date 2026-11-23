@@ -450,7 +450,8 @@ async function handleClaudeCompletion(input: {
     };
   }
 
-  if (exitCode === 0 && !input.run.delegation) await input.deps.runStore.waitForDelegations(input.run.runId);
+  const drained = exitCode !== 0 || !!input.run.delegation
+    || await input.deps.runStore.waitForDelegations(input.run.runId);
 
   const joinedResult = joinResultSegments(input.state.resultSegments);
   const finalSegment = lastResultSegment(input.state.resultSegments);
@@ -473,7 +474,7 @@ async function handleClaudeCompletion(input: {
     return { outcome: error ? 'failed' : 'completed', result: joinedResult, error, durationMs };
   }
 
-  if (exitCode === 0 && input.state.sessionId) {
+  if (exitCode === 0 && input.state.sessionId && drained) {
     const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
     const completed = await completeTrackedRuntimeCard(
       input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
@@ -496,7 +497,8 @@ async function handleClaudeCompletion(input: {
   }
 
   const stderrTail = await readTail(input.run.stderrPath);
-  const message = stderrTail || `claude exited with code ${exitCode}`;
+  const message = !drained ? 'Managed child review still running at parent drain deadline'
+    : stderrTail || `claude exited with code ${exitCode}`;
   const aborted = input.input.abortSignal?.aborted;
   await input.deps.runStore.finishRun(input.run.runId, {
     status: aborted ? 'aborted' : 'failed',

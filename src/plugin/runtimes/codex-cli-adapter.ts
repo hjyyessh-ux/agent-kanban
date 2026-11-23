@@ -485,8 +485,8 @@ async function handleCodexCompletion(input: {
   const joinedResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
   const finalSegment = lastResultSegment(input.state.resultSegments);
 
-  if (exitCode === 0 && input.state.threadId) {
-    await input.deps.runStore.waitForDelegations(input.run.runId);
+  const drained = exitCode !== 0 || !input.state.threadId || await input.deps.runStore.waitForDelegations(input.run.runId);
+  if (exitCode === 0 && input.state.threadId && drained) {
     const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
     const completed = await completeTrackedRuntimeCard(
       input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
@@ -516,7 +516,8 @@ async function handleCodexCompletion(input: {
   }
 
   const stderrTail = await readTail(input.run.stderrPath);
-  const message = stderrTail || `codex exited with code ${exitCode}`;
+  const message = !drained ? 'Managed child review still running at parent drain deadline'
+    : stderrTail || `codex exited with code ${exitCode}`;
   const aborted = input.input.abortSignal?.aborted;
   await input.deps.runStore.finishRun(input.run.runId, {
     status: aborted ? 'aborted' : 'failed',

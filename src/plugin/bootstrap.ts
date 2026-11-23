@@ -69,6 +69,7 @@ export interface DispatchEngine {
 }
 
 export interface CreateKanbanAppOptions {
+  delegationOperatorToken?: string;
   dataDir: string;
   /** opencode plugin host input; null when running as the standalone daemon. */
   opencodeInput: PluginInput | null;
@@ -284,6 +285,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     boardHistory,
     dispatch.delegations,
     dispatch.setApiUrl,
+    () => isRuntimeOwner ? options.delegationOperatorToken : undefined,
   );
   const port = await monitor.start();
   if (port) {

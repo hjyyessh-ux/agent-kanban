@@ -32,7 +32,7 @@ console.log(JSON.stringify({type:'assistant',message:{content:[{type:'text',text
   });
   test('sends stdin and inherited parent identity with auth, then prints the complete review', async () => {
     await withTempDir(async dir => {
-      await Bun.write(join(dir, '.peer-token'), 'local-test-token');
+      const operator = 'B'.repeat(43);
       const requests: { method: string; authorization: string | null; body?: unknown }[] = [];
       let reads = 0;
       const server = Bun.serve({ port: 0, hostname: '127.0.0.1', async fetch(req) {
@@ -45,8 +45,8 @@ console.log(JSON.stringify({type:'assistant',message:{content:[{type:'text',text
       } });
       try {
         const proc = Bun.spawn([process.execPath, resolve('scripts/delegate-review.ts'),
-          '--request-id', 'stable-request', '--model', 'gpt-6-astra'], {
-          env: { ...process.env, KANBAN_DATA_DIR: dir,
+          '--request-id', 'stable-request', '--model', 'gpt-6-astra', '--parent-card', 'parent-card', '--parent-run', 'parent-run'], {
+          env: { ...process.env, KANBAN_DATA_DIR: dir, KANBAN_DELEGATION_OPERATOR_TOKEN: operator,
             KANBAN_API_URL: `http://127.0.0.1:${server.port}`,
             AGENT_KANBAN_DISPATCH_CARD_ID: 'parent-card', AGENT_KANBAN_DISPATCH_RUN_ID: 'parent-run' },
           stdin: 'pipe', stdout: 'pipe', stderr: 'pipe',
@@ -62,14 +62,14 @@ console.log(JSON.stringify({type:'assistant',message:{content:[{type:'text',text
         expect(requests.filter(r => r.method === 'POST')).toHaveLength(1);
         expect(requests[0]?.body).toEqual({ parentCardId: 'parent-card', parentRunId: 'parent-run',
           requestId: 'stable-request', model: 'gpt-6-astra', prompt: '리뷰 요청 전문' });
-        expect(requests.every(r => r.authorization === 'Bearer local-test-token')).toBe(true);
+        expect(requests.every(r => r.authorization === `Bearer ${operator}`)).toBe(true);
       } finally { server.stop(true); }
     });
   });
 
   test('run-id resumes reads without creating another review and returns failure with preserved output', async () => {
     await withTempDir(async dir => {
-      await Bun.write(join(dir, '.peer-token'), 'resume-token');
+      const operator = 'C'.repeat(43);
       const methods: string[] = [];
       const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(req) {
         methods.push(req.method);
@@ -78,7 +78,7 @@ console.log(JSON.stringify({type:'assistant',message:{content:[{type:'text',text
       } });
       try {
         const proc = Bun.spawn([process.execPath, resolve('scripts/delegate-review.ts'), '--run-id', 'interrupted'], {
-          env: { ...process.env, KANBAN_DATA_DIR: dir,
+          env: { ...process.env, KANBAN_DATA_DIR: dir, KANBAN_DELEGATION_OPERATOR_TOKEN: operator,
             KANBAN_API_URL: `http://127.0.0.1:${server.port}`,
             AGENT_KANBAN_DISPATCH_CARD_ID: '', AGENT_KANBAN_DISPATCH_RUN_ID: '' },
           stdout: 'pipe', stderr: 'pipe',

@@ -116,8 +116,7 @@ describe('managed cross-runtime delegation (synthetic CLIs)', () => {
       const parent = await f.dispatchParent('codex');
       expect(parent.sessionId).toBe(`codex-parent-${parent.card.id}`);
       const parentCapture = (await f.captures()).find(c => c.cardId === parent.card.id)!;
-      expect(parentCapture.prompt).toContain('delegate-review.ts');
-      expect(parentCapture.prompt).toContain(`--model ${DEFAULT_CLAUDE_MODEL}`);
+      expect(parentCapture.prompt).toBe('PARENT task');
       expect(parentCapture.apiUrl).toBe('http://127.0.0.1:39993');
 
       const accepted = await f.host.delegations.start(f.request(parent));

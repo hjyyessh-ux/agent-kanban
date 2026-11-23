@@ -323,22 +323,28 @@ describe('managed external delegation', () => {
       const f = await fixture(dir);
       await f.enable();
       const args: Parameters<typeof createRouteHandler> = [f.store];
-      args[11] = () => 'delegation-test-token';
+      args[11] = () => 'board-peer-test-token';
       args[17] = f.host.runStore;
       args[23] = f.host.delegations;
+      const operator = 'A'.repeat(43);
+      args[24] = () => operator;
       const { handleRequest } = createRouteHandler(...args);
       const local = (request: Request) => handleRequest(request, { clientAddress: '127.0.0.1' });
       const remote = await handleRequest(new Request('http://localhost/api/delegations/local-review', {
-        headers: { Authorization: 'Bearer delegation-test-token' },
+        headers: { Authorization: `Bearer ${operator}` },
       }), { clientAddress: '192.0.2.1' });
       expect(remote.status).toBe(403);
+      const probe = 'http://localhost/api/delegations/local-review';
+      expect((await local(new Request(probe, {headers:{Authorization:'Bearer board-peer-test-token'}}))).status).toBe(401);
+      expect((await local(new Request(probe, {headers:{Authorization:`Bearer ${operator}`, Origin:'http://localhost'}}))).status).toBe(403);
+      expect((await handleRequest(new Request(probe, {headers:{Authorization:`Bearer ${operator}`}}))).status).toBe(403);
       const unauthenticated = await local(new Request('http://localhost/api/delegations', {
         method: 'POST', body: JSON.stringify(f.request),
       }));
       expect(unauthenticated.status).toBe(401);
       const accepted = await local(new Request('http://localhost/api/delegations', {
         method: 'POST',
-        headers: { Authorization: 'Bearer delegation-test-token', 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${operator}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(f.request),
       }));
       expect(accepted.ok).toBe(true);
@@ -349,7 +355,7 @@ describe('managed external delegation', () => {
       const url = `http://localhost/api/delegations/${record.runId}`;
       expect((await local(new Request(url))).status).toBe(401);
       const read = await local(new Request(url, {
-        headers: { Authorization: 'Bearer delegation-test-token' },
+        headers: { Authorization: `Bearer ${operator}` },
       }));
       expect(read.status).toBe(200);
       expect((await read.json() as { result: string }).result).toContain('final review');

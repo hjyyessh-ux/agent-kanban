@@ -4,11 +4,14 @@ import { createKanbanApp } from '../plugin/bootstrap';
 import { createStandaloneRuntimeHost } from '../plugin/runtimes/runtime-host';
 
 const kanbanDataDir = getKanbanDataDir();
+const delegationOperatorToken = process.env.KANBAN_DELEGATION_OPERATOR_TOKEN;
+delete process.env.KANBAN_DELEGATION_OPERATOR_TOKEN;
 
 const app = await createKanbanApp({
   dataDir: kanbanDataDir,
   opencodeInput: null,
   debugLabel: 'daemon.runtime',
+  delegationOperatorToken,
   createDispatch: async ({ store, settingsStore }) => {
     const runtimeHost = await createStandaloneRuntimeHost({
       store,

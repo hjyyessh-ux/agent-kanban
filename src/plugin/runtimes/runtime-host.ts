@@ -1,5 +1,4 @@
 import { existsSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
 import type { AgentRuntime, DispatchResult, KanbanCard } from '../../core/types';
@@ -24,8 +23,6 @@ import { buildDispatchPromptText } from '../dispatch-prompt';
 import { captureGitStart } from './git-capture';
 import { mergeCodexCliModelsIntoCatalog } from './codex-model-catalog';
 import { ExternalDelegationService } from './external-delegation-service';
-import { DEFAULT_DELEGATION_CODEX_MODEL, DELEGATION_ENABLED_KEY } from './external-delegation-service';
-import { getSettingValueOrDefault } from '../../core/settings-store';
 
 export interface RuntimeAvailability {
   runtime: AgentRuntime;
@@ -92,19 +89,7 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
     validateProjectDir(card);
 
     const adapter = registry.pickAdapter(resolveAgentRuntime(card));
-    let prompt = buildDispatchPromptText(card, (screenshot) => options.store.getScreenshotPath(screenshot.filename));
-    if ((card.agentRuntime === 'claude' || card.agentRuntime === 'codex')
-      && await getSettingValueOrDefault(options.settingsStore, DELEGATION_ENABLED_KEY, 'false') === 'true') {
-      const runner = [resolve(import.meta.dir, '../../../scripts/delegate-review.ts'),
-        resolve(import.meta.dir, '../../scripts/delegate-review.ts')].find(path => existsSync(path));
-      const target = card.agentRuntime === 'claude'
-        ? { label: 'Codex/Astra', model: DEFAULT_DELEGATION_CODEX_MODEL, raw: 'codex exec' }
-        : { label: 'Claude', model: DEFAULT_CLAUDE_MODEL, raw: 'claude -p' };
-      if (runner) prompt += `\n\nFor an explicitly requested external ${target.label} review, use the tracked runner:\n`
-        + `bun '${runner.replaceAll("'", "'\\''")}' --request-id <stable-review-id> --model ${target.model} < /path/to/review-prompt.txt\n`
-        + 'It records a child card and waits for the review. Reuse the request ID only for transport retries; '
-        + `a new review attempt needs a new ID. Use --run-id to resume polling. Do not use raw ${target.raw} for this delegation.`;
-    }
+    const prompt = buildDispatchPromptText(card, (screenshot) => options.store.getScreenshotPath(screenshot.filename));
     const cwd = card.projectDir ?? options.cwd ?? process.cwd();
     await captureGitStart(options.store, card.id, cwd); // best-effort, never throws
     const handle = await adapter.start({

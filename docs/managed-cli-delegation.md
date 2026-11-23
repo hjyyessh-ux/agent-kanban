@@ -1,33 +1,39 @@
 # Managed Claude and Codex delegation
 
-The standalone Kanban daemon can record an explicitly requested review from
-one dispatched CLI as a child of that CLI's active Card and runtime run:
+A trusted local operator can deliberately ask the standalone Kanban daemon
+to launch an opposite-runtime review under a currently running Card:
 
 | Parent | Child |
 | --- | --- |
 | Claude | Codex |
 | Codex | Claude |
 
-The feature is **off by default** (setting `agent.external_delegation.enabled`).
-It does not infer parentage for a command started directly in a shell. The
-managed runner authenticates to the daemon's real loopback listener through its
-existing local peer credential. It does not follow redirects. LAN and
-unauthenticated requests cannot use the delegation API. Use read-only model
-permissions for children; a child cannot open another delegation.
+The feature is **off by default**. It requires
+`agent.external_delegation.enabled` plus a dedicated high-entropy operator
+credential supplied to the standalone daemon and the local operator runner as
+`KANBAN_DELEGATION_OPERATOR_TOKEN`. No placeholder is provided or enabled.
+The daemon retains the credential in process, removes it from its environment
+before creating runtimes, and only its current runtime owner can accept the
+request. The runner takes explicit `--parent-card`, `--parent-run`, and
+`--request-id`. The board-wide peer token, browser Origin, forwarded requests,
+remote or unknown socket addresses, and credentials supplied by a child are
+not supported as operator authority. Do not add credentials to prompts, model
+settings, logs or command arguments. The local runner does not follow redirects.
 
-A request is bound to its active parent Card/run and an idempotency key. The
-child run and Card IDs are saved before spawn. The adapter links only a session
-reported by that child runtime. A retry with the same input retrieves the
-existing run. A different deliberate review requires a new request ID.
-On parent success, admission closes and active child runs are allowed to drain.
-Interrupted child runs are reconciled without re-launching, and their saved
-output stays available. Native same-runtime subagents are a separate path.
+The latest active parent Card/run must have a real session. The child run and
+Card are reserved before spawn and link only to a session reported by that
+child runtime. The same request ID and input retrieves the existing run; a
+different deliberate review requires a new key. Managed children use
+read-only review permissions and cannot delegate again. A successful parent
+closes admission and waits up to 60 seconds for already accepted children;
+timeouts do not mark the parent successful or erase child work. Recovery
+does not re-launch interrupted children. Same-runtime native child handling
+remains separate.
 
-Verification on account-backed CLIs depends on their local authentication
-and their policy for localhost access; a sandbox refusing the runner must
-not be bypassed. OpenCode-hosted plugin delegation is not enabled here.
-This change does not modify Board History or change its credentials,
-transport, or backing store.
-
-Tests use synthetic local CLIs. Disable the setting and drain children before
-rolling back to a build without managed delegation.
+There is no transparent provider-to-provider launch via inherited IDs, no
+guessing for independently launched shell commands, and no managed route on
+the OpenCode-hosted plugin. Actual account-backed CLI validation still
+requires operator credentials, normal permissions, and a dedicated local
+test. Do not bypass a sandbox which cannot use this route. Board History
+and its credential are independent. Disable delegation and drain children
+before rolling back to a release which does not support managed delegation.

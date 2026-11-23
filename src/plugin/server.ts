@@ -103,6 +103,7 @@ export class ServerMonitor {
     private readonly boardHistory?: BoardHistoryService,
     private readonly delegations?: import('./runtimes/external-delegation-service').ExternalDelegationService,
     private readonly setApiUrl?: (url: string) => void,
+    private readonly delegationOperatorToken?: () => string | undefined,
   ) {
     this.store = store;
     this.input = input;
@@ -175,6 +176,7 @@ export class ServerMonitor {
       this.workStore,
       this.boardHistory,
       this.delegations,
+      this.delegationOperatorToken,
     );
     this.setApiUrl?.(`http://127.0.0.1:${instance.port}`);
     return instance;

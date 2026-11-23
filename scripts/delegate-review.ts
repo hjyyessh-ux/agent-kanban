@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { ExternalDelegationView } from '../src/core/types';
 
 /**
@@ -19,8 +16,8 @@ async function main(): Promise<void> {
     || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash) {
     throw new Error('Delegation API must be a local loopback origin');
   }
-  const dataDir = process.env.KANBAN_DATA_DIR ?? join(homedir(), '.agent-kanban');
-  const token = (await readFile(join(dataDir, '.peer-token'), 'utf8')).trim();
+  const token = process.env.KANBAN_DELEGATION_OPERATOR_TOKEN;
+  if (!token || !/^[A-Za-z0-9_-]{43,128}$/.test(token)) throw new Error('Dedicated local operator credential required');
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const request = async (path: string, body?: unknown): Promise<ExternalDelegationView> => {
     const response = await fetch(new URL(path, endpoint), {
@@ -33,10 +30,10 @@ async function main(): Promise<void> {
   let runId = option('--run-id');
   if (!runId) {
     const requestId = option('--request-id');
-    const parentCardId = process.env.AGENT_KANBAN_DISPATCH_CARD_ID;
-    const parentRunId = process.env.AGENT_KANBAN_DISPATCH_RUN_ID;
+    const parentCardId = option('--parent-card');
+    const parentRunId = option('--parent-run');
     if (!requestId || !parentCardId || !parentRunId) {
-      throw new Error('A board-dispatched Claude or Codex parent and --request-id are required (or use --run-id to resume polling)');
+      throw new Error('Explicit --parent-card, --parent-run and --request-id are required (or use --run-id to resume polling)');
     }
     const accepted = await request('/api/delegations', {
       parentCardId, parentRunId, requestId, model: option('--model'), prompt: await Bun.stdin.text(),

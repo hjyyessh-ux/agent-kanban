@@ -179,7 +179,7 @@ import type { ExternalDelegationRequest } from '../core/types';
 import { ManagedDelegationConflict } from '../core/store';
 import { RuntimeDispatchError } from '../plugin/runtimes/types';
 import type { BoardHistoryService } from '../core/board-history';
-import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest } from './board-history-routes';
+import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
 import { RESPONSE_GUIDELINES_SETTING_KEY, normalizeResponseGuidelines, validateResponseGuidelines } from '../core/response-guidelines';
 
@@ -1275,6 +1275,7 @@ export function createRouteHandler(
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
   delegations?: ExternalDelegationService,
+  delegationOperatorToken?: () => string | undefined,
 ) {
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
@@ -1366,6 +1367,30 @@ export function createRouteHandler(
     // (unit tests, e2e test-server), this is a no-op and the same-origin guard
     // remains the active protection.
     const localToken = peerTokenFn?.();
+    const delegationMatch = path.match(/^\/api\/delegations\/([^/]+)$/);
+    if ((path === '/api/delegations' && method === 'POST') || (delegationMatch && method === 'GET')) {
+      const expected = delegationOperatorToken?.();
+      if (!delegations || !expected || !/^[A-Za-z0-9_-]{43,128}$/.test(expected) || expected === localToken) {
+        return errorResponse('Delegation route unavailable', 404);
+      }
+      if (!ctx?.clientAddress || !isLoopbackClient(ctx.clientAddress) || req.headers.has('origin')
+        || ['forwarded','x-forwarded-for','x-forwarded-host'].some(h => req.headers.has(h))) {
+        return errorResponse('Direct local operator required', 403);
+      }
+      if (!hasAuthorizedBearerToken(req, expected)) return errorResponse('Unauthorized', 401);
+      try {
+        if (method === 'POST') {
+          const body = await readCappedBody(req, 65_536);
+          if (body === null) return errorResponse('Delegation input too large', 413);
+          return json(await delegations.start(JSON.parse(body) as ExternalDelegationRequest), 202);
+        }
+        return json(await delegations.get(delegationMatch![1]));
+      } catch (e: unknown) {
+        return errorResponse(e instanceof Error ? e.message : 'Invalid delegation request',
+          e instanceof RuntimeDispatchError || e instanceof ManagedDelegationConflict ? e.statusCode : 400);
+      }
+    }
+
     if (localToken && requiresLocalAuth(method, path)) {
       if (!hasAuthorizedBearerToken(req, localToken)) {
         return errorResponse('Unauthorized', 401);
@@ -2420,21 +2445,6 @@ export function createRouteHandler(
 
     // TODO: Add GET /api/cards?label=X&priority=Y filtering
     // TODO: Add GET /api/stats endpoint (card counts, avg completion time)
-
-    const delegationMatch = path.match(/^\/api\/delegations\/([^/]+)$/);
-    if ((path === '/api/delegations' && method === 'POST') || (delegationMatch && method === 'GET')) {
-      if (!isLoopbackClient(ctx?.clientAddress)) return errorResponse('Local clients only', 403);
-      if (!hasAuthorizedBearerToken(req, localToken)) return errorResponse('Unauthorized', 401);
-      if (!delegations) return errorResponse('External delegation unavailable', 503);
-      try {
-        return method === 'POST'
-          ? json(await delegations.start(await req.json() as ExternalDelegationRequest), 202)
-          : json(await delegations.get(delegationMatch![1]));
-      } catch (e: unknown) {
-        return errorResponse(e instanceof Error ? e.message : 'Invalid delegation request',
-          e instanceof RuntimeDispatchError || e instanceof ManagedDelegationConflict ? e.statusCode : 400);
-      }
-    }
 
     // Route: POST /api/archive
     if (method === 'POST' && path === '/api/archive') {

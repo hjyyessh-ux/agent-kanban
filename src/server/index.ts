@@ -89,6 +89,7 @@ export function createServer(
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
   delegations?: ExternalDelegationService,
+  delegationOperatorToken?: () => string | undefined,
 ): ServerInstance {
   const { handleRequest } = createRouteHandler(
     store,
@@ -115,6 +116,7 @@ export function createServer(
     workStore,
     boardHistory,
     delegations,
+    delegationOperatorToken,
   );
 
   const fetchHandler = async (req: Request, server: ReturnType<typeof Bun.serve>) => {

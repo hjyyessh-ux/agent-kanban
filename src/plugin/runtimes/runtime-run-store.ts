@@ -141,11 +141,11 @@ export class RuntimeRunStore {
         }
         return { run: existing, created: false };
       }
-      const parent = state.runs.find(r => r.runId === input.parentRunId);
+      const parent = state.runs.findLast(r => r.cardId === input.parentCardId);
       const childRuntime = parent ? crossRuntimeTarget(parent.runtime) : undefined;
       // A managed child never delegates again (no Claude↔Codex ping-pong chains), and only
       // the parent card's own live run may admit children.
-      if (!parent || !childRuntime || parent.cardId !== input.parentCardId || parent.delegation
+      if (!parent || parent.runId !== input.parentRunId || !parent.sessionId || !childRuntime || parent.delegation
         || parent.status !== 'running' || parent.admissionClosed
         || (input.childRuntime && input.childRuntime !== childRuntime)) {
         throw new RuntimeDispatchError('Parent run is not accepting delegations', 409);
@@ -186,11 +186,14 @@ export class RuntimeRunStore {
     await this.updateRun(runId, { admissionClosed: true });
   }
 
-  async waitForDelegations(parentRunId: string): Promise<void> {
+  async waitForDelegations(parentRunId: string, timeoutMs = 60_000): Promise<boolean> {
+    const deadline = performance.now() + timeoutMs;
     while ((await this.listRuns()).some(r => r.delegation?.parentRunId === parentRunId
       && (r.status === 'starting' || r.status === 'running'))) {
+      if (performance.now() >= deadline) return false;
       await new Promise(resolve => setTimeout(resolve, 25));
     }
+    return true;
   }
 
   async updateRun(runId: string, input: Partial<Omit<RuntimeRun, 'runId'>>): Promise<RuntimeRun> {

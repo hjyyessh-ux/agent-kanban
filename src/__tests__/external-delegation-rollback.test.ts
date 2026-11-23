@@ -52,7 +52,7 @@ console.log(JSON.stringify({type:'turn.completed'}));
       });
       await store.updateCard(parent.id, { status: 'in_progress' });
       const parentRun = await host.runStore.createRun({ cardId: parent.id, runtime: 'claude', cwd: dir });
-      await host.runStore.updateRun(parentRun.runId, { status: 'running' });
+      await host.runStore.updateRun(parentRun.runId, { status: 'running', sessionId: 'rollback-parent' });
       await settingsStore.upsertByKey(DELEGATION_ENABLED_KEY, 'true');
       const request = { parentCardId: parent.id, parentRunId: parentRun.runId,
         requestId: 'rollback-request', prompt: 'Review without modifying files' };
