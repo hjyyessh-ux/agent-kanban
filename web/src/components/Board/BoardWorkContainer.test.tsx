@@ -75,7 +75,7 @@ describe('BoardWorkContainer', () => {
   test('header (A′): title · ★ N · ● N · ▴ 접기 · ⋯ — the Work id is hover-only on the meta line', () => {
     const html = render(cards, works);
     expect(html).not.toContain('kv2-work-chevron');
-    expect(html).toMatch(/<button type="button" class="kv2-work-title"[^>]*>Work W1<\/button>/);
+    expect(html).toMatch(/<button type="button" class="kv2-work-title"[^>]*><span class="kv2-work-title-text">Work W1<\/span><\/button>/);
     expect(html).toContain(`aria-label="${BOARD_WORKS_COPY.menuLabel('Work W1')}"`);
     const head = html.slice(html.indexOf('<header class="kv2-work-head"'), html.indexOf('</header>'));
     expect(head).not.toContain('kv2-id-chip');

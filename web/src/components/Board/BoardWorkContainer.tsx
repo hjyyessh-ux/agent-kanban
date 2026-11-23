@@ -210,7 +210,8 @@ export const BoardWorkContainer: React.FC<BoardWorkContainerProps> = ({
           onFocus={(event) => setPeerHighlight(event.currentTarget, work.id, true)}
           onBlur={(event) => setPeerHighlight(event.currentTarget, work.id, false)}
         >
-          {work.title}
+          {/* Inner span: a two-line clamp is reliable on a span, not on a <button>. */}
+          <span className="kv2-work-title-text">{work.title}</span>
         </button>
         {fragment.favoriteCount > 0 && (
           <span

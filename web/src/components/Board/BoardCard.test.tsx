@@ -6,8 +6,8 @@ import {
   confirmBoardCardDelete,
 } from './BoardCard';
 import type { V2CardViewModel } from './board-selectors';
-import { CardActions } from './BoardCardSections';
-import { CARD_ACTION_COPY } from '../../constants/copy';
+import { CardActions, QueueTargetChip } from './BoardCardSections';
+import { CARD_ACTION_COPY, QUEUE_TARGET_COPY } from '../../constants/copy';
 import { primaryActionFor, secondaryActionFor } from '../../constants/card-actions';
 
 const originalWindow = globalThis.window;
@@ -382,5 +382,36 @@ describe('CardActions mapping', () => {
     expect(primaryActionFor('todo', { surface: 'detail' }).label).toBe(CARD_ACTION_COPY.startTask);
     expect(secondaryActionFor('todo')).toBeNull();
     expect(secondaryActionFor('done')).toBeNull();
+  });
+});
+
+describe('QueueTargetChip', () => {
+  const base = {
+    queueTargetTitle: '#420 3단계 · 예시 선행 카드',
+    queuedAfterCardId: 'prev-card',
+    queueSessionMode: undefined,
+  } as const;
+
+  test('card layout shows the queue position and the direction before the target title', () => {
+    const next = renderToStaticMarkup(<QueueTargetChip {...base} queuePosition={1} layout="card" />);
+    expect(next).toContain('kv2-card-queue-target--card');
+    expect(next).toContain(`<span class="kv2-card-queue-target-pos">${QUEUE_TARGET_COPY.position(1)}</span>`);
+    expect(next).toContain(QUEUE_TARGET_COPY.after);
+    expect(next).toContain(base.queueTargetTitle);
+
+    const third = renderToStaticMarkup(<QueueTargetChip {...base} queuePosition={3} layout="card" />);
+    expect(third).toContain('⏭ #3');
+  });
+
+  test('card layout without a position omits the badge', () => {
+    const html = renderToStaticMarkup(<QueueTargetChip {...base} queuePosition={undefined} layout="card" />);
+    expect(html).not.toContain('kv2-card-queue-target-pos');
+  });
+
+  test('inline (List row) keeps the one-line `🔗 title` chip', () => {
+    const html = renderToStaticMarkup(<QueueTargetChip {...base} queuePosition={1} />);
+    expect(html).not.toContain('kv2-card-queue-target--card');
+    expect(html).not.toContain('kv2-card-queue-target-pos');
+    expect(html).toContain(`🔗 ${base.queueTargetTitle}`);
   });
 });
