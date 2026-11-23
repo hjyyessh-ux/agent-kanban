@@ -63,8 +63,11 @@ import {
   type MentionToken,
   type ResolvedReference,
   type ResolvedReferenceWorkSession,
+  type SkillLaunchStatus,
   type TranscriptMissingReason,
 } from '../core/mention-reference';
+import { buildSkillMentionPool, type SkillPoolInput } from './mention-skill-discovery';
+import type { SkillPoolEntry } from '../core/mention-skills';
 import {
   DEFAULT_MENTION_LIMIT,
   buildSessionCandidateSources,
@@ -999,10 +1002,37 @@ function hasAuthorizedBearerToken(req: Request, expectedToken: string | undefine
 // 역인덱스 같은 계층을 두지 않는다.
 
 const MAX_MENTION_LIMIT = 50;
-const MENTION_KIND_VALUES = new Set<string>(['session', 'work', 'doc']);
+const MENTION_KIND_VALUES = new Set<string>(['session', 'work', 'doc', 'skill']);
 
 function isMentionKind(value: string): value is MentionKind {
   return MENTION_KIND_VALUES.has(value);
+}
+
+/**
+ * 스킬 멘션 컨텍스트 — 카드가 실행될 runtime × projectDir. 스킬은 이 둘에 따라
+ * 보이는 목록이 다르다(`mention-skill-discovery.ts`). 런타임을 모르면 claude로 본다
+ * (New Task 기본값).
+ */
+export interface MentionSkillContext {
+  runtime: AgentRuntime;
+  projectDir?: string;
+}
+
+function readMentionSkillContext(url: URL): MentionSkillContext {
+  const runtimeParam = url.searchParams.get('runtime');
+  const runtime: AgentRuntime = runtimeParam === 'codex' || runtimeParam === 'opencode' ? runtimeParam : 'claude';
+  const projectDir = url.searchParams.get('projectDir')?.trim() || undefined;
+  return { runtime, ...(projectDir ? { projectDir } : {}) };
+}
+
+/** 보드에 등장하는 projectDir — 다른 프로젝트 전용 스킬(회색 행)의 출처. */
+function boardProjectDirs(cards: KanbanCard[]): string[] {
+  const dirs = new Set<string>();
+  for (const card of cards) {
+    const dir = card.projectDir?.trim();
+    if (dir && !card.deletedAt) dirs.add(dir);
+  }
+  return [...dirs];
 }
 
 /** 설정된 vault 디렉토리. 미설정·부재는 오류가 아니라 "Docs 탭 없음"이다. */
@@ -1059,6 +1089,7 @@ export async function buildMentionPool(
   store: KanbanStore,
   workStore?: WorkStore,
   wikiWorker?: WikiWorker,
+  skillContext?: MentionSkillContext,
 ): Promise<MentionSearchPool> {
   const cards = await store.getCards({});
   const vaultDir = await readWikiVaultDir(wikiWorker);
@@ -1066,7 +1097,50 @@ export async function buildMentionPool(
     sessions: buildSessionCandidateSources(cards),
     works: workStore ? await workStore.getWorks() : [],
     docs: vaultDir ? scanWikiVaultDocs(vaultDir) : [],
+    ...(skillContext ? { skills: buildSkillMentionPool({ ...skillContext, knownProjectDirs: boardProjectDirs(cards) }) } : {}),
   };
+}
+
+/** 스킬 토큰 → 참조. 이 세션에서 쓸 수 없으면 이유를 달아 `unavailable`. */
+function resolveSkillReference(token: MentionToken, pool: SkillPoolEntry[]): ResolvedReference {
+  const entry = pool.find((candidate) => candidate.name === token.id);
+  const base: ResolvedReference = { kind: 'skill', id: token.id, raw: token.raw, title: token.id };
+  if (!entry) return { ...base, unresolved: 'not_found' };
+  const meta: ResolvedReference = {
+    ...base,
+    title: entry.name,
+    skillRuntime: entry.runtime,
+    skillScope: entry.scope,
+    ...(entry.plugin ? { skillPlugin: entry.plugin } : {}),
+    skillInvocation: entry.invocation,
+    skillPath: entry.skillPath,
+    ...(entry.projectDir ? { skillProjectDir: entry.projectDir } : {}),
+  };
+  if (entry.unavailable) return { ...meta, unresolved: 'unavailable', skillUnavailable: entry.unavailable };
+  // claude 첫 줄 실행 전용은 블록 지시로는 실행되지 않는다(E2b·E3b) — 토큰이 아니라
+  // 첫 줄 `/name`으로 넣어야 한다.
+  if (entry.invocation === 'launch') return { ...meta, unresolved: 'unavailable', skillUnavailable: 'launch_only' };
+  return meta;
+}
+
+/**
+ * 본문 첫 줄 `/name` 검증. 없는 이름을 그대로 보내면 claude는 평문으로 받아 스킬
+ * 없이 진행하므로(E2f), 여기서 `ok: false`를 돌려 UI가 제출을 막게 한다.
+ */
+export function resolveSkillLaunch(name: string, pool: SkillPoolEntry[], runtime: AgentRuntime): SkillLaunchStatus {
+  const entry = pool.find((candidate) => candidate.name === name);
+  if (!entry) return { name, ok: false, reason: 'not_found' };
+  const detail = {
+    invocation: entry.invocation,
+    scope: entry.scope,
+    description: entry.description,
+    ...(entry.projectDir ? { projectDir: entry.projectDir } : {}),
+  };
+  if (entry.unavailable) return { name, ok: false, reason: entry.unavailable, ...detail };
+  // 첫 줄 slash는 claude 문법이다. codex에 `/name`을 보내면 주입되지 않고 모델이
+  // 파일을 찾아 읽는 우회 실행이 된다(C9).
+  if (runtime !== 'claude') return { name, ok: false, reason: 'runtime_mismatch', ...detail };
+  return { name, ok: true, ...detail };
 }
 
 /**
@@ -1225,12 +1299,17 @@ function resolveDocReference(token: MentionToken, vaultDir: string | undefined):
 export async function resolveMentionReferences(
   tokens: MentionToken[],
   deps: { store: KanbanStore; workStore?: WorkStore; wikiWorker?: WikiWorker },
+  skillContext: MentionSkillContext | null = { runtime: 'claude' },
 ): Promise<ResolvedReference[]> {
-  const needsCards = tokens.some((token) => token.kind === 'session' || token.kind === 'work');
+  const needsSkills = skillContext !== null && tokens.some((token) => token.kind === 'skill');
+  const needsCards = needsSkills || tokens.some((token) => token.kind === 'session' || token.kind === 'work');
   const cards = needsCards ? await deps.store.getCards({}) : [];
   const vaultDir = tokens.some((token) => token.kind === 'doc')
     ? await readWikiVaultDir(deps.wikiWorker)
     : undefined;
+  const skillPool = needsSkills && skillContext
+    ? buildSkillMentionPool({ ...skillContext, knownProjectDirs: boardProjectDirs(cards) } satisfies SkillPoolInput)
+    : [];
 
   const references: ResolvedReference[] = [];
   for (const token of tokens) {
@@ -1243,6 +1322,10 @@ export async function resolveMentionReferences(
       references.push(work
         ? resolveWorkReference(token, work, cards)
         : { kind: 'work', id: token.id, raw: token.raw, title: '', unresolved: 'not_found' });
+      continue;
+    }
+    if (token.kind === 'skill') {
+      references.push(resolveSkillReference(token, skillPool));
       continue;
     }
     references.push(resolveDocReference(token, vaultDir));
@@ -1464,13 +1547,30 @@ export function createRouteHandler(
       }
     }
 
+    // Skill discovery can reveal local paths, installed integrations and
+    // operational descriptions. Do not infer loopback from a forwarded header
+    // or the existing permissive helper's unknown-address behavior.
+    const skillMentionPermission = () => {
+      if (!hasAuthorizedBearerToken(req, localToken)) return 401;
+      return ctx?.clientAddress && LOOPBACK_ADDRESSES.has(ctx.clientAddress) ? 200 : 403;
+    };
+    const skillMentionDenied = (status: number) => errorResponse(
+      status === 403 ? 'Skill mentions are local only' : 'Unauthorized', status,
+    );
+    const mentionResponse = (value: MentionSearchResponse | MentionResolveResponse) => {
+      const response = json(value);
+      // A proxy/browser must not reuse an authenticated skill view for another request.
+      response.headers.set('Cache-Control', 'no-store');
+      return response;
+    };
+
     // Route: GET /api/mentions — `@` 멘션 후보 (All / Sessions / Works / Docs).
     // 현재 보드 + works.json + wiki vault 스캔만 본다. 월별 아카이브는 어느
     // 경로로도 열지 않는다 — 지나간 작업의 참조는 `@doc:`이 담당한다.
     if (method === 'GET' && path === '/api/mentions') {
       const kindParam = url.searchParams.get('kind') ?? 'all';
       if (kindParam !== 'all' && !isMentionKind(kindParam)) {
-        return errorResponse('kind must be one of: all, session, work, doc', 400);
+        return errorResponse('kind must be one of: all, session, work, doc, skill', 400);
       }
       const limitParam = Number(url.searchParams.get('limit'));
       const limit = Number.isFinite(limitParam) && limitParam > 0
@@ -1479,7 +1579,15 @@ export function createRouteHandler(
       const q = url.searchParams.get('q') ?? '';
 
       try {
-        const pool = await buildMentionPool(store, workStore, wikiWorker);
+        const skillAccess = skillMentionPermission();
+        if (kindParam === 'skill' && skillAccess !== 200) return skillMentionDenied(skillAccess);
+        const wantsSkills = skillAccess === 200 && (kindParam === 'all' || kindParam === 'skill');
+        const pool = await buildMentionPool(
+          store,
+          workStore,
+          wikiWorker,
+          wantsSkills ? readMentionSkillContext(url) : undefined,
+        );
         // 자르기 전 전체를 받아 totals를 세고, 노출은 kind별 limit까지만 한다.
         const ranked = selectMentionCandidates(pool, {
           q,
@@ -1494,14 +1602,16 @@ export function createRouteHandler(
             sessions: ranked.sessions.slice(0, limit),
             works: ranked.works.slice(0, limit),
             docs: ranked.docs.slice(0, limit),
+            skills: ranked.skills.slice(0, limit),
           },
           totals: {
             sessions: ranked.sessions.length,
             works: ranked.works.length,
             docs: ranked.docs.length,
+            skills: ranked.skills.length,
           },
         };
-        return json(response);
+        return mentionResponse(response);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to search mentions';
         return errorResponse(message, 500);
@@ -1527,9 +1637,19 @@ export function createRouteHandler(
       }
 
       try {
-        const references = await resolveMentionReferences(tokens, { store, workStore, wikiWorker });
+        // `runtime`·`projectDir`는 skill 토큰과 첫 줄 실행(`launch`) 해석에만 쓰인다.
+        const skillAccess = skillMentionPermission();
+        const launchName = url.searchParams.get('launch')?.trim();
+        if (launchName && skillAccess !== 200) return skillMentionDenied(skillAccess);
+        const skillContext = skillAccess === 200 ? readMentionSkillContext(url) : null;
+        const references = await resolveMentionReferences(tokens, { store, workStore, wikiWorker }, skillContext);
         const response: MentionResolveResponse = { references };
-        return json(response);
+        if (launchName && skillContext) {
+          const cards = await store.getCards({});
+          const pool = buildSkillMentionPool({ ...skillContext, knownProjectDirs: boardProjectDirs(cards) });
+          response.launch = resolveSkillLaunch(launchName, pool, skillContext.runtime);
+        }
+        return mentionResponse(response);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to resolve mentions';
         return errorResponse(message, 500);

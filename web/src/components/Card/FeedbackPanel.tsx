@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { appendReferenceBlock, type ResolvedReference } from "../../../../src/core/mention-reference";
 import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
 import { MentionTextarea } from "../Mention/MentionTextarea";
+import type { AgentRuntime } from "../../../../src/core/types";
 import { ImageLightbox } from "../shared/ImageLightbox";
 import { clearDraft, readDraftImages, readDraftText, writeDraftImages, writeDraftText } from "./feedbackDraft";
 
@@ -17,6 +18,12 @@ interface FeedbackPanelProps {
   onClose?: () => void;
   /** 대상 카드의 프로젝트 — `@` 후보에서 같은 디렉토리가 먼저 온다. */
   projectDir?: string;
+  /**
+   * 피드백이 실행될 런타임(대상 카드와 같다). `@skill:` 후보·해석이 달라진다.
+   * 첫 줄 실행 스킬은 허용하지 않는다 — 피드백 본문 앞에는 `[Feedback for: …]`
+   * 헤더가 붙어 첫 줄을 보장할 수 없다.
+   */
+  agentRuntime?: AgentRuntime;
   /**
    * 자기 참조로 막을 세션 — 피드백 대상 카드 자신의 세션이다. 자기 transcript를
    * 자기 프롬프트에 넣는 건 항상 무의미하고 재귀적으로 커진다.
@@ -53,6 +60,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
   onCreateFeedback,
   onClose,
   projectDir,
+  agentRuntime,
   excludeSessionIds,
   boundarySelector = ".kv2-dialog",
   draftKey,
@@ -134,7 +142,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
     setIsSubmittingFeedback(true);
     try {
       // 디바운스된 해석을 기다리지 않는다 — 참조를 고르자마자 보내면 사람이 이긴다.
-      const submitRefs = await resolveReferencesForSubmit(feedbackText, resolvedRefs);
+      const submitRefs = await resolveReferencesForSubmit(feedbackText, resolvedRefs, { runtime: agentRuntime, projectDir });
       await onCreateFeedback(
         cardId,
         // 참조 블록은 여기서 붙는다. `App.handleCreateFeedback`은 받은 문자열을
@@ -200,6 +208,7 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
           disabled={isSubmittingFeedback}
           boundarySelector={boundarySelector}
           projectDir={projectDir}
+          agentRuntime={agentRuntime}
           excludeSessionIds={excludeSessionIds}
           onReferencesChange={setResolvedRefs}
         />

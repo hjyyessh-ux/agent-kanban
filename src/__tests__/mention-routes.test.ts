@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { resolveClaudeTranscriptPath } from '../plugin/wiki/wiki-transcript';
 import { KanbanStore } from '../core/store';
@@ -13,6 +14,23 @@ import type { MentionResolveResponse } from '../core/mention-reference';
 import type { MentionSearchResponse } from '../core/mention-search';
 import { withTempDir } from './setup';
 import type { KanbanCard } from '../core/types';
+import { clearMentionSkillCache } from '../server/mention-skill-discovery';
+
+// `/api/mentions`는 Skills 그룹을 위해 홈 디렉토리의 스킬 폴더를 읽는다. 이 파일의
+// 기대값이 개발자 머신의 `~/.claude/skills`에 흔들리지 않도록 빈 HOME으로 격리한다.
+// 스킬 동작 자체는 `mention-skills.test.ts`가 본다.
+const originalHome = process.env.HOME;
+let isolatedHome = '';
+beforeAll(() => {
+  isolatedHome = mkdtempSync(join(tmpdir(), 'mention-routes-home-'));
+  process.env.HOME = isolatedHome;
+  clearMentionSkillCache();
+});
+afterAll(() => {
+  process.env.HOME = originalHome;
+  clearMentionSkillCache();
+  rmSync(isolatedHome, { recursive: true, force: true });
+});
 
 /**
  * The two read-only mention routes.
@@ -95,11 +113,11 @@ describe('GET /api/mentions', () => {
       const body = await searchMentions(handleRequest, '?q=텔레그램');
 
       expect(body.q).toBe('텔레그램');
-      expect(Object.keys(body.groups).sort()).toEqual(['docs', 'sessions', 'works']);
+      expect(Object.keys(body.groups).sort()).toEqual(['docs', 'sessions', 'skills', 'works']);
       expect(body.groups.sessions.map((c) => c.id)).toEqual(['aaaa1111']);
       expect(body.groups.sessions[0].snippet).toEqual({ field: 'description', text: '텔레그램 폴러 중복 카드' });
       expect(body.groups.works.map((c) => c.label)).toEqual(['텔레그램 연동 안정화']);
-      expect(body.totals).toEqual({ sessions: 1, works: 1, docs: 0 });
+      expect(body.totals).toEqual({ sessions: 1, works: 1, docs: 0, skills: 0 });
     });
   });
 
@@ -144,11 +162,11 @@ describe('GET /api/mentions', () => {
       const body = await searchMentions(handleRequest, '?q=텔레그램&kind=work');
       expect(body.groups.sessions).toEqual([]);
       expect(body.groups.works.length).toBe(1);
-      expect(body.totals).toEqual({ sessions: 0, works: 1, docs: 0 });
+      expect(body.totals).toEqual({ sessions: 0, works: 1, docs: 0, skills: 0 });
 
       const bad = await handleRequest(new Request('http://localhost/api/mentions?kind=card'));
       expect(bad.status).toBe(400);
-      expect(await bad.json()).toEqual({ error: 'kind must be one of: all, session, work, doc' });
+      expect(await bad.json()).toEqual({ error: 'kind must be one of: all, session, work, doc, skill' });
     });
   });
 

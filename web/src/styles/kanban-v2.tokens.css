@@ -133,6 +133,7 @@
   --kv2-ref-session: #1668e8;  /* h 216  thread — one session */
   --kv2-ref-work: #8b5cf0;     /* h 259  Work — same violet as the lineage mark */
   --kv2-ref-doc: #0d9488;      /* h 175  Wiki document */
+  --kv2-ref-skill: #c2410c;    /* h  21  skill — a capability to invoke, not a document to read */
 }
 
 /* =============================================================
@@ -615,6 +616,7 @@
   --kv2-ref-session-text: color-mix(in srgb, var(--kv2-ref-session) 42%, var(--kv2-text-primary));
   --kv2-ref-work-text: color-mix(in srgb, var(--kv2-ref-work) 38%, var(--kv2-text-primary));
   --kv2-ref-doc-text: color-mix(in srgb, var(--kv2-ref-doc) 40%, var(--kv2-text-primary));
+  --kv2-ref-skill-text: color-mix(in srgb, var(--kv2-ref-skill) 45%, var(--kv2-text-primary));
 }
 
 /* =============================================================

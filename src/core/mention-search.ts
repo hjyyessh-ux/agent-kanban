@@ -1,4 +1,11 @@
 import { stripReferenceBlock, type MentionKind } from './mention-reference';
+import type {
+  SkillInvocation,
+  SkillMentionScope,
+  SkillPoolEntry,
+  SkillRuntime,
+  SkillUnavailableReason,
+} from './mention-skills';
 import type { AgentRuntime, KanbanCard, Work } from './types';
 
 /**
@@ -50,7 +57,15 @@ export interface MentionCandidate {
   sublabel?: string;       // '세션 4개 · 카드 11개' 등
   /** 검색 시 매칭된 위치의 앞뒤 문맥 (±40자). 어느 필드에서 걸렸는지도 담는다. */
   snippet?: { field: 'title' | 'description' | 'result' | 'path'; text: string };
-  disabledReason?: 'self';
+  /** `self` — 자기 세션. 나머지는 skill 후보 전용(`SkillUnavailableReason`). */
+  disabledReason?: 'self' | SkillUnavailableReason;
+  /** skill 후보 메타. */
+  skill?: {
+    runtime: SkillRuntime;
+    scope: SkillMentionScope;
+    invocation: SkillInvocation;
+    plugin?: string;
+  };
 }
 
 export interface MentionSearchInput {
@@ -78,19 +93,22 @@ export interface MentionSearchPool {
   sessions: SessionCandidateSource[];
   works: Work[];
   docs: DocEntry[];
+  /** 카드의 runtime × projectDir 기준 스킬 풀. 고를 수 없는 항목은 `unavailable`이 붙어 있다. */
+  skills?: SkillPoolEntry[];
 }
 
 export interface MentionSearchResult {
   sessions: MentionCandidate[];
   works: MentionCandidate[];
   docs: MentionCandidate[];
+  skills: MentionCandidate[];
 }
 
 /** `GET /api/mentions` 응답. `totals`는 `limit`으로 자르기 **전** 개수다. */
 export interface MentionSearchResponse {
   q: string;
   groups: MentionSearchResult;
-  totals: { sessions: number; works: number; docs: number };
+  totals: { sessions: number; works: number; docs: number; skills: number };
 }
 
 type SnippetField = NonNullable<MentionCandidate['snippet']>['field'];
@@ -358,6 +376,51 @@ function docCandidate(doc: DocEntry, needle: string): MentionCandidate | undefin
   };
 }
 
+/** 스킬 설명은 길다(수백 자) — 행 보조 라벨로는 첫 문장 근처만. */
+const SKILL_SUBLABEL_LENGTH = 90;
+
+function skillCandidate(entry: SkillPoolEntry, needle: string): MentionCandidate | undefined {
+  let snippet: MentionCandidate['snippet'];
+  if (needle) {
+    const nameMatch = entry.name.toLowerCase().includes(needle);
+    if (!nameMatch) {
+      snippet = firstSnippet([{ field: 'description', text: entry.description }], needle);
+      if (!snippet) return undefined;
+    }
+  }
+  const flat = entry.description.replace(/\s+/g, ' ').trim();
+  return {
+    kind: 'skill',
+    id: entry.name,
+    label: entry.name,
+    agentRuntime: entry.runtime,
+    ...(entry.projectDir ? { projectDir: entry.projectDir } : {}),
+    updatedAt: entry.updatedAt ?? '',
+    sublabel: flat.length > SKILL_SUBLABEL_LENGTH ? `${flat.slice(0, SKILL_SUBLABEL_LENGTH)}…` : flat,
+    ...(snippet ? { snippet } : {}),
+    ...(entry.unavailable ? { disabledReason: entry.unavailable } : {}),
+    skill: {
+      runtime: entry.runtime,
+      scope: entry.scope,
+      invocation: entry.invocation,
+      ...(entry.plugin ? { plugin: entry.plugin } : {}),
+    },
+  };
+}
+
+/** 스킬 그룹 정렬 — 고를 수 있는 것 먼저, 그다음 가까운 scope(project → plugin → user → system), 이름. */
+const SKILL_SCOPE_RANK: Record<SkillMentionScope, number> = { project: 0, plugin: 1, user: 2, system: 3 };
+
+function sortSkillCandidates(candidates: MentionCandidate[]): MentionCandidate[] {
+  return candidates.sort((a, b) => {
+    const disabled = Number(Boolean(a.disabledReason)) - Number(Boolean(b.disabledReason));
+    if (disabled !== 0) return disabled;
+    const rank = SKILL_SCOPE_RANK[a.skill?.scope ?? 'system'] - SKILL_SCOPE_RANK[b.skill?.scope ?? 'system'];
+    if (rank !== 0) return rank;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 /**
  * 정렬: ① 선택 불가(자기 참조)는 맨 뒤 → ② `currentProjectDir` 일치 우선 →
  * ③ `updatedAt` 내림차순 → ④ id.
@@ -415,5 +478,13 @@ export function selectMentionCandidates(
     )
     : [];
 
-  return { sessions, works, docs };
+  const skills = wants('skill')
+    ? sortSkillCandidates(
+      (pool.skills ?? [])
+        .map((entry) => skillCandidate(entry, needle))
+        .filter((candidate): candidate is MentionCandidate => Boolean(candidate)),
+    ).slice(0, limit)
+    : [];
+
+  return { sessions, works, docs, skills };
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { KanbanCard } from '../../../../src/core/types';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
 import { splitReferenceBlock } from '../../../../src/core/mention-reference';
+import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 import { SavedReferences } from '../Mention/SavedReferences';
 import { DialogSkeleton } from '../Card/DialogSkeleton';
 import { FeedbackPanel } from '../Card/FeedbackPanel';
@@ -1057,6 +1058,7 @@ export const SessionConversationModal: React.FC<SessionConversationModalProps> =
             setIsSubmittingFeedback={setIsSubmittingFeedback}
             onCreateFeedback={onCreateFeedback}
             projectDir={feedbackTarget.projectDir ?? group.projectDir}
+            agentRuntime={resolveAgentRuntime(feedbackTarget)}
             // 지금 읽고 있는 바로 그 세션이다 — 자기 참조는 후보에서 막는다.
             excludeSessionIds={group.sessionId ? [group.sessionId] : undefined}
             // 세션 단위 초안: 새 turn이 끝나 대상 카드가 바뀌어도 쓰던 내용은 남는다.
