@@ -1,10 +1,11 @@
+import { PromptRefinement } from '../shared/PromptRefinement';
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { KanbanCard, CardRunProgress } from '../../../../src/core/types';
 import { EditingField } from './CardMetaPanel';
 import { CardMarkdown } from './CardMarkdown';
 import { splitCardResult } from './card-result';
 import { splitFeedbackHeader } from '../../../../src/core/mention-search';
-import { splitReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
+import { splitReferenceBlock, stripReferenceBlock, type ResolvedReference } from '../../../../src/core/mention-reference';
 import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 import { MentionTextarea } from '../Mention/MentionTextarea';
 import { SavedReferences } from '../Mention/SavedReferences';
@@ -34,6 +35,7 @@ interface CardPhasesProps {
 
 interface PhaseCardProps {
   name: string;
+  labelAction?: React.ReactNode;
   tone: 'prompt' | 'progress' | 'result' | 'meta';
   canEdit?: boolean;
   isEditing?: boolean;
@@ -275,6 +277,7 @@ export const PhaseAside: React.FC<{
 
 const PhaseCard: React.FC<PhaseCardProps> = ({
   name,
+  labelAction,
   tone,
   canEdit = false,
   isEditing = false,
@@ -289,8 +292,8 @@ const PhaseCard: React.FC<PhaseCardProps> = ({
   return (
     <div className="kv2-phase-card-wrapper">
       <div className="kv2-phase-header kv2-phase-header--outer">
-        <div>
-          <span>{name}</span>
+        <div className="kv2-prompt-refinement-label">
+          <span>{name}</span>{labelAction}
         </div>
         <div className="kv2-phase-header-actions">
           {canEdit && !isEditing && onEdit && (
@@ -382,6 +385,13 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
       {((isTodo && canEdit) || card.description) && (
         <PhaseCard
           name="Prompt"
+          labelAction={<PromptRefinement key={card.id}
+            value={editingField === 'description' ? editValue : stripReferenceBlock(card.description ?? '')}
+            disabled={!isTodo || !canEdit || (editingField !== null && editingField !== 'description')}
+            onChange={value => {
+              if (editingField !== 'description') startEditing('description');
+              setEditValue(value);
+            }} />}
           tone="prompt"
           canEdit={isTodo && canEdit}
           isEditing={editingField === 'description'}
@@ -399,7 +409,10 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
               onChange={setEditValue}
               onKeyDown={handleTextareaKeyDown}
               onPaste={onDescriptionPaste}
-              onBlur={saveEdit}
+              onBlur={event => {
+                if (event.relatedTarget instanceof Element && event.relatedTarget.closest('.kv2-phase-header--outer, [data-prompt-refinement]')) return;
+                saveEdit();
+              }}
               onReferencesChange={onDescriptionReferencesChange}
               boundarySelector=".kv2-dialog"
               projectDir={card.projectDir}

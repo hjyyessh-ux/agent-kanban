@@ -1,3 +1,4 @@
+import { PromptRefinement } from '../shared/PromptRefinement';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AgentRuntime,
@@ -254,7 +255,10 @@ export const QuickActionEditorDialog: React.FC<QuickActionEditorDialogProps> = (
                 />
               </div>
               <div className="kv2-form-group kv2-quick-action-editor-wide">
-                <label className="kv2-label" htmlFor="quick-action-prompt">Prompt template</label>
+                <div className="kv2-prompt-refinement-label">
+                  <label className="kv2-label" htmlFor="quick-action-prompt">Prompt template</label>
+                <PromptRefinement key={draft.id ?? "new"} disabled={saving} value={draft.promptTemplate} onChange={(promptTemplate) => setDraft(current => ({ ...current, promptTemplate }))} />
+                </div>
                 <textarea
                   id="quick-action-prompt"
                   className="kv2-textarea"

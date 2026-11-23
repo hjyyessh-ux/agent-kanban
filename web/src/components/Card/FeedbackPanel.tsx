@@ -1,3 +1,4 @@
+import { PromptRefinement } from '../shared/PromptRefinement';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { appendReferenceBlock, type ResolvedReference } from "../../../../src/core/mention-reference";
 import { resolveReferencesForSubmit } from "../../hooks/useMentionReferences";
@@ -182,7 +183,9 @@ export const FeedbackPanel: React.FC<FeedbackPanelProps> = ({
       }}
     >
       <div className="kv2-feedback-header">
-        <div className="kv2-feedback-title">Feedback</div>
+        <div className="kv2-feedback-title kv2-prompt-refinement-label">Feedback
+          <PromptRefinement key={storageKey} value={feedbackText} onChange={updateText} disabled={isSubmittingFeedback} />
+        </div>
         {targetLabel && <span className="kv2-feedback-target">{targetLabel}</span>}
         {hasDraft && (
           <span className="kv2-feedback-draft">

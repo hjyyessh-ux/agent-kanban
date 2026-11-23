@@ -85,7 +85,9 @@ export function useModalAccessibility(
     if (firstFocusable !== container) firstFocusable.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || container.closest('[inert]')) return;
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (active && active !== document.body && active.closest('[role="dialog"]') !== container) return;
       if (shouldCloseModalOnKey(event.key)) {
         event.preventDefault();
         onCloseRef.current();
@@ -94,7 +96,6 @@ export function useModalAccessibility(
 
       if (event.key !== 'Tab') return;
 
-      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       const currentFocusables = getFocusableElements(container);
 
       if (currentFocusables.length === 0) {
