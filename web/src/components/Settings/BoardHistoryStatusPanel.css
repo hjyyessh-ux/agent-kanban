@@ -1,0 +1,46 @@
+.settings-board-history-panel { margin-bottom: var(--kv2-sp-4); }
+.settings-board-history-list { display: flex; flex-direction: column; gap: var(--kv2-sp-4); }
+.settings-board-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--kv2-sp-3);
+  flex-wrap: wrap;
+}
+.settings-board-history-header h3 { margin: 0; overflow-wrap: anywhere; }
+.settings-board-history-badges { display: flex; flex-wrap: wrap; gap: var(--kv2-sp-2); }
+.settings-board-history-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--kv2-sp-3); }
+.settings-board-history-metrics dt { color: var(--kv2-text-secondary); font-size: var(--kv2-text-sm); }
+.settings-board-history-metrics dd { margin: var(--kv2-sp-1) 0 0; overflow-wrap: anywhere; }
+.settings-board-history-metrics dd.settings-board-history-help { color: var(--kv2-text-secondary); font-size: var(--kv2-text-sm); }
+.settings-board-history-section { margin: var(--kv2-sp-2) 0; font-size: var(--kv2-text-sm); color: var(--kv2-text-secondary); }
+.settings-board-history-gaps { margin: var(--kv2-sp-2) 0 0; padding-left: var(--kv2-sp-4); overflow-wrap: anywhere; }
+.settings-board-history-badge--warning {
+  color: var(--kv2-warn-text-deepest);
+  background: var(--kv2-warn-surface);
+  border-color: var(--kv2-warn-border);
+}
+.settings-board-history-attention {
+  margin: 0;
+  color: var(--kv2-warn-text);
+  font-size: var(--kv2-text-ui-sm);
+}
+.settings-board-history-details { border-top: 1px solid var(--kv2-border); }
+.settings-board-history-details > summary {
+  min-height: 44px;
+  padding: var(--kv2-sp-2) var(--kv2-sp-1);
+  align-content: center;
+  cursor: pointer;
+  color: var(--kv2-text-primary);
+  font-size: var(--kv2-text-ui-sm);
+  font-weight: 600;
+}
+.settings-board-history-details > summary:hover { background: var(--kv2-surface-hover); }
+.settings-board-history-details > summary:focus-visible { outline: 2px solid var(--kv2-focus-ring); outline-offset: 2px; }
+.settings-board-history-detail-body {
+  padding: var(--kv2-sp-3) var(--kv2-sp-1) var(--kv2-sp-1);
+  border-top: 1px solid var(--kv2-border);
+}
+@media (max-width: 480px) {
+  .settings-board-history-metrics { grid-template-columns: minmax(0, 1fr); }
+}

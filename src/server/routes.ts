@@ -185,6 +185,7 @@ import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
 import { selectPromptRefinementProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
+import { BOARD_HISTORY_STATUS_PATH, handleBoardHistoryStatusRequest } from './board-history-status-route';
 import { detectPlaintextSecret } from '../core/secret-detect';
 import { RESPONSE_GUIDELINES_SETTING_KEY, normalizeResponseGuidelines, validateResponseGuidelines } from '../core/response-guidelines';
 
@@ -1406,6 +1407,17 @@ export function createRouteHandler(
     // while the board is running.
     if (isForbiddenCrossOrigin(req)) {
       return errorResponse('Cross-origin request rejected', 403);
+    }
+
+    // Owner-only Card/Works History status summary: before the generic preflight
+    // so it never advertises CORS, and its own loopback + local admin gate.
+    if (path === BOARD_HISTORY_STATUS_PATH) {
+      const adminToken = peerTokenFn?.();
+      return handleBoardHistoryStatusRequest(req, url, {
+        clientAddress: ctx?.clientAddress,
+        adminAuthorized: Boolean(adminToken && hasAuthorizedBearerToken(req, adminToken)),
+        service: boardHistory,
+      });
     }
 
     // Handle preflight (only same-origin requests reach here).

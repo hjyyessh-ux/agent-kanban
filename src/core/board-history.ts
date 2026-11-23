@@ -55,7 +55,7 @@ export interface BoardEntityObservation {
   deleted?: boolean;
 }
 
-interface ConsumerRecord {
+export interface ConsumerRecord {
   version: 1;
   subscriptionId: string;
   projectId: string;
@@ -104,12 +104,12 @@ const IDENTIFIER = /^[A-Za-z0-9_-]{1,120}$/;
 const isIdentifier = (value: unknown): value is string => typeof value === 'string' && IDENTIFIER.test(value);
 const stamp = (ms: number) => new Date(ms).toISOString();
 
-function boardHistoryPaths(dataDir: string) {
+export function boardHistoryPaths(dataDir: string) {
   const dir = join(dataDir, BOARD_HISTORY_DIR);
   return { dir, consumer: join(dir, CONSUMER_FILE), journal: join(dir, JOURNAL_FILE) };
 }
 
-function readConsumer(path: string): ConsumerRecord | null {
+export function readConsumer(path: string): ConsumerRecord | null {
   if (!existsSync(path)) return null;
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ConsumerRecord>;
   if (parsed.version !== 1 || typeof parsed.subscriptionId !== 'string' || !SUBSCRIPTION_PATTERN.test(parsed.subscriptionId)
@@ -258,7 +258,7 @@ export class BoardHistoryService {
   /** Kinds whose `prepare` failed for the current save: the fence check could not run. */
   private readonly unprepared = new Set<Kind>();
 
-  constructor(dataDir: string, private readonly options: BoardHistoryOptions = {}) {
+  constructor(readonly dataDir: string, private readonly options: BoardHistoryOptions = {}) {
     this.paths = boardHistoryPaths(dataDir);
     this.clock = options.clock ?? Date.now;
   }
@@ -418,50 +418,51 @@ export class BoardHistoryService {
     try { return fn(opened, opened.consumer.subscriptionId); } catch (error) { throw toPublicError(error); }
   }
 
-  /**
-   * What this subscription can and cannot vouch for. `preCaptureGap` is the part
-   * of the fixed 7-day window before capture began: no events exist there and
-   * none are synthesized. `gaps` are intervals where a writer bypassed capture
-   * or a capture was interrupted. `pendingSince` is an unfinished capture.
-   */
-  private coverage(db: Database, cutoffUtc: string) {
-    const cutoff = Date.parse(cutoffUtc);
-    const baseline = db.query<{ ms: number | null; kinds: number }, []>(
-      "SELECT MAX(baseline_ms) AS ms, COUNT(*) AS kinds FROM board_capture_meta WHERE kind IN ('card','work')").get()!;
-    const started = baseline.kinds === 2 ? baseline.ms : null;
-    const gaps = db.query<{ kind: Kind; from_ms: number; to_ms: number; reason: GapReason }, [number, number]>(
-      'SELECT kind,from_ms,to_ms,reason FROM board_capture_gaps WHERE to_ms>=? ORDER BY id DESC LIMIT ?').all(cutoff, MAX_REPORTED_GAPS);
-    const gapCount = db.query<{ n: number }, [number]>('SELECT COUNT(*) AS n FROM board_capture_gaps WHERE to_ms>=?').get(cutoff)!.n;
-    const pending = db.query<{ ms: number | null }, []>('SELECT MIN(started_ms) AS ms FROM board_capture_intent').get()!.ms;
-    const preCaptureGap = started !== null && started > cutoff ? { from: cutoffUtc, to: stamp(started) } : null;
-    return {
-      windowStart: cutoffUtc,
-      capturedFrom: started === null ? null : stamp(started),
-      preCaptureGap,
-      gaps: gaps.reverse().map(g => ({ kind: g.kind, from: stamp(g.from_ms), to: stamp(g.to_ms), reason: g.reason })),
-      gapCount,
-      pendingSince: pending === null ? null : stamp(pending),
-      continuousSinceWindowStart: started !== null && preCaptureGap === null && gapCount === 0 && pending === null,
-    };
-  }
-
   status() {
     return this.run(({ journal, captureDb }, id) => {
       const status = journal.status(id);
-      return { subscriptionId: id, status, coverage: this.coverage(captureDb, status.cutoffUtc) };
+      return { subscriptionId: id, status, coverage: captureCoverage(captureDb, status.cutoffUtc) };
     });
   }
 
   page(limit = 100) {
     return this.run(({ journal, captureDb }, id) => {
       const page = journal.page(id, limit);
-      return { subscriptionId: id, ...page, coverage: this.coverage(captureDb, page.status.cutoffUtc) };
+      return { subscriptionId: id, ...page, coverage: captureCoverage(captureDb, page.status.cutoffUtc) };
     });
   }
 
   ack(deliveryId: string) {
     return this.run(({ journal }, id) => ({ subscriptionId: id, committedSequence: journal.ack(id, deliveryId) }));
   }
+}
+
+/**
+ * What this subscription can and cannot vouch for. `preCaptureGap` is the part
+ * of the fixed 7-day window before capture began: no events exist there and
+ * none are synthesized. `gaps` are intervals where a writer bypassed capture
+ * or a capture was interrupted. `pendingSince` is an unfinished capture.
+ * Reads only; also used by the owner status summary on a read-only handle.
+ */
+export function captureCoverage(db: Database, cutoffUtc: string) {
+  const cutoff = Date.parse(cutoffUtc);
+  const baseline = db.query<{ ms: number | null; kinds: number }, []>(
+    "SELECT MAX(baseline_ms) AS ms, COUNT(*) AS kinds FROM board_capture_meta WHERE kind IN ('card','work')").get()!;
+  const started = baseline.kinds === 2 ? baseline.ms : null;
+  const gaps = db.query<{ kind: Kind; from_ms: number; to_ms: number; reason: GapReason }, [number, number]>(
+    'SELECT kind,from_ms,to_ms,reason FROM board_capture_gaps WHERE to_ms>=? ORDER BY id DESC LIMIT ?').all(cutoff, MAX_REPORTED_GAPS);
+  const gapCount = db.query<{ n: number }, [number]>('SELECT COUNT(*) AS n FROM board_capture_gaps WHERE to_ms>=?').get(cutoff)!.n;
+  const pending = db.query<{ ms: number | null }, []>('SELECT MIN(started_ms) AS ms FROM board_capture_intent').get()!.ms;
+  const preCaptureGap = started !== null && started > cutoff ? { from: cutoffUtc, to: stamp(started) } : null;
+  return {
+    windowStart: cutoffUtc,
+    capturedFrom: started === null ? null : stamp(started),
+    preCaptureGap,
+    gaps: gaps.reverse().map(g => ({ kind: g.kind, from: stamp(g.from_ms), to: stamp(g.to_ms), reason: g.reason })),
+    gapCount,
+    pendingSince: pending === null ? null : stamp(pending),
+    continuousSinceWindowStart: started !== null && preCaptureGap === null && gapCount === 0 && pending === null,
+  };
 }
 
 /** Projects raw JSON store records to observations without retaining other fields. */
