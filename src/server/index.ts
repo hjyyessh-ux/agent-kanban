@@ -7,6 +7,7 @@ import type { SettingsStore } from '../core/settings-store';
 import type { ScriptStore } from '../core/script-store';
 import type { QuickActionStore } from '../core/quick-action-store';
 import type { WorkStore } from '../core/work-store';
+import type { ExternalDelegationService } from '../plugin/runtimes/external-delegation-service';
 import type { BoardHistoryService } from '../core/board-history';
 import type { ScriptExecutionService } from '../plugin/script-execution-service';
 import type { SkillStore } from '../core/skill-store';
@@ -87,6 +88,7 @@ export function createServer(
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
+  delegations?: ExternalDelegationService,
 ): ServerInstance {
   const { handleRequest } = createRouteHandler(
     store,
@@ -112,6 +114,7 @@ export function createServer(
     scriptExecutionService,
     workStore,
     boardHistory,
+    delegations,
   );
 
   const fetchHandler = async (req: Request, server: ReturnType<typeof Bun.serve>) => {

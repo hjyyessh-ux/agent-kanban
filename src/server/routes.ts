@@ -174,6 +174,10 @@ import { existsSync, mkdirSync, cpSync, statSync, readFileSync, readdirSync, rmS
 import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
+import type { ExternalDelegationService } from '../plugin/runtimes/external-delegation-service';
+import type { ExternalDelegationRequest } from '../core/types';
+import { ManagedDelegationConflict } from '../core/store';
+import { RuntimeDispatchError } from '../plugin/runtimes/types';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
@@ -1270,6 +1274,7 @@ export function createRouteHandler(
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
+  delegations?: ExternalDelegationService,
 ) {
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
@@ -2416,6 +2421,21 @@ export function createRouteHandler(
     // TODO: Add GET /api/cards?label=X&priority=Y filtering
     // TODO: Add GET /api/stats endpoint (card counts, avg completion time)
 
+    const delegationMatch = path.match(/^\/api\/delegations\/([^/]+)$/);
+    if ((path === '/api/delegations' && method === 'POST') || (delegationMatch && method === 'GET')) {
+      if (!isLoopbackClient(ctx?.clientAddress)) return errorResponse('Local clients only', 403);
+      if (!hasAuthorizedBearerToken(req, localToken)) return errorResponse('Unauthorized', 401);
+      if (!delegations) return errorResponse('External delegation unavailable', 503);
+      try {
+        return method === 'POST'
+          ? json(await delegations.start(await req.json() as ExternalDelegationRequest), 202)
+          : json(await delegations.get(delegationMatch![1]));
+      } catch (e: unknown) {
+        return errorResponse(e instanceof Error ? e.message : 'Invalid delegation request',
+          e instanceof RuntimeDispatchError || e instanceof ManagedDelegationConflict ? e.statusCode : 400);
+      }
+    }
+
     // Route: POST /api/archive
     if (method === 'POST' && path === '/api/archive') {
       try {
@@ -2426,7 +2446,7 @@ export function createRouteHandler(
         return json(result);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Archive failed';
-        return errorResponse(message, 500);
+        return errorResponse(message, e instanceof ManagedDelegationConflict ? 409 : 500);
       }
     }
 
@@ -3180,7 +3200,8 @@ export function createRouteHandler(
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : '';
           if (message.includes('not found')) return errorResponse('Card not found', 404);
-          return errorResponse('Update failed', 500);
+          return errorResponse(e instanceof ManagedDelegationConflict ? message : 'Update failed',
+            e instanceof ManagedDelegationConflict ? 409 : 500);
         }
       }
 

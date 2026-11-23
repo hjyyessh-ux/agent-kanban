@@ -18,6 +18,8 @@ const app = await createKanbanApp({
     return {
       dispatchCard: runtimeHost.dispatchCard,
       runStore: runtimeHost.runStore,
+      delegations: runtimeHost.delegations,
+      setApiUrl: runtimeHost.setApiUrl,
       runtimeCatalogFn: () => runtimeHost.getRuntimeCatalog(),
       singletonServices: [runtimeHost.watchdog],
     };

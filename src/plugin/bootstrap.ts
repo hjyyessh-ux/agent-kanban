@@ -58,6 +58,8 @@ export interface KanbanAppStores {
 export interface DispatchEngine {
   dispatchCard: (cardId: string) => Promise<DispatchResult>;
   runStore?: RuntimeRunStore;
+  delegations?: import('./runtimes/external-delegation-service').ExternalDelegationService;
+  setApiUrl?: (url: string) => void;
   runtimeCatalogFn?: () => RuntimeCatalogEntry[] | Promise<RuntimeCatalogEntry[]>;
   /**
    * Extra owner-gated services (watchdogs, stale checkers). Started right
@@ -280,6 +282,8 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     workStore,
     () => { void syncOnStartup(); },
     boardHistory,
+    dispatch.delegations,
+    dispatch.setApiUrl,
   );
   const port = await monitor.start();
   if (port) {

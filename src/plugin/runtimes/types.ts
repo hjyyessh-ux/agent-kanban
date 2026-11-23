@@ -1,6 +1,7 @@
 import type { PluginInput } from '@opencode-ai/plugin';
 import type { KanbanCard, AgentRuntime, DispatchResult } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
+import type { RuntimeRun } from './runtime-run-store';
 
 export interface AdapterRunResult {
   outcome: 'completed' | 'failed' | 'aborted';
@@ -20,6 +21,7 @@ export interface AdapterStartInput {
   cwd: string;
   resumeSessionId?: string;
   abortSignal?: AbortSignal;
+  reservedRun?: RuntimeRun;
 }
 
 export interface AgentAdapter {

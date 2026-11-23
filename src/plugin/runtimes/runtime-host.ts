@@ -1,8 +1,10 @@
 import { existsSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
 import type { AgentRuntime, DispatchResult, KanbanCard } from '../../core/types';
 import {
+  DEFAULT_CLAUDE_MODEL,
   RUNTIME_CATALOG,
   resolveAgentRuntime,
   type RuntimeCatalogEntry,
@@ -21,6 +23,9 @@ import { isRecentlyFailed } from '../hooks/event-handler';
 import { buildDispatchPromptText } from '../dispatch-prompt';
 import { captureGitStart } from './git-capture';
 import { mergeCodexCliModelsIntoCatalog } from './codex-model-catalog';
+import { ExternalDelegationService } from './external-delegation-service';
+import { DEFAULT_DELEGATION_CODEX_MODEL, DELEGATION_ENABLED_KEY } from './external-delegation-service';
+import { getSettingValueOrDefault } from '../../core/settings-store';
 
 export interface RuntimeAvailability {
   runtime: AgentRuntime;
@@ -33,6 +38,8 @@ export interface RuntimeHost {
   runStore: RuntimeRunStore;
   registry: RuntimeRegistry;
   watchdog: ClaudeCodexWatchdog;
+  delegations: ExternalDelegationService;
+  setApiUrl(url: string): void;
   dispatchCard(cardId: string): Promise<DispatchResult>;
   getRuntimeAvailability(): RuntimeAvailability[];
   getRuntimeCatalog(): Promise<RuntimeCatalogEntry[]>;
@@ -54,6 +61,7 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
   const childLinker = new ChildLinker(options.store);
   const watchdog = new ClaudeCodexWatchdog(options.store, runStore);
   let dispatchCard: (cardId: string) => Promise<DispatchResult>;
+  let apiUrl: string | undefined;
   const registry = createRuntimeRegistry([
     createUnavailableOpencodeAdapter({ store: options.store }),
     createClaudeAdapter({
@@ -64,6 +72,7 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
       sessionIdTimeoutMs: options.claudeSessionIdTimeoutMs,
       dispatchFn: (cardId) => dispatchCard(cardId),
       onChildEvent: (parentCardId, runId, ev) => childLinker.onChildEvent(parentCardId, runId, ev),
+      getApiUrl: () => apiUrl,
     }),
     createCodexCliAdapter({
       store: options.store,
@@ -72,16 +81,30 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
       commandOverride: options.codexCommandOverride,
       threadIdTimeoutMs: options.codexThreadIdTimeoutMs,
       dispatchFn: (cardId) => dispatchCard(cardId),
+      getApiUrl: () => apiUrl,
     }),
   ]);
 
   dispatchCard = async (cardId: string): Promise<DispatchResult> => {
     const card = await options.store.getCard(cardId);
     if (!card) throw new RuntimeDispatchError('Card not found', 404);
+    if (card.managedDelegation) throw new RuntimeDispatchError('Use a new delegation request to retry', 409);
     validateProjectDir(card);
 
     const adapter = registry.pickAdapter(resolveAgentRuntime(card));
-    const prompt = buildDispatchPromptText(card, (screenshot) => options.store.getScreenshotPath(screenshot.filename));
+    let prompt = buildDispatchPromptText(card, (screenshot) => options.store.getScreenshotPath(screenshot.filename));
+    if ((card.agentRuntime === 'claude' || card.agentRuntime === 'codex')
+      && await getSettingValueOrDefault(options.settingsStore, DELEGATION_ENABLED_KEY, 'false') === 'true') {
+      const runner = [resolve(import.meta.dir, '../../../scripts/delegate-review.ts'),
+        resolve(import.meta.dir, '../../scripts/delegate-review.ts')].find(path => existsSync(path));
+      const target = card.agentRuntime === 'claude'
+        ? { label: 'Codex/Astra', model: DEFAULT_DELEGATION_CODEX_MODEL, raw: 'codex exec' }
+        : { label: 'Claude', model: DEFAULT_CLAUDE_MODEL, raw: 'claude -p' };
+      if (runner) prompt += `\n\nFor an explicitly requested external ${target.label} review, use the tracked runner:\n`
+        + `bun '${runner.replaceAll("'", "'\\''")}' --request-id <stable-review-id> --model ${target.model} < /path/to/review-prompt.txt\n`
+        + 'It records a child card and waits for the review. Reuse the request ID only for transport retries; '
+        + `a new review attempt needs a new ID. Use --run-id to resume polling. Do not use raw ${target.raw} for this delegation.`;
+    }
     const cwd = card.projectDir ?? options.cwd ?? process.cwd();
     await captureGitStart(options.store, card.id, cwd); // best-effort, never throws
     const handle = await adapter.start({
@@ -117,6 +140,11 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
     runStore,
     registry,
     watchdog,
+    setApiUrl: (url) => { apiUrl = url; },
+    delegations: new ExternalDelegationService({
+      store: options.store, settingsStore: options.settingsStore, runStore,
+      adapterFor: (runtime) => registry.pickAdapter(runtime),
+    }),
     dispatchCard,
     getRuntimeAvailability: () => availability,
     getRuntimeCatalog: () => mergeCodexCliModelsIntoCatalog(
