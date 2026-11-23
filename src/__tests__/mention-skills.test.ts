@@ -19,6 +19,7 @@ import {
   parseCodexEnabledPlugins,
 } from '../server/mention-skill-discovery';
 import { createRouteHandler } from '../server/routes';
+import { createServer } from '../server/index';
 import { withTempDir } from './setup';
 
 /**
@@ -220,8 +221,18 @@ describe('pool', () => {
 });
 
 describe('routes', () => {
+  const token = 'synthetic-local-mention-token';
+  function routes(store: KanbanStore) {
+    const args: Parameters<typeof createRouteHandler> = [store];
+    args[11] = () => token;
+    return createRouteHandler(...args).handleRequest;
+  }
   function handler(store: KanbanStore) {
-    return createRouteHandler(store).handleRequest;
+    const handleRequest = routes(store);
+    return (req: Request) => {
+      req.headers.set('Authorization', `Bearer ${token}`);
+      return handleRequest(req, { clientAddress: '127.0.0.1' });
+    };
   }
 
   async function getJson<T>(handleRequest: (req: Request) => Promise<Response>, path: string): Promise<T> {
@@ -229,6 +240,71 @@ describe('routes', () => {
     expect(res.status).toBe(200);
     return await res.json() as T;
   }
+
+  test('remote and unauthenticated calls do not scan or return skill metadata', async () => {
+    await withTempDir(async (dir) => {
+      const store = new KanbanStore(dir);
+      const card = await store.createCard({ title: 'Visible session', description: 'Visible session', projectDir: projectA });
+      await store.updateCard(card.id, { sessionId: 'visible-session' });
+      const handle = routes(store);
+      const path = `/api/mentions?kind=skill&projectDir=${encodeURIComponent(projectA)}`;
+      const query = `/api/mentions?projectDir=${encodeURIComponent(projectA)}`;
+      const launch = '/api/mentions/resolve?launch=consensus';
+      const mixed = '/api/mentions/resolve?token=@session:visible-session&token=@skill:consensus';
+      const auth = { Authorization: `Bearer ${token}` };
+      const local = { clientAddress: '127.0.0.1' };
+      const remote = { clientAddress: '192.0.2.5' };
+
+      expect((await handle(new Request('http://localhost' + path), local)).status).toBe(401);
+      expect((await handle(new Request('http://localhost' + launch), local)).status).toBe(401);
+      expect((await handle(new Request('http://localhost' + path, { headers: auth }))).status).toBe(403);
+      expect((await handle(new Request('http://localhost' + path, { headers: auth }), remote)).status).toBe(403);
+      expect((await handle(new Request('http://localhost' + launch, { headers: auth }), remote)).status).toBe(403);
+
+      for (const [headers, address] of [[{}, local], [auth, remote]] as const) {
+        const res = await handle(new Request('http://localhost' + query, { headers }), address);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('Cache-Control')).toBe('no-store');
+        const found = await res.json() as MentionSearchResponse;
+        expect(found.groups.sessions).toHaveLength(1);
+        expect(found.groups.skills).toEqual([]);
+        expect(found.totals.skills).toBe(0);
+        const references = await handle(new Request('http://localhost' + mixed, { headers }), address);
+        expect(references.status).toBe(200);
+        const body = await references.json() as MentionResolveResponse;
+        expect(body.references[0]).toMatchObject({ kind: 'session', sessionId: 'visible-session' });
+        expect(body.references[1]).toMatchObject({ kind: 'skill', unresolved: 'not_found' });
+        expect(body.references[1].skillPath).toBeUndefined();
+        expect(body.references[1].skillRuntime).toBeUndefined();
+      }
+    });
+  });
+
+  test('browser same-origin bootstrap token discovers skill over the daemon HTTP socket', async () => {
+    await withTempDir(async (dir) => {
+      const args: Parameters<typeof createServer> = [new KanbanStore(dir), 0];
+      args[7] = '127.0.0.1';
+      args[14] = () => token;
+      const server = createServer(...args);
+      const origin = `http://127.0.0.1:${server.port}`;
+      try {
+        const bootstrap = await fetch(origin + '/api/auth/token', { headers: { Origin: origin } });
+        expect(bootstrap.status).toBe(200);
+        const issued = await bootstrap.json() as { token: string };
+        expect(issued.token).toBe(token);
+        const response = await fetch(
+          `${origin}/api/mentions?kind=skill&runtime=claude&projectDir=${encodeURIComponent(projectA)}`,
+          { headers: { Origin: origin, Authorization: `Bearer ${issued.token}` } },
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get('Cache-Control')).toBe('no-store');
+        const skills = (await response.json() as MentionSearchResponse).groups.skills;
+        expect(skills.map((candidate) => candidate.id)).toContain('api-test');
+      } finally {
+        server.stop();
+      }
+    });
+  });
 
   test('GET /api/mentions?kind=skill groups skills for the card runtime × directory', async () => {
     await withTempDir(async (dir) => {

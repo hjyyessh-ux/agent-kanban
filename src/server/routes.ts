@@ -1292,15 +1292,15 @@ function resolveDocReference(token: MentionToken, vaultDir: string | undefined):
 export async function resolveMentionReferences(
   tokens: MentionToken[],
   deps: { store: KanbanStore; workStore?: WorkStore; wikiWorker?: WikiWorker },
-  skillContext: MentionSkillContext = { runtime: 'claude' },
+  skillContext: MentionSkillContext | null = { runtime: 'claude' },
 ): Promise<ResolvedReference[]> {
-  const needsSkills = tokens.some((token) => token.kind === 'skill');
+  const needsSkills = skillContext !== null && tokens.some((token) => token.kind === 'skill');
   const needsCards = needsSkills || tokens.some((token) => token.kind === 'session' || token.kind === 'work');
   const cards = needsCards ? await deps.store.getCards({}) : [];
   const vaultDir = tokens.some((token) => token.kind === 'doc')
     ? await readWikiVaultDir(deps.wikiWorker)
     : undefined;
-  const skillPool = needsSkills
+  const skillPool = needsSkills && skillContext
     ? buildSkillMentionPool({ ...skillContext, knownProjectDirs: boardProjectDirs(cards) } satisfies SkillPoolInput)
     : [];
 
@@ -1500,6 +1500,23 @@ export function createRouteHandler(
       }
     }
 
+    // Skill discovery can reveal local paths, installed integrations and
+    // operational descriptions. Do not infer loopback from a forwarded header
+    // or the existing permissive helper's unknown-address behavior.
+    const skillMentionPermission = () => {
+      if (!hasAuthorizedBearerToken(req, localToken)) return 401;
+      return ctx?.clientAddress && LOOPBACK_ADDRESSES.has(ctx.clientAddress) ? 200 : 403;
+    };
+    const skillMentionDenied = (status: number) => errorResponse(
+      status === 403 ? 'Skill mentions are local only' : 'Unauthorized', status,
+    );
+    const mentionResponse = (value: MentionSearchResponse | MentionResolveResponse) => {
+      const response = json(value);
+      // A proxy/browser must not reuse an authenticated skill view for another request.
+      response.headers.set('Cache-Control', 'no-store');
+      return response;
+    };
+
     // Route: GET /api/mentions — `@` 멘션 후보 (All / Sessions / Works / Docs).
     // 현재 보드 + works.json + wiki vault 스캔만 본다. 월별 아카이브는 어느
     // 경로로도 열지 않는다 — 지나간 작업의 참조는 `@doc:`이 담당한다.
@@ -1515,7 +1532,9 @@ export function createRouteHandler(
       const q = url.searchParams.get('q') ?? '';
 
       try {
-        const wantsSkills = kindParam === 'all' || kindParam === 'skill';
+        const skillAccess = skillMentionPermission();
+        if (kindParam === 'skill' && skillAccess !== 200) return skillMentionDenied(skillAccess);
+        const wantsSkills = skillAccess === 200 && (kindParam === 'all' || kindParam === 'skill');
         const pool = await buildMentionPool(
           store,
           workStore,
@@ -1545,7 +1564,7 @@ export function createRouteHandler(
             skills: ranked.skills.length,
           },
         };
-        return json(response);
+        return mentionResponse(response);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to search mentions';
         return errorResponse(message, 500);
@@ -1572,16 +1591,18 @@ export function createRouteHandler(
 
       try {
         // `runtime`·`projectDir`는 skill 토큰과 첫 줄 실행(`launch`) 해석에만 쓰인다.
-        const skillContext = readMentionSkillContext(url);
-        const references = await resolveMentionReferences(tokens, { store, workStore, wikiWorker }, skillContext);
+        const skillAccess = skillMentionPermission();
         const launchName = url.searchParams.get('launch')?.trim();
+        if (launchName && skillAccess !== 200) return skillMentionDenied(skillAccess);
+        const skillContext = skillAccess === 200 ? readMentionSkillContext(url) : null;
+        const references = await resolveMentionReferences(tokens, { store, workStore, wikiWorker }, skillContext);
         const response: MentionResolveResponse = { references };
-        if (launchName) {
+        if (launchName && skillContext) {
           const cards = await store.getCards({});
           const pool = buildSkillMentionPool({ ...skillContext, knownProjectDirs: boardProjectDirs(cards) });
           response.launch = resolveSkillLaunch(launchName, pool, skillContext.runtime);
         }
-        return json(response);
+        return mentionResponse(response);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to resolve mentions';
         return errorResponse(message, 500);
