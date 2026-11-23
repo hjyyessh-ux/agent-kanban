@@ -177,6 +177,8 @@ import { existsSync, mkdirSync, cpSync, statSync, readFileSync, readdirSync, rmS
 import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
+import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
+import { configuredPromptProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
@@ -1353,7 +1355,9 @@ export function createRouteHandler(
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
+  promptRefinementRoute?: PromptRefinementRoute,
 ) {
+  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(configuredPromptProvider(process.env));
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
       ? new ScriptExecutionService({
@@ -1444,6 +1448,13 @@ export function createRouteHandler(
     // (unit tests, e2e test-server), this is a no-op and the same-origin guard
     // remains the active protection.
     const localToken = peerTokenFn?.();
+    if (path === PROMPT_PROPOSAL_PATH) {
+      if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress))
+        return errorResponse('Local client required', 403);
+      if (!localToken || !hasAuthorizedBearerToken(req, localToken))
+        return errorResponse('Unauthorized', 401);
+      return promptProposal(req);
+    }
     if (localToken && requiresLocalAuth(method, path)) {
       if (!hasAuthorizedBearerToken(req, localToken)) {
         return errorResponse('Unauthorized', 401);

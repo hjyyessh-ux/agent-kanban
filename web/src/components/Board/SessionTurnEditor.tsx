@@ -1,3 +1,4 @@
+import { PromptRefinement } from '../shared/PromptRefinement';
 import React, { useRef, useState } from 'react';
 import type { KanbanCard } from '../../../../src/core/types';
 import { deleteScreenshot, getScreenshotUrl, uploadScreenshot } from '../../hooks/useKanbanApi';
@@ -95,6 +96,10 @@ export const SessionTurnEditor: React.FC<{
         void upload(imageFiles(Array.from(event.dataTransfer.files)));
       }}
     >
+      <div className="kv2-prompt-refinement-label">
+        <span>Prompt</span>
+        <PromptRefinement key={card.id} value={draft} onChange={setDraft} disabled={saving} />
+      </div>
       <MentionTextarea
         className="kv2-textarea session-turn-editor-input"
         ariaLabel="Prompt 편집"

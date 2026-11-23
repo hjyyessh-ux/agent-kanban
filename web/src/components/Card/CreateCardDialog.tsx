@@ -1,3 +1,4 @@
+import { PromptRefinement } from '../shared/PromptRefinement';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { uploadScreenshot } from "../../hooks/useKanbanApi";
 import { KanbanCard, CreateCardInput, QueueSessionMode, ClaudePermissionMode, CodexReasoningEffort, CodexSandboxMode, CreateWorkInput, Work } from "../../../../src/core/types";
@@ -675,7 +676,11 @@ export const CreateCardDialog: React.FC<CreateCardDialogProps> = ({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            <label className="kv2-create-label" htmlFor="create-card-description-input">Prompt {promptRequired ? '*' : '(ignored)'}</label>
+            <div className="kv2-prompt-refinement-label">
+              <label className="kv2-create-label" htmlFor="create-card-description-input">Prompt {promptRequired ? '*' : '(ignored)'}</label>
+              <PromptRefinement value={description} disabled={isSubmitting || isCommandOnly}
+                onChange={next => { setDescription(next); clearFieldError('description'); }} />
+            </div>
             <div className={`kv2-feedback-compose kv2-create-compose${hasPendingScreenshots ? ' has-shots' : ''}`}>
             <MentionTextarea
               id="create-card-description-input"

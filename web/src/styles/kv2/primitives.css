@@ -682,3 +682,49 @@
   color: var(--kv2-success-text);
   border-color: currentColor;
 }
+
+/* Kanban quick skill: quiet field-label action, native top-layer preview. */
+.kv2-prompt-refinement-label, .kv2-prompt-refinement-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--kv2-sp-2);
+}
+.kv2-prompt-refinement { display: inline-flex; align-items: center; gap: var(--kv2-sp-2); }
+.kv2-prompt-refinement-link {
+  padding: var(--kv2-sp-1) var(--kv2-sp-2); border: 0; border-radius: var(--kv2-radius-sm);
+  background: transparent; color: var(--kv2-text-muted); font: inherit; font-size: var(--kv2-text-ui-sm);
+  white-space: nowrap; cursor: pointer;
+}
+.kv2-prompt-refinement-link:hover { background: var(--kv2-surface-hover); color: var(--kv2-text-primary); }
+.kv2-prompt-refinement-link:focus-visible { outline: 2px solid var(--kv2-text-link); outline-offset: 1px; }
+.kv2-prompt-refinement-link:disabled { opacity: .5; cursor: default; }
+.kv2-prompt-refinement-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.kv2-prompt-refinement-dialog {
+  position: fixed; inset: 0; margin: auto; width: min(880px, calc(100vw - 32px)); max-height: min(84dvh, 880px);
+  padding: 0; background: var(--kv2-surface); color: var(--kv2-text-primary); overflow: hidden;
+}
+.kv2-prompt-refinement-dialog:not([open]) { display: none; }
+.kv2-prompt-refinement-dialog[open] { display: flex; flex-direction: column; }
+.kv2-prompt-refinement-dialog::backdrop { background: color-mix(in srgb, var(--kv2-text-primary) 20%, transparent); backdrop-filter: brightness(.55); }
+.kv2-prompt-refinement-dialog .kv2-dialog-header { justify-content: space-between; }
+.kv2-prompt-refinement-body { padding: var(--kv2-sp-4); min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.kv2-prompt-refinement-intro, .kv2-prompt-refinement-hint { color: var(--kv2-text-secondary); font-size: var(--kv2-text-ui-sm); margin-bottom: var(--kv2-sp-2); }
+.kv2-prompt-refinement-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); gap: var(--kv2-sp-4); margin-top: var(--kv2-sp-4); }
+.kv2-prompt-refinement-grid > section { min-width: 0; padding: var(--kv2-sp-3); border: 1px solid var(--kv2-border); border-radius: var(--kv2-radius-md); }
+.kv2-prompt-refinement-grid h3 { margin: 0 0 var(--kv2-sp-2); font-size: var(--kv2-text-sm); }
+.kv2-prompt-refinement-section { margin-bottom: var(--kv2-sp-2); }
+.kv2-prompt-refinement-section label { display: block; margin-bottom: var(--kv2-sp-1); font-size: var(--kv2-text-ui-sm); }
+.kv2-prompt-refinement-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.kv2-prompt-refinement-dialog textarea { width: 100%; min-height: 0; }
+.kv2-prompt-refinement-footer { justify-content: flex-end; flex-shrink: 0; padding: var(--kv2-sp-3) var(--kv2-sp-4); border-top: 1px solid var(--kv2-border); }
+.kv2-prompt-refinement-options {
+  display: grid; gap: var(--kv2-sp-2); padding: var(--kv2-sp-3); margin-bottom: var(--kv2-sp-3);
+  border: 1px solid var(--kv2-border); border-radius: var(--kv2-radius-md);
+}
+.kv2-prompt-refinement-options .kv2-prompt-refinement-hint { margin: 0; }
+.kv2-prompt-refinement-mode { display: flex; flex-wrap: wrap; gap: var(--kv2-sp-3); margin: 0; padding: 0; border: 0; font-size: var(--kv2-text-ui-sm); }
+.kv2-prompt-refinement-mode legend { padding: 0; margin-bottom: var(--kv2-sp-1); color: var(--kv2-text-secondary); }
+.kv2-prompt-refinement-field { display: grid; gap: var(--kv2-sp-1); font-size: var(--kv2-text-ui-sm); color: var(--kv2-text-secondary); }
+.kv2-prompt-refinement-field .kv2-select { max-width: 360px; }
+.kv2-prompt-refinement-loop { display: inline-flex; align-items: center; gap: var(--kv2-sp-2); font-size: var(--kv2-text-ui-sm); font-weight: 600; }
+.kv2-prompt-refinement-loop-fields { display: grid; gap: var(--kv2-sp-2); padding-left: var(--kv2-sp-4); }
+.kv2-prompt-refinement-rounds .kv2-input { width: 96px; }
+@media (max-width: 620px) { .kv2-prompt-refinement-grid { grid-template-columns: minmax(0, 1fr); } }
