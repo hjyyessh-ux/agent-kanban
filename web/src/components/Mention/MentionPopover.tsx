@@ -4,6 +4,10 @@ import type {
   MentionCandidate,
   MentionSearchResponse,
 } from '../../../../src/core/mention-search';
+import {
+  SKILL_INVOCATION_LABEL,
+  SKILL_UNAVAILABLE_LABEL,
+} from '../../../../src/core/mention-skills';
 import { RuntimeBadge } from '../Board/BoardCardSections';
 import { dirAccentClass } from '../../utils/project-color';
 import { IdText } from '../shared/IdChip';
@@ -19,13 +23,14 @@ import { useResizablePopover } from './useResizablePopover';
  * 옳은 자리다.
  */
 
-export type MentionTab = 'all' | 'session' | 'work' | 'doc';
+export type MentionTab = 'all' | 'session' | 'work' | 'doc' | 'skill';
 
 export const MENTION_TABS: { id: MentionTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'session', label: 'Sessions' },
   { id: 'work', label: 'Works' },
   { id: 'doc', label: 'Docs' },
+  { id: 'skill', label: 'Skills' },
 ];
 
 /** All 탭이 종류별로 섞어 보여주는 개수. */
@@ -35,13 +40,31 @@ const KIND_ICON: Record<MentionKind, string> = {
   session: '🧵',
   work: '🗂',
   doc: '📄',
+  skill: '🧩',
 };
 
 const GROUP_LABEL: Record<MentionKind, string> = {
   session: '🧵 Sessions',
   work: '🗂 Works',
   doc: '📄 Docs (Wiki)',
+  skill: '🧩 Skills',
 };
+
+/** 선택 불가 행의 툴팁. `self`는 기존 문구 그대로. */
+function disabledTitle(candidate: MentionCandidate): string | undefined {
+  const reason = candidate.disabledReason;
+  if (!reason) return undefined;
+  if (reason === 'self') return '이 카드 자신의 세션은 참조할 수 없습니다';
+  const where = reason === 'other_project' && candidate.projectDir ? ` — ${candidate.projectDir}` : '';
+  return `${SKILL_UNAVAILABLE_LABEL[reason]}${where}`;
+}
+
+/** 스킬 행의 scope 라벨 — plugin은 이름까지. */
+function skillScopeLabel(candidate: MentionCandidate): string | undefined {
+  const skill = candidate.skill;
+  if (!skill) return undefined;
+  return skill.plugin ? `plugin · ${skill.plugin}` : skill.scope;
+}
 
 /** 상태 dot의 색 캐리어(`kv2/mention.css`)를 고르는 규칙 — 보드와 같은 4종. */
 function statusModifier(status: string | undefined): string {
@@ -81,10 +104,13 @@ export function buildMentionRows(
     { kind: 'session', list: data.groups.sessions },
     { kind: 'work', list: data.groups.works },
     { kind: 'doc', list: data.groups.docs },
+    { kind: 'skill', list: data.groups.skills ?? [] },
   ];
 
   for (const group of groups) {
     if (tab !== 'all' && tab !== group.kind) continue;
+    // All 탭은 "읽을 자료"만 섞는다 — 스킬은 실행할 기능이라 자기 탭에서만 고른다.
+    if (tab === 'all' && group.kind === 'skill') continue;
     const shown = tab === 'all' ? group.list.slice(0, ALL_TAB_PER_KIND) : group.list;
     if (shown.length === 0) continue;
     if (tab === 'all') {
@@ -159,6 +185,7 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
     if (id === 'all') return totals.sessions + totals.works + totals.docs;
     if (id === 'session') return totals.sessions;
     if (id === 'work') return totals.works;
+    if (id === 'skill') return totals.skills ?? 0;
     return totals.docs;
   };
 
@@ -229,7 +256,8 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
               );
             }
             const { candidate, index } = item;
-            const disabled = candidate.disabledReason === 'self';
+            const disabled = Boolean(candidate.disabledReason);
+            const isSkill = candidate.kind === 'skill';
             const classes = [
               'kv2-mention-row',
               `kv2-ref-kind-${candidate.kind}`,
@@ -249,24 +277,40 @@ export const MentionPopover: React.FC<MentionPopoverProps> = ({
                 onClick={() => {
                   if (!disabled) onSelect(candidate);
                 }}
-                title={disabled ? '이 카드 자신의 세션은 참조할 수 없습니다' : undefined}
+                title={disabledTitle(candidate)}
               >
                 <span className="kv2-mention-row-kind" aria-hidden="true">
-                  {KIND_ICON[candidate.kind]}
+                  {isSkill && candidate.skill?.invocation === 'launch' ? '▶' : KIND_ICON[candidate.kind]}
                 </span>
-                <span
-                  className={`kv2-mention-row-dot kv2-mention-row-dot--${statusModifier(candidate.status)}`}
-                  aria-hidden="true"
-                />
+                {!isSkill && (
+                  <span
+                    className={`kv2-mention-row-dot kv2-mention-row-dot--${statusModifier(candidate.status)}`}
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="kv2-mention-row-body">
                   <span className="kv2-mention-row-title">
                     {highlight(candidate.label, query)}
-                    {disabled && <span className="kv2-mention-row-aside"> (이 카드의 세션)</span>}
+                    {candidate.disabledReason === 'self' && <span className="kv2-mention-row-aside"> (이 카드의 세션)</span>}
                   </span>
                   <span className="kv2-mention-row-meta">
-                    {candidate.kind === 'doc'
-                      ? <span className="kv2-mention-row-id">{candidate.id}</span>
-                      : <IdText id={candidate.id} kind={candidate.kind} className="kv2-mention-row-id" />}
+                    {isSkill && candidate.skill && (
+                      <>
+                        <span className={`kv2-skill-badge kv2-skill-badge--${candidate.skill.invocation}`}>
+                          {SKILL_INVOCATION_LABEL[candidate.skill.invocation]}
+                        </span>
+                        <span className="kv2-skill-badge kv2-skill-badge--scope">{skillScopeLabel(candidate)}</span>
+                        {candidate.disabledReason && candidate.disabledReason !== 'self' && (
+                          <span className="kv2-skill-badge kv2-skill-badge--unavailable">
+                            {SKILL_UNAVAILABLE_LABEL[candidate.disabledReason]}
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {candidate.kind === 'doc' && <span className="kv2-mention-row-id">{candidate.id}</span>}
+                    {(candidate.kind === 'session' || candidate.kind === 'work') && (
+                      <IdText id={candidate.id} kind={candidate.kind} className="kv2-mention-row-id" />
+                    )}
                     {candidate.status && (
                       <span
                         className={`kv2-session-status-badge kv2-session-status-badge--${statusModifier(candidate.status)}`}

@@ -1,6 +1,12 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ResolvedReference } from '../../../../src/core/mention-reference';
-import type { MentionCandidate } from '../../../../src/core/mention-search';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ResolvedReference, SkillLaunchStatus } from '../../../../src/core/mention-reference';
+import type { MentionCandidate, MentionSearchResponse } from '../../../../src/core/mention-search';
+import {
+  SKILL_UNAVAILABLE_LABEL,
+  applySkillLaunch,
+  removeSkillLaunch,
+} from '../../../../src/core/mention-skills';
+import type { AgentRuntime } from '../../../../src/core/types';
 import { MetaPopoverPortal, useAnchoredPopover } from '../Card/MetaDropdown';
 import { useMentionReferences } from '../../hooks/useMentionReferences';
 import { useMentionSearch } from '../../hooks/useMentionSearch';
@@ -46,6 +52,17 @@ export interface MentionTextareaProps {
   /** 자기 참조 제외 — 카드가 아니라 세션 단위로 건다. */
   excludeSessionIds?: string[];
   /**
+   * 카드가 실행될 런타임. Skills 탭 후보와 스킬 토큰 해석이 이 값에 따라 달라진다
+   * (claude는 `.claude/skills`, codex는 `.codex/skills`·`.agents/skills`).
+   */
+  agentRuntime?: AgentRuntime;
+  /**
+   * claude 첫 줄 실행 전용 스킬(`disable-model-invocation`)을 고를 수 있는가.
+   * 본문이 **그대로 프롬프트 첫 줄이 되는** 입력창(New Task, 프롬프트 편집)에서만
+   * 켠다. 피드백·세션 턴은 헤더가 앞에 붙어 첫 줄을 보장하지 못한다.
+   */
+  allowSkillLaunch?: boolean;
+  /**
    * 붙여넣기 훅 — `FeedbackPanel`/`CreateCardDialog`의 클립보드 스크린샷 첨부를
    * 그대로 살리기 위해 통과시킨다. 빠뜨리면 기존 기능이 죽는다.
    */
@@ -87,6 +104,8 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
   boundarySelector,
   projectDir,
   excludeSessionIds = EMPTY_EXCLUDES,
+  agentRuntime,
+  allowSkillLaunch = false,
   onPaste,
   textareaRef,
   onReferencesChange,
@@ -138,10 +157,27 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
     query: active?.query ?? '',
     projectDir,
     excludeSessionIds,
+    runtime: agentRuntime,
   });
-  const rowsModel = buildMentionRows(search.data, tab);
+  // 첫 줄 실행은 claude 문법이다 — codex에 `/name`을 보내면 주입되지 않는다(C9).
+  const launchAllowed = allowSkillLaunch && (agentRuntime ?? 'claude') === 'claude';
+  const searchData = useMemo(
+    () => markLaunchAvailability(search.data, launchAllowed),
+    [search.data, launchAllowed],
+  );
+  const rowsModel = buildMentionRows(searchData, tab);
 
-  const { tokens, references, loading: referencesLoading } = useMentionReferences(value);
+  const referenceContext = useMemo(
+    () => ({ runtime: agentRuntime, projectDir, checkLaunch: launchAllowed }),
+    [agentRuntime, projectDir, launchAllowed],
+  );
+  const {
+    tokens,
+    references,
+    launchName,
+    launch,
+    loading: referencesLoading,
+  } = useMentionReferences(value, referenceContext);
 
   // 콜백은 ref로 받는다 — 호출부가 인라인 화살표를 넘겨도(흔하다) 참조가 실제로
   // 바뀔 때만 통지가 나가고, 렌더마다 부모를 흔들지 않는다.
@@ -218,7 +254,18 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
 
   const select = useCallback(
     (candidate: MentionCandidate) => {
-      if (!active || candidate.disabledReason === 'self') return;
+      if (!active || candidate.disabledReason) return;
+      if (candidate.kind === 'skill' && candidate.skill?.invocation === 'launch') {
+        // 첫 줄 실행 전용 — 토큰이 아니라 본문 첫 줄 `/name`이 된다. 입력 중이던
+        // `@query`는 지우고, 기존 실행 라인이 있으면 교체한다(프롬프트당 1개, E3a).
+        const without = value.slice(0, active.start) + value.slice(active.end);
+        const next = applySkillLaunch(without, candidate.id);
+        const shift = next.length - without.length;
+        applyEdit({ next, caret: Math.max(0, Math.min(next.length, active.start + shift)) });
+        setActive(null);
+        setOpen(false);
+        return;
+      }
       const token = buildMentionToken(candidate.kind, candidate.id);
       applyEdit(replaceActiveMention(value, active, token));
       setActive(null);
@@ -226,6 +273,10 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
     },
     [active, applyEdit, value, setOpen],
   );
+
+  const handleRemoveLaunch = useCallback(() => {
+    applyEdit({ next: removeSkillLaunch(value), caret: 0 });
+  }, [applyEdit, value]);
 
   const moveSelection = useCallback(
     (delta: number) => {
@@ -236,7 +287,7 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
         let next = current;
         for (let step = 0; step < candidates.length; step += 1) {
           next = (next + delta + candidates.length) % candidates.length;
-          if (candidates[next]?.disabledReason !== 'self') return next;
+          if (!candidates[next]?.disabledReason) return next;
         }
         return current;
       });
@@ -279,7 +330,7 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
           // 고를 게 없으면 평소대로 개행한다. 이때 구간에 개행이 들어가므로
           // `findActiveMention`이 null을 돌려주고 팝오버는 저절로 닫힌다.
           // `⌘⏎`는 고를 게 있어도 호출부(저장)로 보낸다.
-          if (e.metaKey || e.ctrlKey || !candidate || candidate.disabledReason === 'self') {
+          if (e.metaKey || e.ctrlKey || !candidate || candidate.disabledReason) {
             onKeyDown?.(e);
             return;
           }
@@ -328,6 +379,15 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
 
   return (
     <div className="kv2-mention-host">
+      {launchAllowed && launchName && (
+        <SkillLaunchBar
+          name={launchName}
+          status={launch}
+          loading={referencesLoading}
+          disabled={disabled}
+          onRemove={handleRemoveLaunch}
+        />
+      )}
       <textarea
         id={id}
         ref={setRefs}
@@ -386,6 +446,72 @@ export const MentionTextarea: React.FC<MentionTextareaProps> = ({
         onRemove={handleRemove}
         disabled={disabled}
       />
+    </div>
+  );
+};
+
+/**
+ * 첫 줄 실행 전용 스킬을 이 입력창에서 고를 수 없으면 회색으로 돌린다. 서버는
+ * 입력창 종류를 모르므로(같은 카드라도 New Task와 피드백은 다르다) 여기서 표시한다.
+ */
+function markLaunchAvailability(
+  data: MentionSearchResponse | null,
+  launchAllowed: boolean,
+): MentionSearchResponse | null {
+  if (!data || launchAllowed) return data;
+  const skills = data.groups.skills.map((candidate) =>
+    candidate.skill?.invocation === 'launch' && !candidate.disabledReason
+      ? { ...candidate, disabledReason: 'launch_not_allowed' as const }
+      : candidate,
+  );
+  return { ...data, groups: { ...data.groups, skills } };
+}
+
+const LAUNCH_FAILURE_TEXT: Record<NonNullable<SkillLaunchStatus['reason']>, string> = {
+  ...SKILL_UNAVAILABLE_LABEL,
+  not_found: '이 디렉토리·런타임에서 찾을 수 없는 스킬입니다',
+  not_launch: '첫 줄 실행용 스킬이 아닙니다',
+};
+
+interface SkillLaunchBarProps {
+  name: string;
+  status: SkillLaunchStatus | null;
+  loading: boolean;
+  disabled?: boolean;
+  onRemove: () => void;
+}
+
+/**
+ * 본문 첫 줄 `/name`의 시각화. 실행 라인은 본문 텍스트 그 자체라(카드 필드 없음)
+ * 이 바는 렌더일 뿐이고, ✕도 본문에서 첫 줄을 지운다.
+ *
+ * 검증 실패를 빨갛게 보여주는 이유: 없는 스킬의 slash는 claude가 오류 없이 평문으로
+ * 받아 스킬 없이 진행한다(E2f). 조용한 실패를 사람이 볼 수 있게 하는 자리가 여기다.
+ */
+const SkillLaunchBar: React.FC<SkillLaunchBarProps> = ({ name, status, loading, disabled, onRemove }) => {
+  const failed = status !== null && !status.ok;
+  const detail = failed && status?.reason
+    ? `${LAUNCH_FAILURE_TEXT[status.reason]}${status.projectDir ? ` (${status.projectDir})` : ''}`
+    : loading || !status
+      ? '확인 중…'
+      : '첫 줄 slash로 실행 · 아래 본문 전체가 스킬 인자로 전달됩니다';
+  return (
+    <div className={`kv2-skill-launch${failed ? ' is-failed' : ''}`} role="status">
+      <span className="kv2-skill-launch-play" aria-hidden="true">{failed ? '⚠' : '▶'}</span>
+      <span className="kv2-skill-launch-label">실행</span>
+      <code className="kv2-skill-launch-name">/{name}</code>
+      <span className="kv2-skill-launch-detail">{detail}</span>
+      <button
+        type="button"
+        className="kv2-skill-launch-remove"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onRemove}
+        disabled={disabled}
+        aria-label={`/${name} 실행 해제`}
+        title="본문 첫 줄의 실행 라인을 지웁니다"
+      >
+        ×
+      </button>
     </div>
   );
 };

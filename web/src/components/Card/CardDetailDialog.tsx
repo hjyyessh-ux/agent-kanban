@@ -18,6 +18,7 @@ import {
   DEFAULT_CODEX_MODEL,
   DEFAULT_CODEX_REASONING_EFFORT,
   DEFAULT_CODEX_SANDBOX,
+  resolveAgentRuntime,
 } from "../../../../src/core/runtime-config";
 import { useRuntimeDefaults } from "../../hooks/useRuntimeDefaults";
 import { useCardResultSync } from "../../hooks/useCardResultSync";
@@ -465,13 +466,16 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
     }
     savingDescriptionRef.current = true;
     try {
-      const refs = await resolveReferencesForSubmit(body, descriptionRefsRef.current);
+      const refs = await resolveReferencesForSubmit(body, descriptionRefsRef.current, {
+        runtime: resolveAgentRuntime(card),
+        projectDir: card.projectDir,
+      });
       onUpdate(cardId, { description: appendReferenceBlock(body, refs) });
     } finally {
       savingDescriptionRef.current = false;
     }
     setEditingField(null);
-  }, [onUpdate, card.id, card.description, editValue]);
+  }, [onUpdate, card, editValue]);
 
   const saveEdit = useCallback(() => {
     if (!editingField || !onUpdate) return;
@@ -932,6 +936,7 @@ export const CardDetailDialog: React.FC<CardDetailDialogProps> = ({
                 onCreateFeedback={onCreateFeedback}
                 onClose={onClose}
                 projectDir={card.projectDir}
+                agentRuntime={resolveAgentRuntime(card)}
                 excludeSessionIds={card.sessionId ? [card.sessionId] : undefined}
               />
             )}
