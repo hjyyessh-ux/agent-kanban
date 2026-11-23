@@ -174,6 +174,8 @@ import { existsSync, mkdirSync, cpSync, statSync, readFileSync, readdirSync, rmS
 import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
+import type { BoardHistoryService } from '../core/board-history';
+import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
 import { RESPONSE_GUIDELINES_SETTING_KEY, normalizeResponseGuidelines, validateResponseGuidelines } from '../core/response-guidelines';
 
@@ -1267,6 +1269,7 @@ export function createRouteHandler(
   quickActionStore?: QuickActionStore,
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
+  boardHistory?: BoardHistoryService,
 ) {
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
@@ -1315,6 +1318,19 @@ export function createRouteHandler(
     // Handle preflight (only same-origin requests reach here).
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: PREFLIGHT_HEADERS });
+    }
+
+    // Dedicated metadata subscription: own token, own scope; handled before the
+    // peer-token gate so neither credential can stand in for the other.
+    if (path === BOARD_HISTORY_PREFIX || path.startsWith(`${BOARD_HISTORY_PREFIX}/`)) {
+      return handleBoardHistoryRequest(req, url, {
+        service: boardHistory,
+        clientAddress: ctx?.clientAddress,
+        reconcile: async () => {
+          await store.reconcileChangeObserver();
+          await workStore?.reconcileChangeObserver();
+        },
+      });
     }
 
     // Token bootstrap: the same-origin SPA fetches its auth token here. Served

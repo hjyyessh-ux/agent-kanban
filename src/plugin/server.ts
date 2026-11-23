@@ -24,6 +24,7 @@ import type { PlacementTargetsStore } from '../core/placement-targets-store';
 import type { RuntimeRunStore } from './runtimes/runtime-run-store';
 import type { QuestionMonitor } from './question-monitor';
 import type { WikiWorker } from './wiki/wiki-worker';
+import type { BoardHistoryService } from '../core/board-history';
 
 /**
  * Resolve the web UI static directory.
@@ -99,6 +100,7 @@ export class ServerMonitor {
     scriptExecutionService?: ScriptExecutionService,
     workStore?: WorkStore,
     private readonly onListening?: () => void,
+    private readonly boardHistory?: BoardHistoryService,
   ) {
     this.store = store;
     this.input = input;
@@ -169,6 +171,7 @@ export class ServerMonitor {
       this.quickActionStore,
       this.scriptExecutionService,
       this.workStore,
+      this.boardHistory,
     );
   }
 

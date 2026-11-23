@@ -59,6 +59,7 @@
     "test": "bun test",
     "dev:plugin": "bun run src/plugin/index.ts",
     "dev:daemon": "bun run src/daemon/index.ts",
+    "board-history:install": "bun run src/daemon/board-history-install.ts",
     "test:e2e": "npx playwright test",
     "prepare": "bun run build"
   }

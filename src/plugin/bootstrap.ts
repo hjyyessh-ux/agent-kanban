@@ -6,6 +6,7 @@ import { SettingsStore } from '../core/settings-store';
 import { ScriptStore } from '../core/script-store';
 import { QuickActionStore } from '../core/quick-action-store';
 import { WorkStore } from '../core/work-store';
+import { BoardHistoryService, observeCards, observeWorks } from '../core/board-history';
 import { SkillStore } from '../core/skill-store';
 import { SkillRootsStore } from '../core/skill-roots-store';
 import { PlacementTargetsStore } from '../core/placement-targets-store';
@@ -115,6 +116,20 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   const { dataDir } = options;
 
   const store = new KanbanStore(dataDir);
+  const workStore = new WorkStore(dataDir);
+  // Dedicated board-history sidecar, wired before any boot-time write so that
+  // write is observed too. Inert (one existsSync per save) until installed;
+  // capture faults are logged with a fixed code, never fail a write, and
+  // surface to the consumer as pending/gap coverage instead of being hidden.
+  const boardHistory = new BoardHistoryService(dataDir, {
+    onCaptureFailure: (kind, code) => appendRuntimeDebugLog('boardHistory.capture.failed', { kind, code }),
+  });
+  store.setChangeObserver(boardHistory.observer('card', observeCards));
+  workStore.setChangeObserver(boardHistory.observer('work', observeWorks));
+  // Boot recovery: a crash between rename and capture, or writes by a build
+  // without the observer, are captured now (as a declared gap). Best-effort.
+  await store.reconcileChangeObserver().catch(() => undefined);
+  await workStore.reconcileChangeObserver().catch(() => undefined);
   const schedulerStore = new SchedulerStore(dataDir);
   const settingsStore = new SettingsStore(dataDir);
   // Hide any legacy wiki-internal cards (minted before the chat-message guard)
@@ -122,7 +137,6 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   await sweepWikiInternalCards(store);
   const scriptStore = new ScriptStore(dataDir);
   const quickActionStore = new QuickActionStore(dataDir, scriptStore);
-  const workStore = new WorkStore(dataDir);
   // `plannedWorkId` auto-link — see work-planned-link.ts. Wired here (not in
   // `store.ts`) so `KanbanStore` never imports `WorkStore` directly.
   store.setSessionAssignedHook(createPlannedWorkLinker(store, workStore));
@@ -265,6 +279,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     scriptExecutionService,
     workStore,
     () => { void syncOnStartup(); },
+    boardHistory,
   );
   const port = await monitor.start();
   if (port) {
