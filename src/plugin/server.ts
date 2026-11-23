@@ -101,6 +101,9 @@ export class ServerMonitor {
     workStore?: WorkStore,
     private readonly onListening?: () => void,
     private readonly boardHistory?: BoardHistoryService,
+    private readonly delegations?: import('./runtimes/external-delegation-service').ExternalDelegationService,
+    private readonly setApiUrl?: (url: string) => void,
+    private readonly delegationOperatorToken?: () => string | undefined,
   ) {
     this.store = store;
     this.input = input;
@@ -145,7 +148,7 @@ export class ServerMonitor {
 
   /** Single place that assembles the createServer() dependency list. */
   private createServerInstance(hostname: string | undefined) {
-    return createServer(
+    const instance = createServer(
       this.store,
       this.port,
       resolveStaticDir(),
@@ -172,7 +175,12 @@ export class ServerMonitor {
       this.scriptExecutionService,
       this.workStore,
       this.boardHistory,
+      undefined,
+      this.delegations,
+      this.delegationOperatorToken,
     );
+    this.setApiUrl?.(`http://127.0.0.1:${instance.port}`);
+    return instance;
   }
 
   /** Try to start the server. Returns port if successful, null if port is in use. */

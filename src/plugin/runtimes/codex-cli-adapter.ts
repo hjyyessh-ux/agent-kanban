@@ -1,6 +1,6 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import type { CodexReasoningEffort, CodexSandboxMode, DispatchResult } from '../../core/types';
+import type { CodexReasoningEffort, CodexSandboxMode, DispatchResult, UpdateCardInput } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
 import { getSettingValueOrDefault } from '../../core/settings-store';
@@ -39,6 +39,7 @@ export interface CodexCliAdapterDeps {
   dispatchFn?: (cardId: string) => Promise<DispatchResult>;
   commandOverride?: string[];
   threadIdTimeoutMs?: number;
+  getApiUrl?: () => string | undefined;
 }
 
 interface CodexRunState {
@@ -73,7 +74,10 @@ async function startCodexRun(
   input: AdapterStartInput,
 ): Promise<DispatchHandle> {
   const activeCardRun = await deps.runStore.findActiveRunByCard(input.card.id);
-  if (activeCardRun) {
+  if (input.card.managedDelegation && !input.reservedRun) {
+    throw new RuntimeDispatchError('Managed delegations must use the delegation service', 409);
+  }
+  if (activeCardRun && activeCardRun.runId !== input.reservedRun?.runId) {
     throw new RuntimeDispatchError(`Card already has an active ${activeCardRun.runtime} run`, 409);
   }
   if (input.resumeSessionId) {
@@ -84,7 +88,12 @@ async function startCodexRun(
   }
 
   const model = input.card.model?.trim() || DEFAULT_CODEX_MODEL;
-  const run = await deps.runStore.createRun({
+  const reserved = input.reservedRun ? await deps.runStore.getRun(input.reservedRun.runId) : null;
+  if (input.reservedRun && (!reserved?.delegation?.claimed || reserved.status !== 'starting'
+    || reserved.cardId !== input.card.id || input.card.managedDelegation?.runId !== reserved.runId)) {
+    throw new RuntimeDispatchError('Delegation reservation is not executable', 409);
+  }
+  const run = reserved ?? await deps.runStore.createRun({
     cardId: input.card.id,
     runtime: 'codex',
     sessionId: input.resumeSessionId,
@@ -107,6 +116,7 @@ async function startCodexRun(
 
   let proc: ReturnType<typeof Bun.spawn>;
   try {
+    const apiUrl = deps.getApiUrl?.();
     proc = Bun.spawn(argv, {
       cwd: input.cwd,
       stdin: 'pipe',
@@ -116,15 +126,23 @@ async function startCodexRun(
         ...process.env,
         AGENT_KANBAN_DISPATCH_CARD_ID: input.card.id,
         AGENT_KANBAN_DISPATCH_RUN_ID: run.runId,
+        ...(apiUrl ? { KANBAN_API_URL: apiUrl } : {}),
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to spawn Codex';
+    await deps.runStore.closeDelegationAdmission(run.runId);
+    if (run.delegation) {
+      await finalizeDelegation(deps, run, {
+        status: 'complete', resolution: 'failed', result: message, progressSummary: `[failed] ${message}`,
+      }, 'failed', message);
+      throw new RuntimeDispatchError(message, 500);
+    }
     await deps.runStore.finishRun(run.runId, {
       status: 'failed',
       error: message,
     });
-    await deps.store.updateCard(input.card.id, {
+    await writeCodexCard(deps, run, {
       status: 'todo',
       progressSummary: `[failed] runId=${run.runId} ${message.slice(0, 500)}`,
     });
@@ -167,12 +185,12 @@ async function startCodexRun(
 
   const childLinker = new ChildLinker(deps.store);
   const stdoutDone = readCodexStdout(getReadableStream(proc.stdout), run, state, async (threadId) => {
-    if (state.threadResolved) return;
+    if (state.threadResolved || state.timedOut) return;
     state.threadId = threadId;
     state.threadResolved = true;
     state.resolveThread?.(threadId);
     await deps.runStore.updateRun(run.runId, { sessionId: threadId });
-    await deps.store.updateCard(input.card.id, {
+    await writeCodexCard(deps, run, {
       status: 'in_progress',
       startedAt: run.startedAt,
       progressSummary: undefined,
@@ -180,7 +198,11 @@ async function startCodexRun(
       staleStatus: null,
       staleDetectedAt: null,
     });
-  }, event => childLinker.onChildEvent(input.card.id, run.runId, event, 'codex').catch(() => undefined));
+  }, async event => {
+    if (!run.delegation) {
+      await childLinker.onChildEvent(input.card.id, run.runId, event, 'codex').catch(() => undefined);
+    }
+  });
   const stderrDone = readCodexStderr(getReadableStream(proc.stderr), run.stderrPath);
   const done = handleCodexCompletion({
     deps,
@@ -191,16 +213,26 @@ async function startCodexRun(
     stdoutDone,
     stderrDone,
   });
+  const settled = Promise.allSettled([done]);
 
-  const sessionId = await waitForThreadId({
-    threadPromise,
-    timeoutMs: threadIdTimeoutMs,
-    proc,
-    run,
-    deps,
-    cardId: input.card.id,
-    state,
-  });
+  let sessionId: string;
+  try {
+    sessionId = await waitForThreadId({
+      threadPromise,
+      timeoutMs: threadIdTimeoutMs,
+      proc,
+      run,
+      deps,
+      cardId: input.card.id,
+      state,
+    });
+  } catch (error) {
+    const [completion] = await settled;
+    if (error instanceof Error && completion!.status === 'rejected') {
+      error.cause = new AggregateError(error.cause ? [error.cause, completion!.reason] : [completion!.reason], 'Codex startup cleanup failed');
+    }
+    throw error;
+  }
 
   return {
     sessionId,
@@ -385,6 +417,7 @@ async function waitForThreadId(input: {
     input.state.timedOut = true;
     input.proc.kill();
     const message = error instanceof Error ? error.message : 'Codex thread_id timeout';
+    if (input.run.delegation) throw error;
     await input.deps.runStore.finishRun(input.run.runId, {
       status: 'failed',
       error: message,
@@ -410,9 +443,30 @@ async function handleCodexCompletion(input: {
   stdoutDone: Promise<void>;
   stderrDone: Promise<void>;
 }): Promise<AdapterRunResult> {
+  const streams = Promise.allSettled([input.stdoutDone, input.stderrDone]);
   const exitCode = await input.proc.exited;
-  await Promise.allSettled([input.stdoutDone, input.stderrDone]);
+  await streams;
   const durationMs = Date.now() - new Date(input.run.startedAt).getTime();
+
+  if (input.run.delegation) {
+    const result = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
+    const error = input.state.timedOut ? 'Codex thread_id timeout'
+      : exitCode === 0 && input.state.threadId ? undefined
+      : await readTail(input.run.stderrPath) || `codex exited with code ${exitCode}`;
+    await finalizeDelegation(input.deps, input.run, {
+      status: 'complete', resolution: error ? 'failed' : 'completed',
+      sessionId: input.state.threadId, result: result || error || '(no output)',
+      finalResult: lastResultSegment(input.state.resultSegments) || undefined,
+      progressSummary: error ? `[failed] ${error}` : undefined,
+      responseAt: new Date().toISOString(), durationMs,
+    }, error ? 'failed' : 'completed', error, exitCode);
+    return { outcome: error ? 'failed' : 'completed', result, error, durationMs };
+  }
+
+  // Codex → Claude admission closes under the run-store lock before the parent's
+  // terminal write, so no late delegation races the drain below. A failed parent
+  // does not cancel accepted Claude children; each keeps its own run.
+  await input.deps.runStore.closeDelegationAdmission(input.run.runId);
 
   if (input.state.timedOut) {
     return {
@@ -431,7 +485,8 @@ async function handleCodexCompletion(input: {
   const joinedResult = await readFinalResult(input.run, joinResultSegments(input.state.resultSegments));
   const finalSegment = lastResultSegment(input.state.resultSegments);
 
-  if (exitCode === 0 && input.state.threadId) {
+  const drained = exitCode !== 0 || !input.state.threadId || await input.deps.runStore.waitForDelegations(input.run.runId);
+  if (exitCode === 0 && input.state.threadId && drained) {
     const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
     const completed = await completeTrackedRuntimeCard(
       input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
@@ -461,7 +516,8 @@ async function handleCodexCompletion(input: {
   }
 
   const stderrTail = await readTail(input.run.stderrPath);
-  const message = stderrTail || `codex exited with code ${exitCode}`;
+  const message = !drained ? 'Managed child review still running at parent drain deadline'
+    : stderrTail || `codex exited with code ${exitCode}`;
   const aborted = input.input.abortSignal?.aborted;
   await input.deps.runStore.finishRun(input.run.runId, {
     status: aborted ? 'aborted' : 'failed',
@@ -483,6 +539,25 @@ async function handleCodexCompletion(input: {
     error: message,
     durationMs,
   };
+}
+
+async function writeCodexCard(deps: CodexCliAdapterDeps, run: RuntimeRun, updates: UpdateCardInput): Promise<void> {
+  try {
+    await deps.store.updateCard(run.cardId, updates, run.delegation ? run.runId : undefined);
+  } catch (error) {
+    if (run.delegation && error instanceof Error && error.message === `Card not found: ${run.cardId}`) return;
+    throw error;
+  }
+}
+
+async function finalizeDelegation(
+  deps: CodexCliAdapterDeps, run: RuntimeRun, updates: UpdateCardInput,
+  status: 'completed' | 'failed', error?: string, exitCode?: number,
+): Promise<void> {
+  const current = await deps.runStore.getRun(run.runId);
+  if (!current || !['starting', 'running'].includes(current.status)) return;
+  await writeCodexCard(deps, run, { ...updates, staleStatus: null, staleDetectedAt: null });
+  await deps.runStore.finishRun(run.runId, { status, error, exitCode });
 }
 
 // The streamed agent_message segments are authoritative: `codex exec -o` writes

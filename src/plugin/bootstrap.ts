@@ -58,6 +58,8 @@ export interface KanbanAppStores {
 export interface DispatchEngine {
   dispatchCard: (cardId: string) => Promise<DispatchResult>;
   runStore?: RuntimeRunStore;
+  delegations?: import('./runtimes/external-delegation-service').ExternalDelegationService;
+  setApiUrl?: (url: string) => void;
   runtimeCatalogFn?: () => RuntimeCatalogEntry[] | Promise<RuntimeCatalogEntry[]>;
   /**
    * Extra owner-gated services (watchdogs, stale checkers). Started right
@@ -67,6 +69,7 @@ export interface DispatchEngine {
 }
 
 export interface CreateKanbanAppOptions {
+  delegationOperatorToken?: string;
   dataDir: string;
   /** opencode plugin host input; null when running as the standalone daemon. */
   opencodeInput: PluginInput | null;
@@ -280,6 +283,9 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     workStore,
     () => { void syncOnStartup(); },
     boardHistory,
+    dispatch.delegations,
+    dispatch.setApiUrl,
+    () => isRuntimeOwner ? options.delegationOperatorToken : undefined,
   );
   const port = await monitor.start();
   if (port) {

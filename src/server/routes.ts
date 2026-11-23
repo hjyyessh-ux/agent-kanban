@@ -177,10 +177,14 @@ import { existsSync, mkdirSync, cpSync, statSync, readFileSync, readdirSync, rmS
 import { extname, join, basename, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { timingSafeEqual } from 'node:crypto';
+import type { ExternalDelegationService } from '../plugin/runtimes/external-delegation-service';
+import type { ExternalDelegationRequest } from '../core/types';
+import { ManagedDelegationConflict } from '../core/store';
+import { RuntimeDispatchError } from '../plugin/runtimes/types';
 import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
 import { configuredPromptProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
-import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest } from './board-history-routes';
+import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
 import { RESPONSE_GUIDELINES_SETTING_KEY, normalizeResponseGuidelines, validateResponseGuidelines } from '../core/response-guidelines';
 
@@ -1356,6 +1360,8 @@ export function createRouteHandler(
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
   promptRefinementRoute?: PromptRefinementRoute,
+  delegations?: ExternalDelegationService,
+  delegationOperatorToken?: () => string | undefined,
 ) {
   const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(configuredPromptProvider(process.env));
   const effectiveScriptExecutionService = scriptExecutionService ?? (
@@ -1448,6 +1454,30 @@ export function createRouteHandler(
     // (unit tests, e2e test-server), this is a no-op and the same-origin guard
     // remains the active protection.
     const localToken = peerTokenFn?.();
+    const delegationMatch = path.match(/^\/api\/delegations\/([^/]+)$/);
+    if ((path === '/api/delegations' && method === 'POST') || (delegationMatch && method === 'GET')) {
+      const expected = delegationOperatorToken?.();
+      if (!delegations || !expected || !/^[A-Za-z0-9_-]{43,128}$/.test(expected) || expected === localToken) {
+        return errorResponse('Delegation route unavailable', 404);
+      }
+      if (!ctx?.clientAddress || !isLoopbackClient(ctx.clientAddress) || req.headers.has('origin')
+        || ['forwarded','x-forwarded-for','x-forwarded-host'].some(h => req.headers.has(h))) {
+        return errorResponse('Direct local operator required', 403);
+      }
+      if (!hasAuthorizedBearerToken(req, expected)) return errorResponse('Unauthorized', 401);
+      try {
+        if (method === 'POST') {
+          const body = await readCappedBody(req, 65_536);
+          if (body === null) return errorResponse('Delegation input too large', 413);
+          return json(await delegations.start(JSON.parse(body) as ExternalDelegationRequest), 202);
+        }
+        return json(await delegations.get(delegationMatch![1]));
+      } catch (e: unknown) {
+        return errorResponse(e instanceof Error ? e.message : 'Invalid delegation request',
+          e instanceof RuntimeDispatchError || e instanceof ManagedDelegationConflict ? e.statusCode : 400);
+      }
+    }
+
     if (path === PROMPT_PROPOSAL_PATH) {
       if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress))
         return errorResponse('Local client required', 403);
@@ -2557,7 +2587,7 @@ export function createRouteHandler(
         return json(result);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Archive failed';
-        return errorResponse(message, 500);
+        return errorResponse(message, e instanceof ManagedDelegationConflict ? 409 : 500);
       }
     }
 
@@ -3311,7 +3341,8 @@ export function createRouteHandler(
         } catch (e: unknown) {
           const message = e instanceof Error ? e.message : '';
           if (message.includes('not found')) return errorResponse('Card not found', 404);
-          return errorResponse('Update failed', 500);
+          return errorResponse(e instanceof ManagedDelegationConflict ? message : 'Update failed',
+            e instanceof ManagedDelegationConflict ? 409 : 500);
         }
       }
 

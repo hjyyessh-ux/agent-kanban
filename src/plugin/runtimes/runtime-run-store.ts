@@ -7,6 +7,7 @@ import { FileLock } from '../../core/filelock';
 import { resolveDir } from '../../core/data-dir';
 import { parseClaudeStreamLine } from './claude-stream-parser';
 import type { ChildLinker } from './child-linker';
+import { RuntimeDispatchError } from './types';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
 import { codexChildEvents } from './codex-child-events';
 
@@ -30,6 +31,36 @@ export interface RuntimeRun {
   stderrPath: string;
   lastMessagePath: string;
   error?: string;
+  admissionClosed?: boolean;
+  delegation?: {
+    parentCardId: string; parentRunId: string; requestId: string; requestHash: string;
+    claimed?: boolean;
+  };
+}
+
+export type ManagedDelegationRuntime = 'claude' | 'codex';
+
+/** Managed delegation only crosses runtimes: Claude → Codex and Codex → Claude. */
+export function crossRuntimeTarget(parentRuntime: AgentRuntime): ManagedDelegationRuntime | undefined {
+  if (parentRuntime === 'claude') return 'codex';
+  if (parentRuntime === 'codex') return 'claude';
+  return undefined;
+}
+
+/** Every assistant text block a delegated child run streamed, parsed in its own runtime's format. */
+export async function readDelegationSegments(run: RuntimeRun): Promise<string[]> {
+  const segments: string[] = [];
+  if (!existsSync(run.eventsPath)) return segments;
+  for (const line of (await Bun.file(run.eventsPath).text()).split('\n')) {
+    if (run.runtime === 'claude') {
+      const event = parseClaudeStreamLine(line);
+      if (event?.type === 'assistant' && event.text) segments.push(event.text);
+    } else {
+      const event = parseCodexJsonlLine(line);
+      if (event?.type === 'agent_message') segments.push(event.text);
+    }
+  }
+  return segments;
 }
 
 interface RuntimeRunState {
@@ -47,6 +78,7 @@ interface CreateRunInput {
 }
 
 export class RuntimeRunStore {
+  private readonly dataDir: string;
   private readonly rootDir: string;
   private readonly runsPath: string;
   private readonly tmpPath: string;
@@ -54,13 +86,25 @@ export class RuntimeRunStore {
   private lockPromise: Promise<void> = Promise.resolve();
 
   constructor(dataDir: string) {
-    this.rootDir = join(resolveDir(dataDir), 'runtime-runs');
+    this.dataDir = resolveDir(dataDir);
+    this.rootDir = join(this.dataDir, 'runtime-runs');
     this.runsPath = join(this.rootDir, 'runs.json');
     this.tmpPath = join(this.rootDir, '.runs.json.tmp');
     this.fileLock = new FileLock(join(this.rootDir, '.runs.json.lock'));
   }
 
   async createRun(input: CreateRunInput): Promise<RuntimeRun> {
+    const run = this.newRun(input);
+    await this.withDualLock(async () => {
+      const state = await this.loadUnsafe();
+      state.runs.push(run);
+      state.lastModified = run.startedAt;
+      await this.saveUnsafe(state);
+    });
+    return run;
+  }
+
+  private newRun(input: CreateRunInput): RuntimeRun {
     const runId = `${input.runtime}-${Date.now()}-${nanoid(8)}`;
     const runDir = this.getRunDir(runId);
     mkdirSync(runDir, { recursive: true });
@@ -79,14 +123,77 @@ export class RuntimeRunStore {
       lastMessagePath: join(runDir, 'last-message.md'),
     };
 
-    await this.withDualLock(async () => {
+    return run;
+  }
+
+  async reserveDelegation(input: {
+    parentCardId: string; parentRunId: string; requestId: string; requestHash: string; model: string;
+    /** Expected child runtime; the parent run's runtime is authoritative and must cross to it. */
+    childRuntime?: ManagedDelegationRuntime;
+  }, createCard: (run: RuntimeRun) => Promise<void>): Promise<{ run: RuntimeRun; created: boolean }> {
+    return this.withDualLock(async () => {
       const state = await this.loadUnsafe();
+      const existing = state.runs.find(r => r.delegation?.parentRunId === input.parentRunId
+        && r.delegation.requestId === input.requestId);
+      if (existing) {
+        if (existing.delegation?.requestHash !== input.requestHash) {
+          throw new RuntimeDispatchError('Delegation requestId was reused with different input', 409);
+        }
+        return { run: existing, created: false };
+      }
+      const parent = state.runs.findLast(r => r.cardId === input.parentCardId);
+      const childRuntime = parent ? crossRuntimeTarget(parent.runtime) : undefined;
+      // A managed child never delegates again (no Claude↔Codex ping-pong chains), and only
+      // the parent card's own live run may admit children.
+      if (!parent || parent.runId !== input.parentRunId || !parent.sessionId || !childRuntime || parent.delegation
+        || parent.status !== 'running' || parent.admissionClosed
+        || (input.childRuntime && input.childRuntime !== childRuntime)) {
+        throw new RuntimeDispatchError('Parent run is not accepting delegations', 409);
+      }
+      const run = this.newRun({ runtime: childRuntime, cardId: nanoid(), model: input.model, cwd: parent.cwd });
+      run.delegation = { parentCardId: input.parentCardId, parentRunId: input.parentRunId,
+        requestId: input.requestId, requestHash: input.requestHash };
       state.runs.push(run);
       state.lastModified = new Date().toISOString();
       await this.saveUnsafe(state);
+      try {
+        // Runtime reservation survives card deletion/purge and a crash before creation.
+        await createCard(run);
+      } catch (error) {
+        run.status = 'failed';
+        run.error = error instanceof Error ? error.message : 'Delegation card creation failed';
+        run.finishedAt = new Date().toISOString();
+        await this.saveUnsafe(state);
+        throw error;
+      }
+      return { run, created: true };
     });
+  }
 
-    return run;
+  async claimDelegation(runId: string, enabled: () => Promise<boolean>): Promise<RuntimeRun | null> {
+    return this.withDualLock(async () => {
+      const state = await this.loadUnsafe();
+      const run = state.runs.find(r => r.runId === runId);
+      if (!run?.delegation || run.status !== 'starting' || run.delegation.claimed) return null;
+      if (!await enabled()) return null;
+      run.delegation.claimed = true;
+      await this.saveUnsafe(state);
+      return run;
+    });
+  }
+
+  async closeDelegationAdmission(runId: string): Promise<void> {
+    await this.updateRun(runId, { admissionClosed: true });
+  }
+
+  async waitForDelegations(parentRunId: string, timeoutMs = 60_000): Promise<boolean> {
+    const deadline = performance.now() + timeoutMs;
+    while ((await this.listRuns()).some(r => r.delegation?.parentRunId === parentRunId
+      && (r.status === 'starting' || r.status === 'running'))) {
+      if (performance.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    return true;
   }
 
   async updateRun(runId: string, input: Partial<Omit<RuntimeRun, 'runId'>>): Promise<RuntimeRun> {
@@ -95,6 +202,11 @@ export class RuntimeRunStore {
       const state = await this.loadUnsafe();
       const index = state.runs.findIndex(run => run.runId === runId);
       if (index === -1) throw new Error(`Runtime run not found: ${runId}`);
+      if (state.runs[index].delegation
+        && !['starting', 'running'].includes(state.runs[index].status)) {
+        updated = state.runs[index];
+        return;
+      }
       state.runs[index] = {
         ...state.runs[index],
         ...input,
@@ -176,9 +288,28 @@ export class RuntimeRunStore {
         }
         if (!activeIds.has(run.runId)) continue;
         if (run.status !== 'starting' && run.status !== 'running') continue;
-        // The monitor was lost. The runtime outcome is still unknown.
-        run.status = 'interrupted';
-        run.restartReconcilePending = true;
+        if (run.delegation) {
+          const now = new Date().toISOString();
+          const committed = run.delegation
+            ? await store.getCard(run.cardId, { includeArchived: true, includeDeleted: true }) : null;
+          if (committed?.managedDelegation?.runId === run.runId
+            && (committed.status === 'complete' || committed.status === 'done')) {
+            // Card completion is the durable commit before the run terminal write.
+            // A restart in that gap must not turn a committed success into failure.
+            run.status = committed.resolution === 'completed' ? 'completed' : 'failed';
+            run.finishedAt = committed.completedAt ?? now;
+            run.error = run.status === 'completed' ? undefined : run.error ?? 'Delegation failed before restart';
+            staleRuns.push({ ...run });
+            continue;
+          }
+          run.status = 'failed';
+          run.finishedAt = now;
+          run.error = run.error ?? 'Runtime run was reconciled after restart';
+        } else {
+          // The monitor was lost. The runtime outcome is still unknown.
+          run.status = 'interrupted';
+          run.restartReconcilePending = true;
+        }
         staleRuns.push({ ...run });
       }
       if (staleRuns.length > 0) {
@@ -188,6 +319,18 @@ export class RuntimeRunStore {
     });
 
     for (const run of staleRuns) {
+      if (run.delegation) {
+        if (run.status === 'completed') continue;
+        const segments = await readDelegationSegments(run);
+        const card = await store.getCard(run.cardId);
+        if (card) await store.updateCard(card.id, {
+          status: 'complete', resolution: 'failed',
+          result: segments.join('\n\n') || card.result || run.error,
+          finalResult: segments.at(-1) || card.finalResult,
+          progressSummary: `[failed] ${run.error}`, staleStatus: null, staleDetectedAt: null,
+        }, run.runId);
+        continue;
+      }
       // Step 1: Replay the runtime's recorded lifecycle before interrupted-child cleanup.
       if (childLinker && existsSync(run.eventsPath)) {
         try {

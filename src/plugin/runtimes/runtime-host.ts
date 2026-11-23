@@ -3,6 +3,7 @@ import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
 import type { AgentRuntime, DispatchResult, KanbanCard } from '../../core/types';
 import {
+  DEFAULT_CLAUDE_MODEL,
   RUNTIME_CATALOG,
   resolveAgentRuntime,
   type RuntimeCatalogEntry,
@@ -21,6 +22,7 @@ import { isRecentlyFailed } from '../hooks/event-handler';
 import { buildDispatchPromptText } from '../dispatch-prompt';
 import { captureGitStart } from './git-capture';
 import { mergeCodexCliModelsIntoCatalog } from './codex-model-catalog';
+import { ExternalDelegationService } from './external-delegation-service';
 
 export interface RuntimeAvailability {
   runtime: AgentRuntime;
@@ -33,6 +35,8 @@ export interface RuntimeHost {
   runStore: RuntimeRunStore;
   registry: RuntimeRegistry;
   watchdog: ClaudeCodexWatchdog;
+  delegations: ExternalDelegationService;
+  setApiUrl(url: string): void;
   dispatchCard(cardId: string): Promise<DispatchResult>;
   getRuntimeAvailability(): RuntimeAvailability[];
   getRuntimeCatalog(): Promise<RuntimeCatalogEntry[]>;
@@ -54,6 +58,7 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
   const childLinker = new ChildLinker(options.store);
   const watchdog = new ClaudeCodexWatchdog(options.store, runStore);
   let dispatchCard: (cardId: string) => Promise<DispatchResult>;
+  let apiUrl: string | undefined;
   const registry = createRuntimeRegistry([
     createUnavailableOpencodeAdapter({ store: options.store }),
     createClaudeAdapter({
@@ -64,6 +69,7 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
       sessionIdTimeoutMs: options.claudeSessionIdTimeoutMs,
       dispatchFn: (cardId) => dispatchCard(cardId),
       onChildEvent: (parentCardId, runId, ev) => childLinker.onChildEvent(parentCardId, runId, ev),
+      getApiUrl: () => apiUrl,
     }),
     createCodexCliAdapter({
       store: options.store,
@@ -72,12 +78,14 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
       commandOverride: options.codexCommandOverride,
       threadIdTimeoutMs: options.codexThreadIdTimeoutMs,
       dispatchFn: (cardId) => dispatchCard(cardId),
+      getApiUrl: () => apiUrl,
     }),
   ]);
 
   dispatchCard = async (cardId: string): Promise<DispatchResult> => {
     const card = await options.store.getCard(cardId);
     if (!card) throw new RuntimeDispatchError('Card not found', 404);
+    if (card.managedDelegation) throw new RuntimeDispatchError('Use a new delegation request to retry', 409);
     validateProjectDir(card);
 
     const adapter = registry.pickAdapter(resolveAgentRuntime(card));
@@ -117,6 +125,11 @@ export async function createStandaloneRuntimeHost(options: StandaloneRuntimeHost
     runStore,
     registry,
     watchdog,
+    setApiUrl: (url) => { apiUrl = url; },
+    delegations: new ExternalDelegationService({
+      store: options.store, settingsStore: options.settingsStore, runStore,
+      adapterFor: (runtime) => registry.pickAdapter(runtime),
+    }),
     dispatchCard,
     getRuntimeAvailability: () => availability,
     getRuntimeCatalog: () => mergeCodexCliModelsIntoCatalog(

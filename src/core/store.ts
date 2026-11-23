@@ -18,6 +18,7 @@ import type {
   WikiArchiveCardsResponse,
   WikiArchiveCardStatusFilter,
   DispatchResult,
+  CodexReasoningEffort,
 } from './types';
 import { normalizeCardRequester, WIKI_INTERNAL_MARKER } from './types';
 import { FileLock } from './filelock';
@@ -46,6 +47,10 @@ import {
  * `WorkStore` itself, so the hook keeps the two stores independent.
  */
 export type SessionAssignedHook = (card: KanbanCard) => void | Promise<void>;
+
+export class ManagedDelegationConflict extends Error {
+  readonly statusCode = 409;
+}
 
 function inferAgentRuntime(input: Pick<CreateCardInput, 'agentRuntime' | 'sourceContext'>): AgentRuntime {
   if (input.agentRuntime) return input.agentRuntime;
@@ -431,7 +436,7 @@ export class KanbanStore {
       const now = new Date().toISOString();
       let changed = false;
       for (const card of board.cards) {
-        if (!isActiveCard(card) || card.parentCardId !== parentCardId || card.childRunId !== runId
+        if (!isActiveCard(card) || card.managedDelegation || card.parentCardId !== parentCardId || card.childRunId !== runId
           || card.linkKind !== 'subagent' || !['todo', 'in_progress'].includes(card.status)) continue;
         card.status = 'complete';
         card.completedAt = now;
@@ -623,8 +628,49 @@ export class KanbanStore {
     return updated!;
   }
 
-  async updateCard(id: string, input: UpdateCardInput): Promise<KanbanCard> {
-    return (await this.writeCardUpdate(id, input))!;
+  async createDelegationCard(input: {
+    id: string; parentCardId: string; parentRunId: string; runId: string;
+    prompt: string; model: string; cwd: string;
+    /** Child runtime; defaults to the original Claude → Codex direction. */
+    runtime?: 'claude' | 'codex';
+    reasoningEffort?: CodexReasoningEffort;
+  }): Promise<KanbanCard> {
+    const runtime = input.runtime ?? 'codex';
+    const parentRuntime = runtime === 'codex' ? 'claude' : 'codex';
+    return this.withDualLock(async () => {
+      const board = await this.load();
+      const parent = board.cards.find(c => c.id === input.parentCardId && isActiveCard(c));
+      if (!parent || parent.status !== 'in_progress' || parent.agentRuntime !== parentRuntime
+        || parent.managedDelegation) {
+        throw new ManagedDelegationConflict(
+          `Delegation requires a live ${parentRuntime === 'claude' ? 'Claude' : 'Codex'} parent`);
+      }
+      const siblings = board.cards.filter(c => c.parentCardId === parent.id && !c.deletedAt).length;
+      const card = buildCard({
+        title: `${runtime === 'codex' ? 'Codex' : 'Claude'}#${siblings + 1}`,
+        description: input.prompt, agentType: runtime,
+        projectDir: input.cwd, agentRuntime: runtime, model: input.model,
+        parentCardId: parent.id, rootCardId: parent.rootCardId ?? parent.id,
+        linkKind: 'subagent', childRunId: input.parentRunId, childTaskId: input.runId,
+        // Managed children are read-only reviewers regardless of global bypass settings.
+        ...(runtime === 'codex'
+          ? { codexOptions: { sandbox: 'read-only' as const, bypassApprovalsAndSandbox: false,
+            reasoningEffort: input.reasoningEffort } }
+          : { claudeOptions: { permissionMode: 'plan' as const, dangerouslySkipPermissions: false } }),
+      }, new Date().toISOString());
+      card.id = input.id;
+      card.status = 'in_progress';
+      card.startedAt = card.createdAt;
+      card.managedDelegation = { runId: input.runId, parentRunId: input.parentRunId };
+      board.cards.push(card);
+      board.lastModified = card.createdAt;
+      await this.save(board);
+      return card;
+    });
+  }
+
+  async updateCard(id: string, input: UpdateCardInput, delegationRunId?: string): Promise<KanbanCard> {
+    return (await this.writeCardUpdate(id, input, undefined, delegationRunId))!;
   }
 
   async updateCardIf(
@@ -639,7 +685,11 @@ export class KanbanStore {
     id: string,
     input: UpdateCardInput,
     matches?: (card: KanbanCard) => boolean,
+    delegationRunId?: string,
   ): Promise<KanbanCard | undefined> {
+    if (Object.prototype.hasOwnProperty.call(input, 'managedDelegation')) {
+      throw new ManagedDelegationConflict('Delegation provenance is server-owned');
+    }
     // Pre-build the partial update outside the lock
     const updates = {
       ...input,
@@ -660,6 +710,17 @@ export class KanbanStore {
         throw new Error(`Card not found: ${id}`);
       }
       if (matches && !matches(board.cards[index])) return;
+      const managed = board.cards[index];
+      if (managed.managedDelegation) {
+        if (delegationRunId) {
+          if (managed.managedDelegation.runId !== delegationRunId || managed.deletedAt
+            || managed.status === 'complete' || managed.status === 'done') { updatedCard = managed; return; }
+        } else if (Object.keys(input).some(key => key !== 'title' && key !== 'favorite'
+          && !(key === 'status' && input.status === 'done'
+            && (managed.status === 'complete' || managed.status === 'done')))) {
+          throw new ManagedDelegationConflict('Delegation execution fields are server-owned');
+        }
+      }
       const previousSessionId = board.cards[index].sessionId;
       // Separate null (=delete) fields from normal updates
       const {
@@ -1382,6 +1443,13 @@ export class KanbanStore {
     await this.withDualLock(async () => {
       const board = await this.load();
 
+      const candidates = selectArchiveCards(board.cards, cardIds, false);
+      const candidateIds = new Set(candidates.map(c => c.id));
+      if (board.cards.some(c => !c.deletedAt && c.managedDelegation
+        && (candidateIds.has(c.id) || (c.parentCardId && candidateIds.has(c.parentCardId)))
+        && c.status !== 'complete' && c.status !== 'done')) {
+        throw new ManagedDelegationConflict('Cannot archive an unfinished delegation');
+      }
       const toArchive = selectArchiveCards(board.cards, cardIds);
       if (toArchive.length === 0) return;
       // Run under the board lock against the actual cascade, before any write.

@@ -86,6 +86,30 @@ export interface CodexOptions {
   bypassApprovalsAndSandbox?: boolean;
 }
 
+/** Managed cross-runtime delegation: a Claude parent gets a Codex child, a Codex parent a Claude child. */
+export interface ExternalDelegationRequest {
+  parentCardId: string;
+  parentRunId: string;
+  requestId: string;
+  prompt: string;
+  model?: string;
+  /** Codex children only; rejected for Claude children. */
+  reasoningEffort?: CodexReasoningEffort;
+}
+
+export interface ExternalDelegationView {
+  runId: string;
+  cardId: string;
+  parentRunId: string;
+  /** Child runtime. */
+  runtime?: 'claude' | 'codex';
+  status: 'starting' | 'running' | 'completed' | 'failed' | 'aborted';
+  sessionId?: string;
+  result?: string;
+  finalResult?: string;
+  error?: string;
+}
+
 export interface ClaudeOptions {
   permissionMode?: ClaudePermissionMode;
   dangerouslySkipPermissions?: boolean;
@@ -449,6 +473,8 @@ export interface KanbanCard {
   childTaskId?: string;    // Claude task_* natural key (from task_started.task_id)
   childToolUseId?: string; // tool_use_id from the Agent tool call (auxiliary key)
   childRunId?: string;     // parent run ID (composite key scoping)
+  /** Server-owned external delegation; its own runtime run owns completion. */
+  managedDelegation?: { runId: string; parentRunId: string };
   rootCardId?: string;     // tree root card (for multi-level hierarchies)
   agentType?: string;      // agent type (e.g., 'explore', 'librarian', 'oracle')
   command?: string;        // builtin command id that initiated this card (e.g., 'start-work')

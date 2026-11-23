@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import type { SettingsStore } from '../../core/settings-store';
 import { getSettingValueOrDefault } from '../../core/settings-store';
 import { buildClaudeAppendSystemPrompt, loadResponseGuidelines } from '../../core/response-guidelines';
-import type { DispatchResult } from '../../core/types';
+import type { DispatchResult, UpdateCardInput } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
 import { DEFAULT_CLAUDE_MODEL, isClaudeModelValid } from '../../core/runtime-config';
 import { dispatchNextQueuedTodoCard } from '../hooks/event-handler';
@@ -28,11 +28,12 @@ export interface ClaudeAdapterDeps {
   commandOverride?: string[];
   sessionIdTimeoutMs?: number;
   onChildEvent?: (parentCardId: string, runId: string, ev: ClaudeStreamEvent) => Promise<void>;
+  getApiUrl?: () => string | undefined;
 }
 
 interface ClaudeRunState {
   sessionId?: string;
-  timedOut: boolean;
+  startupFailure?: string;
   // Every assistant text block seen this run, in order. Joined at completion
   // (see result-segments.ts) so mid-turn answers are not lost.
   resultSegments: string[];
@@ -67,7 +68,10 @@ async function startClaudeRun(
   input: AdapterStartInput,
 ): Promise<DispatchHandle> {
   const activeCardRun = await deps.runStore.findActiveRunByCard(input.card.id);
-  if (activeCardRun) {
+  if (input.card.managedDelegation && !input.reservedRun) {
+    throw new RuntimeDispatchError('Managed delegations must use the delegation service', 409);
+  }
+  if (activeCardRun && activeCardRun.runId !== input.reservedRun?.runId) {
     throw new RuntimeDispatchError(`Card already has an active ${activeCardRun.runtime} run`, 409);
   }
   if (input.resumeSessionId) {
@@ -80,27 +84,35 @@ async function startClaudeRun(
   const model = input.card.model && isClaudeModelValid(input.card.model)
     ? input.card.model
     : DEFAULT_CLAUDE_MODEL;
-  const run = await deps.runStore.createRun({
+  // A Codex → Claude managed child runs on the run id the delegation service
+  // persisted before spawn; it is never re-created here.
+  const reserved = input.reservedRun ? await deps.runStore.getRun(input.reservedRun.runId) : null;
+  if (input.reservedRun && (!reserved?.delegation?.claimed || reserved.status !== 'starting'
+    || reserved.runtime !== 'claude' || reserved.cardId !== input.card.id
+    || input.card.managedDelegation?.runId !== reserved.runId || input.resumeSessionId)) {
+    throw new RuntimeDispatchError('Delegation reservation is not executable', 409);
+  }
+  const run = reserved ?? await deps.runStore.createRun({
     cardId: input.card.id,
     runtime: 'claude',
     sessionId: input.resumeSessionId,
     model,
     cwd: input.cwd,
   });
-  await Bun.write(run.promptPath, input.prompt);
-  await Bun.write(run.eventsPath, '');
-  await Bun.write(run.stderrPath, '');
-
-  const argv = await buildClaudeCommand(deps, resolveClaudeBinary, {
-    model,
-    resumeSessionId: input.resumeSessionId,
-    permissionMode: input.card.claudeOptions?.permissionMode,
-    dangerouslySkipPermissions: input.card.claudeOptions?.dangerouslySkipPermissions,
-    effort: input.card.claudeOptions?.effort,
-  });
-
   let proc: ReturnType<typeof Bun.spawn>;
   try {
+    await Bun.write(run.promptPath, input.prompt);
+    await Bun.write(run.eventsPath, '');
+    await Bun.write(run.stderrPath, '');
+
+    const argv = await buildClaudeCommand(deps, resolveClaudeBinary, {
+      model,
+      resumeSessionId: input.resumeSessionId,
+      permissionMode: input.card.claudeOptions?.permissionMode,
+      dangerouslySkipPermissions: input.card.claudeOptions?.dangerouslySkipPermissions,
+      effort: input.card.claudeOptions?.effort,
+    });
+    const apiUrl = deps.getApiUrl?.();
     proc = Bun.spawn(argv, {
       cwd: input.cwd,
       stdin: 'pipe',
@@ -110,35 +122,36 @@ async function startClaudeRun(
         ...process.env,
         AGENT_KANBAN_DISPATCH_CARD_ID: input.card.id,
         AGENT_KANBAN_DISPATCH_RUN_ID: run.runId,
+        ...(apiUrl ? { KANBAN_API_URL: apiUrl } : {}),
       },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to spawn Claude';
+    await deps.runStore.closeDelegationAdmission(run.runId);
+    if (run.delegation) {
+      await finalizeClaudeDelegation(deps, run, {
+        status: 'complete', resolution: 'failed', result: message, progressSummary: `[failed] ${message}`,
+      }, 'failed', message);
+      const failure = new RuntimeDispatchError(message, 500);
+      failure.cause = error;
+      throw failure;
+    }
     await deps.runStore.finishRun(run.runId, {
       status: 'failed',
       error: message,
     });
-    await deps.store.updateCard(input.card.id, {
+    await updateCardIfPresent(deps.store, input.card.id, {
       status: 'todo',
       progressSummary: `[failed] runId=${run.runId} ${message.slice(0, 500)}`,
+      staleStatus: null, staleDetectedAt: null,
     });
-    throw new RuntimeDispatchError(message, 500);
+    const failure = new RuntimeDispatchError(message, 500);
+    failure.cause = error;
+    throw failure;
   }
-
-  await deps.runStore.updateRun(run.runId, {
-    status: 'running',
-    pid: proc.pid,
-  });
-
-  const stdin = getWritableStdin(proc.stdin);
-  stdin.write(input.prompt);
-  stdin.end();
-
-  input.abortSignal?.addEventListener('abort', () => proc.kill(), { once: true });
 
   const state: ClaudeRunState = {
     sessionId: input.resumeSessionId,
-    timedOut: false,
     resultSegments: [],
     sessionResolved: Boolean(input.resumeSessionId),
   };
@@ -148,7 +161,9 @@ async function startClaudeRun(
     if (input.resumeSessionId) resolve(input.resumeSessionId);
   });
 
-  const childEventCallback = deps.onChildEvent
+  // Like Codex delegated runs, a managed child does not mint its own native
+  // child cards; restart recovery for managed runs replays only its output.
+  const childEventCallback = deps.onChildEvent && !run.delegation
     ? async (ev: ClaudeStreamEvent) => {
         try {
           await deps.onChildEvent!(input.card.id, run.runId, ev);
@@ -170,12 +185,12 @@ async function startClaudeRun(
   }
 
   const stdoutDone = readClaudeStdout(getReadableStream(proc.stdout), run, state, async (sessionId) => {
-    if (state.sessionResolved) return;
+    if (state.sessionResolved || state.startupFailure !== undefined) return;
     state.sessionId = sessionId;
     state.sessionResolved = true;
     state.resolveSession?.(sessionId);
     await deps.runStore.updateRun(run.runId, { sessionId });
-    await deps.store.updateCard(input.card.id, {
+    await writeClaudeCard(deps, run, input.card.id, {
       status: 'in_progress',
       startedAt: run.startedAt,
       progressSummary: undefined,
@@ -185,6 +200,9 @@ async function startClaudeRun(
     });
   }, childEventCallback);
   const stderrDone = readClaudeStderr(getReadableStream(proc.stderr), run.stderrPath);
+  let finishStartup!: () => void;
+  const startupDone = new Promise<void>(resolve => { finishStartup = resolve; });
+  const abort = () => proc.kill();
   const done = handleClaudeCompletion({
     deps,
     input,
@@ -193,25 +211,61 @@ async function startClaudeRun(
     state,
     stdoutDone,
     stderrDone,
-  });
+    startupDone,
+  }).finally(() => input.abortSignal?.removeEventListener('abort', abort));
+  // Observe rejection immediately, while start still owns the process. The
+  // original promise is returned on success so callers still see its failure.
+  const settled = Promise.allSettled([done, stdoutDone, stderrDone]);
 
-  const sessionId = await waitForSessionId({
-    sessionPromise,
-    timeoutMs: sessionIdTimeoutMs,
-    proc,
-    run,
-    deps,
-    cardId: input.card.id,
-    state,
-  });
+  try {
+    await deps.runStore.updateRun(run.runId, { status: 'running', pid: proc.pid });
+    const stdin = getWritableStdin(proc.stdin);
+    stdin.write(input.prompt);
+    stdin.end();
+    input.abortSignal?.addEventListener('abort', abort, { once: true });
+    if (input.abortSignal?.aborted) abort();
 
-  return {
-    sessionId,
-    runId: run.runId,
-    startedAt: run.startedAt,
-    abort: () => proc.kill(),
-    done,
-  };
+    if (input.resumeSessionId) {
+      await deps.store.updateCard(input.card.id, {
+        status: 'in_progress', sessionId: input.resumeSessionId, startedAt: run.startedAt, progressSummary: undefined,
+        staleStatus: null, staleDetectedAt: null,
+      });
+    }
+    const sessionId = await waitForSessionId({ sessionPromise, timeoutMs: sessionIdTimeoutMs });
+    finishStartup();
+    return { sessionId, runId: run.runId, startedAt: run.startedAt, abort, done };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to start Claude';
+    state.startupFailure = message;
+    const failures: unknown[] = [];
+    try { proc.kill(); } catch (failure) { failures.push(failure); }
+    finishStartup();
+    for (const completion of await settled) if (completion.status === 'rejected') failures.push(completion.reason);
+    // Completion owns process/stream drain and admission closure. Only this
+    // branch writes startup failure, after all late session callbacks stopped.
+    if (run.delegation) {
+      // A managed child is terminal on startup failure: never a retryable todo,
+      // never a placeholder session id.
+      try {
+        await finalizeClaudeDelegation(deps, run, {
+          status: 'complete', resolution: 'failed', result: message, progressSummary: `[failed] ${message}`,
+        }, 'failed', message);
+      } catch (failure) { failures.push(failure); }
+    } else {
+      try { await deps.runStore.finishRun(run.runId, { status: 'failed', error: message }); }
+      catch (failure) { failures.push(failure); }
+      try {
+        await updateCardIfPresent(deps.store, input.card.id, {
+          status: 'todo', progressSummary: `[failed] ${message}`,
+          staleStatus: null, staleDetectedAt: null,
+        });
+      } catch (failure) { failures.push(failure); }
+    }
+    if (error instanceof Error && failures.length) {
+      error.cause = new AggregateError(error.cause ? [error.cause, ...failures] : failures, 'Claude startup cleanup failed');
+    }
+    throw error;
+  }
 }
 
 async function buildClaudeCommand(
@@ -348,11 +402,6 @@ async function readClaudeStderr(stream: ReadableStream<Uint8Array>, stderrPath: 
 async function waitForSessionId(input: {
   sessionPromise: Promise<string>;
   timeoutMs: number;
-  proc: ReturnType<typeof Bun.spawn>;
-  run: RuntimeRun;
-  deps: ClaudeAdapterDeps;
-  cardId: string;
-  state: ClaudeRunState;
 }): Promise<string> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -365,21 +414,6 @@ async function waitForSessionId(input: {
         )), input.timeoutMs);
       }),
     ]);
-  } catch (error) {
-    input.state.timedOut = true;
-    input.proc.kill();
-    const message = error instanceof Error ? error.message : 'Claude session_id timeout';
-    await input.deps.runStore.finishRun(input.run.runId, {
-      status: 'failed',
-      error: message,
-    });
-    await updateCardIfPresent(input.deps.store, input.cardId, {
-      status: 'todo',
-      progressSummary: `[failed] ${message}`,
-      staleStatus: null,
-      staleDetectedAt: null,
-    });
-    throw error;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
@@ -393,19 +427,31 @@ async function handleClaudeCompletion(input: {
   state: ClaudeRunState;
   stdoutDone: Promise<void>;
   stderrDone: Promise<void>;
+  startupDone: Promise<void>;
 }): Promise<AdapterRunResult> {
+  // Attach both handlers before waiting for exit; a rejected reader must never
+  // become an unhandled rejection while the child is still terminating.
+  const streams = Promise.allSettled([input.stdoutDone, input.stderrDone]);
   const exitCode = await input.proc.exited;
-  await Promise.allSettled([input.stdoutDone, input.stderrDone]);
+  await streams;
+  await input.startupDone;
   const durationMs = Date.now() - new Date(input.run.startedAt).getTime();
 
-  if (input.state.timedOut) {
+  // Admission and reservations share the run-store lock. Once closed, no late
+  // delegation can race the final empty-child check. Failure does not cancel
+  // independent Codex children; each child retains its own run/artifacts.
+  await input.deps.runStore.closeDelegationAdmission(input.run.runId);
+  if (input.state.startupFailure !== undefined) {
     return {
       outcome: 'failed',
       result: '',
-      error: 'session_id timeout',
+      error: input.state.startupFailure,
       durationMs,
     };
   }
+
+  const drained = exitCode !== 0 || !!input.run.delegation
+    || await input.deps.runStore.waitForDelegations(input.run.runId);
 
   const joinedResult = joinResultSegments(input.state.resultSegments);
   const finalSegment = lastResultSegment(input.state.resultSegments);
@@ -413,7 +459,22 @@ async function handleClaudeCompletion(input: {
     await writeFile(input.run.lastMessagePath, joinedResult);
   }
 
-  if (exitCode === 0 && input.state.sessionId) {
+  if (input.run.delegation) {
+    // Managed Codex → Claude child: its own run owns a terminal card; no Telegram,
+    // queue continuation or git capture (the parent run owns those).
+    const error = exitCode === 0 && input.state.sessionId ? undefined
+      : await readTail(input.run.stderrPath) || `claude exited with code ${exitCode}`;
+    await finalizeClaudeDelegation(input.deps, input.run, {
+      status: 'complete', resolution: error ? 'failed' : 'completed',
+      sessionId: input.state.sessionId, result: joinedResult || error || '(no output)',
+      finalResult: finalSegment || undefined,
+      progressSummary: error ? `[failed] ${error}` : undefined,
+      responseAt: new Date().toISOString(), durationMs,
+    }, error ? 'failed' : 'completed', error, exitCode);
+    return { outcome: error ? 'failed' : 'completed', result: joinedResult, error, durationMs };
+  }
+
+  if (exitCode === 0 && input.state.sessionId && drained) {
     const run = await input.deps.runStore.finishRun(input.run.runId, { status: 'completed', exitCode });
     const completed = await completeTrackedRuntimeCard(
       input.deps.store, input.deps.runStore, run, joinedResult || '(no output)', finalSegment || undefined,
@@ -436,7 +497,8 @@ async function handleClaudeCompletion(input: {
   }
 
   const stderrTail = await readTail(input.run.stderrPath);
-  const message = stderrTail || `claude exited with code ${exitCode}`;
+  const message = !drained ? 'Managed child review still running at parent drain deadline'
+    : stderrTail || `claude exited with code ${exitCode}`;
   const aborted = input.input.abortSignal?.aborted;
   await input.deps.runStore.finishRun(input.run.runId, {
     status: aborted ? 'aborted' : 'failed',
@@ -477,6 +539,33 @@ async function updateCardIfPresent(
   const existing = await store.getCard(cardId, { includeDeleted: true });
   if (!existing) return;
   await store.updateCard(cardId, input);
+}
+
+/** Card writes for a managed child carry its run id, the only writer the store accepts. */
+async function writeClaudeCard(
+  deps: ClaudeAdapterDeps, run: RuntimeRun, cardId: string, updates: UpdateCardInput,
+): Promise<void> {
+  if (!run.delegation) {
+    await deps.store.updateCard(cardId, updates);
+    return;
+  }
+  try {
+    await deps.store.updateCard(cardId, updates, run.runId);
+  } catch (error) {
+    // A purged managed child keeps its run record; the run stays readable.
+    if (error instanceof Error && error.message === `Card not found: ${cardId}`) return;
+    throw error;
+  }
+}
+
+async function finalizeClaudeDelegation(
+  deps: ClaudeAdapterDeps, run: RuntimeRun, updates: UpdateCardInput,
+  status: 'completed' | 'failed', error?: string, exitCode?: number,
+): Promise<void> {
+  const current = await deps.runStore.getRun(run.runId);
+  if (!current || !['starting', 'running'].includes(current.status)) return;
+  await writeClaudeCard(deps, run, run.cardId, { ...updates, staleStatus: null, staleDetectedAt: null });
+  await deps.runStore.finishRun(run.runId, { status, error, exitCode });
 }
 
 async function readTail(path: string): Promise<string> {
