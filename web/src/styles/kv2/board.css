@@ -3287,6 +3287,58 @@
   opacity: 0.94;
 }
 
+/* Board card (`layout="card"`): the chip takes its own full-width row above
+   the buttons, shows the queue position (`⏭ NEXT` / `⏭ #N`, same as the queue
+   panel) and up to two lines of the target title. Text uses the primary text
+   token: `--kv2-ink-pure` on the dark-theme purple was nearly unreadable. */
+.kv2-card-actions .kv2-card-queue-target--card {
+  order: -1;
+  flex: 1 0 100%;
+  align-items: flex-start;
+  gap: 6px;
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  padding: 5px 8px;
+  color: var(--kv2-text-primary);
+  line-height: 1.35;
+}
+
+.kv2-card-queue-target--card .kv2-card-queue-target-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.kv2-card-queue-target-pos {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--kv2-surface);
+  color: var(--kv2-text-primary);
+  font-family: var(--kv2-font-mono);
+  font-size: var(--kv2-text-2xs);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.kv2-card-queue-target-lead {
+  color: var(--kv2-text-secondary);
+  font-weight: 600;
+}
+
+/* With a queue chip, the actions box dissolves into the footer row so the
+   chip spans the whole card (row 1) and `▶ 시작 · 큐 해제 ··· ✕` share row 2 —
+   `✕` no longer wraps onto a line of its own. */
+.kv2-card-actions:has(.kv2-card-queue-target--card) {
+  display: contents;
+}
+
 /* ── Card Actions ────────────────────────────────────────── */
 .kv2-card-actions-wrapper {
   display: flex;
@@ -3503,7 +3555,8 @@
 
 .kv2-work-head {
   display: flex;
-  align-items: center;
+  /* Top, not centre: a two-line title keeps `● N` · fold · ⋯ on its first line. */
+  align-items: flex-start;
   gap: var(--kv2-sp-2);
   min-width: 0;
   padding: 10px 12px 4px;
@@ -3519,10 +3572,20 @@
   font-size: var(--kv2-text-base);
   font-weight: 800;
   text-align: left;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
+}
+
+/* The Work title is the only board title allowed two lines (session titles
+   and turn prompts stay one line): one line cut `Agent Kanban · 증분 …`. */
+.kv2-work-title-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: keep-all;
 }
 
 /* Head + meta: one click target for the Work popup. */
@@ -3600,8 +3663,35 @@
    name, capped so a long name still truncates. (The session id lives on the
    meta row's end now — A′ — so it no longer competes here.) */
 .kv2-work .kv2-complete-session-top .kv2-project-chip {
-  flex: 0 0 auto;
+  /* Shrinks only as a last resort and never below 9ch (no `ag` again):
+     with `flex: 0 0 auto` a long name pushed the resume id past the card's
+     right edge (its `↩` got clipped). */
+  flex: 0 1 auto;
+  min-width: min(9ch, 100%);
   max-width: max(9ch, 60%);
+}
+
+/* Inside a Work a narrow session header drops the runtime name and keeps
+   its icon (name stays in the badge's `title` and for screen readers), so
+   `● N` and the resume id stay on row ① inside the card. */
+.kv2-work .kv2-complete-session-header {
+  container: kv2-work-session-header / inline-size;
+}
+
+@container kv2-work-session-header (max-width: 360px) {
+  .kv2-complete-session-top > .kv2-runtime-badge {
+    gap: 0;
+    padding: 3px 5px;
+  }
+
+  .kv2-complete-session-top > .kv2-runtime-badge .kv2-runtime-badge-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .kv2-work .kv2-complete-session-top-meta {

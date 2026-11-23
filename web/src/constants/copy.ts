@@ -209,6 +209,13 @@ export const CARD_ACTION_COPY = {
   archive: '아카이브',
 } as const;
 
+/** Board card queue chip (`QueueTargetChip layout="card"`). The position
+ *  reads the same as the queue settings panel's `⏭ NEXT` / `⏭ #N`. */
+export const QUEUE_TARGET_COPY = {
+  position: (position: number) => (position === 1 ? '⏭ NEXT' : `⏭ #${position}`),
+  after: '완료 후 시작 ←',
+} as const;
+
 /** Column header `⋯` menu. */
 export const COLUMN_MENU_COPY = {
   hideAll: '모두 숨기기',

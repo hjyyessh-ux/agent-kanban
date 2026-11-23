@@ -4,7 +4,7 @@ import codexIconUrl from '../../assets/codex-icon-transparent.png';
 import dotsFelipeUrl from '../../assets/dots-felipe.webp';
 import { ScheduledDispatchBadge } from '../shared/ScheduledDispatchUi';
 import type { ChildItem, V2CardViewModel } from './board-selectors';
-import { CARD_ACTION_COPY } from '../../constants/copy';
+import { CARD_ACTION_COPY, QUEUE_TARGET_COPY } from '../../constants/copy';
 import { primaryActionFor, secondaryActionFor, type CardActionKind } from '../../constants/card-actions';
 
 export const ActionSpinner: React.FC = () => (
@@ -237,33 +237,52 @@ export const QueueTargetChip: React.FC<{
   queuePosition: number | undefined;
   queueSessionMode: V2CardViewModel['queueSessionMode'];
   onClick?: () => void;
-}> = ({ queueTargetTitle, queuedAfterCardId, queuePosition, queueSessionMode, onClick }) => {
+  /** `card`: the board card's own full-width row — visible position badge,
+   *  direction lead and a two-line target title. `inline` (List row): one line. */
+  layout?: 'inline' | 'card';
+}> = ({ queueTargetTitle, queuedAfterCardId, queuePosition, queueSessionMode, onClick, layout = 'inline' }) => {
   if (!queuedAfterCardId) return null;
 
   const title = queueTargetTitle ?? 'Queued target';
   const chipLabel = queueTargetTitle ? `🔗 ${queueTargetTitle}` : 'Queued target';
   const modeHint = queueSessionMode === 'continue_queued_after_session' ? 'Continue session' : 'New session';
   const posHint = queuePosition === 1 ? 'Next up' : queuePosition ? `Queued #${queuePosition}` : 'Queued';
+  const isCard = layout === 'card';
+  const className = `kv2-card-queue-target${isCard ? ' kv2-card-queue-target--card' : ''}`;
+
+  const content = isCard ? (
+    <>
+      {queuePosition ? (
+        <span className="kv2-card-queue-target-pos">{QUEUE_TARGET_COPY.position(queuePosition)}</span>
+      ) : null}
+      <span className="kv2-card-queue-target-text">
+        <span className="kv2-card-queue-target-lead">🔗 {QUEUE_TARGET_COPY.after}</span>{' '}
+        {title}
+      </span>
+    </>
+  ) : (
+    <span className="kv2-card-queue-target-text">{chipLabel}</span>
+  );
 
   if (onClick) {
     return (
       <button
         type="button"
-        className="kv2-card-queue-target"
+        className={className}
         title={`${posHint} · ${modeHint} · ${title}`}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
         }}
       >
-        <span className="kv2-card-queue-target-text">{chipLabel}</span>
+        {content}
       </button>
     );
   }
 
   return (
-    <span className="kv2-card-queue-target" title={`${posHint} · ${modeHint} · ${title}`}>
-      <span className="kv2-card-queue-target-text">{chipLabel}</span>
+    <span className={className} title={`${posHint} · ${modeHint} · ${title}`}>
+      {content}
     </span>
   );
 };
@@ -400,6 +419,7 @@ export const CardActions: React.FC<CardActionsProps> = ({
           queuePosition={vm.queuePosition}
           queueSessionMode={vm.queueSessionMode}
           onClick={onQueueOpen}
+          layout="card"
         />
 
       </div>
