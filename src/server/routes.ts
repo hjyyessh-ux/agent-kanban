@@ -181,6 +181,8 @@ import type { ExternalDelegationService } from '../plugin/runtimes/external-dele
 import type { ExternalDelegationRequest } from '../core/types';
 import { ManagedDelegationConflict } from '../core/store';
 import { RuntimeDispatchError } from '../plugin/runtimes/types';
+import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
+import { configuredPromptProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
@@ -1357,9 +1359,11 @@ export function createRouteHandler(
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
+  promptRefinementRoute?: PromptRefinementRoute,
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
 ) {
+  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(configuredPromptProvider(process.env));
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
       ? new ScriptExecutionService({
@@ -1474,6 +1478,13 @@ export function createRouteHandler(
       }
     }
 
+    if (path === PROMPT_PROPOSAL_PATH) {
+      if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress))
+        return errorResponse('Local client required', 403);
+      if (!localToken || !hasAuthorizedBearerToken(req, localToken))
+        return errorResponse('Unauthorized', 401);
+      return promptProposal(req);
+    }
     if (localToken && requiresLocalAuth(method, path)) {
       if (!hasAuthorizedBearerToken(req, localToken)) {
         return errorResponse('Unauthorized', 401);

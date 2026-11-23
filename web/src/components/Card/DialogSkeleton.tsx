@@ -72,7 +72,8 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
             onClose();
             return;
           }
-          e.stopPropagation();
+          // Let the shared window-level focus trap handle Tab, including portal dialogs.
+          if (e.key !== 'Tab') e.stopPropagation();
         }}
       >
         <div className="kv2-dialog-header">

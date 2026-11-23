@@ -325,9 +325,9 @@ describe('managed external delegation', () => {
       const args: Parameters<typeof createRouteHandler> = [f.store];
       args[11] = () => 'board-peer-test-token';
       args[17] = f.host.runStore;
-      args[23] = f.host.delegations;
+      args[24] = f.host.delegations;
       const operator = 'A'.repeat(43);
-      args[24] = () => operator;
+      args[25] = () => operator;
       const { handleRequest } = createRouteHandler(...args);
       const local = (request: Request) => handleRequest(request, { clientAddress: '127.0.0.1' });
       const remote = await handleRequest(new Request('http://localhost/api/delegations/local-review', {

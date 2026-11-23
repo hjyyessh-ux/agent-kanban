@@ -175,6 +175,7 @@ export class ServerMonitor {
       this.scriptExecutionService,
       this.workStore,
       this.boardHistory,
+      undefined,
       this.delegations,
       this.delegationOperatorToken,
     );

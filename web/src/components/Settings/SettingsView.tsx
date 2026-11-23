@@ -5,6 +5,7 @@ import { CLAUDE_MODELS, CODEX_MODELS } from '../../../../src/core/runtime-config
 import { fetchModels, type ModelInfo } from '../../hooks/useKanbanApi';
 import { readSyncedCatalog, useModelSync } from '../../hooks/useModelCatalog';
 import { fetchSetting } from '../../hooks/useSettingsApi';
+import { PromptRefinementModelsPanel } from './PromptRefinementModelsPanel';
 import { useFontScale } from '../../hooks/useFontScale';
 import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import { SettingsEntryModal } from './SettingsEntryModal';
@@ -358,6 +359,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <SettingsMaintenancePanel />
 
+      <PromptRefinementModelsPanel />
       {/* Model Visibility Filter */}
       <div className="settings-model-filter">
         <div className="settings-model-filter-header">

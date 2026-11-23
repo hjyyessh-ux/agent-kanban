@@ -8,6 +8,7 @@ import type { ScriptStore } from '../core/script-store';
 import type { QuickActionStore } from '../core/quick-action-store';
 import type { WorkStore } from '../core/work-store';
 import type { ExternalDelegationService } from '../plugin/runtimes/external-delegation-service';
+import type { PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import type { ScriptExecutionService } from '../plugin/script-execution-service';
 import type { SkillStore } from '../core/skill-store';
@@ -88,6 +89,7 @@ export function createServer(
   scriptExecutionService?: ScriptExecutionService,
   workStore?: WorkStore,
   boardHistory?: BoardHistoryService,
+  promptRefinementRoute?: PromptRefinementRoute,
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
 ): ServerInstance {
@@ -115,6 +117,7 @@ export function createServer(
     scriptExecutionService,
     workStore,
     boardHistory,
+    promptRefinementRoute,
     delegations,
     delegationOperatorToken,
   );
