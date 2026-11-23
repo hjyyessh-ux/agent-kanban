@@ -1,12 +1,12 @@
 /**
- * Browser test for the Settings → 카드·Works History status panel (390px + desktop).
+ * Browser test for the Settings → 카드·작업 이력 status panel (390px + desktop).
  *
  * Runs only via `playwright.board-history.config.ts`. Spawns the real daemon on
  * a throwaway HOME / KANBAN_DATA_DIR and a free loopback port (never 24680),
  * with a synthetic consumer token. Requires a built SPA (`bun run build:web`).
  * Screenshots: e2e/results/board-history-status-*.png
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -81,7 +81,35 @@ async function openSettings(page: Page) {
   await page.goto(base + '/');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('tab', { name: 'Settings', exact: true }).click();
-  return page.getByRole('region', { name: '카드·Works History 구독' });
+  return page.getByRole('region', { name: '카드·작업 이력 구독' });
+}
+
+async function textContrast(locator: Locator) {
+  return locator.evaluate(el => {
+    // Canvas resolves modern color(srgb …) from dark-theme color-mix(), as
+    // well as older rgb/rgba values, to 8-bit sRGB sample channels.
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d')!;
+    const rgb = (value: string) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = value;
+      ctx.fillRect(0, 0, 1, 1);
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data);
+    };
+    const lum = ([r, g, b]: number[]) => [r, g, b].map(c => c / 255)
+      .map((c, i) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][i])
+      .reduce((a, b) => a + b);
+    let bg: number[] | undefined;
+    for (let it: Element | null = el; it; it = it.parentElement) {
+      const col = rgb(getComputedStyle(it).backgroundColor);
+      if (col[3] === 255) { bg = col; break; }
+      if (col[3] > 0) throw new Error('contrast test requires an opaque or transparent fill');
+    }
+    if (!bg) throw new Error('cannot measure contrast without a background');
+    const values = [lum(rgb(getComputedStyle(el).color)), lum(bg)].sort((a, b) => b - a);
+    return (values[0] + 0.05) / (values[1] + 0.05);
+  });
 }
 
 function watch(page: Page) {
@@ -113,7 +141,11 @@ test('desktop: OFF before install, then registered with gap/pending/counts; refr
 
   await panel.getByRole('button', { name: '상태 다시 읽기' }).click();
   await expect(panel.getByText('구독 등록됨')).toBeVisible();
-  await expect(panel.getByText('설치 전 미기록 구간 있음')).toBeVisible();
+  const warning = panel.getByText('설치 전 미기록 구간 있음');
+  await expect(warning).toBeVisible();
+  expect(await textContrast(warning)).toBeGreaterThanOrEqual(4.5);
+  await expect(panel.getByRole('status')).toHaveText('최신 상태를 확인했습니다.');
+  await expect(panel.getByRole('button', { name: '상태 다시 읽기' })).toBeFocused();
   const details = panel.locator('details.settings-board-history-details');
   const toggle = details.locator('summary');
   const windowStart = panel.getByText('기록 창 시작 (설치 7일 전, 고정)');
@@ -144,6 +176,7 @@ test('desktop: OFF before install, then registered with gap/pending/counts; refr
   await panel.getByRole('button', { name: '상태 다시 읽기' }).click();
   await expect(panel.getByRole('alert')).toContainText('일시적으로 상태를 읽지 못했습니다.');
   await expect(panel.getByRole('alert')).toContainText('직전에 성공한 조회');
+  expect(await textContrast(panel.getByText(/직전에 성공한 조회/))).toBeGreaterThanOrEqual(4.5);
   await expect(panel.getByText('구독 등록됨')).toBeVisible();
   await expect(windowStart).toBeHidden();
   await panel.screenshot({ path: join(SHOTS, 'history-new-dark-desktop-error.png'), animations: 'disabled' });

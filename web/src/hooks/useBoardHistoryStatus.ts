@@ -25,11 +25,12 @@ export function useBoardHistoryStatus() {
   const [summary, setSummary] = useState<BoardHistoryStatusSummary | null>(null);
   const [failure, setFailure] = useState<BoardHistoryStatusFailure | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [manualRefreshStatus, setManualRefreshStatus] = useState('');
   const requestVersion = useRef(0);
   /** `manual` marks the button press: only it shows the in-flight state. Polls stay quiet. */
   const refresh = useCallback(async (manual: boolean = false) => {
     const version = ++requestVersion.current;
-    if (manual) setRefreshing(true);
+    if (manual) { setRefreshing(true); setManualRefreshStatus(''); }
     let status: number | null = null;
     try {
       const response = await fetch('/api/board-history-status', { method: 'GET', cache: 'no-store' });
@@ -39,6 +40,7 @@ export function useBoardHistoryStatus() {
       if (version !== requestVersion.current) return;
       setSummary(next);
       setFailure(null);
+      if (manual) setManualRefreshStatus(BOARD_HISTORY_COPY.refreshSucceeded);
     } catch {
       if (version !== requestVersion.current) return;
       setFailure({ message: boardHistoryFailureMessage(status), at: new Date().toISOString() });
@@ -49,5 +51,5 @@ export function useBoardHistoryStatus() {
   const poll = useCallback(() => refresh(false), [refresh]);
   useEffect(() => { void poll(); return () => { requestVersion.current++; }; }, [poll]);
   usePolling(poll, 10000);
-  return { summary, failure, refreshing, refresh };
+  return { summary, failure, refreshing, refresh, manualRefreshStatus };
 }

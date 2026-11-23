@@ -111,11 +111,12 @@ export function BoardHistoryStatusContent({ summary }: { summary: BoardHistorySt
   </div>;
 }
 
-export function BoardHistoryStatusView({ summary, failure, refreshing, onRefresh }: {
+export function BoardHistoryStatusView({ summary, failure, refreshing, onRefresh, manualRefreshStatus = '' }: {
   summary: BoardHistoryStatusSummary | null;
   failure: BoardHistoryStatusFailure | null;
   refreshing: boolean;
   onRefresh: () => void;
+  manualRefreshStatus?: string;
 }) {
   return <section className="settings-item settings-board-history-panel" aria-label={COPY.title}>
     <div className="settings-board-history-header">
@@ -124,10 +125,12 @@ export function BoardHistoryStatusView({ summary, failure, refreshing, onRefresh
         <p className="settings-network-desc">{COPY.description}</p>
       </div>
       <button type="button" className="kv2-btn kv2-btn--outline kv2-btn--small"
-        onClick={onRefresh} disabled={refreshing} aria-busy={refreshing || undefined}>
+        onClick={() => { if (!refreshing) onRefresh(); }}
+        aria-disabled={refreshing || undefined} aria-busy={refreshing || undefined}>
         {refreshing ? COPY.refreshing : COPY.refresh}
       </button>
     </div>
+    <span role="status" className="settings-board-history-screen-reader">{manualRefreshStatus}</span>
     {failure && <ErrorAlert title={COPY.errorTitle} variant="inline"
       message={`${failure.message} (${COPY.failedAt(time(failure.at))})${summary ? ` ${COPY.staleNote(time(summary.checkedAt))}` : ''}`} />}
     {summary ? <BoardHistoryStatusContent summary={summary} /> : !failure && <p>{COPY.loading}</p>}
@@ -135,6 +138,7 @@ export function BoardHistoryStatusView({ summary, failure, refreshing, onRefresh
 }
 
 export function BoardHistoryStatusPanel() {
-  const { summary, failure, refreshing, refresh } = useBoardHistoryStatus();
-  return <BoardHistoryStatusView summary={summary} failure={failure} refreshing={refreshing} onRefresh={() => void refresh(true)} />;
+  const { summary, failure, refreshing, refresh, manualRefreshStatus } = useBoardHistoryStatus();
+  return <BoardHistoryStatusView summary={summary} failure={failure} refreshing={refreshing}
+    manualRefreshStatus={manualRefreshStatus} onRefresh={() => void refresh(true)} />;
 }
