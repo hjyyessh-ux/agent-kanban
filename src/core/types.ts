@@ -2065,3 +2065,61 @@ export interface TimelineSnapshot {
   /** Archive month files read for this window — diagnostics for the range heuristic. */
   scannedMonths: string[];
 }
+
+/**
+ * Owner-only, read-only summary of the dedicated Card/Works History
+ * subscription (`GET /api/board-history-status`). Carries no event, entity,
+ * delivery or subscription IDs, no token material and no board content.
+ *
+ * - `registered`: consumer installed and its journal readable.
+ * - `not_registered`: no consumer installed (subscription OFF).
+ * - `inactive`: this process does not serve/capture it (legacy sync active).
+ * - `unavailable`: installed but the sidecar could not be read right now.
+ */
+export type BoardHistorySummaryState = 'registered' | 'not_registered' | 'inactive' | 'unavailable';
+
+export interface BoardHistoryDeclaredGap {
+  kind: 'card' | 'work';
+  from: string;
+  to: string;
+  reason: 'unobserved_writer' | 'interrupted_capture';
+}
+
+export interface BoardHistoryStatusSummary {
+  state: BoardHistorySummaryState;
+  /** Server time this summary was read. */
+  checkedAt: string;
+  /** Present only for `registered`. */
+  registration?: {
+    installedAt: string;
+    /** Fixed at install: install time − 7 days. */
+    windowStart: string;
+    /** When capture of both kinds began; `null` until both baselines exist. */
+    captureStartedAt: string | null;
+    /** Part of the window before capture began: nothing was recorded there. */
+    preCaptureGap: { from: string; to: string } | null;
+    /** Declared gaps after install (most recent ≤ 20) and their total count. */
+    gaps: BoardHistoryDeclaredGap[];
+    gapCount: number;
+    /** An unfinished capture; `null` when none. */
+    pendingSince: string | null;
+    continuousSinceWindowStart: boolean;
+    /** Last time the sidecar appended a change event (journal append time). */
+    lastChangeRecordedAt: string | null;
+    /** Last time a board/Works save was compared by the sidecar (even with no change). */
+    lastSaveObservedAt: string | null;
+    consumer: {
+      /** The server does not record when the consumer read or ACKed; always `false`. */
+      readAndAckTimesCollected: false;
+      /** Append time of the newest ACKed event, if still retained. Not the ACK time. */
+      ackedThroughRecordedAt: string | null;
+      /** A page was handed out and is waiting for ACK. */
+      deliveryAwaitingAck: boolean;
+      /** In-scope events not yet ACKed; `null` when the cursor expired (count would mislead). */
+      unackedEvents: number | null;
+      /** In-scope events ACKed so far; `null` when pruning made the count partial. */
+      ackedEvents: number | null;
+      cursorExpired: boolean;
+    };
+  };
+}
