@@ -17,6 +17,7 @@ import type {
   WorkPruneSessionsResponse,
 } from './types';
 import { FileLock } from './filelock';
+import { fileIdentity, observeSafely, type JsonSaveObserver } from './json-save-observer';
 import { resolveDir } from './data-dir';
 import { selectWorks } from './work-list';
 import {
@@ -67,6 +68,7 @@ export class WorkStore {
   private readonly tmpPath: string;
   private readonly fileLock: FileLock;
   private lockPromise: Promise<void> = Promise.resolve();
+  private changeObserver?: JsonSaveObserver<Work>;
 
   constructor(dataDir: string) {
     this.dataDir = resolveDir(dataDir);
@@ -108,8 +110,26 @@ export class WorkStore {
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
+    const observer = this.changeObserver?.isActive() ? this.changeObserver : undefined;
+    if (observer) observeSafely(() => observer.prepare(fileIdentity(this.worksPath)));
     await Bun.write(this.tmpPath, JSON.stringify(state, null, 2));
     renameSync(this.tmpPath, this.worksPath);
+    if (observer) observeSafely(() => observer.commit(state.works, fileIdentity(this.worksPath)));
+  }
+
+  /** Sidecar observer of saved Works (board-history capture). Called once from boot wiring. */
+  setChangeObserver(observer: JsonSaveObserver<Work>): void {
+    this.changeObserver = observer;
+  }
+
+  /** See `KanbanStore.reconcileChangeObserver`. Reads only; never writes `works.json`. */
+  async reconcileChangeObserver(): Promise<void> {
+    const observer = this.changeObserver;
+    if (!observer?.isActive()) return;
+    await this.withDualLock(async () => {
+      const state = await this.load();
+      observeSafely(() => observer.reconcile(state.works, fileIdentity(this.worksPath)));
+    });
   }
 
   /**

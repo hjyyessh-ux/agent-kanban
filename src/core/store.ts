@@ -21,6 +21,7 @@ import type {
 } from './types';
 import { normalizeCardRequester, WIKI_INTERNAL_MARKER } from './types';
 import { FileLock } from './filelock';
+import { fileIdentity, observeSafely, type JsonSaveObserver } from './json-save-observer';
 import { resolveDir } from './data-dir';
 import { normalizeAgentType } from './agent-type';
 import { normalizeRuntimeCommandId } from './commands';
@@ -236,6 +237,7 @@ export class KanbanStore {
   private readonly fileLock: FileLock;
   private lockPromise: Promise<void> = Promise.resolve();
   private sessionAssignedHook?: SessionAssignedHook;
+  private changeObserver?: JsonSaveObserver<KanbanCard>;
 
   constructor(dataDir: string) {
     this.dataDir = resolveDir(dataDir);
@@ -304,8 +306,36 @@ export class KanbanStore {
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
+    // Optional sidecar observer (board-history). It records intent before and
+    // captures after the rename; a fault there never fails this board write.
+    const observer = this.changeObserver?.isActive() ? this.changeObserver : undefined;
+    if (observer) observeSafely(() => observer.prepare(fileIdentity(this.activePath)));
     await Bun.write(this.tmpPath, JSON.stringify(board, null, 2));
     renameSync(this.tmpPath, this.activePath);
+    if (observer) observeSafely(() => observer.commit(board.cards, fileIdentity(this.activePath)));
+  }
+
+  /** Sidecar observer of saved cards (board-history capture). Called once from boot wiring. */
+  setChangeObserver(observer: JsonSaveObserver<KanbanCard>): void {
+    this.changeObserver = observer;
+  }
+
+  /**
+   * Lets the observer catch up with the file on disk (boot, consumer reads):
+   * covers a crash between rename and capture and writers without an observer.
+   * Takes the board lock, reads only; never writes `active.json`.
+   */
+  async reconcileChangeObserver(): Promise<void> {
+    const observer = this.changeObserver;
+    if (!observer?.isActive()) return;
+    await this.withDualLock(async () => {
+      const identity = fileIdentity(this.activePath);
+      // Do not invoke load(): its legacy migration can write active.json during a consumer GET.
+      const board = identity === 'missing'
+        ? this.defaultBoard()
+        : migrateStatuses(JSON.parse(await Bun.file(this.activePath).text()) as KanbanBoard);
+      observeSafely(() => observer.reconcile(board.cards, identity));
+    });
   }
 
   async createCard(input: CreateCardInput): Promise<KanbanCard> {
