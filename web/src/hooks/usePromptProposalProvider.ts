@@ -13,7 +13,7 @@ export function usePromptProposalProvider(injected?: PromptProposalProvider) {
         if (!res.ok || ctrl.signal.aborted) return;
         const data = await res.json() as {provider?: {provider?: string; model?: string; models?: unknown} | null};
         const value = data?.provider;
-        if (ctrl.signal.aborted || value?.provider !== 'OpenAI' || typeof value.model !== 'string' ||
+        if (ctrl.signal.aborted || (value?.provider !== 'OpenAI' && value?.provider !== 'Codex CLI') || typeof value.model !== 'string' ||
             !PROMPT_MODEL_PATTERN.test(value.model)) return;
         const {provider, model} = value;
         const listed = Array.isArray(value.models)

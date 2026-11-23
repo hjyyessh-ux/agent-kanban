@@ -182,7 +182,7 @@ import type { ExternalDelegationRequest } from '../core/types';
 import { ManagedDelegationConflict } from '../core/store';
 import { RuntimeDispatchError } from '../plugin/runtimes/types';
 import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
-import { configuredPromptProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
+import { selectPromptRefinementProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
 import { detectPlaintextSecret } from '../core/secret-detect';
@@ -1363,7 +1363,7 @@ export function createRouteHandler(
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
 ) {
-  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(configuredPromptProvider(process.env));
+  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(selectPromptRefinementProvider(process.env));
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
       ? new ScriptExecutionService({

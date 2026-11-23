@@ -133,7 +133,7 @@ export function PromptRefinement({value, onChange, disabled, aiProvider: injecte
             {isAi && aiProvider ? <>
               <PromptModelPicker provider={aiProvider.provider} models={models} selected={selectedModel}
                 defaultModel={aiProvider.model} disabled={disabled || ai.loading} onSelect={setModel}/>
-              <p className="kv2-prompt-refinement-hint">카드 실행 모델과 별개입니다. 제안 생성을 누를 때만 원문과 선택 입력값이 모델에 전송됩니다. API 사용료와 제공자 데이터 정책이 적용될 수 있습니다.</p>
+              <p className="kv2-prompt-refinement-hint">카드 실행 모델과 별개입니다. 제안 생성을 누를 때만 원문과 선택 입력값이 모델에 전송됩니다. {aiProvider.provider === 'Codex CLI' ? 'Mac의 Codex로 실행하지만 원문은 OpenAI로 전송되며 구독 한도와 데이터 정책이 적용될 수 있습니다.' : 'API 사용료와 제공자 데이터 정책이 적용될 수 있습니다.'}</p>
             </> : <p className="kv2-prompt-refinement-hint">{hasAi?'로컬 템플릿에서는 외부로 보내지 않습니다.':'연결된 다듬기 모델이 없습니다. 로컬 템플릿은 외부 전송 없이 사용할 수 있습니다.'}</p>}
             <div className="kv2-refine-loop">
               <label className="kv2-prompt-refinement-loop"><input type="checkbox" checked={loopOn} disabled={disabled || ai.loading}
