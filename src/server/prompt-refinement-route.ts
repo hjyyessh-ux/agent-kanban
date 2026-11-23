@@ -1,3 +1,4 @@
+import { CODEX_REFINEMENT, configuredCodexRefiner, type CodexRefiner } from './prompt-refinement-codex';
 import {
   buildProposalInput, MAX_REFINEMENT_INPUT, PROMPT_LOOP_SKILL, PROMPT_MODEL_PATTERN, PROMPT_PROPOSAL_SKILL,
   proposalSchema, readLoopOptions, readPromptModels, readPromptProposal, type PromptLoopOptions,
@@ -16,6 +17,13 @@ export function configuredPromptProvider(env: Record<string, string | undefined>
   const model = env.KANBAN_PROMPT_OPENAI_MODEL?.trim();
   return env.KANBAN_PROMPT_AI_ENABLED === 'true' && apiKey && model && PROMPT_MODEL_PATTERN.test(model)
     ? {apiKey, model, models: readPromptModels(model, env.KANBAN_PROMPT_OPENAI_MODELS)} : undefined;
+}
+
+/** Explicit Codex selection never uses a different transport if unavailable. */
+export function selectPromptRefinementProvider(env: Record<string, string | undefined>): Config | CodexRefiner | undefined {
+  if (env.KANBAN_PROMPT_CODEX_ENABLED !== undefined && env.KANBAN_PROMPT_CODEX_ENABLED !== 'false')
+    return configuredCodexRefiner(env);
+  return configuredPromptProvider(env);
 }
 
 async function boundedJson(body: ReadableStream<Uint8Array> | null, signal: AbortSignal): Promise<unknown> {
@@ -39,13 +47,13 @@ async function boundedJson(body: ReadableStream<Uint8Array> | null, signal: Abor
   } finally { signal.removeEventListener('abort', cancel); reader.releaseLock(); }
 }
 
-export function createPromptRefinementRoute(config: Config | undefined, request: Fetch = fetch) {
+export function createPromptRefinementRoute(config: Config | CodexRefiner | undefined, request: Fetch = fetch) {
   let busy = false;
   const json = (value: unknown, status = 200) => Response.json(value, {status, headers:{'Cache-Control':'no-store'}});
   return async (req: Request): Promise<Response> => {
     if (new URL(req.url).search) return json({error:'unsupported_query'}, 400);
     const models = config ? config.models ?? [config.model] : [];
-    if (req.method === 'GET') return json({provider: config ? {provider:'OpenAI', model:config.model, models} : null});
+    if (req.method === 'GET') return json({provider: config ? {provider:'provider' in config ? CODEX_REFINEMENT : 'OpenAI', model:config.model, models} : null});
     if (req.method !== 'POST') return json({error:'method_not_allowed'}, 405);
     if (!config) return json({error:'provider_unavailable'}, 503);
     if (req.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase() !== 'application/json')
@@ -64,14 +72,19 @@ export function createPromptRefinementRoute(config: Config | undefined, request:
       let loop: PromptLoopOptions | undefined;
       try { loop = 'loop' in body ? readLoopOptions(body.loop) : undefined; }
       catch { return json({error:'invalid_body'},400); }
-      // Provider/model come only from the server allow-list; the endpoint is a fixed constant.
-      if (provider !== 'OpenAI' || typeof model !== 'string' || !models.includes(model))
+      // Provider/model come only from the server allow-list; the transport is selected by the server.
+      if (provider !== ('provider' in config ? CODEX_REFINEMENT : 'OpenAI') || typeof model !== 'string' || !models.includes(model))
         return json({error:'provider_changed'},409);
       if (req.signal.aborted) return json({error:'proposal_cancelled'}, 408);
       try {
         const signal = AbortSignal.any([req.signal, AbortSignal.timeout(45_000)]);
         const instructions=loop ? PROMPT_PROPOSAL_SKILL + '\n' + PROMPT_LOOP_SKILL : PROMPT_PROPOSAL_SKILL;
         const input=buildProposalInput(source,loop);
+        if ('propose' in config) {
+          const output=await config.propose(model,instructions,input,signal);
+          if(signal.aborted) throw Error('cancelled');
+          return json(readPromptProposal(source,output,loop ? [loop.goal,loop.doneWhen] : []));
+        }
         const response = await request(ENDPOINT, {
           method:'POST', redirect:'error', signal,
           headers:{authorization:'Bearer ' + config.apiKey, 'content-type':'application/json'},
