@@ -1,10 +1,16 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { lstatSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
 import { FileLock } from './filelock';
 
 type DocumentKey = 'cards' | 'works' | `archive:${string}`;
 type WriteContext = { db: Database; afterCommit: (() => void)[]; active: boolean };
 type Document = { body: string; revision: number };
+export const SQLITE_BOARD_SCHEMA = `CREATE TABLE IF NOT EXISTS board_documents (
+  key TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)),
+  revision INTEGER NOT NULL CHECK(revision>0), legacy_identity TEXT
+) STRICT`;
 const archivePrefix = 'archive:';
 
 /**
@@ -17,15 +23,14 @@ export class SqliteBoardStorage {
   private readonly lock: FileLock;
   private waiting: Promise<void> = Promise.resolve();
 
-  constructor(private readonly path: string) {
+  constructor(private readonly path: string, create = true) {
     this.lock = new FileLock(path + '.write-lock');
-    const db = new Database(path,{create:true,strict:true});
+    const db = new Database(path,{create,strict:true});
     try {
-      db.exec(`PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
-        CREATE TABLE IF NOT EXISTS board_documents (
-          key TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)),
-          revision INTEGER NOT NULL CHECK(revision>0)
-        ) STRICT`);
+      db.exec('PRAGMA busy_timeout=3000');
+      if(!create)db.query('SELECT key,body,revision,legacy_identity FROM board_documents LIMIT 0').all();
+      db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
+      if(create)db.exec(SQLITE_BOARD_SCHEMA);
     } finally { db.close(); }
   }
 
@@ -43,9 +48,9 @@ export class SqliteBoardStorage {
   }
 
   identity(key:'cards'|'works'):string {
-    const row=this.read(db=>db.query<Pick<Document,'revision'>,[string]>(
-      'SELECT revision FROM board_documents WHERE key=?').get(key));
-    return row ? `sqlite-board-v1:${key}:${row.revision}` : 'missing';
+    const row=this.read(db=>db.query<Pick<Document,'revision'> & { legacy_identity:string|null },[string]>(
+      'SELECT revision,legacy_identity FROM board_documents WHERE key=?').get(key));
+    return row ? row.legacy_identity ?? `sqlite-board-v1:${key}:${row.revision}` : 'missing';
   }
 
   archiveMonths():string[] {
@@ -58,7 +63,7 @@ export class SqliteBoardStorage {
     const tx=this.scope.getStore();
     if(!tx?.active) throw new Error('SQLite board write requires a transaction');
     tx.db.run(`INSERT INTO board_documents (key,body,revision) VALUES (?,?,1)
-      ON CONFLICT(key) DO UPDATE SET body=excluded.body,revision=revision+1`,[key,JSON.stringify(value)]);
+      ON CONFLICT(key) DO UPDATE SET body=excluded.body,revision=revision+1,legacy_identity=NULL`,[key,JSON.stringify(value)]);
   }
 
   inWrite():boolean {return this.scope.getStore()?.active===true;}
@@ -97,4 +102,33 @@ export class SqliteBoardStorage {
       });
     } finally {release();}
   }
+}
+
+
+export const SQLITE_STORAGE_MARKER = '.board-storage';
+export const SQLITE_STORAGE_VERSION = 'sqlite-v1\n';
+const openStores = new Map<string,SqliteBoardStorage>();
+
+/** Existing app and maintenance stores use one backend selector. Selecting
+ * SQLite requires an already provisioned DB; an invalid marker or absent
+ * DB fails closed rather than opening the old JSON. */
+export function selectSqliteBoardStorage(dataDir:string):SqliteBoardStorage|undefined {
+  const marker=join(dataDir,SQLITE_STORAGE_MARKER);
+  const path=join(dataDir,'board.sqlite');
+  let stat;
+  try {stat=lstatSync(marker);}
+  catch(error) {
+    if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;
+    try {lstatSync(path);}
+    catch(err){if((err as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw err;}
+    throw Error('SQLite Board exists but its activation marker is missing');
+  }
+  if(!stat.isFile()||stat.size!==SQLITE_STORAGE_VERSION.length||readFileSync(marker,'utf8')!==SQLITE_STORAGE_VERSION)
+    throw Error('Invalid Board backend marker');
+  if(!lstatSync(path).isFile())throw Error('Invalid SQLite Board file');
+  const existing=openStores.get(path);
+  if(existing)return existing;
+  const opened=new SqliteBoardStorage(path,false);
+  openStores.set(path,opened);
+  return opened;
 }

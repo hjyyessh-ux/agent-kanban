@@ -1,9 +1,11 @@
 import {expect,test} from 'bun:test';
-import {existsSync,readFileSync} from 'node:fs';
+import {existsSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {SqliteBoardStorage} from '../core/sqlite-board-storage';
+import {SqliteBoardStorage,SQLITE_STORAGE_MARKER,SQLITE_STORAGE_VERSION} from '../core/sqlite-board-storage';
 import {KanbanStore} from '../core/store';
 import {WorkStore} from '../core/work-store';
+import {BoardHistoryService,installBoardHistory,observeCards} from '../core/board-history';
+import {importFrozenBoard} from '../core/import-frozen-board';
 import {withTempDir} from './setup';
 
 const setup=(dir:string)=>{
@@ -56,7 +58,28 @@ test('concurrent existing store instances preserve writes without touching JSON'
   expect(existsSync(join(dir,'active.json'))).toBe(false);
 }));
 
-test('normal application bootstrap serves its existing routes over one SQLite-backed process',()=>withTempDir(async dir=>{
+test('normal application bootstrap serves its existing routes over one SQLite-backed process',()=>withTempDir(async fixturePath=>{
+  const dir=realpathSync(fixturePath);
+  const legacy = new KanbanStore(dir);
+  const prior = await legacy.createCard({title:'preexisting JSON fixture',description:''});
+  const historyToken='test_history_token_0123456789abcdef';
+  await installBoardHistory({dataDir:dir,subscriptionId:'fixture',token:historyToken});
+  const history=new BoardHistoryService(dir);
+  let pending:ReturnType<BoardHistoryService['page']>;
+  try {
+    legacy.setChangeObserver(history.observer('card',observeCards));
+    await legacy.updateCard(prior.id,{status:'in_progress'});
+    pending=history.page(20);
+    expect(pending.deliveryId).not.toBeNull();
+  } finally {history.close();}
+  const old=readFileSync(join(dir,'active.json'));
+  const sqlite=join(dir,'board.sqlite');
+  expect(importFrozenBoard(dir,sqlite)).toBe(1);
+  expect(()=>importFrozenBoard(dir,sqlite)).toThrow('Destination Board already exists');
+  expect(()=>new WorkStore(dir)).toThrow('activation marker is missing');
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+
+
   const originProbe=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response()});
   const port=originProbe.port;
   originProbe.stop(true);
@@ -80,6 +103,19 @@ test('normal application bootstrap serves its existing routes over one SQLite-ba
       return await fetch(base+path,{method,headers:{authorization:'Bearer '+token,'content-type':'application/json'},
         body:body===undefined?undefined:JSON.stringify(body)});
     }
+    const historyHeaders={authorization:'Bearer '+historyToken,'content-type':'application/json'};
+    const getHistory=async()=>{
+      const r=await fetch(base+'/api/board-history/events',{headers:historyHeaders});
+      expect(r.status).toBe(200);
+      return await r.json() as typeof pending;
+    };
+    const carried=await getHistory();
+    expect(carried.deliveryId).toBe(pending.deliveryId);
+    expect(carried.events).toEqual(pending.events);
+    expect(carried.coverage.gaps).toEqual(pending.coverage.gaps);
+    const ack=await fetch(base+'/api/board-history/ack',{method:'POST',headers:historyHeaders,
+      body:JSON.stringify({deliveryId:carried.deliveryId})});
+    expect(ack.status).toBe(200);
     const added=await api('POST','/api/cards',{title:'SQLite via canonical API',description:'fixture'});
     expect(added.status).toBe(201);
     const card=await added.json() as {id:string};
@@ -100,10 +136,39 @@ test('normal application bootstrap serves its existing routes over one SQLite-ba
     const work=await api('POST','/api/works',{title:'SQLite Work via same API'});
     expect(work.ok).toBe(true);
     expect(existsSync(join(dir,'board.sqlite'))).toBe(true);
-    expect(existsSync(join(dir,'active.json'))).toBe(false);
+    expect(readFileSync(join(dir,'active.json'))).toEqual(old);
     expect(existsSync(join(dir,'works.json'))).toBe(false);
+    const next=await getHistory();
+    expect(next.deliveryId).not.toBe(carried.deliveryId);
+    expect(next.events.some(e=>e.entityId===card.id && e.operation==='create')).toBe(true);
+    expect(next.events.every(e=>e.sequence>carried.throughSequence)).toBe(true);
   } finally {
     proc.stdin.end();
     await proc.exited;
   }
 }),10_000);
+
+test('normal backend selector refuses incomplete and corrupt activation',()=>withTempDir(async dir=>{
+  const sqlite=join(dir,'board.sqlite'), marker=join(dir,SQLITE_STORAGE_MARKER);
+  writeFileSync(marker,'unknown format');
+  expect(()=>new KanbanStore(dir)).toThrow('Invalid Board backend marker');
+  writeFileSync(marker,SQLITE_STORAGE_VERSION);
+  expect(()=>new KanbanStore(dir)).toThrow();
+  writeFileSync(sqlite,'invalid SQLite body');
+  expect(()=>new WorkStore(dir)).toThrow();
+  expect(existsSync(join(dir,'active.json'))).toBe(false);
+}));
+
+test('a new History installation snapshots the current SQLite store, not leftover JSON',()=>withTempDir(async dir=>{
+  const s=setup(dir);
+  const card=await s.cards.createCard({title:'on SQLite before History',description:''});
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+  await installBoardHistory({dataDir:dir,subscriptionId:'fixture',token:'fixture_history_token_0123456789abc'});
+  const history=new BoardHistoryService(dir);
+  try {
+    s.cards.setChangeObserver(history.observer('card',observeCards));
+    await s.cards.updateCard(card.id,{status:'in_progress'});
+    expect(history.page().events).toMatchObject([{entityId:card.id,operation:'update'}]);
+    expect(history.status().coverage.gaps).toEqual([]);
+  } finally {history.close();}
+}));

@@ -1,4 +1,4 @@
-import type { SqliteBoardStorage } from './sqlite-board-storage';
+import { selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
@@ -71,7 +71,7 @@ export class WorkStore {
   private lockPromise: Promise<void> = Promise.resolve();
   private changeObserver?: JsonSaveObserver<Work>;
 
-  constructor(dataDir: string, private readonly sqlite?: SqliteBoardStorage) {
+  constructor(dataDir: string, private readonly sqlite: SqliteBoardStorage|undefined = selectSqliteBoardStorage(resolveDir(dataDir))) {
     this.dataDir = resolveDir(dataDir);
     this.worksPath = join(this.dataDir, 'works.json');
     this.tmpPath = join(this.dataDir, '.works.json.tmp');

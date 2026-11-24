@@ -1,12 +1,9 @@
-import { join } from 'node:path';
-import { SqliteBoardStorage } from '../../core/sqlite-board-storage';
 import { createKanbanApp } from '../../plugin/bootstrap';
 
 const dataDir = process.env.KANBAN_DATA_DIR;
 if (!dataDir || !process.env.KANBAN_PORT) throw Error('Explicit fixture paths/port required');
-const boardStorage = new SqliteBoardStorage(join(dataDir,'board.sqlite'));
 const app = await createKanbanApp({
-  dataDir,boardStorage, opencodeInput:null, debugLabel:'fixture.sqlite',
+  dataDir, opencodeInput:null, debugLabel:'fixture.sqlite',
   createDispatch: async ({store}) => ({
     dispatchCard:async id=>{
       const card=await store.getCard(id);

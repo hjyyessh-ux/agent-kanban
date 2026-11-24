@@ -1,4 +1,4 @@
-import type { SqliteBoardStorage } from './sqlite-board-storage';
+import { selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
 import { selectArchiveCards } from './archive-selection';
 import { Buffer } from 'node:buffer';
 import { existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
@@ -245,7 +245,7 @@ export class KanbanStore {
   private sessionAssignedHook?: SessionAssignedHook;
   private changeObserver?: JsonSaveObserver<KanbanCard>;
 
-  constructor(dataDir: string, private readonly sqlite?: SqliteBoardStorage) {
+  constructor(dataDir: string, private readonly sqlite: SqliteBoardStorage|undefined = selectSqliteBoardStorage(resolveDir(dataDir))) {
     this.dataDir = resolveDir(dataDir);
     this.activePath = join(this.dataDir, 'active.json');
     this.archiveDir = join(this.dataDir, 'archive');
