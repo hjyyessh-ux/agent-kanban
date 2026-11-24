@@ -1973,10 +1973,8 @@ export class KanbanStore {
 
   // ─── Screenshot Methods ──────────────────────────────────────────
 
-  private ensureScreenshotDir(): void {
-    if (!existsSync(this.screenshotDir)) {
-      mkdirSync(this.screenshotDir, { recursive: true });
-    }
+  private ensureScreenshotDir():boolean {
+    return mkdirSync(this.screenshotDir,{recursive:true})!==undefined;
   }
 
   /**
@@ -2017,13 +2015,17 @@ export class KanbanStore {
         throw new Error(`Card not found: ${cardId}`);
       }
       if (this.sqlite) {
-        this.ensureScreenshotDir();
+        const created=this.ensureScreenshotDir();
         const fd=openSync(filePath,'wx',0o600);
         this.sqlite.afterFinish(null,()=>{try{unlinkSync(filePath);}catch{/* best-effort cleanup on known rollback */}});
         try {writeFileSync(fd,new Uint8Array(fileData));fsyncSync(fd);}
         finally {closeSync(fd);}
         const directory=openSync(this.screenshotDir,constants.O_RDONLY|constants.O_DIRECTORY);
         try {fsyncSync(directory);} finally {closeSync(directory);}
+        if(created){
+          const parent=openSync(this.dataDir,constants.O_RDONLY|constants.O_DIRECTORY);
+          try {fsyncSync(parent);} finally {closeSync(parent);}
+        }
       }
       const card = board.cards[index];
       card.screenshots = card.screenshots ?? [];
