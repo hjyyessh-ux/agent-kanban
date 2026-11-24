@@ -1696,34 +1696,36 @@ export function createRouteHandler(
       const { from, to } = requested;
       const includesSubagents = url.searchParams.get('subagents') === '1';
       try {
-        const scannedMonths = timelineArchiveMonths(store.listArchiveMonths(), from, to);
-        const cards: KanbanCard[] = [...await store.getCards({})];
-        for (const month of scannedMonths) {
-          const archive = await store.loadArchiveMonth(month);
-          if (archive) cards.push(...archive.cards);
-        }
-        // Discarded sessions still ran, so they keep their row — but they are no
-        // longer in the Inbox, and a 배정 button that opens a modal with nothing
-        // in it is a permanently dead button. Flagged rather than dropped: the
-        // work happened and the grid should still say so.
-        const ignoredSessionIds = workStore
-          ? new Set((await workStore.load()).ignoredSessionIds)
-          : undefined;
-        const sessions = buildTimelineSessions(cards, {
-          from,
-          to,
-          includeSubagents: includesSubagents,
-          now: new Date(),
-          ignoredSessionIds,
+        return await store.readBoardSnapshot(async () => {
+          const scannedMonths = timelineArchiveMonths(store.listArchiveMonths(), from, to);
+          const cards: KanbanCard[] = [...await store.getCards({})];
+          for (const month of scannedMonths) {
+            const archive = await store.loadArchiveMonth(month);
+            if (archive) cards.push(...archive.cards);
+          }
+          // Discarded sessions still ran, so they keep their row — but they are no
+          // longer in the Inbox, and a 배정 button that opens a modal with nothing
+          // in it is a permanently dead button. Flagged rather than dropped: the
+          // work happened and the grid should still say so.
+          const ignoredSessionIds = workStore
+            ? new Set((await workStore.load()).ignoredSessionIds)
+            : undefined;
+          const sessions = buildTimelineSessions(cards, {
+            from,
+            to,
+            includeSubagents: includesSubagents,
+            now: new Date(),
+            ignoredSessionIds,
+          });
+          const snapshot: TimelineSnapshot = {
+            from,
+            to,
+            includesSubagents,
+            sessions,
+            scannedMonths,
+          };
+          return json(snapshot);
         });
-        const snapshot: TimelineSnapshot = {
-          from,
-          to,
-          includesSubagents,
-          sessions,
-          scannedMonths,
-        };
-        return json(snapshot);
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to build timeline';
         return errorResponse(message, 500);
@@ -1752,25 +1754,27 @@ export function createRouteHandler(
       if (sortParam !== null && !isWorkListSort(sortParam)) {
         return errorResponse('Invalid sort', 400);
       }
-      const works = await workStore.getWorks();
-      const cards = await store.getCards();
-      const floor = works.map(workCardScanFloor).sort()[0];
-      if (floor) {
-        for (const month of timelineArchiveMonths(store.listArchiveMonths(), floor)) {
-          const archive = await store.loadArchiveMonth(month);
-          if (archive) cards.push(...archive.cards);
+      return store.readBoardSnapshot(async () => {
+        const works = await workStore.getWorks();
+        const cards = await store.getCards();
+        const floor = works.map(workCardScanFloor).sort()[0];
+        if (floor) {
+          for (const month of timelineArchiveMonths(store.listArchiveMonths(), floor)) {
+            const archive = await store.loadArchiveMonth(month);
+            if (archive) cards.push(...archive.cards);
+          }
         }
-      }
-      const entries = works.map(work => {
-        const { cardCount, doneCount, inProgressCount, lastActivityAt } = buildWorkSessionsResponse(work, cards);
-        return { ...work, activity: { cardCount, doneCount, inProgressCount, lastActivityAt } };
+        const entries = works.map(work => {
+          const { cardCount, doneCount, inProgressCount, lastActivityAt } = buildWorkSessionsResponse(work, cards);
+          return { ...work, activity: { cardCount, doneCount, inProgressCount, lastActivityAt } };
+        });
+        return json(selectWorks(entries, {
+          status: statusParam as WorkStatus | null ?? undefined,
+          projectDir: url.searchParams.get('projectDir') ?? undefined,
+          q: url.searchParams.get('q') ?? undefined,
+          sort: sortParam ?? undefined,
+        }));
       });
-      return json(selectWorks(entries, {
-        status: statusParam as WorkStatus | null ?? undefined,
-        projectDir: url.searchParams.get('projectDir') ?? undefined,
-        q: url.searchParams.get('q') ?? undefined,
-        sort: sortParam ?? undefined,
-      }));
     }
 
     // Route: POST /api/works
@@ -2226,40 +2230,42 @@ export function createRouteHandler(
       if (!workStore) return errorResponse('Works not available', 503);
       const workId = workCompletionPreviewMatch[1];
       try {
-        const work = await workStore.getWork(workId);
-        if (!work) return errorResponse('Work not found', 404);
-        const scannedMonths = timelineArchiveMonths(
-          store.listArchiveMonths(),
-          workCardScanFloor(work),
-        );
-        const liveCards = await store.getCards({});
-        const cards: KanbanCard[] = [...liveCards];
-        const archivedCardIds = new Set<string>();
-        for (const month of scannedMonths) {
-          const archive = await store.loadArchiveMonth(month);
-          if (!archive) continue;
-          for (const card of archive.cards) {
-            archivedCardIds.add(card.id);
-            cards.push(card);
+        return await store.readBoardSnapshot(async () => {
+          const work = await workStore.getWork(workId);
+          if (!work) return errorResponse('Work not found', 404);
+          const scannedMonths = timelineArchiveMonths(
+            store.listArchiveMonths(),
+            workCardScanFloor(work),
+          );
+          const liveCards = await store.getCards({});
+          const cards: KanbanCard[] = [...liveCards];
+          const archivedCardIds = new Set<string>();
+          for (const month of scannedMonths) {
+            const archive = await store.loadArchiveMonth(month);
+            if (!archive) continue;
+            for (const card of archive.cards) {
+              archivedCardIds.add(card.id);
+              cards.push(card);
+            }
           }
-        }
-        // Only board cards can be running: an archived card's run is over. And
-        // only cards the sweep would actually take can block it — a favorited
-        // card stays on the board, so its live run is nobody's problem here.
-        const boardSeedIds = selectWorkSweepCards(liveCards, work)
-          .filter(c => !c.favorite)
-          .map(c => c.id);
-        const runningCardIds = activeRunProbe && boardSeedIds.length > 0
-          ? await activeRunProbe(boardSeedIds)
-          : [];
-        const otherSessions = new Set((await workStore.getWorks()).filter(w => w.id !== work.id)
-          .flatMap(w => w.sessionLinks.map(l => l.sessionId)));
-        return json(buildWorkCompletionPreview(work, cards, {
-          conflictingCardIds: selectWorkSweepCards(liveCards, work).filter(c => c.sessionId && otherSessions.has(c.sessionId)).map(c => c.id),
-          archivedCardIds,
-          runningCardIds,
-          scannedMonths,
-        }));
+          // Only board cards can be running: an archived card's run is over. And
+          // only cards the sweep would actually take can block it — a favorited
+          // card stays on the board, so its live run is nobody's problem here.
+          const boardSeedIds = selectWorkSweepCards(liveCards, work)
+            .filter(c => !c.favorite)
+            .map(c => c.id);
+          const runningCardIds = activeRunProbe && boardSeedIds.length > 0
+            ? await activeRunProbe(boardSeedIds)
+            : [];
+          const otherSessions = new Set((await workStore.getWorks()).filter(w => w.id !== work.id)
+            .flatMap(w => w.sessionLinks.map(l => l.sessionId)));
+          return json(buildWorkCompletionPreview(work, cards, {
+            conflictingCardIds: selectWorkSweepCards(liveCards, work).filter(c => c.sessionId && otherSessions.has(c.sessionId)).map(c => c.id),
+            archivedCardIds,
+            runningCardIds,
+            scannedMonths,
+          }));
+        });
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to build completion preview';
         return errorResponse(message, 500);
@@ -2277,25 +2283,27 @@ export function createRouteHandler(
       if (!workStore) return errorResponse('Works not available', 503);
       const workId = workSessionsMatch[1];
       try {
-        const work = await workStore.getWork(workId);
-        if (!work) return errorResponse('Work not found', 404);
-        const scannedMonths = timelineArchiveMonths(
-          store.listArchiveMonths(),
-          workCardScanFloor(work),
-        );
-        const cards: KanbanCard[] = [...await store.getCards({})];
-        // A card carries no archived flag (`archivedAt` lives on the monthly
-        // file), so the two reads are kept distinguishable by id.
-        const archivedCardIds = new Set<string>();
-        for (const month of scannedMonths) {
-          const archive = await store.loadArchiveMonth(month);
-          if (!archive) continue;
-          for (const card of archive.cards) {
-            archivedCardIds.add(card.id);
-            cards.push(card);
+        return await store.readBoardSnapshot(async () => {
+          const work = await workStore.getWork(workId);
+          if (!work) return errorResponse('Work not found', 404);
+          const scannedMonths = timelineArchiveMonths(
+            store.listArchiveMonths(),
+            workCardScanFloor(work),
+          );
+          const cards: KanbanCard[] = [...await store.getCards({})];
+          // A card carries no archived flag (`archivedAt` lives on the monthly
+          // file), so the two reads are kept distinguishable by id.
+          const archivedCardIds = new Set<string>();
+          for (const month of scannedMonths) {
+            const archive = await store.loadArchiveMonth(month);
+            if (!archive) continue;
+            for (const card of archive.cards) {
+              archivedCardIds.add(card.id);
+              cards.push(card);
+            }
           }
-        }
-        return json(buildWorkSessionsResponse(work, cards, { archivedCardIds, scannedMonths }));
+          return json(buildWorkSessionsResponse(work, cards, { archivedCardIds, scannedMonths }));
+        });
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Failed to load work sessions';
         return errorResponse(message, 500);

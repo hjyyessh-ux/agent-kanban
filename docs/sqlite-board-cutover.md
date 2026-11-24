@@ -36,3 +36,21 @@ peer, or unexpected lock is a stop condition. Inspect backups and shutdown;
 do not blindly delete the marker, SQL files or lock. Once SQLite writes start,
 using the old JSON would drop those writes. Recovery that retains newer work
 must retain the SQLite database; this tool does not roll back live writes.
+
+## Search tools and hooks
+
+Custom local skills and scripts must not read `active.json`, `works.json` or
+`archive/*.json` after activation; those are frozen originals. Existing app
+hooks continue using the same HTTP API. Update personal search skills to use
+the current app port. For example, a known session is available with its
+active and archived cards:
+
+```sh
+curl --fail-with-body --get 'http://127.0.0.1:24680/api/cards' \
+  --data-urlencode 'include_archived=true' \
+  --data-urlencode "session_id=$SESSION_ID"
+```
+
+For broad search, query `/api/cards?include_archived=true` and filter the JSON
+locally. Work metadata remains at `/api/works`. Do not fall back to the frozen
+files when the app is unavailable; this would return plausible stale results.

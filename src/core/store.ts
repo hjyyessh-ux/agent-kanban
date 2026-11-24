@@ -255,6 +255,11 @@ export class KanbanStore {
     this.fileLock = new FileLock(join(this.dataDir, '.board.json.lock'));
   }
 
+  /** Group disjoint app reads into one view when the Board is SQLite. */
+  readBoardSnapshot<T>(fn:()=>Promise<T>):Promise<T> {
+    return this.sqlite ? this.sqlite.readSnapshot(fn) : fn();
+  }
+
   /** See `SessionAssignedHook`. Called once, from the app's boot wiring. */
   setSessionAssignedHook(hook: SessionAssignedHook): void {
     this.sessionAssignedHook = hook;
