@@ -1,7 +1,7 @@
 import {expect,test} from 'bun:test';
 import {existsSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {SqliteBoardStorage,SQLITE_STORAGE_MARKER,SQLITE_STORAGE_VERSION} from '../core/sqlite-board-storage';
+import {SqliteBoardStorage,SQLITE_STORAGE_MARKER,sqliteBoardMarkerFor} from '../core/sqlite-board-storage';
 import {KanbanStore} from '../core/store';
 import {WorkStore} from '../core/work-store';
 import {BoardHistoryService,installBoardHistory,observeCards} from '../core/board-history';
@@ -77,7 +77,7 @@ test('normal application bootstrap serves its existing routes over one SQLite-ba
   expect(importFrozenBoard(dir,sqlite)).toBe(1);
   expect(()=>importFrozenBoard(dir,sqlite)).toThrow('Destination Board already exists');
   expect(()=>new WorkStore(dir)).toThrow('activation marker is missing');
-  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),sqliteBoardMarkerFor(join(dir,'board.sqlite')),{mode:0o600});
 
 
   const originProbe=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response()});
@@ -152,7 +152,7 @@ test('normal backend selector refuses incomplete and corrupt activation',()=>wit
   const sqlite=join(dir,'board.sqlite'), marker=join(dir,SQLITE_STORAGE_MARKER);
   writeFileSync(marker,'unknown format');
   expect(()=>new KanbanStore(dir)).toThrow('Invalid Board backend marker');
-  writeFileSync(marker,SQLITE_STORAGE_VERSION);
+  writeFileSync(marker,'sqlite-v1:11111111-1111-1111-1111-111111111111\n');
   expect(()=>new KanbanStore(dir)).toThrow();
   writeFileSync(sqlite,'invalid SQLite body');
   expect(()=>new WorkStore(dir)).toThrow();
@@ -162,7 +162,7 @@ test('normal backend selector refuses incomplete and corrupt activation',()=>wit
 test('a new History installation snapshots the current SQLite store, not leftover JSON',()=>withTempDir(async dir=>{
   const s=setup(dir);
   const card=await s.cards.createCard({title:'on SQLite before History',description:''});
-  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),sqliteBoardMarkerFor(join(dir,'board.sqlite')),{mode:0o600});
   await installBoardHistory({dataDir:dir,subscriptionId:'fixture',token:'fixture_history_token_0123456789abc'});
   const history=new BoardHistoryService(dir);
   try {
@@ -205,7 +205,7 @@ test('known rollback leaves existing attachment bytes and does not leave History
   const s=setup(dir);
   const card=await s.cards.createCard({title:'rollback capture',description:''});
   const file=await s.cards.saveScreenshot(card.id,new Uint8Array([1,2,3]).buffer,'before.png','image/png');
-  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),sqliteBoardMarkerFor(join(dir,'board.sqlite')),{mode:0o600});
   await installBoardHistory({dataDir:dir,subscriptionId:'fixture',token:'fixture_history_token_0123456789abc'});
   const history=new BoardHistoryService(dir);
   s.cards.setChangeObserver(history.observer('card',observeCards));

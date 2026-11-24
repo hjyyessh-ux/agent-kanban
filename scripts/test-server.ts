@@ -1,6 +1,6 @@
 import { rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { SqliteBoardStorage,SQLITE_STORAGE_MARKER,SQLITE_STORAGE_VERSION } from '../src/core/sqlite-board-storage';
+import { SqliteBoardStorage,SQLITE_STORAGE_MARKER,sqliteBoardMarkerFor } from '../src/core/sqlite-board-storage';
 import { KanbanStore } from '../src/core/store';
 import { SettingsStore } from '../src/core/settings-store';
 import { SchedulerStore } from '../src/core/scheduler-store';
@@ -77,7 +77,7 @@ if(sqlitePrefix) {
   const marker=join(dataDir,SQLITE_STORAGE_MARKER);
   if(!existsSync(marker)){
     new SqliteBoardStorage(join(dataDir,'board.sqlite'));
-    writeFileSync(marker,SQLITE_STORAGE_VERSION,{mode:0o600,flag:'wx'});
+    writeFileSync(marker,sqliteBoardMarkerFor(join(dataDir,'board.sqlite')),{mode:0o600,flag:'wx'});
   }
 }
 

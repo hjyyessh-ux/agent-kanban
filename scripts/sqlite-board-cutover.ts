@@ -4,7 +4,7 @@ import { closeSync, constants, fsyncSync, linkSync, lstatSync, mkdtempSync, open
   readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { importFrozenBoard } from '../src/core/import-frozen-board';
-import { SQLITE_STORAGE_MARKER, SQLITE_STORAGE_VERSION } from '../src/core/sqlite-board-storage';
+import { SQLITE_STORAGE_MARKER, sqliteBoardMarkerFor } from '../src/core/sqlite-board-storage';
 
 function exists(path:string):boolean {
   try { lstatSync(path); return true; }
@@ -41,6 +41,9 @@ function digestState(path:string, frozen:boolean):string {
   if (!lstatSync(path).isFile() || realpathSync(path)!==path) throw new Error('Board SQLite must be a regular file.');
   if (frozen && ['-wal','-shm','-journal'].some(suffix=>exists(path+suffix)))
     throw new Error('Interrupted import has SQLite sidecars; do not activate it.');
+  // Validate the DB's identity, but do not include its random value in the
+  // equivalence digest: two imports of the same frozen input get different IDs.
+  sqliteBoardMarkerFor(path);
   const db=new Database(path,{readonly:true,strict:true});
   try {
     const checks=db.query<{ quick_check:string },[]>('PRAGMA quick_check').all();
@@ -67,7 +70,7 @@ export function prepareSqliteCutover(dir:string, activate:boolean) {
   requireCold(dir);
   const sqlite=join(dir,'board.sqlite'), marker=join(dir,SQLITE_STORAGE_MARKER);
   if (exists(marker)) {
-    if (!lstatSync(marker).isFile() || readFileSync(marker,'utf8')!==SQLITE_STORAGE_VERSION || !exists(sqlite))
+    if (!lstatSync(marker).isFile() || !exists(sqlite) || readFileSync(marker,'utf8')!==sqliteBoardMarkerFor(sqlite))
       throw new Error('Incomplete or invalid Board SQLite activation.');
     digestState(sqlite,false);
     return { state:'already-active' as const };
@@ -91,10 +94,10 @@ export function prepareSqliteCutover(dir:string, activate:boolean) {
     requireCold(dir);
     const stagingMarker=join(stage,basename(marker));
     const fd=openSync(stagingMarker,'wx',0o600);
-    try {writeFileSync(fd,SQLITE_STORAGE_VERSION);fsyncSync(fd);} finally {closeSync(fd);}
+    try {writeFileSync(fd,sqliteBoardMarkerFor(sqlite));fsyncSync(fd);} finally {closeSync(fd);}
     try {linkSync(stagingMarker,marker);}
     catch (error) {if ((error as NodeJS.ErrnoException).code!=='EEXIST') throw error;}
-    if (!lstatSync(marker).isFile() || readFileSync(marker,'utf8')!==SQLITE_STORAGE_VERSION)
+    if (!lstatSync(marker).isFile() || readFileSync(marker,'utf8')!==sqliteBoardMarkerFor(sqlite))
       throw new Error('Board activation marker changed.');
     syncDirectory(dir);
     return {state:'activated' as const, documents};

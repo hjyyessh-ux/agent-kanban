@@ -31,22 +31,23 @@ const archivePrefix = 'archive:';
  */
 export class SqliteBoardStorage {
   private readonly scope = new AsyncLocalStorage<Transaction>();
-  private readonly incarnation: string;
+  readonly incarnation: string;
   private waiting: Promise<void> = Promise.resolve();
 
-  constructor(private readonly path: string, create = true) {
+  constructor(private readonly path: string, create = true, expected?:string) {
     const db = new Database(path,{create,strict:true});
     try {
       db.exec('PRAGMA busy_timeout=3000');
-      if(!create)db.query('SELECT key,body,revision,legacy_identity FROM board_documents LIMIT 0').all();
+      if(!create){
+        db.query('SELECT key,body,revision,legacy_identity FROM board_documents LIMIT 0').all();
+        if (expected && boardIdentity(db)!==expected) throw Error('SQLite Board marker does not match database identity');
+      }
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
       if(create){
         db.exec(SQLITE_BOARD_SCHEMA);
         db.run('INSERT OR IGNORE INTO board_backend VALUES (1,?)',[randomUUID()]);
       }
-      const incarnation=db.query<{incarnation:string},[]>('SELECT incarnation FROM board_backend WHERE singleton=1').get()?.incarnation;
-      if(!incarnation||!/^[0-9a-f-]{36}$/.test(incarnation))throw Error('Invalid SQLite Board identity');
-      this.incarnation=incarnation;
+      this.incarnation=boardIdentity(db);
     } finally { db.close(); }
   }
 
@@ -176,7 +177,22 @@ export class SqliteBoardStorage {
 
 
 export const SQLITE_STORAGE_MARKER = '.board-storage';
-export const SQLITE_STORAGE_VERSION = 'sqlite-v1\n';
+const boardUuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function boardIdentity(db:Database):string {
+  const id=db.query<{incarnation:string},[]>('SELECT incarnation FROM board_backend WHERE singleton=1').get()?.incarnation;
+  if(!id||!boardUuid.test(id))throw Error('Invalid SQLite Board identity');
+  return id;
+}
+export function sqliteBoardMarkerFor(path:string):string {
+  if(!lstatSync(path).isFile())throw Error('Invalid SQLite Board file');
+  const db=new Database(path,{create:false,strict:true});
+  try {db.exec('PRAGMA query_only=ON');return 'sqlite-v1:'+boardIdentity(db)+'\n';}
+  finally {db.close();}
+}
+function parseBoardMarker(marker:string):string|undefined {
+  const match=/^sqlite-v1:([0-9a-f-]{36})\n$/.exec(marker);
+  return match&&boardUuid.test(match[1]) ? match[1] : undefined;
+}
 const openStores = new Map<string,SqliteBoardStorage>();
 
 /** Existing app and maintenance stores use one backend selector. Selecting
@@ -193,12 +209,16 @@ export function selectSqliteBoardStorage(dataDir:string):SqliteBoardStorage|unde
     catch(err){if((err as NodeJS.ErrnoException).code==='ENOENT')return undefined;throw err;}
     throw Error('SQLite Board exists but its activation marker is missing');
   }
-  if(!stat.isFile()||stat.size!==SQLITE_STORAGE_VERSION.length||readFileSync(marker,'utf8')!==SQLITE_STORAGE_VERSION)
-    throw Error('Invalid Board backend marker');
+  const identity=stat.isFile() && stat.size===47 ? parseBoardMarker(readFileSync(marker,'utf8')) : undefined;
+  if(!identity)throw Error('Invalid Board backend marker');
   if(!lstatSync(path).isFile())throw Error('Invalid SQLite Board file');
   const existing=openStores.get(path);
-  if(existing)return existing;
-  const opened=new SqliteBoardStorage(path,false);
+  if(existing?.incarnation===identity){
+    if(sqliteBoardMarkerFor(path)!=='sqlite-v1:'+identity+'\n')
+      throw Error('SQLite Board marker does not match database identity');
+    return existing;
+  }
+  const opened=new SqliteBoardStorage(path,false,identity);
   openStores.set(path,opened);
   return opened;
 }

@@ -2,7 +2,7 @@ import { expect,test } from 'bun:test';
 import { existsSync,readFileSync,realpathSync,writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { importFrozenBoard } from '../core/import-frozen-board';
-import { SQLITE_STORAGE_MARKER,SQLITE_STORAGE_VERSION } from '../core/sqlite-board-storage';
+import { SQLITE_STORAGE_MARKER,sqliteBoardMarkerFor } from '../core/sqlite-board-storage';
 import { KanbanStore } from '../core/store';
 import type { KanbanCard } from '../core/types';
 import { withTempDir } from './setup';
@@ -14,7 +14,7 @@ for(const runtime of ['codex','claude'] as const){
     const fixture=await legacy.createCard({title:'preexisting',description:'migration fixture'});
     const before=readFileSync(join(dir,'active.json'));
     importFrozenBoard(dir,join(dir,'board.sqlite'));
-    writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+    writeFileSync(join(dir,SQLITE_STORAGE_MARKER),sqliteBoardMarkerFor(join(dir,'board.sqlite')),{mode:0o600});
     const probe=Bun.serve({hostname:'127.0.0.1',port:0,fetch:()=>new Response()});
     const base='http://127.0.0.1:'+probe.port;
     const port=String(probe.port);

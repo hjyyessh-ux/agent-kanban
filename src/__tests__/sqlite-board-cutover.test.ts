@@ -57,6 +57,24 @@ test('cold CLI validates and resumes a verified unpublished import, refuses stal
   const repeat=command(dir);status(repeat,0);expect(state(repeat)).toBe('already-active');
 }));
 
+test('activation refuses an orphan with broken identity and a marker bound to another DB',()=>withTempDir(async temp=>{
+  const dir=realpathSync(temp), sqlite=join(dir,'board.sqlite'), marker=join(dir,'.board-storage');
+  await new KanbanStore(dir).createCard({title:'identity test',description:''});
+  importFrozenBoard(dir,sqlite);
+  const db=new Database(sqlite);
+  const identity=db.query<{incarnation:string},[]>('SELECT incarnation FROM board_backend').get()!.incarnation;
+  try { db.run('DELETE FROM board_backend'); } finally {db.close();}
+  expect(command(dir,'--check').stderr.toString()).toContain('Invalid SQLite Board identity');
+  expect(command(dir).stderr.toString()).toContain('Invalid SQLite Board identity');
+  expect(existsSync(marker)).toBe(false);
+  const restore=new Database(sqlite);
+  try {restore.run('INSERT INTO board_backend VALUES (1,?)',[identity]);} finally {restore.close();}
+  status(command(dir),0);
+  writeFileSync(marker,'sqlite-v1:11111111-1111-1111-1111-111111111111\n',{mode:0o600});
+  expect(()=>new KanbanStore(dir)).toThrow('marker does not match database identity');
+  expect(command(dir,'--check').stderr.toString()).toContain('Incomplete or invalid Board SQLite activation');
+}));
+
 test('ordinary daemon restart replays existing History delivery then persists new SQLite writes',()=>withTempDir(async temp=>{
   const dir=realpathSync(temp);
   const legacy=new KanbanStore(dir);
