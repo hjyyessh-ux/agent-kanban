@@ -4,6 +4,7 @@ import {
   chmodSync, existsSync, linkSync, mkdirSync, readFileSync, rmSync, writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { selectSqliteBoardStorage } from './sqlite-board-storage';
 import { BoardJournal, type BoardJournalInput } from './board-journal';
 import { fileIdentity, type JsonSaveObserver } from './json-save-observer';
 import { FileLock } from './filelock';
@@ -12,8 +13,8 @@ import type { KanbanCard, KanbanStatus, Work, WorkStatus } from './types';
 /**
  * Dedicated, metadata-only Card/Work change sidecar for one local consumer.
  *
- * The board JSON files stay the only primary store. This module never writes
- * them; it observes `KanbanStore.save()` / `WorkStore.save()` around their own
+ * The application's Board storage stays authoritative. This module never writes
+ * its records; it observes `KanbanStore.save()` / `WorkStore.save()` around their own
  * atomic rename and records ID, status enum, soft-delete presence and
  * `updatedAt`. Titles, prompts, results, paths and attachments are never read
  * into the sidecar.
@@ -508,6 +509,7 @@ export async function installBoardHistory(input: InstallBoardHistoryInput) {
   if (!SUBSCRIPTION_PATTERN.test(input.subscriptionId)) throw new Error('invalid_board_history_subscription');
   if (!TOKEN_PATTERN.test(input.token)) throw new Error('invalid_board_history_token');
   const clock = input.clock ?? Date.now;
+  const sqlite = selectSqliteBoardStorage(input.dataDir);
   const paths = boardHistoryPaths(input.dataDir);
   if (existsSync(paths.consumer)) throw new Error('board_history_already_installed');
   mkdirSync(paths.dir, { recursive: true, mode: 0o700 });
@@ -521,11 +523,21 @@ export async function installBoardHistory(input: InstallBoardHistoryInput) {
         ['card', '.board.json.lock', 'active.json', 'cards'],
         ['work', '.works.json.lock', 'works.json', 'works'],
       ];
-      for (const [kind, lock, file, key] of phases) {
-        const path = join(input.dataDir, file);
-        await new FileLock(join(input.dataDir, lock)).withLock(async () => {
-          writeBaseline(captureDb, kind, asObservations(readJsonList(path, key), kind === 'card'), fileIdentity(path), clock());
+      if(sqlite) {
+        const storage=sqlite;
+        await storage.write(async()=>{
+          for(const [kind,,,key] of phases) {
+            const items = storage.readDocument<Record<string, unknown[]>>(key)?.[key] ?? [];
+            writeBaseline(captureDb,kind,asObservations(items,kind==='card'),storage.identity(key),clock());
+          }
         });
+      } else {
+        for (const [kind, lock, file, key] of phases) {
+          const path = join(input.dataDir, file);
+          await new FileLock(join(input.dataDir, lock)).withLock(async () => {
+            writeBaseline(captureDb, kind, asObservations(readJsonList(path, key), kind === 'card'), fileIdentity(path), clock());
+          });
+        }
       }
     } finally { captureDb.close(); }
     status = journal.subscribe(input.subscriptionId, BOARD_HISTORY_PROJECT_ID);

@@ -7,7 +7,7 @@ REPO_ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
 resolve_data_dir() {
   if [ -n "${KANBAN_DATA_DIR:-}" ]; then
     printf '%s' "$KANBAN_DATA_DIR"
-  elif [ -f "$HOME/.agent-kanban/active.json" ]; then
+  elif [ -f "$HOME/.agent-kanban/.board-storage" ] || [ -f "$HOME/.agent-kanban/active.json" ]; then
     printf '%s' "$HOME/.agent-kanban"
   else
     printf '%s' "$HOME/.agent-kanban"

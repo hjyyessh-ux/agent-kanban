@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
+import { SqliteBoardStorage } from '../core/sqlite-board-storage';
 import { KanbanStore } from '../core/store';
 import { createKanbanApp } from '../plugin/bootstrap';
 import {
@@ -121,45 +123,53 @@ describe('ScheduledDispatchService', () => {
     });
   });
 
-  test('race between timer scan and manual dispatch still dispatches only once', async () => {
-    await withTempDir(async (dir) => {
-      const store = new KanbanStore(dir);
-      const card = await store.createCard({ title: 'Race', description: 'Only once' });
-      await store.scheduleCardDispatch(card.id, '2026-07-17T00:00:00.000Z');
+  for (const backend of ['json','sqlite'] as const) {
+    test(`race between timer scan and manual dispatch still dispatches only once (${backend})`, async () => {
+      await withTempDir(async (dir) => {
+        const storage = backend==='sqlite' ? new SqliteBoardStorage(join(dir,'board.sqlite')) : undefined;
+        const store = new KanbanStore(dir,storage);
+        const card = await store.createCard({ title: 'Race', description: 'Only once' });
+        await store.scheduleCardDispatch(card.id, '2026-07-17T00:00:00.000Z');
 
-      const timer = createManualTimer();
-      const dispatchGate = createDeferred<void>();
-      const dispatched: string[] = [];
-      const service = new ScheduledDispatchService({
-        store,
-        dispatchFn: async (cardId) => {
-          dispatched.push(cardId);
-          await dispatchGate.promise;
-          return { sessionId: 'session-race', runId: 'run-race', startedAt: '2026-07-17T00:00:02.000Z' };
-        },
-        now: () => new Date('2026-07-17T00:00:01.000Z'),
-        timer: timer.timer,
+        const timer = createManualTimer();
+        const dispatchGate = createDeferred<void>();
+        const claimed = createDeferred<void>();
+        const dispatched: string[] = [];
+        const service = new ScheduledDispatchService({
+          store,
+          dispatchFn: async (cardId) => {
+            dispatched.push(cardId);
+            claimed.resolve();
+            await dispatchGate.promise;
+            return { sessionId: 'session-race', runId: 'run-race', startedAt: '2026-07-17T00:00:02.000Z' };
+          },
+          now: () => new Date('2026-07-17T00:00:01.000Z'),
+          timer: timer.timer,
+        });
+
+        const startPromise = service.start();
+        // Wait for a successful scheduler claim, not an arbitrary number of
+        // microtasks. SQLite and JSON may yield a different number of times.
+        await claimed.promise;
+        try {
+          await expect(dispatchCardWithScheduledReservation({
+            store,
+            dispatchFn: async () => ({ sessionId: 'manual', runId: 'manual', startedAt: '2026-07-17T00:00:03.000Z' }),
+            cardId: card.id,
+            now: () => new Date('2026-07-17T00:00:01.500Z'),
+          })).rejects.toMatchObject({ statusCode: 409 });
+        } finally {
+          dispatchGate.resolve();
+          await startPromise;
+          service.stop();
+        }
+
+        expect(dispatched).toEqual([card.id]);
+        expect((await store.getCard(card.id))?.scheduledDispatch?.status).toBe('dispatched');
+
       });
-
-      const startPromise = service.start();
-      await drainMicrotasks();
-
-      await expect(dispatchCardWithScheduledReservation({
-        store,
-        dispatchFn: async () => ({ sessionId: 'manual', runId: 'manual', startedAt: '2026-07-17T00:00:03.000Z' }),
-        cardId: card.id,
-        now: () => new Date('2026-07-17T00:00:01.500Z'),
-      })).rejects.toMatchObject({ statusCode: 409 });
-
-      dispatchGate.resolve();
-      await startPromise;
-
-      expect(dispatched).toEqual([card.id]);
-      expect((await store.getCard(card.id))?.scheduledDispatch?.status).toBe('dispatched');
-
-      service.stop();
     });
-  });
+  }
 
   test('marks failed dispatches once without automatic retries', async () => {
     await withTempDir(async (dir) => {

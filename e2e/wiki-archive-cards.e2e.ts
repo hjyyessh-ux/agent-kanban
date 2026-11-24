@@ -28,7 +28,7 @@ test('Wiki Archive Cards shows first page and loads more cards', async ({ page }
   await page.goto('/');
   await page.getByRole('tab', { name: 'Wiki' }).click();
 
-  const archiveStat = page.getByRole('button', { name: /Archive Cards/i });
+  const archiveStat = page.getByRole('button', { name: /보관 카드/ });
   await expect(archiveStat).toBeVisible();
   await archiveStat.click();
 
@@ -64,7 +64,7 @@ test('Wiki Archive Cards falls back when the paginated API is missing', async ({
 
   await page.goto('/');
   await page.getByRole('tab', { name: 'Wiki' }).click();
-  await page.getByRole('button', { name: /Archive Cards/i }).click();
+  await page.getByRole('button', { name: /보관 카드/ }).click();
   await page.getByRole('searchbox').fill(runId);
 
   await expect(page.getByText(`Legacy archive API fallback fixture ${runId}`)).toBeVisible();
@@ -82,7 +82,7 @@ test('Wiki Archive Cards shows API errors', async ({ page }) => {
 
   await page.goto('/');
   await page.getByRole('tab', { name: 'Wiki' }).click();
-  await page.getByRole('button', { name: /Archive Cards/i }).click();
+  await page.getByRole('button', { name: /보관 카드/ }).click();
 
   await expect(page.getByRole('alert').filter({ hasText: 'forced archive error' })).toBeVisible();
   await expect(page.getByText('Archive Cards를 불러오지 못했습니다.')).toBeVisible();
