@@ -1973,8 +1973,8 @@ export class KanbanStore {
 
   // ─── Screenshot Methods ──────────────────────────────────────────
 
-  private ensureScreenshotDir():boolean {
-    return mkdirSync(this.screenshotDir,{recursive:true})!==undefined;
+  private ensureScreenshotDir():void {
+    mkdirSync(this.screenshotDir,{recursive:true});
   }
 
   /**
@@ -2015,17 +2015,17 @@ export class KanbanStore {
         throw new Error(`Card not found: ${cardId}`);
       }
       if (this.sqlite) {
-        const created=this.ensureScreenshotDir();
+        this.ensureScreenshotDir();
         const fd=openSync(filePath,'wx',0o600);
         this.sqlite.afterFinish(null,()=>{try{unlinkSync(filePath);}catch{/* best-effort cleanup on known rollback */}});
         try {writeFileSync(fd,new Uint8Array(fileData));fsyncSync(fd);}
         finally {closeSync(fd);}
         const directory=openSync(this.screenshotDir,constants.O_RDONLY|constants.O_DIRECTORY);
         try {fsyncSync(directory);} finally {closeSync(directory);}
-        if(created){
-          const parent=openSync(this.dataDir,constants.O_RDONLY|constants.O_DIRECTORY);
-          try {fsyncSync(parent);} finally {closeSync(parent);}
-        }
+        // An earlier failed upload may have created this directory without
+        // making its parent's entry durable. Sync it on every SQLite upload.
+        const parent=openSync(this.dataDir,constants.O_RDONLY|constants.O_DIRECTORY);
+        try {fsyncSync(parent);} finally {closeSync(parent);}
       }
       const card = board.cards[index];
       card.screenshots = card.screenshots ?? [];
