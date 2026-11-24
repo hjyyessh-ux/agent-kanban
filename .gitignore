@@ -101,3 +101,8 @@ ds-bundle/
 .agents/
 nskills-lock.json
 *.pptx
+
+# SQLite browser test fixtures
+.e2e-data-sqlite/
+.e2e-home-sqlite/
+e2e/results-sqlite/

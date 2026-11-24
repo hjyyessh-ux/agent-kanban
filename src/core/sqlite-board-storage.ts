@@ -1,15 +1,26 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { lstatSync, readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
-import { FileLock } from './filelock';
 
 type DocumentKey = 'cards' | 'works' | `archive:${string}`;
-type WriteContext = { db: Database; afterCommit: (() => void)[]; active: boolean };
+type Transaction = {
+  db: Database;
+  observers: Map<DocumentKey,{before:string; commit:(before:string)=>void}>;
+  mode: 'read'|'write';
+  active: boolean;
+  afterCommit: (()=>void)[];
+  afterRollback: (()=>void)[];
+};
 type Document = { body: string; revision: number };
 export const SQLITE_BOARD_SCHEMA = `CREATE TABLE IF NOT EXISTS board_documents (
   key TEXT PRIMARY KEY, body TEXT NOT NULL CHECK(json_valid(body)),
   revision INTEGER NOT NULL CHECK(revision>0), legacy_identity TEXT
+) STRICT;
+CREATE TABLE IF NOT EXISTS board_backend (
+  singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+  incarnation TEXT NOT NULL
 ) STRICT`;
 const archivePrefix = 'archive:';
 
@@ -19,25 +30,38 @@ const archivePrefix = 'archive:';
  * (not a shadow JSON file) owns every document and archive transaction.
  */
 export class SqliteBoardStorage {
-  private readonly scope = new AsyncLocalStorage<WriteContext>();
-  private readonly lock: FileLock;
+  private readonly scope = new AsyncLocalStorage<Transaction>();
+  private readonly incarnation: string;
   private waiting: Promise<void> = Promise.resolve();
 
   constructor(private readonly path: string, create = true) {
-    this.lock = new FileLock(path + '.write-lock');
     const db = new Database(path,{create,strict:true});
     try {
       db.exec('PRAGMA busy_timeout=3000');
       if(!create)db.query('SELECT key,body,revision,legacy_identity FROM board_documents LIMIT 0').all();
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL');
-      if(create)db.exec(SQLITE_BOARD_SCHEMA);
+      if(create){
+        db.exec(SQLITE_BOARD_SCHEMA);
+        db.run('INSERT OR IGNORE INTO board_backend VALUES (1,?)',[randomUUID()]);
+      }
+      const incarnation=db.query<{incarnation:string},[]>('SELECT incarnation FROM board_backend WHERE singleton=1').get()?.incarnation;
+      if(!incarnation||!/^[0-9a-f-]{36}$/.test(incarnation))throw Error('Invalid SQLite Board identity');
+      this.incarnation=incarnation;
     } finally { db.close(); }
+  }
+
+  // WAL setup can require writable access to its own shared-memory files
+  // on a cold open. SQL stays read-only with query_only; create stays false.
+  private openForRead():Database {
+    const db=new Database(this.path,{create:false,strict:true});
+    try {db.exec('PRAGMA query_only=ON');return db;}
+    catch(error){db.close();throw error;}
   }
 
   private read<T>(fn:(db:Database)=>T):T {
     const tx=this.scope.getStore();
     if(tx?.active) return fn(tx.db);
-    const db=new Database(this.path,{readonly:true,strict:true});
+    const db=this.openForRead();
     try {return fn(db);} finally {db.close();}
   }
 
@@ -50,7 +74,7 @@ export class SqliteBoardStorage {
   identity(key:'cards'|'works'):string {
     const row=this.read(db=>db.query<Pick<Document,'revision'> & { legacy_identity:string|null },[string]>(
       'SELECT revision,legacy_identity FROM board_documents WHERE key=?').get(key));
-    return row ? row.legacy_identity ?? `sqlite-board-v1:${key}:${row.revision}` : 'missing';
+    return row ? row.legacy_identity ?? `sqlite-board-v1:${this.incarnation}:${key}:${row.revision}` : 'missing';
   }
 
   archiveMonths():string[] {
@@ -61,29 +85,73 @@ export class SqliteBoardStorage {
 
   writeDocument(key:DocumentKey, value:unknown):void {
     const tx=this.scope.getStore();
-    if(!tx?.active) throw new Error('SQLite board write requires a transaction');
+    if(!tx?.active||tx.mode!=='write') throw new Error('SQLite board write requires a transaction');
     tx.db.run(`INSERT INTO board_documents (key,body,revision) VALUES (?,?,1)
       ON CONFLICT(key) DO UPDATE SET body=excluded.body,revision=revision+1,legacy_identity=NULL`,[key,JSON.stringify(value)]);
   }
 
-  inWrite():boolean {return this.scope.getStore()?.active===true;}
+  inWrite():boolean {
+    const active=this.scope.getStore();
+    return active?.active===true && active.mode==='write';
+  }
 
-  afterCommit(fn:()=>void):void {
+  afterDocumentCommit(key:DocumentKey,before:string,commit:(before:string)=>void):void {
     const tx=this.scope.getStore();
-    if(!tx?.active) throw new Error('SQLite board write requires a transaction');
-    tx.afterCommit.push(fn);
+    if(!tx?.active||tx.mode!=='write') throw new Error('SQLite board write requires a transaction');
+    tx.observers.set(key,{before:tx.observers.get(key)?.before??before,commit});
+  }
+
+  afterFinish(commit:(()=>void)|null, rollback:(()=>void)|null):void {
+    const tx=this.scope.getStore();
+    if(!tx?.active||tx.mode!=='write')throw Error('SQLite Board hook requires a write');
+    if(commit)tx.afterCommit.push(commit);
+    if(rollback)tx.afterRollback.push(rollback);
+  }
+
+  async readSnapshot<T>(fn:()=>Promise<T>):Promise<T> {
+    if(this.scope.getStore()?.active)return fn();
+    const db=this.openForRead();
+    const tx:Transaction={db,observers:new Map(),mode:'read',active:true,afterCommit:[],afterRollback:[]};
+    try {
+      db.exec('BEGIN');
+      return await this.scope.run(tx,fn);
+    } finally { tx.active=false; db.close(); }
+  }
+
+  // A separate SQLite lock serializes the board commit *and* its History
+  // callback across processes. There is no age-based ownership transfer;
+  // the OS releases SQLite's lock on process death. Never wait synchronously
+  // on another async writer in this process.
+  private async observerLease():Promise<Database> {
+    const db=new Database(this.path+'.observer-lock',{create:true,strict:true});
+    try {
+      db.exec('PRAGMA busy_timeout=0');
+      const deadline=Date.now()+5_000;
+      while(true){
+        try { db.exec('BEGIN IMMEDIATE'); return db; }
+        catch(error) {
+          if((error as {code?:string}).code!=='SQLITE_BUSY'||Date.now()>=deadline)throw error;
+          await Bun.sleep(20);
+        }
+      }
+    } catch(error) {db.close();throw error;}
   }
 
   async write<T>(fn:()=>Promise<T>):Promise<T> {
-    if(this.inWrite()) return fn();
+    const current=this.scope.getStore();
+    if(current?.active) {
+      if(current.mode!=='write')throw Error('Cannot mutate inside a Board read snapshot');
+      return fn();
+    }
     const previous=this.waiting;
     let release!:()=>void;
     this.waiting=new Promise<void>(resolve=>{release=resolve;});
     await previous;
     try {
-      return await this.lock.withLock(async()=>{
+      const lock=await this.observerLease();
+      try {
         const db=new Database(this.path,{create:false,strict:true});
-        const tx:WriteContext={db,afterCommit:[],active:true};
+        const tx:Transaction={db,observers:new Map(),mode:'write',active:true,afterCommit:[],afterRollback:[]};
         let result:T;
         try {
           db.exec('PRAGMA busy_timeout=3000; PRAGMA synchronous=FULL; BEGIN IMMEDIATE');
@@ -91,17 +159,19 @@ export class SqliteBoardStorage {
             result=await this.scope.run(tx,fn);
             db.exec('COMMIT');
           } catch(error) {
-            try {db.exec('ROLLBACK');} catch { /* preserve original failure */ }
+            let rolledBack=false;
+            try {db.exec('ROLLBACK');rolledBack=true;} catch { /* unknown; do not discard files */ }
+            if(rolledBack)for(const effect of tx.afterRollback.reverse())effect();
             throw error;
           }
         } finally {tx.active=false;db.close();}
-        // Keep the legacy capture callback ordered while the shared writer
-        // lock is held. It is best-effort and never changes the commit result.
-        for(const effect of tx.afterCommit) effect();
+        for(const effect of tx.observers.values())effect.commit(effect.before);
+        for(const effect of tx.afterCommit)effect();
         return result;
-      });
+      } finally {lock.close();}
     } finally {release();}
   }
+
 }
 
 
@@ -131,4 +201,16 @@ export function selectSqliteBoardStorage(dataDir:string):SqliteBoardStorage|unde
   const opened=new SqliteBoardStorage(path,false);
   openStores.set(path,opened);
   return opened;
+}
+
+
+// Rechecked at a mutation boundary as well as construction: a cooperating
+// JSON instance cannot keep updating files after a cold activation was staged.
+export function assertLegacyBoardStorageWritable(dir:string):void {
+  if(storeArtifactPresent(join(dir, SQLITE_STORAGE_MARKER))||storeArtifactPresent(join(dir,'board.sqlite')))
+    throw Error('Legacy JSON Board is sealed for SQLite');
+}
+function storeArtifactPresent(path:string):boolean {
+  try {lstatSync(path);return true;}
+  catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return false;throw error;}
 }

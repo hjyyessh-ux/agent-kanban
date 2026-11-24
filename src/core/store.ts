@@ -1,4 +1,4 @@
-import { selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
+import { assertLegacyBoardStorageWritable, selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
 import { selectArchiveCards } from './archive-selection';
 import { Buffer } from 'node:buffer';
 import { existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
@@ -267,6 +267,7 @@ export class KanbanStore {
    */
   private async withDualLock<T>(fn: () => Promise<T>): Promise<T> {
     if (this.sqlite) return this.sqlite.write(fn);
+    assertLegacyBoardStorageWritable(this.dataDir);
     // 1. Acquire in-process mutex
     let release: () => void;
     const prev = this.lockPromise;
@@ -277,7 +278,10 @@ export class KanbanStore {
 
     try {
       // 2. Acquire cross-process file lock, then execute fn
-      return await this.fileLock.withLock(fn);
+      return await this.fileLock.withLock(async ()=>{
+        assertLegacyBoardStorageWritable(this.dataDir);
+        return fn();
+      });
     } finally {
       release!();
     }
@@ -300,6 +304,7 @@ export class KanbanStore {
 
     // Legacy migration: board.json → active.json
     if (existsSync(this.legacyBoardPath)) {
+      assertLegacyBoardStorageWritable(this.dataDir);
       const content = await Bun.file(this.legacyBoardPath).text();
       const board = migrateStatuses(JSON.parse(content) as KanbanBoard);
       // Write to active.json atomically
@@ -318,15 +323,19 @@ export class KanbanStore {
       const storage = this.sqlite;
       if (!storage.inWrite()) return storage.write(() => this.save(board));
       const observer = this.changeObserver?.isActive() ? this.changeObserver : undefined;
-      if (observer) observeSafely(() => observer.prepare(storage.identity('cards')));
+      const before = observer ? storage.identity('cards') : undefined;
       storage.writeDocument('cards',board);
       if (observer) {
         const identity = storage.identity('cards');
         const items = structuredClone(board.cards);
-        storage.afterCommit(() => observeSafely(() => observer.commit(items,identity)));
+        storage.afterDocumentCommit('cards',before!,previous=>{
+          observeSafely(() => observer.prepare(previous));
+          observeSafely(() => observer.commit(items,identity));
+        });
       }
       return;
     }
+    assertLegacyBoardStorageWritable(this.dataDir);
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
@@ -1328,6 +1337,14 @@ export class KanbanStore {
     id: string,
     options?: { includeDeleted?: boolean; includeArchived?: boolean },
   ): Promise<KanbanCard | null> {
+    const read=()=>this.readCard(id,options);
+    return this.sqlite && options?.includeArchived ? this.sqlite.readSnapshot(read) : read();
+  }
+
+  private async readCard(
+    id: string,
+    options?: { includeDeleted?: boolean; includeArchived?: boolean },
+  ): Promise<KanbanCard | null> {
     const board = await this.load();
     const card = board.cards.find(c => c.id === id) ?? null;
     if (card) {
@@ -1444,6 +1461,11 @@ export class KanbanStore {
   }
 
   async getCards(filter?: { status?: KanbanStatus; includeArchived?: boolean; includeDeleted?: boolean }): Promise<KanbanCard[]> {
+    const read=()=>this.readCards(filter);
+    return this.sqlite && filter?.includeArchived ? this.sqlite.readSnapshot(read) : read();
+  }
+
+  private async readCards(filter?: { status?: KanbanStatus; includeArchived?: boolean; includeDeleted?: boolean }): Promise<KanbanCard[]> {
     const board = await this.load();
     let cards = filter?.includeDeleted ? board.cards : board.cards.filter(isActiveCard);
 
@@ -1657,6 +1679,11 @@ export class KanbanStore {
   }
 
   async loadArchives(): Promise<KanbanCard[]> {
+    const read=()=>this.readArchives();
+    return this.sqlite ? this.sqlite.readSnapshot(read) : read();
+  }
+
+  private async readArchives(): Promise<KanbanCard[]> {
     if (this.sqlite) {
       const cards: KanbanCard[] = [];
       for (const month of this.listArchiveMonths().reverse()) {
@@ -1950,7 +1977,10 @@ export class KanbanStore {
    * Save a screenshot file and attach metadata to a card.
    */
   async saveScreenshot(cardId: string, fileData: ArrayBuffer, originalName: string, mimeType: string): Promise<Screenshot> {
-    this.ensureScreenshotDir();
+    if (!this.sqlite) {
+      assertLegacyBoardStorageWritable(this.dataDir);
+      this.ensureScreenshotDir();
+    }
 
     const id = nanoid();
     const timestamp = Date.now();
@@ -1959,7 +1989,7 @@ export class KanbanStore {
     const filePath = join(this.screenshotDir, filename);
 
     // Write file to disk
-    await Bun.write(filePath, fileData);
+    if (!this.sqlite) await Bun.write(filePath, fileData);
 
     const screenshot: Screenshot = {
       id,
@@ -1979,6 +2009,11 @@ export class KanbanStore {
         // Clean up the written file since card doesn't exist
         try { unlinkSync(filePath); } catch { /* ignore */ }
         throw new Error(`Card not found: ${cardId}`);
+      }
+      if (this.sqlite) {
+        this.ensureScreenshotDir();
+        this.sqlite.afterFinish(null,()=>{try{unlinkSync(filePath);}catch{/* retain no orphan on known rollbacks */}});
+        await Bun.write(filePath,fileData);
       }
       const card = board.cards[index];
       card.screenshots = card.screenshots ?? [];
@@ -2007,6 +2042,10 @@ export class KanbanStore {
       if (ssIndex === -1) throw new Error(`Screenshot not found: ${screenshotId}`);
 
       filename = card.screenshots![ssIndex].filename;
+      if (this.sqlite) {
+        const path=join(this.screenshotDir,filename);
+        this.sqlite.afterFinish(()=>{try{unlinkSync(path);}catch{/* already gone */}},null);
+      }
       card.screenshots!.splice(ssIndex, 1);
       if (card.screenshots!.length === 0) {
         delete card.screenshots;
@@ -2017,7 +2056,7 @@ export class KanbanStore {
     });
 
     // Delete file from disk (outside lock)
-    if (filename) {
+    if (filename && !this.sqlite) {
       const filePath = join(this.screenshotDir, filename);
       try { unlinkSync(filePath); } catch { /* file may already be gone */ }
     }

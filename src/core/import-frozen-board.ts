@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Database } from 'bun:sqlite';
 import { closeSync, constants, fsyncSync, fstatSync, linkSync, lstatSync, mkdtempSync, openSync,
   readFileSync, readdirSync, realpathSync, rmSync, writeFileSync, type BigIntStats } from 'node:fs';
@@ -54,6 +55,7 @@ export function importFrozenBoard(dataDir:string, outputPath:string):number {
     try {
       db.exec(`PRAGMA synchronous=FULL; ${SQLITE_BOARD_SCHEMA}`);
       db.transaction(()=>{
+        db.run('INSERT INTO board_backend VALUES (1,?)',[randomUUID()]);
         for(const input of inputs){
           const fd=openSync(input.path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
           try {

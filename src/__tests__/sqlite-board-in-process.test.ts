@@ -172,3 +172,55 @@ test('a new History installation snapshots the current SQLite store, not leftove
     expect(history.status().coverage.gaps).toEqual([]);
   } finally {history.close();}
 }));
+
+test('already open legacy stores refuse mutation once backing DB has been staged',()=>withTempDir(async temp=>{
+  const dir=realpathSync(temp);
+  const oldCards=new KanbanStore(dir),oldWorks=new WorkStore(dir);
+  const card=await oldCards.createCard({title:'old card',description:''});
+  const work=await oldWorks.createWork({title:'old Work'});
+  const active=readFileSync(join(dir,'active.json')),works=readFileSync(join(dir,'works.json'));
+  importFrozenBoard(dir,join(dir,'board.sqlite'));
+  await expect(oldCards.updateCard(card.id,{title:'must not write'})).rejects.toThrow('sealed');
+  await expect(oldWorks.updateWork(work.id,{title:'must not write'})).rejects.toThrow('sealed');
+  expect(readFileSync(join(dir,'active.json'))).toEqual(active);
+  expect(readFileSync(join(dir,'works.json'))).toEqual(works);
+}));
+
+test('archive readers keep a single view across a concurrent transition',()=>withTempDir(async dir=>{
+  const src=setup(dir), other=setup(dir);
+  const card=await src.cards.createCard({title:'snapshot',description:''});
+  await src.cards.updateCard(card.id,{status:'done'});
+  await src.storage.readSnapshot(async()=>{
+    const before=await src.cards.getCards({includeArchived:true});
+    expect(before.map(c=>c.id)).toEqual([card.id]);
+    await other.cards.archiveCards([card.id]);
+    const after=await src.cards.getCards({includeArchived:true});
+    expect(after).toEqual(before);
+  });
+  expect(await src.cards.getCard(card.id)).toBeNull();
+  expect((await src.cards.getCard(card.id,{includeArchived:true}))?.id).toBe(card.id);
+}));
+
+test('known rollback leaves existing attachment bytes and does not leave History intent or uploading bytes',()=>withTempDir(async dir=>{
+  const s=setup(dir);
+  const card=await s.cards.createCard({title:'rollback capture',description:''});
+  const file=await s.cards.saveScreenshot(card.id,new Uint8Array([1,2,3]).buffer,'before.png','image/png');
+  writeFileSync(join(dir,SQLITE_STORAGE_MARKER),SQLITE_STORAGE_VERSION,{mode:0o600});
+  await installBoardHistory({dataDir:dir,subscriptionId:'fixture',token:'fixture_history_token_0123456789abc'});
+  const history=new BoardHistoryService(dir);
+  s.cards.setChangeObserver(history.observer('card',observeCards));
+  let uploaded:string|undefined;
+  try {
+    await expect(s.storage.write(async()=>{
+      await s.cards.deleteScreenshot(card.id,file.id);
+      uploaded=(await s.cards.saveScreenshot(card.id,new Uint8Array([4]).buffer,'after.png','image/png')).filename;
+      throw Error('known rollback');
+    })).rejects.toThrow('known rollback');
+    expect(readFileSync(s.cards.getScreenshotPath(file.filename))).toEqual(Buffer.from([1,2,3]));
+    expect(existsSync(s.cards.getScreenshotPath(uploaded!))).toBe(false);
+    await s.cards.reconcileChangeObserver();
+    expect(history.page().events).toEqual([]);
+    expect(history.status().coverage.gaps).toEqual([]);
+    expect(history.status().coverage.pendingSince).toBeNull();
+  } finally {history.close();}
+}));

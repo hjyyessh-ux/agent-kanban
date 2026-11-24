@@ -1,4 +1,4 @@
-import { selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
+import { assertLegacyBoardStorageWritable, selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
@@ -81,6 +81,7 @@ export class WorkStore {
   /** Dual locking: in-process mutex + cross-process FileLock. */
   private async withDualLock<T>(fn: () => Promise<T>): Promise<T> {
     if (this.sqlite) return this.sqlite.write(fn);
+    assertLegacyBoardStorageWritable(this.dataDir);
     let release: () => void;
     const prev = this.lockPromise;
     this.lockPromise = new Promise<void>((resolve) => {
@@ -89,7 +90,10 @@ export class WorkStore {
     await prev;
 
     try {
-      return await this.fileLock.withLock(fn);
+      return await this.fileLock.withLock(async ()=>{
+        assertLegacyBoardStorageWritable(this.dataDir);
+        return fn();
+      });
     } finally {
       release!();
     }
@@ -117,15 +121,19 @@ export class WorkStore {
       const storage = this.sqlite;
       if (!storage.inWrite()) return storage.write(() => this.save(state));
       const observer = this.changeObserver?.isActive() ? this.changeObserver : undefined;
-      if (observer) observeSafely(() => observer.prepare(storage.identity('works')));
+      const before = observer ? storage.identity('works') : undefined;
       storage.writeDocument('works',state);
       if (observer) {
         const identity = storage.identity('works');
         const items = structuredClone(state.works);
-        storage.afterCommit(() => observeSafely(() => observer.commit(items,identity)));
+        storage.afterDocumentCommit('works',before!,previous=>{
+          observeSafely(() => observer.prepare(previous));
+          observeSafely(() => observer.commit(items,identity));
+        });
       }
       return;
     }
+    assertLegacyBoardStorageWritable(this.dataDir);
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }

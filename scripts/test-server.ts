@@ -1,5 +1,6 @@
-import { rmSync, existsSync, mkdirSync } from 'node:fs';
+import { rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { SqliteBoardStorage,SQLITE_STORAGE_MARKER,SQLITE_STORAGE_VERSION } from '../src/core/sqlite-board-storage';
 import { KanbanStore } from '../src/core/store';
 import { SettingsStore } from '../src/core/settings-store';
 import { SchedulerStore } from '../src/core/scheduler-store';
@@ -22,7 +23,8 @@ import { buildDispatchPromptText } from '../src/plugin/dispatch-prompt';
 import { ScriptExecutionService } from '../src/plugin/script-execution-service';
 
 const port = Number.parseInt(process.env.E2E_PORT ?? '24681', 10);
-const dataDir = resolve(process.cwd(), '.e2e-data');
+const sqlitePrefix = process.env.E2E_BOARD_BACKEND==='sqlite' ? '-sqlite' : '';
+const dataDir = resolve(process.cwd(), '.e2e-data'+sqlitePrefix);
 const e2eHome = resolve(process.env.E2E_HOME ?? join(process.cwd(), '.e2e-home'));
 const staticDir = resolve(process.cwd(), 'web/dist');
 const DEFAULT_E2E_NOW = '2026-07-18T00:20:00.000Z';
@@ -70,6 +72,14 @@ if (process.env.E2E_KEEP_DATA !== 'true') {
   rmSync(e2eHome, { recursive: true, force: true });
 }
 mkdirSync(e2eHome, { recursive: true });
+if(sqlitePrefix) {
+  mkdirSync(dataDir,{recursive:true,mode:0o700});
+  const marker=join(dataDir,SQLITE_STORAGE_MARKER);
+  if(!existsSync(marker)){
+    new SqliteBoardStorage(join(dataDir,'board.sqlite'));
+    writeFileSync(marker,SQLITE_STORAGE_VERSION,{mode:0o600,flag:'wx'});
+  }
+}
 
 if (process.env.E2E_SKIP_BUILD !== 'true') {
   const build = Bun.spawnSync(['bun', 'run', 'build:web'], {
