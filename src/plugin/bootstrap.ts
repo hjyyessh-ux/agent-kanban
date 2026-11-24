@@ -1,3 +1,4 @@
+import type { SqliteBoardStorage } from '../core/sqlite-board-storage';
 import { existsSync, mkdirSync } from 'node:fs';
 import type { PluginInput } from '@opencode-ai/plugin';
 import { KanbanStore } from '../core/store';
@@ -70,6 +71,8 @@ export interface DispatchEngine {
 
 export interface CreateKanbanAppOptions {
   delegationOperatorToken?: string;
+  /** An explicitly provisioned Board backend; JSON remains the default. */
+  boardStorage?: SqliteBoardStorage;
   dataDir: string;
   /** opencode plugin host input; null when running as the standalone daemon. */
   opencodeInput: PluginInput | null;
@@ -118,8 +121,8 @@ export interface KanbanApp extends KanbanAppStores {
 export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<KanbanApp> {
   const { dataDir } = options;
 
-  const store = new KanbanStore(dataDir);
-  const workStore = new WorkStore(dataDir);
+  const store = new KanbanStore(dataDir,options.boardStorage);
+  const workStore = new WorkStore(dataDir,options.boardStorage);
   // Dedicated board-history sidecar, wired before any boot-time write so that
   // write is observed too. Inert (one existsSync per save) until installed;
   // capture faults are logged with a fixed code, never fail a write, and

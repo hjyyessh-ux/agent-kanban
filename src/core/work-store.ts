@@ -1,3 +1,4 @@
+import type { SqliteBoardStorage } from './sqlite-board-storage';
 import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
@@ -70,7 +71,7 @@ export class WorkStore {
   private lockPromise: Promise<void> = Promise.resolve();
   private changeObserver?: JsonSaveObserver<Work>;
 
-  constructor(dataDir: string) {
+  constructor(dataDir: string, private readonly sqlite?: SqliteBoardStorage) {
     this.dataDir = resolveDir(dataDir);
     this.worksPath = join(this.dataDir, 'works.json');
     this.tmpPath = join(this.dataDir, '.works.json.tmp');
@@ -79,6 +80,7 @@ export class WorkStore {
 
   /** Dual locking: in-process mutex + cross-process FileLock. */
   private async withDualLock<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.sqlite) return this.sqlite.write(fn);
     let release: () => void;
     const prev = this.lockPromise;
     this.lockPromise = new Promise<void>((resolve) => {
@@ -94,6 +96,10 @@ export class WorkStore {
   }
 
   async load(): Promise<WorkStoreState> {
+    if (this.sqlite) {
+      const state = this.sqlite.readDocument<WorkStoreState>('works');
+      return state ? this.normalizeState(state) : this.defaultState();
+    }
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
@@ -107,6 +113,19 @@ export class WorkStore {
   }
 
   async save(state: WorkStoreState): Promise<void> {
+    if (this.sqlite) {
+      const storage = this.sqlite;
+      if (!storage.inWrite()) return storage.write(() => this.save(state));
+      const observer = this.changeObserver?.isActive() ? this.changeObserver : undefined;
+      if (observer) observeSafely(() => observer.prepare(storage.identity('works')));
+      storage.writeDocument('works',state);
+      if (observer) {
+        const identity = storage.identity('works');
+        const items = structuredClone(state.works);
+        storage.afterCommit(() => observeSafely(() => observer.commit(items,identity)));
+      }
+      return;
+    }
     if (!existsSync(this.dataDir)) {
       mkdirSync(this.dataDir, { recursive: true });
     }
@@ -128,7 +147,7 @@ export class WorkStore {
     if (!observer?.isActive()) return;
     await this.withDualLock(async () => {
       const state = await this.load();
-      observeSafely(() => observer.reconcile(state.works, fileIdentity(this.worksPath)));
+      observeSafely(() => observer.reconcile(state.works, this.sqlite?.identity('works') ?? fileIdentity(this.worksPath)));
     });
   }
 
