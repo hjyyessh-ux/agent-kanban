@@ -1,7 +1,8 @@
 import { assertLegacyBoardStorageWritable, selectSqliteBoardStorage, type SqliteBoardStorage } from './sqlite-board-storage';
 import { selectArchiveCards } from './archive-selection';
 import { Buffer } from 'node:buffer';
-import { existsSync, mkdirSync, renameSync, readdirSync, unlinkSync } from 'node:fs';
+import { closeSync, constants, existsSync, fsyncSync, mkdirSync, openSync, renameSync, readdirSync, unlinkSync,
+  writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { nanoid } from 'nanoid';
 import type {
@@ -2017,8 +2018,12 @@ export class KanbanStore {
       }
       if (this.sqlite) {
         this.ensureScreenshotDir();
-        this.sqlite.afterFinish(null,()=>{try{unlinkSync(filePath);}catch{/* retain no orphan on known rollbacks */}});
-        await Bun.write(filePath,fileData);
+        const fd=openSync(filePath,'wx',0o600);
+        this.sqlite.afterFinish(null,()=>{try{unlinkSync(filePath);}catch{/* best-effort cleanup on known rollback */}});
+        try {writeFileSync(fd,new Uint8Array(fileData));fsyncSync(fd);}
+        finally {closeSync(fd);}
+        const directory=openSync(this.screenshotDir,constants.O_RDONLY|constants.O_DIRECTORY);
+        try {fsyncSync(directory);} finally {closeSync(directory);}
       }
       const card = board.cards[index];
       card.screenshots = card.screenshots ?? [];
