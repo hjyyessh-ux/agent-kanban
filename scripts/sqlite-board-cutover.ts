@@ -38,7 +38,7 @@ function syncDirectory(dir:string) {
   try {fsyncSync(fd);} finally {closeSync(fd);}
 }
 function digestState(path:string, frozen:boolean):string {
-  if (!lstatSync(path).isFile() || realpathSync(path)!==path) throw new Error('Board SQLite must be a regular file.');
+  if (!lstatSync(path).isFile()) throw new Error('Board SQLite must be a regular file.');
   if (frozen && ['-wal','-shm','-journal'].some(suffix=>exists(path+suffix)))
     throw new Error('Interrupted import has SQLite sidecars; do not activate it.');
   // Validate the DB's identity, but do not include its random value in the
