@@ -10,7 +10,7 @@ import { resolveAgentRuntime } from '../../../../src/core/runtime-config';
 import { MentionTextarea } from '../Mention/MentionTextarea';
 import { SavedReferences } from '../Mention/SavedReferences';
 import type { CardResultSyncControl } from '../../hooks/useCardResultSync';
-import { RESULT_SYNC_COPY } from '../../constants/copy';
+import { PROGRESS_COMMAND_TIME_COPY, RESULT_SYNC_COPY } from '../../constants/copy';
 
 interface CardPhasesProps {
   card: KanbanCard;
@@ -58,6 +58,13 @@ interface RunMetaGroupProps {
 
 const INITIAL_VISIBLE_COMMANDS = 3;
 const INITIAL_VISIBLE_STEPS = 3;
+const COMMAND_TIME_FORMAT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
 
 // Short badge text per step kind — must stay narrow enough for one line.
 const STEP_KIND_LABELS: Record<string, string> = {
@@ -116,17 +123,26 @@ export const ProgressSteps: React.FC<{
           const toggleBody = step.body
             ? () => setOpenBodies((prev) => ({ ...prev, [stepKey]: !prev[stepKey] }))
             : undefined;
+          const Row = step.body ? 'button' : 'div';
+          const commandStart = step.commandStartedAt ? Date.parse(step.commandStartedAt) : NaN;
           return (
             <li
               key={`${stepKey}-${step.kind}-${step.label}`}
               className={`kv2-progress-step kv2-progress-step--${step.kind}${step.body ? ' kv2-progress-step--expandable' : ''}`}
             >
-              <div
+              <Row
                 className="kv2-progress-step-row"
+                type={step.body ? 'button' : undefined}
                 onClick={toggleBody}
-                role={step.body ? 'button' : undefined}
                 aria-expanded={step.body ? bodyOpen : undefined}
               >
+                {step.kind === 'command' && (
+                  Number.isFinite(commandStart)
+                    ? <time className="kv2-progress-time" dateTime={step.commandStartedAt}>
+                        {COMMAND_TIME_FORMAT.format(commandStart)}
+                      </time>
+                    : <span className="kv2-progress-time" title={PROGRESS_COMMAND_TIME_COPY.unavailable}>—</span>
+                )}
                 <span className="kv2-progress-kind">{STEP_KIND_LABELS[step.kind] ?? step.kind}</span>
                 <span className="kv2-progress-label">{step.label}</span>
                 {step.detail && (
@@ -139,7 +155,7 @@ export const ProgressSteps: React.FC<{
                     {bodyOpen ? '▴' : '▾'}
                   </span>
                 )}
-              </div>
+              </Row>
               {step.body && bodyOpen && (
                 <pre className="kv2-progress-body">{step.body}</pre>
               )}
@@ -449,6 +465,9 @@ export const CardPhases: React.FC<CardPhasesProps> = ({
       {(card.progressSummary || (progress && progress.steps.length > 0)) && (
         <PhaseCard
           name="Progress"
+          labelAction={progress?.steps.some(step => step.kind === 'command') && (
+            <span className="kv2-progress-timezone">{PROGRESS_COMMAND_TIME_COPY.timezone}</span>
+          )}
           tone="progress"
           collapsed={collapsedPhases.progress}
           onToggle={() => togglePhase('progress')}

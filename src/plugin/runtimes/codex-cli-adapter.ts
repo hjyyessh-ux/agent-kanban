@@ -18,6 +18,7 @@ import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle 
 import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { parseCodexJsonlLine } from './codex-jsonl-parser';
+import { stampCommandStartReceipt } from './run-progress';
 import { completeTrackedRuntimeCard, updateFailedRuntimeCard } from './runtime-restart-sync';
 import { codexChildEvents } from './codex-child-events';
 import { ChildLinker } from './child-linker';
@@ -184,7 +185,10 @@ async function startCodexRun(
   }
 
   const childLinker = new ChildLinker(deps.store);
-  const stdoutDone = readCodexStdout(getReadableStream(proc.stdout), run, state, async (threadId) => {
+  // With approvals enabled, exec JSON uses the same item.started for an
+  // approval opening as for an actual launch. Only time unambiguous starts.
+  const observesCommandStarts = argv.includes('--dangerously-bypass-approvals-and-sandbox');
+  const stdoutDone = readCodexStdout(getReadableStream(proc.stdout), run, state, observesCommandStarts, async (threadId) => {
     if (state.threadResolved || state.timedOut) return;
     state.threadId = threadId;
     state.threadResolved = true;
@@ -344,25 +348,28 @@ async function readCodexStdout(
   stream: ReadableStream<Uint8Array>,
   run: RuntimeRun,
   state: CodexRunState,
+  observesCommandStarts: boolean,
   onThreadId: (threadId: string) => Promise<void>,
   onChild: (event: ClaudeStreamEvent) => Promise<void>,
 ): Promise<void> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let receivedAt: string | undefined;
   for await (const chunk of stream) {
+    if (observesCommandStarts) receivedAt = new Date().toISOString();
     const text = decoder.decode(chunk, { stream: true });
     buffer += text;
     let newlineIndex = buffer.indexOf('\n');
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
-      await processCodexLine(run, state, line, onThreadId, onChild);
+      await processCodexLine(run, state, line, receivedAt, onThreadId, onChild);
       newlineIndex = buffer.indexOf('\n');
     }
   }
   const rest = `${buffer}${decoder.decode()}`;
   if (rest.trim()) {
-    await processCodexLine(run, state, rest, onThreadId, onChild);
+    await processCodexLine(run, state, rest, receivedAt, onThreadId, onChild);
   }
 }
 
@@ -370,11 +377,13 @@ async function processCodexLine(
   run: RuntimeRun,
   state: CodexRunState,
   line: string,
+  receivedAt: string | undefined,
   onThreadId: (threadId: string) => Promise<void>,
   onChild: (event: ClaudeStreamEvent) => Promise<void>,
 ): Promise<void> {
   if (!line.trim()) return;
-  await appendFile(run.eventsPath, `${line}\n`);
+  const logged = receivedAt ? stampCommandStartReceipt(line, 'codex', receivedAt) : line;
+  await appendFile(run.eventsPath, `${logged}\n`);
   const event = parseCodexJsonlLine(line);
   if (!event) return;
   if (event.type === 'thread_started') {

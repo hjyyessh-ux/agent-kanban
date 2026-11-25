@@ -10,6 +10,7 @@ import type { CardRunProgress, KanbanCard, RunProgressStep } from '../../core/ty
 import type { RuntimeRun } from './runtime-run-store';
 
 type JsonRecord = Record<string, unknown>;
+const START_RECEIPT = '_kanbanCommandStartReceivedAt';
 
 function asRecord(value: unknown): JsonRecord | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -19,6 +20,80 @@ function asRecord(value: unknown): JsonRecord | undefined {
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function claudeBackgroundStartId(record: JsonRecord): string | undefined {
+  // Foreground shells can register a task only after they have already run
+  // for a while. Promotions are task updates, not initial background starts.
+  if (record.type === 'system' && record.subtype === 'task_started'
+    && record.task_type === 'local_bash' && record.is_backgrounded === true
+    && record.ambient !== true) return asString(record.tool_use_id);
+}
+
+function codexCommand(record: JsonRecord): JsonRecord | undefined {
+  const item = asRecord(record.item);
+  return item?.type === 'command_execution' ? item : undefined;
+}
+
+function parseRecord(line: string): JsonRecord | undefined {
+  try {
+    return asRecord(JSON.parse(line));
+  } catch {
+    return undefined;
+  }
+}
+
+// Preserve the runtime event shape for usage and result readers. Only start
+// events need ingestion metadata, since the CLI streams omit their timestamp.
+export function stampCommandStartReceipt(
+  line: string, runtime: RuntimeRun['runtime'], receivedAt: string,
+): string {
+  const record = parseRecord(line);
+  if (!record) return line;
+  const isStart = runtime === 'codex'
+    ? record.type === 'item.started' && Boolean(asString(codexCommand(record)?.id))
+    : Boolean(claudeBackgroundStartId(record));
+  return isStart ? JSON.stringify({ ...record, [START_RECEIPT]: receivedAt }) : line;
+}
+
+function receiptTime(value: unknown): string | undefined {
+  const time = asString(value);
+  if (!time || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(time)) return;
+  const date = new Date(time);
+  if (Number.isFinite(date.getTime())) return date.toISOString();
+}
+
+interface CommandStepState {
+  step: RunProgressStep;
+  hasFullCommand: boolean;
+  declined: boolean;
+}
+
+// The first observation reserves the row. Full input/completion can enrich it
+// in either order, while only a start observation can supply its time.
+function recordCommand(
+  steps: RunProgressStep[],
+  commands: Map<string, CommandStepState>,
+  data: { id?: string; label: string; command?: string; startedAt?: string; full?: boolean; declined?: boolean },
+): void {
+  const { id, label, command, startedAt, full, declined } = data;
+  let state = id ? commands.get(id) : undefined;
+  if (!state) {
+    state = { step: { kind: 'command', label }, hasFullCommand: false, declined: false };
+    steps.push(state.step);
+    if (id) commands.set(id, state);
+  }
+  if (full) state.step.label = label;
+  if (command && (full || !state.hasFullCommand)) {
+    state.step.detail = command;
+    state.step.body = command;
+    state.hasFullCommand = Boolean(full);
+  }
+  if (declined) {
+    state.declined = true;
+    delete state.step.commandStartedAt;
+  }
+  if (startedAt && !state.declined) state.step.commandStartedAt ??= startedAt;
 }
 
 function formatDetail(text: string): string {
@@ -100,18 +175,10 @@ interface ClaudeParseOptions {
 
 function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunProgressStep[] {
   const steps: RunProgressStep[] = [];
+  const commands = new Map<string, CommandStepState>();
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    const record = asRecord(raw);
+    const record = parseRecord(line);
     if (!record) continue;
 
     const type = asString(record.type);
@@ -120,8 +187,15 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
     if (type === 'system' && asString(record.subtype) === 'task_started') {
       const agentType = asString(record.subagent_type);
       const description = asString(record.description);
-      // local_bash task_started events (background shells) carry no agent type
-      // and are not agent spawns — same filter as child-linker.
+      if (record.task_type === 'local_bash') {
+        const id = claudeBackgroundStartId(record);
+        if (id) recordCommand(steps, commands, {
+          id, label: 'Bash', startedAt: receiptTime(
+            opts.agentFromTaskToolUse ? record.timestamp : record[START_RECEIPT],
+          ),
+        });
+        continue;
+      }
       if (!agentType && asString(record.task_type) !== 'local_agent') continue;
       steps.push({
         kind: 'agent',
@@ -169,13 +243,9 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
         continue;
       }
 
-      if (name === 'Bash') {
-        const command = asString(input?.command);
-        steps.push({
-          kind: 'command',
-          label: 'Bash',
-          ...(command ? { detail: formatDetail(command) } : {}),
-          ...(command ? { body: command } : {}),
+      if (name === 'Bash' || name === 'Monitor') {
+        recordCommand(steps, commands, {
+          id: asString(partRecord.id), label: name, command: asString(input?.command), full: true,
         });
         continue;
       }
@@ -206,35 +276,27 @@ function stepsFromClaudeLines(lines: string[], opts: ClaudeParseOptions): RunPro
 
 function stepsFromCodexLines(lines: string[]): RunProgressStep[] {
   const steps: RunProgressStep[] = [];
+  const commands = new Map<string, CommandStepState>();
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(trimmed);
-    } catch {
+    const record = parseRecord(line);
+    if (!record) continue;
+    const commandItem = codexCommand(record);
+    const isStart = record.type === 'item.started';
+    if (commandItem && (isStart || record.type === 'item.completed')) {
+      const id = asString(commandItem.id);
+      if (!isStart || id) recordCommand(steps, commands, {
+        id, label: 'Shell', command: asString(commandItem.command), full: !isStart,
+        startedAt: isStart ? receiptTime(record[START_RECEIPT]) : undefined,
+        declined: commandItem.status === 'declined',
+      });
       continue;
     }
-    const record = asRecord(raw);
-    if (!record) continue;
-    // Count each item once via item.completed (item.started would double count).
     if (asString(record.type) !== 'item.completed') continue;
     const item = asRecord(record.item);
     if (!item) continue;
 
     const itemType = asString(item.type);
-    if (itemType === 'command_execution') {
-      const command = asString(item.command);
-      steps.push({
-        kind: 'command',
-        label: 'Shell',
-        ...(command ? { detail: formatDetail(command) } : {}),
-        ...(command ? { body: command } : {}),
-      });
-      continue;
-    }
     if (itemType === 'file_change') {
       steps.push({ kind: 'tool', label: 'Edit' });
       continue;
@@ -250,6 +312,18 @@ function stepsFromCodexLines(lines: string[]): RunProgressStep[] {
   return steps;
 }
 
+function rolloutCommand(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return asString(value);
+  const argv = value.filter((part): part is string => typeof part === 'string');
+  const shell = argv[0]?.split('/').at(-1);
+  if (argv.length === 3 && shell && /^(bash|dash|fish|ksh|sh|zsh)$/.test(shell)
+    && /^-[a-z]*c[a-z]*$/.test(argv[1])) return argv[2];
+
+  return argv.map(arg => /^[a-zA-Z0-9_@%+=:,./-]+$/.test(arg)
+    ? arg
+    : "'" + arg.replaceAll("'", "'\\''") + "'").join(' ');
+}
+
 /**
  * Steps from a **Codex rollout** (`~/.codex/sessions/.../rollout-*.jsonl`).
  *
@@ -263,39 +337,30 @@ function stepsFromCodexLines(lines: string[]): RunProgressStep[] {
  */
 function stepsFromCodexRolloutLines(lines: string[]): RunProgressStep[] {
   const steps: RunProgressStep[] = [];
+  const commands = new Map<string, CommandStepState>();
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    const record = asRecord(raw);
+    const record = parseRecord(line);
     if (!record || asString(record.type) !== 'event_msg') continue;
     const payload = asRecord(record.payload);
-    // Count each item once via item_completed (item_started would double count).
-    if (!payload || asString(payload.type) !== 'item_completed') continue;
-    const item = asRecord(payload.item);
+    if (!payload) continue;
+    const legacy = payload.type === 'exec_command_begin' || payload.type === 'exec_command_end';
+    const isStart = payload.type === 'item_started' || payload.type === 'exec_command_begin';
+    if (!legacy && !isStart && payload.type !== 'item_completed') continue;
+    const item = legacy ? { ...payload, type: 'CommandExecution', id: payload.call_id } : asRecord(payload.item);
     if (!item) continue;
+    if (isStart && item.type !== 'CommandExecution') continue;
 
     switch (asString(item.type)) {
       case 'CommandExecution': {
-        // `command` is the argv array the sandbox ran, e.g.
-        // `["/bin/zsh", "-lc", "cat SKILL.md"]` — the last element is the part
-        // a human recognises.
-        const argv = Array.isArray(item.command)
-          ? item.command.filter((part): part is string => typeof part === 'string')
-          : [];
-        const command = argv.length > 0 ? (argv[argv.length - 1] ?? '') : asString(item.command) ?? '';
-        steps.push({
-          kind: 'command',
-          label: 'Shell',
-          ...(command ? { detail: formatDetail(command) } : {}),
-          ...(command ? { body: command } : {}),
+        if (item.source === 'unified_exec_interaction') break; // stdin to an existing shell
+        const command = rolloutCommand(item.command);
+        const itemId = asString(item.id);
+        const id = itemId ? JSON.stringify([asString(payload.turn_id), itemId]) : undefined;
+        if (!isStart || id) recordCommand(steps, commands, {
+          id, label: 'Shell', command, full: !isStart,
+          startedAt: isStart ? receiptTime(record.timestamp) : undefined,
+          declined: item.status === 'declined',
         });
         break;
       }
@@ -402,8 +467,8 @@ export function buildRunProgress(run: RuntimeRun, lines: string[]): CardRunProgr
  * not the card's `agentRuntime`: the lookup is by file existence, so a card
  * tagged one way can legitimately resolve the other runtime's file. Claude's
  * transcript shares the tool_use shape with stream-json but carries no
- * system/task_started events (subagents are read from the Task tool_use
- * instead); Codex's rollout is its own envelope, see
+ * guaranteed system/task_started events for subagents (those steps come
+ * from Task tool_use instead). Codex's rollout is its own envelope, see
  * `stepsFromCodexRolloutLines`.
  */
 export function buildTranscriptProgress(

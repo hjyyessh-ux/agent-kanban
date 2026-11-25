@@ -1,4 +1,6 @@
 import { test, expect } from './fixtures/kanban';
+import type { CardRunProgress, RunProgressStep } from '../src/core/types';
+import { PROGRESS_COMMAND_TIME_COPY } from '../web/src/constants/copy';
 
 test.describe('Progress & Result Phase Blocks', () => {
   test('card with progressSummary shows Progress phase in dialog', async ({ page, seedCardWithStatus, trackCard }) => {
@@ -190,5 +192,80 @@ test.describe('Progress & Result Phase Blocks', () => {
     const progressPhase = page.locator('.kv2-phase--progress');
     await expect(progressPhase).toBeVisible();
     await expect(progressPhase.locator('.kv2-phase-content')).toContainText('Detailed progress summary for modal');
+  });
+});
+
+test.describe('Command start times', () => {
+  test.use({ timezoneId: 'UTC', viewport: { width: 1280, height: 900 } });
+
+  test('shows live KST starts and keeps full command bodies across polls, reload and mobile', async ({
+    page, seedCardWithStatus,
+  }, testInfo) => {
+    const card = await seedCardWithStatus({
+      title: '[E2E] Command starts',
+      description: 'Synthetic progress fixture',
+      agentRuntime: 'codex',
+    }, 'in_progress', { progressSummary: 'Existing progress log fixture' });
+    const longCommand = `printf '%s\\n' '${'synthetic command '.repeat(18).trim()}' && sleep 30`;
+    const command = (body: string, commandStartedAt?: string): RunProgressStep => ({
+      kind: 'command', label: 'Shell', detail: body, body, commandStartedAt,
+    });
+    const progress: CardRunProgress = {
+      source: 'run', runtime: 'codex', runId: 'synthetic-run', runStatus: 'running',
+      startedAt: '2026-07-03T14:55:00.000Z', totalSteps: 3,
+      summary: { tools: ['Shell'], agents: [], skills: [], mcpServers: [], memory: [] },
+      steps: [
+        command('printf legacy'),
+        command('printf midnight', '2026-07-03T14:59:59.000Z'),
+        command(longCommand, '2026-07-03T15:00:02.000Z'),
+      ],
+    };
+    let releaseStale = () => {};
+    const stale = new Promise<void>(resolve => { releaseStale = resolve; });
+    let requestCount = 0;
+    await page.route(`**/api/cards/${card.id}/progress`, async route => {
+      if (++requestCount !== 1) return route.fulfill({ json: progress });
+      await stale;
+      return route.fulfill({
+        headers: { 'x-fixture-stale': 'true' },
+        json: { ...progress, totalSteps: 2, steps: progress.steps.slice(0, 2) },
+      });
+    });
+    await page.goto(`/?card=${card.id}`);
+
+    const dialog = page.getByRole('dialog');
+    const phase = dialog.locator('.kv2-phase--progress');
+    const rows = phase.locator('.kv2-progress-step--command');
+    const times = rows.locator('.kv2-progress-time');
+    await expect(dialog.locator('.kv2-progress-timezone')).toHaveText(PROGRESS_COMMAND_TIME_COPY.timezone);
+    await expect(phase).toContainText('Existing progress log fixture');
+    await expect(times).toHaveText(['—', '23:59:59', '00:00:02']);
+    const staleResponse = page.waitForResponse(response => response.headers()['x-fixture-stale'] === 'true');
+    releaseStale();
+    await (await staleResponse).finished();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(times).toHaveText(['—', '23:59:59', '00:00:02'], { timeout: 1_000 });
+    const desktopTimeWidth = (await times.last().boundingBox())?.width;
+    const wrapper = phase.locator('..');
+    await wrapper.screenshot({ path: testInfo.outputPath('progress-desktop.png') });
+
+    const fullCommand = longCommand + ' && printf done';
+    progress.steps[2] = command(fullCommand, progress.steps[2].commandStartedAt);
+    const row = rows.last().getByRole('button');
+    await expect(row.locator('.kv2-progress-detail')).toHaveAttribute('title', fullCommand);
+    await expect(times).toHaveText(['—', '23:59:59', '00:00:02']);
+    await page.reload();
+    await expect(times).toHaveText(['—', '23:59:59', '00:00:02']);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const detail = row.locator('.kv2-progress-detail');
+    await expect(detail).toBeVisible();
+    expect(await detail.evaluate(node => node.clientWidth >= 55 && node.scrollWidth > node.clientWidth)).toBe(true);
+    expect((await times.last().boundingBox())?.width).toBeCloseTo(desktopTimeWidth ?? 0);
+    await wrapper.screenshot({ path: testInfo.outputPath('progress-mobile.png') });
+    await row.press('Enter');
+    await expect(rows.last().locator('.kv2-progress-body')).toHaveText(fullCommand);
+    await row.press('Enter');
+    await expect(rows.last().locator('.kv2-progress-body')).toHaveCount(0);
   });
 });

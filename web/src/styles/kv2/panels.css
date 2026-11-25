@@ -730,6 +730,11 @@
   color: var(--kv2-strong-label-color);
 }
 
+.kv2-phase-header--outer .kv2-progress-timezone {
+  font-size: var(--kv2-text-xs);
+  color: var(--kv2-text-muted);
+}
+
 .kv2-phase-header--question {
 }
 
@@ -1175,8 +1180,21 @@ ol.kv2-markdown-list {
   min-width: 0;
 }
 
-.kv2-progress-step--expandable .kv2-progress-step-row {
+button.kv2-progress-step-row {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: start;
   cursor: pointer;
+}
+
+.kv2-progress-time {
+  flex: 0 0 8ch;
+  font-family: var(--kv2-font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--kv2-text-muted);
 }
 
 .kv2-progress-step--expandable .kv2-progress-step-row:hover {
@@ -1926,6 +1944,14 @@ ol.kv2-markdown-list {
 }
 
 @media (max-width: 640px) {
+  .kv2-phase--progress {
+    margin-inline: 18px;
+  }
+
+  .kv2-phase--progress .kv2-phase-content {
+    padding-inline: var(--kv2-sp-3);
+  }
+
   .kv2-dialog-overlay {
     padding: 10px;
   }

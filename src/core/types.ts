@@ -402,6 +402,7 @@ export interface RunProgressStep {
   label: string;    // skill 이름, mcp__server__tool, agentType, tool 이름 등
   detail?: string;  // command / 파일 경로 / description 전체
   body?: string;    // 클릭 시 펼치는 본문: Edit old/new diff, Bash 전체 command, Write 내용 등
+  commandStartedAt?: string; // 명령 시작 이벤트가 기록된 시각 (ISO 8601)
 }
 
 // 카드의 최신 runtime run 에 대한 처리과정 타임라인 + 사용 요약.
