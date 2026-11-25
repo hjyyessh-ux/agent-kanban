@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AgentRuntime,
   ClaudePermissionMode,
@@ -12,10 +12,15 @@ import {
   CODEX_SANDBOX_VALUES,
   RUNTIME_MODEL_PREFERENCE_KEY,
 } from "../../../src/core/runtime-config";
+import {
+  CLAUDE_PERMISSION_MODE_SETTING_KEY,
+  CLAUDE_SKIP_PERMISSIONS_SETTING_KEY,
+  CODEX_BYPASS_SETTING_KEY,
+  isClaudePermissionMode,
+} from "../../../src/core/runtime-options";
 
 const LEGACY_KEY = "kanban-agent-model-preference";
 const RUNTIME_VALUES: AgentRuntime[] = ["opencode", "codex", "claude"];
-const CLAUDE_PERMISSION_VALUES: ClaudePermissionMode[] = ["acceptEdits", "bypassPermissions", "plan", "dontAsk"];
 
 type SettingsEntry = {
   key: string;
@@ -53,10 +58,6 @@ function loadPrefs(): RuntimeModelPreference {
 
 function isAgentRuntime(value: string): value is AgentRuntime {
   return RUNTIME_VALUES.includes(value as AgentRuntime);
-}
-
-function isClaudePermissionMode(value: string): value is ClaudePermissionMode {
-  return CLAUDE_PERMISSION_VALUES.includes(value as ClaudePermissionMode);
 }
 
 function isCodexReasoningEffort(value: string): value is CodexReasoningEffort {
@@ -100,16 +101,16 @@ async function loadServerPrefs(): Promise<RuntimeModelPreference> {
       prefs.codexReasoningEffort = entry.value;
     } else if (entry.key === CODEX_SANDBOX_SETTING_KEY && isCodexSandboxMode(entry.value)) {
       prefs.codexSandbox = entry.value;
-    } else if (entry.key === "agent.codex.bypass_approvals_and_sandbox") {
+    } else if (entry.key === CODEX_BYPASS_SETTING_KEY) {
       prefs.codexBypassApprovalsAndSandbox = entry.value === "true";
     } else if (entry.key === "agent.defaults.claude" && entry.value.trim()) {
       prefs.claude = entry.value;
     } else if (entry.key.startsWith("agent.defaults.opencode.") && entry.value.trim()) {
       prefs.opencode = prefs.opencode ?? {};
       prefs.opencode[entry.key.slice("agent.defaults.opencode.".length)] = entry.value;
-    } else if (entry.key === "agent.claude.permission_mode" && isClaudePermissionMode(entry.value)) {
+    } else if (entry.key === CLAUDE_PERMISSION_MODE_SETTING_KEY && isClaudePermissionMode(entry.value)) {
       prefs.claudePermissionMode = entry.value;
-    } else if (entry.key === "agent.claude.dangerously_skip_permissions") {
+    } else if (entry.key === CLAUDE_SKIP_PERMISSIONS_SETTING_KEY) {
       prefs.claudeDangerouslySkipPermissions = entry.value === "true";
     }
   }
@@ -124,33 +125,32 @@ async function saveServerDefault(path: string, value: string): Promise<void> {
   });
 }
 
-async function saveSettingKey(key: string, value: string): Promise<void> {
-  const category = key.startsWith("agent.codex.") ? "agent.codex" : "agent.claude";
-  await fetch(`/api/settings/by-key/${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ value, description: key, category, masked: false }),
-  });
-}
+/** Option fields the browser remembers on its own — never written to the server. */
+type BrowserOptionKey =
+  | "codexReasoningEffort"
+  | "codexSandbox"
+  | "codexBypassApprovalsAndSandbox"
+  | "claudePermissionMode"
+  | "claudeDangerouslySkipPermissions";
 
+/**
+ * Runtime/model defaults plus the permission/effort options the web dialogs
+ * start from. `prefs` = this browser's own choices (localStorage) over the
+ * server values. Option setters here are **browser-only**: the server-side
+ * defaults that API-created cards use are edited only in Settings
+ * (`RuntimeDefaultsPanel`), so a choice made in a dialog never leaks into
+ * API/Telegram/scheduler runs.
+ */
 export function useRuntimeDefaults() {
-  const [prefs, setPrefs] = useState<RuntimeModelPreference>(() => loadPrefs());
+  const [localPrefs, setLocalPrefs] = useState<RuntimeModelPreference>(() => loadPrefs());
+  const [serverPrefs, setServerPrefs] = useState<RuntimeModelPreference>({});
 
   useEffect(() => {
-    setPrefs(loadPrefs());
+    setLocalPrefs(loadPrefs());
     let cancelled = false;
     void loadServerPrefs()
-      .then((serverPrefs) => {
-        if (cancelled) return;
-        setPrefs((current) => {
-          const next = mergePrefs(serverPrefs, current);
-          try {
-            localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-          } catch {
-            return next;
-          }
-          return next;
-        });
+      .then((next) => {
+        if (!cancelled) setServerPrefs(next);
       })
       .catch(() => {});
     return () => {
@@ -158,12 +158,23 @@ export function useRuntimeDefaults() {
     };
   }, []);
 
+  const prefs = useMemo(() => mergePrefs(serverPrefs, localPrefs), [serverPrefs, localPrefs]);
+
+  const writeLocal = useCallback((update: (current: RuntimeModelPreference) => RuntimeModelPreference) => {
+    setLocalPrefs((current) => {
+      const next = update(current);
+      try {
+        localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
+      } catch {
+        return next;
+      }
+      return next;
+    });
+  }, []);
+
   const setDefault = useCallback((path: "runtime" | "codex" | "claude" | `opencode.${string}`, value: string) => {
-    setPrefs((current) => {
-      const next: RuntimeModelPreference = {
-        ...current,
-        opencode: { ...(current.opencode ?? {}) },
-      };
+    writeLocal((current) => {
+      const next: RuntimeModelPreference = { ...current, opencode: { ...(current.opencode ?? {}) } };
       if (path === "runtime") {
         next.runtime = value as AgentRuntime;
       } else if (path === "codex") {
@@ -173,56 +184,35 @@ export function useRuntimeDefaults() {
       } else if (path.startsWith("opencode.")) {
         next.opencode![path.slice("opencode.".length)] = value;
       }
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveServerDefault(path, value).catch(() => {});
       return next;
     });
-  }, []);
+    void saveServerDefault(path, value).catch(() => {});
+  }, [writeLocal]);
 
-  const setClaudePermissionMode = useCallback((value: ClaudePermissionMode) => {
-    setPrefs((current) => {
-      const next = { ...current, claudePermissionMode: value };
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveSettingKey("agent.claude.permission_mode", value).catch(() => {});
-      return next;
-    });
-  }, []);
+  const setBrowserOption = useCallback(<K extends BrowserOptionKey>(key: K, value: RuntimeModelPreference[K]) => {
+    writeLocal((current) => ({ ...current, [key]: value }));
+  }, [writeLocal]);
 
-  const setCodexBypassApprovalsAndSandbox = useCallback((value: boolean) => {
-    setPrefs((current) => {
-      const next = { ...current, codexBypassApprovalsAndSandbox: value };
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveSettingKey("agent.codex.bypass_approvals_and_sandbox", String(value)).catch(() => {});
-      return next;
-    });
-  }, []);
-
-  const setCodexReasoningEffort = useCallback((value: CodexReasoningEffort) => {
-    setPrefs((current) => {
-      const next = { ...current, codexReasoningEffort: value };
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveServerDefault("codex.reasoning_effort", value).catch(() => {});
-      return next;
-    });
-  }, []);
-
-  const setCodexSandbox = useCallback((value: CodexSandboxMode) => {
-    setPrefs((current) => {
-      const next = { ...current, codexSandbox: value };
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveServerDefault("codex.sandbox", value).catch(() => {});
-      return next;
-    });
-  }, []);
-
-  const setClaudeDangerouslySkipPermissions = useCallback((value: boolean) => {
-    setPrefs((current) => {
-      const next = { ...current, claudeDangerouslySkipPermissions: value };
-      localStorage.setItem(RUNTIME_MODEL_PREFERENCE_KEY, JSON.stringify(next));
-      void saveSettingKey("agent.claude.dangerously_skip_permissions", String(value)).catch(() => {});
-      return next;
-    });
-  }, []);
+  const setClaudePermissionMode = useCallback(
+    (value: ClaudePermissionMode) => setBrowserOption("claudePermissionMode", value),
+    [setBrowserOption],
+  );
+  const setClaudeDangerouslySkipPermissions = useCallback(
+    (value: boolean) => setBrowserOption("claudeDangerouslySkipPermissions", value),
+    [setBrowserOption],
+  );
+  const setCodexReasoningEffort = useCallback(
+    (value: CodexReasoningEffort) => setBrowserOption("codexReasoningEffort", value),
+    [setBrowserOption],
+  );
+  const setCodexSandbox = useCallback(
+    (value: CodexSandboxMode) => setBrowserOption("codexSandbox", value),
+    [setBrowserOption],
+  );
+  const setCodexBypassApprovalsAndSandbox = useCallback(
+    (value: boolean) => setBrowserOption("codexBypassApprovalsAndSandbox", value),
+    [setBrowserOption],
+  );
 
   return {
     prefs,

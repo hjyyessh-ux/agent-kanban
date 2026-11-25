@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { nanoid } from 'nanoid';
 import type { ScriptStore } from './script-store';
+import { CLAUDE_PERMISSION_MODE_VALUES } from './runtime-options';
 import type {
   AgentRuntime,
   ClaudeOptions,
@@ -37,7 +38,7 @@ const PARAMETER_TYPES = new Set(['string', 'number', 'boolean', 'select', 'secre
 const AGENT_RUNTIMES = new Set<AgentRuntime>(['opencode', 'codex', 'claude']);
 const CODEX_REASONING_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh']);
 const CODEX_SANDBOX_MODES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
-const CLAUDE_PERMISSION_MODES = new Set(['acceptEdits', 'bypassPermissions', 'plan', 'dontAsk']);
+const CLAUDE_PERMISSION_MODES = new Set<string>(CLAUDE_PERMISSION_MODE_VALUES);
 const CLAUDE_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
 
 const COMMON_INPUT_KEYS = [

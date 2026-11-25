@@ -13,6 +13,7 @@ Key/value settings entry management plus a self-update/maintenance panel that le
 | `SettingsEntryModal.tsx` | Create/edit form for a single `SettingsEntry` (key/value pair). |
 | `SettingsMaintenancePanel.tsx` | Runs and polls status for `bash scripts/install.sh` / `bash scripts/restart-opencode-plugin.sh --yes` via `applyUpdateAndRestart`/`fetchMaintenanceStatus`/`fetchMaintenanceLog`, showing a running/success/failed state machine. |
 | `lanAccess.ts` | `toggleLanFullAccess` — turning `lan_full_access` **on** goes through `window.confirm` (it hands every LAN device a full-power token); turning it off is immediate. `SettingsView` disables the switch (`aria-busy`) while the request is in flight. Covered by `lanAccess.test.ts`. |
+| `RuntimeDefaultsPanel.tsx` | `실행 기본값` — server-side Claude/Codex permission·effort defaults (`src/core/runtime-options.ts` keys) used when an API/Telegram/scheduler card omits or sends invalid `claudeOptions`/`codexOptions`. Collapsed by default (value chips); expanded shows per-key choices, danger switches (red frame, locks the overridden control) and a CLI `실행 미리보기` built with the same `claudeOptionArgs`/`codexOptionArgs` the adapters use. Saves each key immediately via `upsertSettingByKey`. This panel is the **only** writer of these keys — web dialogs keep their choices in the browser (`useRuntimeDefaults`). |
 | `Settings.css` | `.settings-*` styling, including maintenance status color states. |
 
 ## For AI Agents

@@ -43,6 +43,7 @@ Card detail and card creation dialogs, plus every sub-panel they compose: runtim
 - Prefer extracting pure logic (validation, config-building) into standalone functions that can be tested without rendering the full dialog, matching the existing test files' style.
 
 ### Common Patterns
+- Permission/effort choices in NEW TASK and the card meta panel (`useRuntimeDefaults` setters) are **browser-only** (localStorage). They never write the server `실행 기본값` that API-created cards use — only `Settings/RuntimeDefaultsPanel.tsx` does.
 - All fetch/mutation calls go through `web/src/hooks/*` (`useKanbanApi`, `useQuestionsApi`, `useRuntimes`, `useRuntimeDefaults`, `useModelCatalog`) — components never call `fetch` directly.
 - Modals compose `DialogSkeleton` for chrome rather than reimplementing overlay/close/resize logic.
 - Command/runtime label formatting is centralized in `web/src/constants/commands.ts` and `web/src/constants/agents.ts` (`formatCommandName`, `getCommandHint`, `getAgentConfig`) — don't inline label strings.

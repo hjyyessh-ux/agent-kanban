@@ -12,6 +12,7 @@ import { SettingsEntryModal } from './SettingsEntryModal';
 import { BoardHistoryStatusPanel } from './BoardHistoryStatusPanel';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
 import { ResponseGuidelinesPanel } from './ResponseGuidelinesPanel';
+import { RuntimeDefaultsPanel } from './RuntimeDefaultsPanel';
 import { RESPONSE_GUIDELINES_SETTING_KEY } from '../../../../src/core/response-guidelines';
 import { toggleLanFullAccess } from './lanAccess';
 import { ErrorAlert } from '../shared/ErrorAlert';
@@ -355,6 +356,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </button>
         </div>
       )}
+
+      <RuntimeDefaultsPanel entries={entries} onSaved={onRefresh} />
 
       <ResponseGuidelinesPanel entry={guidelinesEntry} onSaved={onRefresh} />
 

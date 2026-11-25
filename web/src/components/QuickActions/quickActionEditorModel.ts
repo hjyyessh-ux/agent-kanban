@@ -1,5 +1,6 @@
 import type {
   AgentRuntime,
+  ClaudePermissionMode,
   CreateQuickActionInput,
   QuickActionParameterDefinition,
   QuickActionView,
@@ -47,7 +48,7 @@ export interface QuickActionEditorDraft {
   codexSandbox: 'read-only' | 'workspace-write' | 'danger-full-access';
   codexSkipGitRepoCheck: boolean;
   codexBypassApprovalsAndSandbox: boolean;
-  claudePermissionMode: 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk';
+  claudePermissionMode: ClaudePermissionMode;
   claudeDangerouslySkipPermissions: boolean;
   scriptId: string;
   parameters: QuickActionParameterDraft[];

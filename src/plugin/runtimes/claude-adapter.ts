@@ -1,9 +1,10 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import type { SettingsStore } from '../../core/settings-store';
-import { getSettingValueOrDefault } from '../../core/settings-store';
+import { claudeOptionArgs, resolveClaudeOptions } from '../../core/runtime-options';
+import { loadRuntimeOptionDefaults } from './runtime-option-defaults';
 import { buildClaudeAppendSystemPrompt, loadResponseGuidelines } from '../../core/response-guidelines';
-import type { DispatchResult, UpdateCardInput } from '../../core/types';
+import type { ClaudeOptions, DispatchResult, UpdateCardInput } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
 import { DEFAULT_CLAUDE_MODEL, isClaudeModelValid } from '../../core/runtime-config';
 import { dispatchNextQueuedTodoCard } from '../hooks/event-handler';
@@ -109,9 +110,7 @@ async function startClaudeRun(
     const argv = await buildClaudeCommand(deps, resolveClaudeBinary, {
       model,
       resumeSessionId: input.resumeSessionId,
-      permissionMode: input.card.claudeOptions?.permissionMode,
-      dangerouslySkipPermissions: input.card.claudeOptions?.dangerouslySkipPermissions,
-      effort: input.card.claudeOptions?.effort,
+      options: input.card.claudeOptions,
     });
     const apiUrl = deps.getApiUrl?.();
     proc = Bun.spawn(argv, {
@@ -275,9 +274,7 @@ async function buildClaudeCommand(
   input: {
     model: string;
     resumeSessionId?: string;
-    permissionMode?: string;
-    dangerouslySkipPermissions?: boolean;
-    effort?: string;
+    options?: ClaudeOptions;
   },
 ): Promise<string[]> {
   const command = await resolveClaudeBinary();
@@ -291,27 +288,8 @@ async function buildClaudeCommand(
     input.model,
   ];
 
-  const skipPermissions = input.dangerouslySkipPermissions
-    ?? ((await getSettingValueOrDefault(
-      deps.settingsStore,
-      'agent.claude.dangerously_skip_permissions',
-      'false',
-    )) === 'true');
-  if (skipPermissions) {
-    args.push('--dangerously-skip-permissions');
-  } else {
-    const permissionMode = input.permissionMode
-      ?? await getSettingValueOrDefault(
-        deps.settingsStore,
-        'agent.claude.permission_mode',
-        'acceptEdits',
-      );
-    args.push('--permission-mode', permissionMode);
-  }
-
-  if (input.effort) {
-    args.push('--effort', input.effort);
-  }
+  const defaults = await loadRuntimeOptionDefaults(deps.settingsStore);
+  args.push(...claudeOptionArgs(resolveClaudeOptions(input.options, defaults.claude)));
 
   // Common response guidelines (Settings). `--append-system-prompt` keeps the
   // default system prompt and CLAUDE.md intact. Snapshot `off` makes every

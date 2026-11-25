@@ -109,3 +109,7 @@ Shared data layer for every runtime. Defines card/scheduler/settings/script/Tele
 - `cold-storage-store.ts` rejects symlinks on all move/copy/freeze/restore operations (`guardNotSymlink`) and verifies directory hashes after cross-volume copies before deleting the source.
 
 <!-- MANUAL: -->
+
+## Runtime options (`runtime-options.ts`)
+
+- Single source for Claude/Codex permission·effort option values, Settings keys, sanitize (invalid → dropped → Settings default) and resolution order: card option → Settings `실행 기본값` → built-in. Adapters (`claude-adapter.ts`, `codex-cli-adapter.ts`) and the Settings panel preview build argv with the same `claudeOptionArgs`/`codexOptionArgs`; do not re-implement flag logic elsewhere.

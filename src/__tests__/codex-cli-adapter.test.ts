@@ -432,6 +432,39 @@ describe('CodexCliAdapter', () => {
     });
   });
 
+  test('stored skip-git-repo-check default is honoured; invalid card sandbox falls back to Settings', async () => {
+    await withTempDir(async (dir) => {
+      const argvPath = join(dir, 'argv.json');
+      const fakeCodex = await createFakeCodexBinary(dir, 'success', { argvPath });
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      await settingsStore.upsertByKey('agent.codex.skip_git_repo_check', 'false');
+      await settingsStore.upsertByKey('agent.defaults.codex.sandbox', 'read-only');
+      const card = await store.createCard({
+        title: 'Codex task',
+        description: 'Do it',
+        agentRuntime: 'codex',
+        projectDir: dir,
+        codexOptions: JSON.parse('{"sandbox":"default"}'),
+      });
+      const adapter = createCodexCliAdapter({
+        store,
+        settingsStore,
+        runStore,
+        commandOverride: [fakeCodex],
+        threadIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      await handle.done;
+
+      const argv = JSON.parse(await Bun.file(argvPath).text()) as string[];
+      expect(argv[argv.indexOf('-s') + 1]).toBe('read-only');
+      expect(argv).not.toContain('--skip-git-repo-check');
+    });
+  });
+
   test('stored Codex bypass default is used when card option is absent', async () => {
     await withTempDir(async (dir) => {
       const argvPath = join(dir, 'argv.json');
