@@ -1,5 +1,5 @@
-import { PROMPT_MODEL_PATTERN, readPromptProposal, type PromptLoopOptions } from '../../../src/core/prompt-proposal';
-import { previewLoopPrompt, type RefinementPreview } from './prompt-refinement';
+import { readPromptProposal, type PromptLoopOptions } from '../../../src/core/prompt-proposal';
+import { previewLoopPrompt, type RefinementPreview, type RefinementSection } from './prompt-refinement';
 
 /** What the client sends. `model` must be one of the server-listed models; the server re-validates. */
 export interface PromptProposalInput { skill: string; source: string; model: string; loop?: PromptLoopOptions }
@@ -15,17 +15,12 @@ export interface PromptProposalProvider {
 }
 export { PROMPT_PROPOSAL_SKILL } from '../../../src/core/prompt-proposal';
 
-export function providerModels(provider: PromptProposalProvider | undefined): string[] {
-  if (!provider) return [];
-  const list = (provider.models ?? []).filter(m => PROMPT_MODEL_PATTERN.test(m));
-  return list.includes(provider.model) ? list : [provider.model, ...list];
-}
-
 export function parsePromptProposal(source: string, raw: unknown, loop?: PromptLoopOptions): RefinementPreview {
-  const sections = readPromptProposal(source, raw, loop ? [loop.goal, loop.doneWhen] : []).sections.map(({kind,title,body}, index) => {
-    const label = kind === 'extracted' ? '원문 발췌' : kind === 'question' ? '확인 필요' : 'AI 제안 · 검토 필요';
-    return {id:`ai-${index}`,title:`${title} (${label})`,body};
-  });
+  const sections: RefinementSection[] = readPromptProposal(source, raw, loop ? [loop.goal, loop.doneWhen] : []).sections
+    .map(({kind,title,body,slot,options}, index) => {
+      const label = kind === 'extracted' ? '원문 발췌' : kind === 'question' ? '확인 필요' : kind === 'decision' ? 'AI 제안 · 결정 필요' : 'AI 제안 · 검토 필요';
+      return {id:`ai-${index}`, kind, slot: slot ?? 'other', title:`${title} (${label})`, body, ...(options?.length ? {options} : {})};
+    });
   // Goals, completion conditions and stop criteria stay explicit even if
   // the model omits or paraphrases them. These are user inputs or local text.
   return { source, sections: loop ? [...sections, ...previewLoopPrompt(source,loop).sections] : sections };

@@ -21,6 +21,15 @@ import { isRecentlyFailed, dispatchNextQueuedTodoCard } from '../src/plugin/hook
 import { RuntimeDispatchError } from '../src/plugin/runtimes/types';
 import { buildDispatchPromptText } from '../src/plugin/dispatch-prompt';
 import { ScriptExecutionService } from '../src/plugin/script-execution-service';
+import { createPromptRefinementRoute } from '../src/server/prompt-refinement-route';
+import { CODEX_REFINEMENT } from '../src/server/prompt-refinement-codex';
+import { PromptRefinementPrefsStore } from '../src/core/prompt-refinement-prefs-store';
+import { createSyntheticPromptUpstream, type SyntheticCall } from '../src/__tests__/synthetic-prompt-provider';
+
+const syntheticPromptCalls: SyntheticCall[] = [];
+
+// e2e never spawns the developer's real `claude` CLI (normal-login refinement adapter).
+process.env.KANBAN_PROMPT_CLAUDE_ENABLED ??= 'false';
 
 const port = Number.parseInt(process.env.E2E_PORT ?? '24681', 10);
 const sqlitePrefix = process.env.E2E_BOARD_BACKEND==='sqlite' ? '-sqlite' : '';
@@ -457,12 +466,48 @@ async function restartBackgroundServices(): Promise<void> {
   await scheduledDispatchService.start();
 }
 
+/**
+ * SYNTHETIC refinement transports for e2e only (`E2E_SYNTHETIC_PROMPT_PROVIDER=true`):
+ * - OpenAI: echo upstream with two allow-listed models (never leaves the process).
+ * - Codex CLI: shaped like the real adapter but reports "not signed in", so the UI
+ *   must show it as unavailable. Calling it throws — it must never be reached.
+ * Prefs persist under the isolated `.e2e-data` dir, wiped at server start.
+ */
+const syntheticPromptRoute = process.env.E2E_SYNTHETIC_PROMPT_PROVIDER === 'true'
+  ? createPromptRefinementRoute([
+    {
+      provider: CODEX_REFINEMENT, model: 'gpt-6.1-sol', models: ['gpt-6.1-sol'],
+      probe: async () => [
+        { key: 'transport', label: '고정 실행 파일', ok: true, detail: '[합성] 경로·SHA-256 일치' },
+        { key: 'auth', label: '전용 로그인', ok: false, detail: '[합성] 전용 로그인 없음 (codex login 미완료)' },
+        { key: 'schema', label: '구조화 출력', ok: true, detail: '[합성] --output-schema 고정 스키마' },
+      ],
+      propose: async () => { throw new Error('synthetic codex transport must never be called'); },
+    },
+    { apiKey: 'synthetic-key', model: 'synthetic-default', models: ['synthetic-default', 'synthetic-alt'] },
+  ], createSyntheticPromptUpstream(syntheticPromptCalls).upstream, {
+    prefs: new PromptRefinementPrefsStore(dataDir),
+    cardModels: async () => ({ OpenCode: (await modelsFn()).map(model => ({ id: model.id, label: model.name })) }),
+  })
+  : undefined;
+
 const outerServer = Bun.serve({
   port,
   hostname: '127.0.0.1',
   idleTimeout: 120,
   async fetch(req) {
     const url = new URL(req.url);
+
+    // Opt-in synthetic refinement catalog (no network, no key, no model). The real
+    // route's bearer/loopback gate is covered by unit tests; the e2e server has no
+    // install token, so the synthetic route is served here only behind the flag.
+    if (syntheticPromptRoute && url.pathname.startsWith('/api/prompt-refinement/')) {
+      return syntheticPromptRoute(req);
+    }
+    // How many times the synthetic upstream was actually reached (models only, no content).
+    if (syntheticPromptRoute && url.pathname === '/api/e2e/prompt-calls' && req.method === 'GET') {
+      return Response.json({ models: syntheticPromptCalls.map(call => call.model) });
+    }
 
     if (url.pathname === '/api/e2e/clock' && req.method === 'GET') {
       return Response.json({ now: fakeClock.toISOString() });

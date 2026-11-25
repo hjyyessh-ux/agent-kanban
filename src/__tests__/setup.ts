@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { KanbanCard, KanbanBoard } from '../core/types';
 
+// Never spawn the developer's real `claude` CLI for prompt refinement in tests.
+process.env.KANBAN_PROMPT_CLAUDE_ENABLED ??= 'false';
+
 // Guard: every test run must be isolated from the user's real ~/.agent-kanban
 // directory. The data-dir resolver would otherwise create or touch files the
 // user is actively using.

@@ -1,3 +1,8 @@
+import { PROMPT_PROPOSAL_PATH, PROMPT_REFINEMENT_DEFAULT_PATH } from '../core/prompt-proposal';
+import { PromptRefinementPrefsStore } from '../core/prompt-refinement-prefs-store';
+import {
+  configuredPromptTransports, createPromptRefinementRoute, promptTransportIssues, type PromptRefinementRoute,
+} from './prompt-refinement-route';
 import type { KanbanStore } from '../core/store';
 import type { SchedulerStore } from '../core/scheduler-store';
 import type { SchedulerEngine } from '../plugin/scheduler-engine';
@@ -181,8 +186,6 @@ import type { ExternalDelegationService } from '../plugin/runtimes/external-dele
 import type { ExternalDelegationRequest } from '../core/types';
 import { ManagedDelegationConflict } from '../core/store';
 import { RuntimeDispatchError } from '../plugin/runtimes/types';
-import { PROMPT_PROPOSAL_PATH } from '../core/prompt-proposal';
-import { selectPromptRefinementProvider, createPromptRefinementRoute, type PromptRefinementRoute } from './prompt-refinement-route';
 import type { BoardHistoryService } from '../core/board-history';
 import { BOARD_HISTORY_PREFIX, handleBoardHistoryRequest, readCappedBody } from './board-history-routes';
 import { BOARD_HISTORY_STATUS_PATH, handleBoardHistoryStatusRequest } from './board-history-status-route';
@@ -403,6 +406,7 @@ function isLoopbackClient(clientAddress: string | undefined): boolean {
  * executable code / command output (scripts).
  */
 function requiresLocalAuth(method: string, path: string): boolean {
+  if (path === PROMPT_PROPOSAL_PATH || path === PROMPT_REFINEMENT_DEFAULT_PATH) return true;
   if (method !== 'GET' && method !== 'OPTIONS') return true;
   if (path === '/api/settings' || path.startsWith('/api/settings/')) return true;
   if (path === '/api/scripts' || path.startsWith('/api/scripts/')) return true;
@@ -1364,7 +1368,21 @@ export function createRouteHandler(
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
 ) {
-  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(selectPromptRefinementProvider(process.env));
+  // Every explicitly configured transport is offered; each request stays pinned to the provider it names.
+  const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(
+    configuredPromptTransports(process.env),
+    fetch,
+    { prefs: new PromptRefinementPrefsStore(resolveKanbanDataDir()), issues: promptTransportIssues(process.env),
+      cardModels: async () => {
+        const runtimes = runtimeCatalogFn ? await runtimeCatalogFn() : RUNTIME_CATALOG;
+        const openCodeModels = modelsFn ? await modelsFn().catch(() => []) : [];
+        return {
+          'Codex CLI': runtimes.find(entry => entry.runtime === 'codex')?.models,
+          'Claude CLI': runtimes.find(entry => entry.runtime === 'claude')?.models,
+          OpenCode: openCodeModels.map(model => ({ id: model.id, label: model.name })),
+        };
+      } },
+  );
   const effectiveScriptExecutionService = scriptExecutionService ?? (
     scriptStore
       ? new ScriptExecutionService({
@@ -1490,7 +1508,7 @@ export function createRouteHandler(
       }
     }
 
-    if (path === PROMPT_PROPOSAL_PATH) {
+    if (path === PROMPT_PROPOSAL_PATH || path === PROMPT_REFINEMENT_DEFAULT_PATH) {
       if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress))
         return errorResponse('Local client required', 403);
       if (!localToken || !hasAuthorizedBearerToken(req, localToken))

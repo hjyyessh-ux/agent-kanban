@@ -2,12 +2,16 @@ import { chmod, lstat, mkdtemp, readFile, realpath, rm, stat, writeFile } from '
 import { homedir } from 'node:os';
 import { isAbsolute, join, normalize } from 'node:path';
 import { createHash } from 'node:crypto';
-import { PROMPT_MODEL_PATTERN, readPromptModels, proposalSchema } from '../core/prompt-proposal';
+import { CODEX_MODELS } from '../core/runtime-config';
+import { PROMPT_MODEL_PATTERN, readPromptModels, proposalSchema, type PromptReadinessCheck } from '../core/prompt-proposal';
 
 export const CODEX_REFINEMENT = 'Codex CLI';
 export type CodexRefiner = {
   provider: typeof CODEX_REFINEMENT; model: string; models: string[];
   propose(model: string, instructions: string, input: string, signal: AbortSignal): Promise<unknown>;
+  /** No model call, no network, no writes: pinned binary, dedicated profile and
+   * login-file presence (lstat only — credential contents are never read). */
+  probe(): Promise<PromptReadinessCheck[]>;
 };
 type Options = { executable: string; binarySha256: string; profile: string; sharedHome: string; model: string; models: string[] };
 const MAX_OUTPUT = 140_000;
@@ -22,8 +26,17 @@ export function configuredCodexRefiner(env: Record<string,string|undefined>): Co
   const model=env.KANBAN_PROMPT_CODEX_MODEL?.trim(), sharedHome=env.HOME??homedir();
   if(!executable||!safePath(executable)||!binarySha256||!SHA.test(binarySha256)||!model||
       !PROMPT_MODEL_PATTERN.test(model)||!safePath(sharedHome)) return;
-  return createCodexRefiner({executable,binarySha256,model,models:readPromptModels(model,env.KANBAN_PROMPT_CODEX_MODELS),
+  // Explicit _MODELS wins; otherwise the card catalog's Codex models are offered (same pinned binary/login).
+  const list=env.KANBAN_PROMPT_CODEX_MODELS?.trim()||CODEX_MODELS.map(m=>m.id).join(',');
+  return createCodexRefiner({executable,binarySha256,model,models:readPromptModels(model,list),
     sharedHome,profile:join(sharedHome,HOME_SUFFIX)});
+}
+
+/** Why `configuredCodexRefiner` returned nothing. Names variables, never echoes their values. */
+export function codexRefinerIssue(env: Record<string,string|undefined>): string {
+  if(env.KANBAN_PROMPT_CODEX_ENABLED!=='true') return '서버에서 꺼져 있음 (KANBAN_PROMPT_CODEX_ENABLED)';
+  if(process.platform!=='darwin') return 'macOS 서버에서만 지원';
+  return '설정값 형식 오류 (KANBAN_PROMPT_CODEX_BINARY 절대경로 / _BINARY_SHA256 / _MODEL)';
 }
 
 async function readBounded(stream:ReadableStream<Uint8Array>, cap:number):Promise<string> {
@@ -40,7 +53,35 @@ async function readBounded(stream:ReadableStream<Uint8Array>, cap:number):Promis
  * regular Codex credentials to prepare a refinement. No card/runtime adapter. */
 export function createCodexRefiner(o:Options):CodexRefiner {
   const {model,models}=o;
-  return {provider:CODEX_REFINEMENT,model,models,async propose(selected,instructions,input,signal) {
+  return {provider:CODEX_REFINEMENT,model,models,async probe() {
+    const binary=await (async()=>{
+      try {
+        const path=await realpath(o.executable), info=await stat(path);
+        if(path!==o.executable||!info.isFile()||!(info.mode&0o111)||(info.mode&0o022)!==0||info.size>512*1024*1024)
+          return '고정 실행 파일 경로·권한 변경됨';
+        return createHash('sha256').update(await readFile(path)).digest('hex')===o.binarySha256 ? '' : '실행 파일 SHA-256 불일치';
+      } catch { return '고정 실행 파일 없음'; }
+    })();
+    const auth=await (async()=>{
+      try {
+        const profile=await realpath(o.profile), info=await lstat(profile);
+        if(profile!==o.profile||!info.isDirectory()||(info.mode&0o077)!==0||info.uid!==process.getuid?.())
+          return '전용 프로필 권한/소유자 불일치';
+        const dir=join(profile,'auth'), dirInfo=await lstat(dir);
+        if(!dirInfo.isDirectory()||(dirInfo.mode&0o077)!==0||dirInfo.uid!==process.getuid?.()) return '전용 로그인 폴더 권한 불일치';
+        for(const name of ['AGENTS.md','AGENTS.override.md','config.toml','hooks.json','skills','plugins','memories']) {
+          try {await lstat(join(dir,name));return '전용 로그인 폴더에 지침/설정 파일이 있음';}
+          catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT') throw error;}
+        }
+        return (await lstat(join(dir,'auth.json'))).isFile() ? '' : '전용 로그인 파일 없음';
+      } catch { return '전용 로그인 없음 (codex login 미완료)'; }
+    })();
+    return [
+      {key:'transport',label:'고정 실행 파일',ok:!binary,detail:binary||'경로·SHA-256 일치'},
+      {key:'auth',label:'전용 로그인',ok:!auth,detail:auth||'전용 CODEX_HOME 로그인 파일 확인 (내용은 읽지 않음)'},
+      {key:'schema',label:'구조화 출력',ok:true,detail:'--output-schema 고정 스키마'},
+    ];
+  },async propose(selected,instructions,input,signal) {
     if(!models.includes(selected)||signal.aborted) throw Error('codex_refinement_request_invalid');
     const path=await realpath(o.executable);
     const host=await realpath(o.sharedHome);

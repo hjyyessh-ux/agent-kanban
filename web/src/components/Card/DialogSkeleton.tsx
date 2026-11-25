@@ -13,6 +13,8 @@ interface DialogSkeletonProps {
   initialFocusRef?: React.RefObject<HTMLElement | null>;
   persistSizeKey?: string;
   defaultSize?: { width: number; height: number };
+  /** False keeps the dialog open on a backdrop click (editing surfaces where a stray click must not discard work). */
+  closeOnBackdrop?: boolean;
 }
 
 const DEFAULT_DIALOG_SIZE = { width: 1200, height: 850 };
@@ -28,6 +30,7 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
   initialFocusRef,
   persistSizeKey,
   defaultSize,
+  closeOnBackdrop = true,
 }) => {
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -51,7 +54,8 @@ export const DialogSkeleton: React.FC<DialogSkeletonProps> = ({
       <button
         type="button"
         className="kv2-dialog-backdrop"
-        onClick={onClose}
+        onClick={closeOnBackdrop ? onClose : undefined}
+        tabIndex={closeOnBackdrop ? undefined : -1}
         aria-label="Close dialog backdrop"
       />
       <div
