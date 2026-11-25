@@ -1061,3 +1061,22 @@ UI 테스트용 question 주입/정리에 사용됩니다.
 - [`./kanban-board.md`](./kanban-board.md)
 - [`./works.md`](./works.md)
 - [`./architecture.md`](./architecture.md)
+
+## 로컬 카드 의미 검색
+
+설정과 검색에는 확인된 loopback 연결과 기존 로컬 Bearer 토큰이 필요하다. 색인 허용 경로는 비민감 프로젝트의 절대 경로를 사용한다.
+
+| 메서드 및 경로 | 동작 |
+| --- | --- |
+| `GET /api/settings/card-semantic` | 켜짐, 준비 상태, 대기·실패 건수를 반환한다. |
+| `PUT /api/settings/card-semantic` | `{ enabled, directories }`를 저장한다. 허용 범위 변경은 검색을 취소하고 파생 색인을 정리한다. |
+| `POST /api/settings/card-semantic/retry` | 현재 버전의 실패 색인이나 Worker 초기화를 재시도한다. |
+| `POST /api/cards/search/semantic` | `{ query, scope }`를 받아 정확 히트와 의미 히트를 반환한다. 범위는 `board`, `work`, `archive` 중 하나다. |
+
+SQLite로 전환한 로컬 앱에서만 쓸 수 있으며 기본값은 OFF다. 옵트인 전에 아래 명령으로 고정 모델 파일을 내려받고 검증한다. 모델 추론과 SQLite 조회는 기존 Bun 프로세스의 Worker 스레드에서 실행하며, 앱은 모델을 자동으로 내려받지 않는다.
+
+```bash
+bun scripts/fetch-card-semantic-model.ts "${KANBAN_DATA_DIR:-$HOME/.agent-kanban}/semantic-search-model"
+```
+
+설정에서 허용한 경로만 임베딩한다. 준비·시간초과·실패 상태에서는 기존 키워드 검색을 유지한다. 한 SQLite 원본 문서가 48MiB를 넘거나 조회 대상이 20,000건·허용된 벡터 후보가 4,096건을 넘는 경우 의미 검색을 생략한다.

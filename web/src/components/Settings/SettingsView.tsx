@@ -9,6 +9,7 @@ import { PromptRefinementModelsPanel } from './PromptRefinementModelsPanel';
 import { useFontScale } from '../../hooks/useFontScale';
 import { useTheme, type ThemePreference } from '../../hooks/useTheme';
 import { SettingsEntryModal } from './SettingsEntryModal';
+import { CardSemanticPanel } from './CardSemanticPanel';
 import { BoardHistoryStatusPanel } from './BoardHistoryStatusPanel';
 import { SettingsMaintenancePanel } from './SettingsMaintenancePanel';
 import { ResponseGuidelinesPanel } from './ResponseGuidelinesPanel';
@@ -361,6 +362,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       <ResponseGuidelinesPanel entry={guidelinesEntry} onSaved={onRefresh} />
 
+      <CardSemanticPanel />
       <BoardHistoryStatusPanel />
 
       <SettingsMaintenancePanel />

@@ -1,3 +1,4 @@
+import type { CardSemanticSearch } from '../plugin/card-semantic-search';
 import { existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import type { KanbanStore } from '../core/store';
@@ -92,6 +93,7 @@ export function createServer(
   promptRefinementRoute?: PromptRefinementRoute,
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
+  semanticSearch?: CardSemanticSearch,
 ): ServerInstance {
   const { handleRequest } = createRouteHandler(
     store,
@@ -120,6 +122,7 @@ export function createServer(
     promptRefinementRoute,
     delegations,
     delegationOperatorToken,
+    semanticSearch,
   );
 
   const fetchHandler = async (req: Request, server: ReturnType<typeof Bun.serve>) => {

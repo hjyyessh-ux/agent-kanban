@@ -1,3 +1,6 @@
+import type { CardSemanticSearch } from '../plugin/card-semantic-search';
+import { CARD_SEMANTIC_SEARCH_PATH, CARD_SEMANTIC_SETTINGS_KEY, CARD_SEMANTIC_SETTINGS_PATH } from '../core/card-semantic';
+import { handleCardSemanticRoute } from './card-semantic-routes';
 import { sanitizeClaudeOptions, sanitizeCodexOptions } from '../core/runtime-options';
 import type { KanbanStore } from '../core/store';
 import type { SchedulerStore } from '../core/scheduler-store';
@@ -1389,6 +1392,7 @@ export function createRouteHandler(
   promptRefinementRoute?: PromptRefinementRoute,
   delegations?: ExternalDelegationService,
   delegationOperatorToken?: () => string | undefined,
+  semanticSearch?: CardSemanticSearch,
 ) {
   const promptProposal = promptRefinementRoute ?? createPromptRefinementRoute(selectPromptRefinementProvider(process.env));
   const effectiveScriptExecutionService = scriptExecutionService ?? (
@@ -1516,6 +1520,18 @@ export function createRouteHandler(
       }
     }
 
+    if (path === CARD_SEMANTIC_SEARCH_PATH || path === CARD_SEMANTIC_SETTINGS_PATH ||
+      path === `${CARD_SEMANTIC_SETTINGS_PATH}/retry`) {
+      if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress)) return errorResponse('Local client required', 403);
+      if (!localToken || !hasAuthorizedBearerToken(req, localToken)) return errorResponse('Unauthorized', 401);
+      try {
+        return await handleCardSemanticRoute({
+          req, path, service: semanticSearch, store, workStore, json, error: errorResponse,
+        });
+      } catch {
+        return errorResponse('Semantic search unavailable', 503);
+      }
+    }
     if (path === PROMPT_PROPOSAL_PATH) {
       if (!ctx?.clientAddress || !LOOPBACK_ADDRESSES.has(ctx.clientAddress))
         return errorResponse('Local client required', 403);
@@ -3592,7 +3608,7 @@ export function createRouteHandler(
       const entries = await settingsStore.getEntries();
       // Redact masked secret values from the list. Plaintext is only served by
       // the explicit single-entry GET below (token-protected).
-      return json(entries.map(redactSetting));
+      return json(entries.filter(entry => entry.key !== CARD_SEMANTIC_SETTINGS_KEY).map(redactSetting));
     }
 
     // Route: POST /api/settings
@@ -3603,6 +3619,7 @@ export function createRouteHandler(
         if (!body.key || !body.description) {
           return errorResponse('key and description are required', 400);
         }
+        if (body.key === CARD_SEMANTIC_SETTINGS_KEY) return errorResponse('Use local card semantic settings', 403);
         const entry = await settingsStore.createEntry(body);
         return json(redactSetting(entry), 201);
       } catch {
@@ -3615,6 +3632,7 @@ export function createRouteHandler(
       if (!settingsStore) return errorResponse('Settings not available', 503);
       try {
         const key = decodeURIComponent(settingsByKeyMatch[1]);
+        if (key === CARD_SEMANTIC_SETTINGS_KEY) return errorResponse('Use local card semantic settings', 403);
         const body = await req.json();
         if (typeof body.value !== 'string') {
           return errorResponse('value (string) is required', 400);
@@ -3653,18 +3671,20 @@ export function createRouteHandler(
     if (settingsMatch) {
       if (!settingsStore) return errorResponse('Settings not available', 503);
       const id = settingsMatch[1];
+      const saved = await settingsStore.getEntry(id);
+      if (saved?.key === CARD_SEMANTIC_SETTINGS_KEY) return errorResponse('Settings entry not found', 404);
 
       if (method === 'GET') {
         // Explicit single-entry read — returns the plaintext value (e.g. for the
         // UI "reveal" action). Token-protected via requiresLocalAuth above.
-        const entry = await settingsStore.getEntry(id);
-        if (!entry) return errorResponse('Settings entry not found', 404);
-        return json(entry);
+        if (!saved) return errorResponse('Settings entry not found', 404);
+        return json(saved);
       }
 
       if (method === 'PATCH') {
         try {
           const body = await req.json();
+          if (body?.key === CARD_SEMANTIC_SETTINGS_KEY) return errorResponse('Use local card semantic settings', 403);
           const entry = await settingsStore.updateEntry(id, body);
 
           // Trigger server restart when network_exposed setting changes
@@ -3682,8 +3702,7 @@ export function createRouteHandler(
       }
 
       if (method === 'DELETE') {
-        const entry = await settingsStore.getEntry(id);
-        if (!entry) return errorResponse('Settings entry not found', 404);
+        if (!saved) return errorResponse('Settings entry not found', 404);
         await settingsStore.deleteEntry(id);
         return new Response(null, { status: 204 });
       }

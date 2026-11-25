@@ -1,4 +1,6 @@
-import type { SqliteBoardStorage } from '../core/sqlite-board-storage';
+import { resolveDir } from '../core/data-dir';
+import { selectSqliteBoardStorage, type SqliteBoardStorage } from '../core/sqlite-board-storage';
+import { CardSemanticSearch } from './card-semantic-search';
 import { existsSync, mkdirSync } from 'node:fs';
 import type { PluginInput } from '@opencode-ai/plugin';
 import { KanbanStore } from '../core/store';
@@ -121,8 +123,9 @@ export interface KanbanApp extends KanbanAppStores {
 export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<KanbanApp> {
   const { dataDir } = options;
 
-  const store = new KanbanStore(dataDir,options.boardStorage);
-  const workStore = new WorkStore(dataDir,options.boardStorage);
+  const boardStorage = options.boardStorage ?? selectSqliteBoardStorage(resolveDir(dataDir));
+  const store = new KanbanStore(dataDir, boardStorage);
+  const workStore = new WorkStore(dataDir, boardStorage);
   // Dedicated board-history sidecar, wired before any boot-time write so that
   // write is observed too. Inert (one existsSync per save) until installed;
   // capture faults are logged with a fixed code, never fail a write, and
@@ -138,6 +141,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
   await workStore.reconcileChangeObserver().catch(() => undefined);
   const schedulerStore = new SchedulerStore(dataDir);
   const settingsStore = new SettingsStore(dataDir);
+  const semanticSearch = new CardSemanticSearch(boardStorage, settingsStore, resolveDir(dataDir));
   // Hide any legacy wiki-internal cards (minted before the chat-message guard)
   // from the board and keep them out of the wiki processing queue.
   await sweepWikiInternalCards(store);
@@ -289,6 +293,7 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     dispatch.delegations,
     dispatch.setApiUrl,
     () => isRuntimeOwner ? options.delegationOperatorToken : undefined,
+    semanticSearch,
   );
   const port = await monitor.start();
   if (port) {
@@ -349,11 +354,13 @@ export async function createKanbanApp(options: CreateKanbanAppOptions): Promise<
     telegramPoller.start();
     telegramReminder.start();
     singletonStarted = true;
+    semanticSearch.start();
   };
 
   const stopSingleton = (): void => {
     if (!singletonStarted) return;
     appendRuntimeDebugLog(`${options.debugLabel}.stop`, { owner: false });
+    semanticSearch.stop();
     telegramReminder.stop();
     telegramPoller.stop();
     wikiWorker.stop();

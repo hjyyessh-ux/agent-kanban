@@ -123,7 +123,7 @@ function decodeWikiArchiveCursor(value: string): WikiArchiveCursor {
   }
 }
 
-function matchesWikiArchiveStatus(card: KanbanCard, filter: WikiArchiveCardStatusFilter): boolean {
+export function matchesWikiArchiveStatus(card: KanbanCard, filter: WikiArchiveCardStatusFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'unprocessed') return !card.wiki;
   if (!card.wiki) return false;
