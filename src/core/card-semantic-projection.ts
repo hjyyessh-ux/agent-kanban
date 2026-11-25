@@ -24,3 +24,21 @@ export function projectSearchCard(card: KanbanCard, policy: IndexPolicy): Projec
     },
   };
 }
+
+export const MAX_PROJECTED_CARDS = 20_000;
+export const MAX_PROJECTED_BYTES = 12 * 1024 * 1024;
+
+export function boundedSearchProjection(original: Iterable<KanbanCard>, policy: IndexPolicy,
+  maximumCards: number, maximumBytes: number) {
+  const cards: ProjectedSearchCard[] = [];
+  let bytes = 0;
+  for (const card of original) {
+    if (card.deletedAt) continue;
+    if (cards.length >= maximumCards) return null;
+    const projected = projectSearchCard(card, policy);
+    bytes += Buffer.byteLength(JSON.stringify(projected));
+    if (bytes > maximumBytes) return null;
+    cards.push(projected);
+  }
+  return { cards, bytes };
+}

@@ -307,7 +307,9 @@ export class CardSemanticSearch {
         const currentScope = () => valid() && sourceRevision === index.storage.cardSearchRevision();
         const cards = await index.storage.readSnapshot(async () => (projected || index.storage.cardSearchWithinBudget(scope !== 'board'))
           ? select(selectionSignal) : null);
-        if (!cards || !projected && cards.length > CARD_SEMANTIC_SCOPE_LIMIT || !currentScope()) return empty('timeout');
+        if (!cards || (!projected && cards.length > CARD_SEMANTIC_SCOPE_LIMIT)) return empty('timeout');
+        if (!await settingsCurrent()) return empty('off');
+        if (!currentScope()) return empty('timeout');
         const { keys, text } = splitCardSearch(query, new Set(cards.map(card => card.id)));
         if (!keys.size && !text) return empty('ready');
         const exactMatches = (cards: KanbanCard[]) => keys.size
@@ -343,7 +345,7 @@ export class CardSemanticSearch {
         const result = await index.storage.readSnapshot(async (): Promise<CardSemanticResult> => {
           if (!projected && !index.storage.cardSearchWithinBudget(scope !== 'board')) return empty('timeout');
           const latest = await select(selectionSignal);
-          if (!latest || !projected && latest.length > CARD_SEMANTIC_SCOPE_LIMIT || !valid()) return empty('timeout');
+          if (!latest || (!projected && latest.length > CARD_SEMANTIC_SCOPE_LIMIT) || !valid()) return empty('timeout');
           const current = new Map(latest.map(card => [card.id, card]));
           const top = new Map(ranked.map(row => [rows[row].card_id, rows[row].token]));
           const matches = index.validate(policy, top, current);
@@ -352,6 +354,7 @@ export class CardSemanticSearch {
         });
         // Read outside the snapshot. A Work link or card can change while a
         // cooperative archive selection holds an older consistent snapshot.
+        if (!await settingsCurrent()) return empty('off');
         return valid() && finalRevision === index.storage.cardSearchRevision() ? result : empty('timeout');
       } finally {
         this.querying = false;

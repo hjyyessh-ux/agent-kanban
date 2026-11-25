@@ -9,6 +9,7 @@ import { KanbanStore } from '../core/store';
 import { SettingsStore } from '../core/settings-store';
 import { WorkStore } from '../core/work-store';
 import { CardSemanticSearch } from '../plugin/card-semantic-search';
+import { boundedSearchProjection } from '../core/card-semantic-projection';
 import type { CardSemanticResult, CardSemanticStatus } from '../core/card-semantic';
 import { writeFileSync } from 'node:fs';
 
@@ -164,6 +165,19 @@ test('oversized archive skips semantic selection before parsing while keyword lo
   } finally { service.stop(); }
 }));
 
+test('scope projection stops before projecting cards beyond its count or byte budget', () => withTempDir(async dir => {
+  const card = await new KanbanStore(dir).createCard({ title: 'Fixture', description: 'No personal data', projectDir });
+  let visited = 0;
+  function* source() {
+    for (let i = 0; i < 20; i++) { visited++; yield { ...card, id: 'fixture-' + i }; }
+  }
+  expect(boundedSearchProjection(source(), policy, 3, 1024 * 1024)).toBeNull();
+  expect(visited).toBe(4);
+  visited = 0;
+  expect(boundedSearchProjection(source(), policy, 100, 1)).toBeNull();
+  expect(visited).toBe(1);
+}));
+
 const modelDir = process.env.KANBAN_SEMANTIC_TEST_MODEL_DIR;
 test.skipIf(!modelDir)('actual application: local model, initial/restarted indexing, edited vectors and scoped search', () => withTempDir(async dir => {
   const database = join(dir, 'board.sqlite');
@@ -235,10 +249,10 @@ test.skipIf(!modelDir)('actual application: local model, initial/restarted index
 
   const row = (id = card.id) => storage.readCardIndex(db => db.query<{input_hash: string; token: string; state: string},[string]>(
     'SELECT input_hash,token,state FROM card_embeddings WHERE card_id=?').get(id));
-  const wait = async (check: () => boolean | Promise<boolean>) => {
+  const wait = async (check: () => boolean | Promise<boolean>, label = 'Index readiness') => {
     const end = performance.now() + (process.env.KANBAN_SEMANTIC_TEST_LARGE ? 40_000 : 10_000);
     while (!await check()) {
-      if (performance.now() >= end) throw Error('Index readiness timed out');
+      if (performance.now() >= end) throw Error(label + ' timed out');
       await Bun.sleep(50);
     }
   };
@@ -287,11 +301,11 @@ test.skipIf(!modelDir)('actual application: local model, initial/restarted index
     knownHash = row()!.input_hash;
     const edit = await api('/api/cards/' + card.id, 'PATCH', { title: 'Editing with optimistic locking' });
     expect(edit.status).toBe(200);
-    await wait(() => row()?.state === 'ready' && row()?.input_hash !== knownHash);
+    await wait(() => row()?.state === 'ready' && row()?.input_hash !== knownHash, 'Edited card reindex');
     lastToken = row()!.token;
   });
   await serve(async (_base, api) => {
-    await wait(async () => (await (await api(settingsPath)).json() as CardSemanticStatus).state === 'ready');
+    await wait(async () => (await (await api(settingsPath)).json() as CardSemanticStatus).state === 'ready', 'Restarted index');
     expect(row()?.token).toBe(lastToken);
     expect((await api('/api/cards/' + card.id, 'DELETE')).status).toBe(204);
     await wait(() => row() === null);
@@ -305,7 +319,7 @@ test.skipIf(!modelDir)('actual application: local model, initial/restarted index
     expect(row(calendar.id)?.token).toBe(previousToken);
     await storage.writeCardIndex(db => db.exec('ALTER TABLE fixture_progress RENAME TO card_embedding_progress'));
     expect((await api(settingsPath, 'PUT', { enabled: true, directories: [projectDir] })).status).toBe(200);
-    await wait(() => row(calendar.id)?.state === 'ready' && row(calendar.id)?.token !== previousToken);
+    await wait(() => row(calendar.id)?.state === 'ready' && row(calendar.id)?.token !== previousToken, 'Reactivated index');
     expect((await api(settingsPath, 'PUT', { enabled: false, directories: [projectDir] })).status).toBe(200);
     expect(row()).toBeNull();
     expect(storage.readCardIndex(db => db.query('SELECT count(*) AS count FROM card_embeddings').get())).toEqual({ count: 0 });

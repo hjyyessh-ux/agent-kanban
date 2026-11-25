@@ -61,9 +61,11 @@ export function exactReferenceKeys(text: string): string[] {
   for (const match of text.matchAll(exactPattern)) {
     try {
       const key = exactKey(match[0]);
-      keys.add(key);
+      if (key.length <= 2_048) keys.add(key);
       const number = /\/pull\/(\d+)$/.exec(key)?.[1];
       if (number) keys.add('#' + number);
+      // The lexical fallback remains available for exceptionally reference-heavy cards.
+      if (keys.size >= 1_024) break;
     } catch {
       // Malformed references remain available through the ordinary keyword search.
     }

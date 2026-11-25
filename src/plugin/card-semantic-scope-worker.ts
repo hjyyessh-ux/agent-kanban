@@ -1,13 +1,13 @@
 import { Database } from 'bun:sqlite';
 import type { CardDocumentKey } from '../core/sqlite-board-storage';
-import { projectSearchCard, type ProjectedSearchCard } from '../core/card-semantic-projection';
+import { boundedSearchProjection, MAX_PROJECTED_BYTES, MAX_PROJECTED_CARDS, type ProjectedSearchCard } from '../core/card-semantic-projection';
 import type { IndexPolicy } from '../core/card-semantic-index';
 import type { KanbanCard } from '../core/types';
 
 export type ScopeRead = { id: number; path: string; kind: 'board' | 'work' | 'archive'; policy: IndexPolicy };
 export type ScopeReply = { id: number; cards: ProjectedSearchCard[] | null };
 type CardDocument = { key: CardDocumentKey; revision: number; bytes: number };
-type CacheEntry = { revision: number; cards: ProjectedSearchCard[] };
+type CacheEntry = { revision: number; cards: ProjectedSearchCard[]; bytes: number };
 let policyVersion = '';
 const cache = new Map<CardDocumentKey, CacheEntry>();
 
@@ -28,6 +28,7 @@ self.onmessage = ({ data }: MessageEvent<ScopeRead>) => {
       if (!ids.has(key) && (data.kind !== 'board' || key === 'cards') && (data.kind !== 'archive' || key !== 'cards')) cache.delete(key);
     }
     const cards: ProjectedSearchCard[] = [];
+    let bytes = 0;
     for (const doc of docs) {
       // Never deserialize a single unexpectedly huge record; leave keyword search in place.
       if (doc.bytes > 48 * 1024 * 1024) return send(null);
@@ -35,11 +36,23 @@ self.onmessage = ({ data }: MessageEvent<ScopeRead>) => {
       if (entry?.revision !== doc.revision) {
         const source = db.query<{ body: string }, [string]>('SELECT body FROM board_documents WHERE key=?').get(doc.key);
         const original = source ? (JSON.parse(source.body) as {cards: KanbanCard[]}).cards : [];
-        entry = { revision: doc.revision, cards: original.filter(card => !card.deletedAt).map(card => projectSearchCard(card, data.policy)) };
-        cache.set(doc.key, entry);
+        const projected = boundedSearchProjection(original, data.policy, MAX_PROJECTED_CARDS - cards.length,
+          MAX_PROJECTED_BYTES - bytes);
+        if (!projected) return send(null);
+        entry = { revision: doc.revision, ...projected };
       }
-      if (cards.length + entry.cards.length > 20_000) return send(null);
+      if (cards.length + entry.cards.length > MAX_PROJECTED_CARDS || bytes + entry.bytes > MAX_PROJECTED_BYTES)
+        return send(null);
       cards.push(...entry.cards);
+      bytes += entry.bytes;
+      cache.delete(doc.key);
+      cache.set(doc.key, entry);
+      let cachedBytes = [...cache.values()].reduce((sum, row) => sum + row.bytes, 0);
+      for (const [key, row] of cache) {
+        if (cachedBytes <= MAX_PROJECTED_BYTES) break;
+        cache.delete(key);
+        cachedBytes -= row.bytes;
+      }
     }
     send(cards);
   } catch {
