@@ -13,6 +13,7 @@ import { RuntimeDispatchError } from './types';
 import type { RuntimeRun, RuntimeRunStore } from './runtime-run-store';
 import { createClaudeBinaryResolver } from './claude-binary';
 import { parseClaudeStreamLine } from './claude-stream-parser';
+import { stampCommandStartReceipt } from './run-progress';
 import { completeTrackedRuntimeCard, updateFailedRuntimeCard } from './runtime-restart-sync';
 import { joinResultSegments, lastResultSegment } from './result-segments';
 import type { ClaudeStreamEvent } from './claude-stream-parser';
@@ -340,20 +341,22 @@ async function readClaudeStdout(
 ): Promise<void> {
   const decoder = new TextDecoder();
   let buffer = '';
+  let receivedAt: string | undefined;
   for await (const chunk of stream) {
+    receivedAt = new Date().toISOString();
     const text = decoder.decode(chunk, { stream: true });
     buffer += text;
     let newlineIndex = buffer.indexOf('\n');
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex);
       buffer = buffer.slice(newlineIndex + 1);
-      await processClaudeLine(run, state, line, onSessionId, onChildEvent);
+      await processClaudeLine(run, state, line, receivedAt, onSessionId, onChildEvent);
       newlineIndex = buffer.indexOf('\n');
     }
   }
   const rest = `${buffer}${decoder.decode()}`;
   if (rest.trim()) {
-    await processClaudeLine(run, state, rest, onSessionId, onChildEvent);
+    await processClaudeLine(run, state, rest, receivedAt, onSessionId, onChildEvent);
   }
 }
 
@@ -361,11 +364,13 @@ async function processClaudeLine(
   run: RuntimeRun,
   state: ClaudeRunState,
   line: string,
+  receivedAt: string | undefined,
   onSessionId: (sessionId: string) => Promise<void>,
   onChildEvent?: (ev: ClaudeStreamEvent) => Promise<void>,
 ): Promise<void> {
   if (!line.trim()) return;
-  await appendFile(run.eventsPath, `${line}\n`);
+  const logged = receivedAt ? stampCommandStartReceipt(line, 'claude', receivedAt) : line;
+  await appendFile(run.eventsPath, `${logged}\n`);
   const event = parseClaudeStreamLine(line);
   if (!event) return;
   if (event.type === 'system' && event.subtype === 'init' && event.sessionId) {

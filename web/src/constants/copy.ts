@@ -239,6 +239,11 @@ export const CARD_DETAIL_COPY = {
 } as const;
 
 /** Result phase — re-pull a lost/truncated result from the session transcript (`useCardResultSync`). */
+export const PROGRESS_COMMAND_TIME_COPY = {
+  timezone: 'KST',
+  unavailable: '명령 시작 시각 기록 없음',
+} as const;
+
 export const RESULT_SYNC_COPY = {
   action: '↻ Sync',
   syncing: 'Sync 중…',

@@ -19,15 +19,17 @@ export function useCardProgress(cardId: string | undefined, live: boolean): Card
     if (!cardId) return;
 
     let cancelled = false;
+    let requested = 0;
+    let applied = 0;
     const load = async () => {
+      const request = ++requested;
       try {
         const res = await fetch(`${BASE_URL}/cards/${encodeURIComponent(cardId)}/progress`);
-        if (!res.ok) {
-          if (!cancelled && res.status === 404) setProgress(null);
-          return; // non-404 errors keep the last known progress
-        }
-        const data = (await res.json()) as CardRunProgress;
-        if (!cancelled) setProgress(data);
+        if (!res.ok && res.status !== 404) return;
+        const data = res.ok ? (await res.json()) as CardRunProgress : null;
+        if (cancelled || request < applied) return;
+        applied = request;
+        setProgress(data);
       } catch {
         // network hiccup — keep the last known progress
       }

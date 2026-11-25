@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { buildRunProgress, buildTranscriptProgress } from '../plugin/runtimes/run-progress';
+import { buildRunProgress, buildTranscriptProgress, stampCommandStartReceipt } from '../plugin/runtimes/run-progress';
 import type { RuntimeRun } from '../plugin/runtimes/runtime-run-store';
 
 function makeRun(overrides: Partial<RuntimeRun> = {}): RuntimeRun {
@@ -18,10 +18,10 @@ function makeRun(overrides: Partial<RuntimeRun> = {}): RuntimeRun {
   };
 }
 
-function assistantToolUse(name: string, input: Record<string, unknown> = {}): string {
+function assistantToolUse(name: string, input: Record<string, unknown> = {}, id?: string): string {
   return JSON.stringify({
     type: 'assistant',
-    message: { content: [{ type: 'tool_use', name, input }] },
+    message: { content: [{ type: 'tool_use', id, name, input }] },
   });
 }
 
@@ -243,5 +243,109 @@ describe('buildTranscriptProgress — codex rollout', () => {
   test('defaults to the claude parser when no format is given', () => {
     const progress = buildTranscriptProgress(card, []);
     expect(progress.runtime).toBe('claude');
+  });
+});
+
+describe('command start observations', () => {
+  const first = '2026-07-03T14:59:59.000Z';
+  const second = '2026-07-03T15:00:02.000Z';
+
+  test('pairs Claude Bash requests and actual task starts by tool ID in either order', () => {
+    const start = stampCommandStartReceipt(JSON.stringify({
+      type: 'system', subtype: 'task_started', task_type: 'local_bash', tool_use_id: 'bash-1', is_backgrounded: true,
+    }), 'claude', first);
+    const command = 'printf a && sleep 30';
+    const request = assistantToolUse('Bash', { command, run_in_background: true }, 'bash-1');
+    const finish = JSON.stringify({
+      type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'bash-1', content: 'ok' }] },
+    });
+    expect(buildRunProgress(makeRun(), [start]).steps).toEqual([
+      { kind: 'command', label: 'Bash', commandStartedAt: first },
+    ]);
+    expect(buildRunProgress(makeRun(), [request]).steps[0].commandStartedAt).toBeUndefined();
+    for (const lines of [[start, request, finish], [request, start, finish]]) {
+      expect(buildRunProgress(makeRun(), [...lines, request]).steps).toEqual([
+        { kind: 'command', label: 'Bash', detail: command, body: command, commandStartedAt: first },
+      ]);
+    }
+  });
+
+  test('uses only a Claude transcript task-start timestamp', () => {
+    const card = { status: 'in_progress' as const, createdAt: first };
+    const request = assistantToolUse('Bash', { command: 'sleep 30' }, 'bash-1');
+    const withTime = (line: string) => JSON.stringify({ ...JSON.parse(line), timestamp: '2026-07-04T00:00:02+09:00' });
+    const progress = withTime(JSON.stringify({ type: 'tool_progress', tool_name: 'Bash', tool_use_id: 'bash-1' }));
+    expect(buildTranscriptProgress(card, [withTime(request), progress]).steps[0].commandStartedAt).toBeUndefined();
+    const task = {
+      type: 'system', subtype: 'task_started', task_type: 'local_bash', tool_use_id: 'bash-1',
+    };
+    const foreground = withTime(JSON.stringify({ ...task, is_backgrounded: false }));
+    expect(buildTranscriptProgress(card, [request, foreground]).steps[0].commandStartedAt).toBeUndefined();
+    const ambient = withTime(JSON.stringify({ ...task, is_backgrounded: true, ambient: true }));
+    expect(buildTranscriptProgress(card, [request, ambient]).steps[0].commandStartedAt).toBeUndefined();
+    const start = withTime(JSON.stringify({ ...task, is_backgrounded: true }));
+    expect(buildTranscriptProgress(card, [start, request]).steps[0].commandStartedAt).toBe(second);
+  });
+
+  test('shows Codex concurrent starts immediately and merges late and duplicate events by ID', () => {
+    const run = makeRun({ runtime: 'codex' });
+    const event = (phase: string, id: string, command?: string, status?: string) => JSON.stringify({
+      type: 'item.' + phase, item: { type: 'command_execution', id, command, status },
+    });
+    const a = stampCommandStartReceipt(event('started', 'a', 'sleep 30'), 'codex', first);
+    const b = stampCommandStartReceipt(event('started', 'b', 'sleep 30'), 'codex', second);
+    const doneB = event('completed', 'b', 'sleep 30 && printf completed');
+    const doneA = event('completed', 'a');
+    const legacy = event('completed', 'legacy', 'printf legacy');
+    expect(buildRunProgress(run, [a, b]).steps.map(s => s.commandStartedAt)).toEqual([first, second]);
+    const finished = buildRunProgress(run, [a, doneB, b, doneA, doneB, a, legacy]);
+    expect(finished.totalSteps).toBe(3);
+    expect(finished.steps.map(s => [s.commandStartedAt, s.body])).toEqual([
+      [first, 'sleep 30'],
+      [second, 'sleep 30 && printf completed'],
+      [undefined, 'printf legacy'],
+    ]);
+    expect(stampCommandStartReceipt(doneB, 'codex', second)).toBe(doneB);
+    expect(buildRunProgress(run, [event('started', 'a', 'sleep 30'), doneA]).steps[0].commandStartedAt)
+      .toBeUndefined();
+    expect(buildRunProgress(run, [b, event('completed', 'b', 'sleep 30', 'declined')]).steps[0].commandStartedAt)
+      .toBeUndefined();
+  });
+
+  test('pairs Codex rollout item lifecycle within each turn and ignores completion timestamps', () => {
+    const card = { status: 'in_progress' as const, createdAt: first };
+    const line = (type: string, turn_id: string, timestamp: string, command: string) => JSON.stringify({
+      timestamp, type: 'event_msg', payload: {
+        type, turn_id, item: { id: 'same-id', type: 'CommandExecution', command: ['/bin/zsh', '-lc', command] },
+      },
+    });
+    const a = line('item_started', 'a', first, 'printf a');
+    const b = line('item_started', 'b', second, 'sleep 30');
+    expect(buildTranscriptProgress(card, [a, b], 'codex').steps.map(s => s.commandStartedAt))
+      .toEqual([first, second]);
+    const done = line('item_completed', 'a', second, 'printf a && printf done');
+    expect(buildTranscriptProgress(card, [done], 'codex').steps[0].commandStartedAt).toBeUndefined();
+    expect(buildTranscriptProgress(card, [done, a, b], 'codex').steps.map(s => [s.commandStartedAt, s.body]))
+      .toEqual([[first, 'printf a && printf done'], [second, 'sleep 30']]);
+  });
+
+  test('accepts an older Codex rollout launch and merges a canonical completion with the same ID', () => {
+    const card = { status: 'in_progress' as const, createdAt: first };
+    const wrap = (timestamp: string, payload: object) => JSON.stringify({ timestamp, type: 'event_msg', payload });
+    const begin = {
+      type: 'exec_command_begin', turn_id: 'turn-a', call_id: 'command-a',
+      command: ['printf', '%s', "two words and an apostrophe's"],
+    };
+    const stdin = { ...begin, call_id: 'stdin', source: 'unified_exec_interaction' };
+    const legacyEnd = { ...begin, type: 'exec_command_end', status: 'completed' };
+    const complete = {
+      type: 'item_completed', turn_id: 'turn-a',
+      item: { type: 'CommandExecution', id: 'command-a', command: ['/bin/zsh', '-lc', 'printf done && sleep 30'] },
+    };
+    const fullCommand = "printf %s 'two words and an apostrophe'\\''s'";
+    expect(buildTranscriptProgress(card, [wrap(first, begin), wrap(second, stdin), wrap(second, legacyEnd)], 'codex').steps)
+      .toEqual([{ kind: 'command', label: 'Shell', commandStartedAt: first, detail: fullCommand, body: fullCommand }]);
+    expect(buildTranscriptProgress(card, [wrap(first, begin), wrap(second, complete)], 'codex').steps)
+      .toEqual([{ kind: 'command', label: 'Shell', commandStartedAt: first, detail: 'printf done && sleep 30', body: 'printf done && sleep 30' }]);
   });
 });
