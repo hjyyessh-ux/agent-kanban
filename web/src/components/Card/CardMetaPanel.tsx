@@ -32,6 +32,8 @@ const CLAUDE_PERMISSION_LABELS: Record<ClaudePermissionMode, string> = {
   bypassPermissions: "Bypass permissions",
   plan: "Plan",
   dontAsk: "Don't ask",
+  auto: "Auto",
+  manual: "Manual",
 };
 
 const CODEX_REASONING_OPTIONS: MetaSelectOption[] = [
@@ -52,6 +54,8 @@ const CLAUDE_PERMISSION_OPTIONS: MetaSelectOption[] = [
   { value: "bypassPermissions", label: "Bypass permissions" },
   { value: "plan", label: "Plan" },
   { value: "dontAsk", label: "Don't ask" },
+  { value: "auto", label: "Auto" },
+  { value: "manual", label: "Manual" },
 ];
 const ClaudeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 26 27" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ flexShrink: 0 }}>

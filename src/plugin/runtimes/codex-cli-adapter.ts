@@ -1,18 +1,11 @@
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import type { CodexReasoningEffort, CodexSandboxMode, DispatchResult, UpdateCardInput } from '../../core/types';
+import type { DispatchResult, UpdateCardInput } from '../../core/types';
 import type { KanbanStore } from '../../core/store';
 import type { SettingsStore } from '../../core/settings-store';
-import { getSettingValueOrDefault } from '../../core/settings-store';
-import {
-  CODEX_REASONING_EFFORT_SETTING_KEY,
-  CODEX_REASONING_EFFORT_VALUES,
-  CODEX_SANDBOX_SETTING_KEY,
-  CODEX_SANDBOX_VALUES,
-  DEFAULT_CODEX_MODEL,
-  DEFAULT_CODEX_REASONING_EFFORT,
-  DEFAULT_CODEX_SANDBOX,
-} from '../../core/runtime-config';
+import { DEFAULT_CODEX_MODEL } from '../../core/runtime-config';
+import { codexOptionArgs, resolveCodexOptions } from '../../core/runtime-options';
+import { loadRuntimeOptionDefaults } from './runtime-option-defaults';
 import { dispatchNextQueuedTodoCard } from '../hooks/event-handler';
 import type { AgentAdapter, AdapterRunResult, AdapterStartInput, DispatchHandle } from './types';
 import { RuntimeDispatchError } from './types';
@@ -30,8 +23,6 @@ import { planCodexGuidelineDelivery } from './codex-response-guidelines';
 import { notifyTelegramCompletion } from '../telegram-completion';
 
 const DEFAULT_THREAD_ID_TIMEOUT_MS = 30_000;
-const CODEX_BYPASS_SETTING_KEY = 'agent.codex.bypass_approvals_and_sandbox';
-const CODEX_BYPASS_ENV_KEY = 'KANBAN_CODEX_BYPASS_APPROVALS_AND_SANDBOX';
 
 export interface CodexCliAdapterDeps {
   store: KanbanStore;
@@ -255,10 +246,8 @@ async function buildCodexCommand(
   guidelineConfigArgs: string[] = [],
 ): Promise<string[]> {
   const command = deps.commandOverride ?? ['codex'];
-  const sandbox = await resolveCodexSandbox(deps, input);
-  const reasoningEffort = await resolveCodexReasoningEffort(deps, input);
-  const skipGitRepoCheck = input.card.codexOptions?.skipGitRepoCheck ?? true;
-  const bypassApprovalsAndSandbox = await resolveBypassApprovalsAndSandbox(deps, input);
+  const defaults = await loadRuntimeOptionDefaults(deps.settingsStore);
+  const options = resolveCodexOptions(input.card.codexOptions, defaults.codex);
 
   const args = [...command, 'exec'];
   args.push(
@@ -267,81 +256,16 @@ async function buildCodexCommand(
     run.lastMessagePath,
     '-m',
     model,
-    '-s',
-    sandbox,
     '-C',
     input.cwd,
   );
-  args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
+  args.push(...codexOptionArgs(options));
   args.push(...guidelineConfigArgs);
-  if (skipGitRepoCheck) {
-    args.push('--skip-git-repo-check');
-  }
-  if (bypassApprovalsAndSandbox) {
-    args.push('--dangerously-bypass-approvals-and-sandbox');
-  }
   if (input.resumeSessionId) {
     args.push('resume', input.resumeSessionId);
   }
   args.push('-');
   return args;
-}
-
-async function resolveCodexSandbox(
-  deps: CodexCliAdapterDeps,
-  input: AdapterStartInput,
-): Promise<CodexSandboxMode> {
-  const cardValue = input.card.codexOptions?.sandbox;
-  if (cardValue) return cardValue;
-
-  if (!deps.settingsStore) return DEFAULT_CODEX_SANDBOX;
-
-  const stored = await getSettingValueOrDefault(
-    deps.settingsStore,
-    CODEX_SANDBOX_SETTING_KEY,
-    DEFAULT_CODEX_SANDBOX,
-  );
-  return CODEX_SANDBOX_VALUES.includes(stored as CodexSandboxMode)
-    ? (stored as CodexSandboxMode)
-    : DEFAULT_CODEX_SANDBOX;
-}
-
-async function resolveCodexReasoningEffort(
-  deps: CodexCliAdapterDeps,
-  input: AdapterStartInput,
-): Promise<CodexReasoningEffort> {
-  const cardValue = input.card.codexOptions?.reasoningEffort;
-  if (cardValue) return cardValue;
-
-  if (!deps.settingsStore) return DEFAULT_CODEX_REASONING_EFFORT;
-
-  const stored = await getSettingValueOrDefault(
-    deps.settingsStore,
-    CODEX_REASONING_EFFORT_SETTING_KEY,
-    DEFAULT_CODEX_REASONING_EFFORT,
-  );
-  return CODEX_REASONING_EFFORT_VALUES.includes(stored as CodexReasoningEffort)
-    ? (stored as CodexReasoningEffort)
-    : DEFAULT_CODEX_REASONING_EFFORT;
-}
-
-async function resolveBypassApprovalsAndSandbox(
-  deps: CodexCliAdapterDeps,
-  input: AdapterStartInput,
-): Promise<boolean> {
-  const cardValue = input.card.codexOptions?.bypassApprovalsAndSandbox;
-  if (typeof cardValue === 'boolean') return cardValue;
-
-  if (deps.settingsStore) {
-    const stored = await getSettingValueOrDefault(
-      deps.settingsStore,
-      CODEX_BYPASS_SETTING_KEY,
-      process.env[CODEX_BYPASS_ENV_KEY] ?? 'false',
-    );
-    return stored === 'true';
-  }
-
-  return process.env[CODEX_BYPASS_ENV_KEY] === 'true';
 }
 
 async function readCodexStdout(

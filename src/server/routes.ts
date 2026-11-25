@@ -1,3 +1,4 @@
+import { sanitizeClaudeOptions, sanitizeCodexOptions } from '../core/runtime-options';
 import type { KanbanStore } from '../core/store';
 import type { SchedulerStore } from '../core/scheduler-store';
 import type { SchedulerEngine } from '../plugin/scheduler-engine';
@@ -259,6 +260,31 @@ const WIKI_ARCHIVE_CARD_FILTERS = new Set<WikiArchiveCardStatusFilter>([
   'pending',
   'unprocessed',
 ]);
+/**
+ * Card `claudeOptions` / `codexOptions` from public API input. Invalid fields
+ * (e.g. `"permissionMode": "default"`) are dropped so the Settings
+ * "실행 기본값" apply at dispatch. On PATCH an options object replaces the
+ * stored one, so "nothing valid left" becomes `null` (clear → defaults).
+ */
+function sanitizeRuntimeOptionsInput<T extends Record<string, unknown>>(body: T, mode: 'create' | 'patch'): T {
+  const next: Record<string, unknown> = { ...body };
+  for (const [key, sanitize] of [
+    ['claudeOptions', sanitizeClaudeOptions],
+    ['codexOptions', sanitizeCodexOptions],
+  ] as const) {
+    if (!(key in next) || next[key] === undefined) continue;
+    if (next[key] === null) {
+      if (mode === 'create') delete next[key];
+      continue;
+    }
+    const cleaned = sanitize(next[key]);
+    if (cleaned) next[key] = cleaned;
+    else if (mode === 'patch') next[key] = null;
+    else delete next[key];
+  }
+  return next as T;
+}
+
 /** Cap on one `POST /api/cards/completion-seen` — a column holds far fewer, and the body is unauthenticated input. */
 const COMPLETION_SEEN_BATCH_MAX = 1000;
 
@@ -2826,7 +2852,7 @@ export function createRouteHandler(
           scriptName: _scriptName,
           parameterSnapshot: _parameterSnapshot,
           ...publicCardInput
-        } = body;
+        } = sanitizeRuntimeOptionsInput(body, 'create');
         const card = await store.createCard({
           ...publicCardInput,
           agentRuntime,
@@ -3355,7 +3381,7 @@ export function createRouteHandler(
             scriptName: _scriptName,
             parameterSnapshot: _parameterSnapshot,
             ...publicCardUpdates
-          } = body;
+          } = sanitizeRuntimeOptionsInput(body, 'patch');
           const card = await store.updateCard(id, publicCardUpdates);
           return json(card);
         } catch (e: unknown) {

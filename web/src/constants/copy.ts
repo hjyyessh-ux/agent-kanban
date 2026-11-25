@@ -377,3 +377,28 @@ export const BOARD_HISTORY_COPY = {
   staleNote: (time: string) => `아래는 직전에 성공한 조회(${time}) 기준입니다.`,
   failedAt: (time: string) => `시도 시각 ${time}`,
 } as const;
+
+export const RUNTIME_DEFAULTS_COPY = {
+  title: '실행 기본값',
+  description: 'API·Telegram·스케줄러로 만든 카드에 옵션이 없거나 잘못된 값이 오면 이 값으로 실행합니다. 웹에서 카드를 만들 때 고른 값은 그 브라우저에만 기억되고 여기에는 영향을 주지 않습니다.',
+  expand: '펼쳐서 변경',
+  collapse: '접기',
+  saved: '저장됨',
+  saveFailed: '저장하지 못했습니다',
+  permissionMode: 'Permission mode',
+  skipPermissions: 'Dangerously skip permissions',
+  skipPermissionsHint: '켜면 모든 권한 검사를 건너뜁니다. permission mode는 무시됩니다.',
+  claudeEffort: 'Effort',
+  claudeEffortHint: 'auto면 --effort를 보내지 않습니다.',
+  sandbox: 'Sandbox',
+  sandboxHint: 'Codex에는 permission mode가 없고 sandbox가 그 역할을 합니다.',
+  bypass: 'Bypass approvals and sandbox',
+  bypassHint: '켜면 샌드박스와 승인을 모두 끕니다. sandbox는 무시됩니다.',
+  skipGitRepoCheck: 'Skip git repo check',
+  skipGitRepoCheckHint: 'Git 저장소가 아닌 폴더에서도 실행합니다.',
+  reasoningEffort: 'Reasoning effort',
+  preview: '실행 미리보기',
+  lockedBySkip: 'skip이 켜져 있어 무시됩니다',
+  lockedByBypass: 'bypass가 켜져 있어 무시됩니다',
+  defaultBadge: '기본',
+};

@@ -443,6 +443,39 @@ describe('ClaudeAdapter', () => {
     });
   });
 
+  test('invalid card permissionMode ("default") uses the Settings default; Settings effort is sent', async () => {
+    await withTempDir(async (dir) => {
+      const argvPath = join(dir, 'argv.json');
+      const fakeClaude = await createFakeClaudeBinary(dir, 'success', { argvPath });
+      const store = new KanbanStore(dir);
+      const settingsStore = new SettingsStore(dir);
+      const runStore = new RuntimeRunStore(dir);
+      await settingsStore.upsertByKey('agent.claude.permission_mode', 'plan');
+      await settingsStore.upsertByKey('agent.defaults.claude.effort', 'high');
+      const card = await store.createCard({
+        title: 'Claude task',
+        description: 'Do it',
+        agentRuntime: 'claude',
+        projectDir: dir,
+        claudeOptions: JSON.parse('{"permissionMode":"default"}'),
+      });
+      const adapter = createClaudeAdapter({
+        store,
+        settingsStore,
+        runStore,
+        commandOverride: [fakeClaude],
+        sessionIdTimeoutMs: 1000,
+      });
+
+      const handle = await adapter.start({ card, prompt: card.description, cwd: dir });
+      await handle.done;
+
+      const argv = JSON.parse(await Bun.file(argvPath).text()) as string[];
+      expect(argv[argv.indexOf('--permission-mode') + 1]).toBe('plan');
+      expect(argv[argv.indexOf('--effort') + 1]).toBe('high');
+    });
+  });
+
   test('card Claude options override current permission settings in argv', async () => {
     await withTempDir(async (dir) => {
       const argvPath = join(dir, 'argv.json');

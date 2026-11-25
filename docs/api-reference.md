@@ -41,7 +41,10 @@
 - `projectDir`
 - `model`
 - `agentRuntime` (`opencode` | `codex` | `claude`, optional; 없으면 `opencode`)
-- `codexOptions` (`reasoningEffort`, `sandbox`, `skipGitRepoCheck`)
+- `claudeOptions` (`permissionMode`: `acceptEdits`/`plan`/`auto`/`manual`/`dontAsk`/`bypassPermissions`, `dangerouslySkipPermissions`: bool, `effort`: `low`~`max`)
+- `codexOptions` (`sandbox`: `read-only`/`workspace-write`/`danger-full-access`, `bypassApprovalsAndSandbox`: bool, `skipGitRepoCheck`: bool, `reasoningEffort`: `low`~`xhigh`)
+  - 두 옵션 모두 **생략하거나 잘못된 값**(예: `"permissionMode": "default"`)이면 그 필드는 저장하지 않고, 실행 시 Settings `실행 기본값` → 내장 기본값 순으로 채웁니다. 400을 돌려주지 않습니다.
+  - `PATCH`에서 옵션 객체를 보내면 저장된 옵션을 **유효한 필드만으로 교체**하고, 유효한 필드가 하나도 없으면 옵션을 지워 기본값으로 돌아갑니다.
 - `agentType`
 - `feedbackForCardId`
 - `queueSessionMode`
@@ -72,7 +75,7 @@
 - `description`
 - `model`
 - `agentRuntime`
-- `codexOptions`
+- `claudeOptions` / `codexOptions` (위 `POST` 규칙과 같음)
 - `progressSummary`
 - `result`
 - `sessionId`
