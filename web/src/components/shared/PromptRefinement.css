@@ -22,8 +22,39 @@
   color:var(--kv2-text-primary); background:var(--kv2-surface); border:1px solid var(--kv2-border);
   border-radius:var(--kv2-radius-sm); cursor:pointer; font:inherit; overflow-wrap:anywhere;
 }
-.kv2-refine-model-options { display:grid; max-height:14rem; overflow:auto; }
-.kv2-refine-model-options button[aria-selected=true],.kv2-refine-model-options button:hover { background:var(--kv2-surface-hover); }
+.kv2-refine-model-options { display:grid; max-height:20rem; overflow:auto; border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-sm); }
+.kv2-refine-model-options button[aria-selected=true],.kv2-refine-model-options button:not([aria-disabled]):hover { background:var(--kv2-surface-hover); }
+.kv2-refine-model-options button { flex-direction:column; align-items:stretch; border-radius:0; border-width:0 0 1px; }
+.kv2-refine-model-options button[aria-disabled=true] { cursor:not-allowed; color:var(--kv2-text-secondary); }
+.kv2-refine-model-group-head {
+  display:flex; flex-wrap:wrap; justify-content:space-between; gap:var(--kv2-sp-1); position:sticky; top:0; z-index:1;
+  padding:var(--kv2-sp-1) var(--kv2-sp-2); background:var(--kv2-surface-hover); font-size:var(--kv2-text-ui-sm);
+}
+.kv2-refine-model-group-head span,.kv2-refine-model-reason { color:var(--kv2-text-secondary); font-size:var(--kv2-text-ui-sm); }
+.kv2-refine-model-name { display:flex; flex-wrap:wrap; align-items:center; gap:var(--kv2-sp-1); }
+.kv2-refine-model-name small,.kv2-refine-tag {
+  padding:0 var(--kv2-sp-1); border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-sm); font-size:var(--kv2-text-ui-sm);
+}
+.kv2-refine-model-reason { display:block; overflow-wrap:anywhere; }
+.kv2-refine-local-info,.kv2-refine-status {
+  border:1px dashed var(--kv2-border); border-radius:var(--kv2-radius-md); padding:var(--kv2-sp-3); margin-bottom:var(--kv2-sp-3);
+  font-size:var(--kv2-text-ui-sm); overflow-wrap:anywhere;
+}
+.kv2-refine-local-info p { margin:0 0 var(--kv2-sp-1); }
+.kv2-refine-local-info ul,.kv2-refine-status ul { margin:0; padding-left:1.2em; display:grid; gap:var(--kv2-sp-1); }
+.kv2-refine-status summary { cursor:pointer; }
+.kv2-refine-settings-groups { display:grid; gap:var(--kv2-sp-2); margin:var(--kv2-sp-2) 0; }
+.kv2-refine-settings-group { padding:var(--kv2-sp-2) var(--kv2-sp-3); }
+.kv2-refine-settings-group summary { cursor:pointer; display:flex; flex-wrap:wrap; gap:var(--kv2-sp-2); align-items:baseline; }
+.kv2-refine-checks { list-style:none; margin:var(--kv2-sp-2) 0; padding:0; display:grid; gap:2px; font-size:var(--kv2-text-ui-sm); overflow-wrap:anywhere; }
+.kv2-refine-checks li[data-ok=false] { color:var(--kv2-text-secondary); }
+.kv2-refine-settings-models { border:0; margin:0; padding:0; display:grid; gap:var(--kv2-sp-1); min-width:0; }
+.kv2-refine-settings-models legend { font-size:var(--kv2-text-ui-sm); color:var(--kv2-text-secondary); margin-bottom:var(--kv2-sp-1); }
+.kv2-refine-settings-model label { display:flex; flex-wrap:wrap; align-items:center; gap:var(--kv2-sp-1); min-height:32px; overflow-wrap:anywhere; }
+.kv2-refine-settings-model[data-selectable=false] label { color:var(--kv2-text-secondary); }
+.kv2-refine-settings-model .kv2-refine-model-reason { padding-left:1.6rem; }
+.kv2-refine-settings-actions { display:flex; flex-wrap:wrap; gap:var(--kv2-sp-2); }
+.kv2-refine-settings .settings-network-desc { overflow-wrap:anywhere; }
 .kv2-refine-model-options button:focus-visible,.kv2-refine-model-trigger:focus-visible { outline:2px solid var(--kv2-text-link); outline-offset:-2px; }
 .kv2-refine-loop,.kv2-refine-proposal,.kv2-refine-original {
   border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-md); padding:var(--kv2-sp-3); margin-bottom:var(--kv2-sp-3);
@@ -42,4 +73,65 @@
   .kv2-dialog-overlay--refinement { padding:var(--kv2-sp-2); }
   .kv2-dialog--refinement { width:100%; max-height:calc(100dvh - var(--kv2-sp-4)); }
   .kv2-refine-footer { padding-bottom:max(var(--kv2-sp-3),env(safe-area-inset-bottom)); }
+}
+/* Resizable (DialogSkeleton persistSizeKey); content scrolls inside the chosen size. */
+.kv2-dialog--refinement.kv2-dialog--resizable { display:flex; flex-direction:column; max-height:95vh; }
+.kv2-dialog--refinement.kv2-dialog--resizable > .kv2-dialog-content { flex:1; }
+.kv2-refine-resumed {
+  margin:0 0 var(--kv2-sp-3); padding:var(--kv2-sp-2); border:1px solid var(--kv2-border);
+  border-radius:var(--kv2-radius-sm); font-size:var(--kv2-text-ui-sm); color:var(--kv2-text-secondary);
+}
+
+/* ───── Split review (원문·결과 | 제안). Container query → tabs when the dialog itself is narrow. ───── */
+.kv2-refine-scroll[data-stage=review] { display:flex; flex-direction:column; overflow:hidden; }
+.kv2-refine-scroll[data-stage=review] > .kv2-refine-split { flex:1; min-height:0; }
+.kv2-refine-scroll[data-stage=review] > :not(.kv2-refine-split) { flex-shrink:0; }
+.kv2-refine-scroll { container-type:inline-size; }
+.kv2-refine-split {
+  display:grid; gap:var(--kv2-sp-3); min-height:22rem;
+  grid-template-columns:minmax(0,2fr) minmax(0,3fr); grid-template-rows:minmax(0,2fr) minmax(0,3fr);
+  grid-template-areas:"source suggest" "result suggest";
+}
+.kv2-refine-tabs { display:none; }
+.kv2-refine-pane { min-height:0; overflow:auto; overscroll-behavior:contain; border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-md); padding:var(--kv2-sp-3); }
+.kv2-refine-pane--source { grid-area:source; }
+.kv2-refine-pane--result { grid-area:result; border-left:3px solid var(--kv2-status-done-display, var(--kv2-text-link)); }
+.kv2-refine-pane--suggest { grid-area:suggest; }
+.kv2-refine-pane-title { margin:0 0 var(--kv2-sp-2); font-size:var(--kv2-text-ui-sm); color:var(--kv2-text-secondary); }
+.kv2-refine-pane-title small { font-weight:normal; margin-left:var(--kv2-sp-1); }
+.kv2-refine-source,.kv2-refine-result { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font:var(--kv2-text-ui-sm)/1.6 var(--kv2-font-mono, ui-monospace, monospace); }
+.kv2-refine-source mark { background:color-mix(in srgb, var(--kv2-text-link) 25%, transparent); color:inherit; border-radius:2px; }
+.kv2-refine-triage { display:flex; flex-wrap:wrap; gap:var(--kv2-sp-1); margin-bottom:var(--kv2-sp-2); }
+.kv2-refine-triage button {
+  font:inherit; font-size:var(--kv2-text-ui-sm); padding:2px var(--kv2-sp-2); cursor:pointer;
+  border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-sm); background:none; color:var(--kv2-text-secondary);
+}
+.kv2-refine-triage button[aria-pressed=true] { background:var(--kv2-surface-hover); color:var(--kv2-text-primary); border-color:var(--kv2-text-link); }
+.kv2-refine-group-title { margin:var(--kv2-sp-3) 0 var(--kv2-sp-1); font-size:var(--kv2-text-ui-sm); color:var(--kv2-text-secondary); letter-spacing:.04em; }
+.kv2-refine-card { border:1px solid var(--kv2-border); border-radius:var(--kv2-radius-md); margin-bottom:var(--kv2-sp-2); overflow:hidden; }
+.kv2-refine-card[data-in=true] { border-color:var(--kv2-text-link); }
+.kv2-refine-card > header { display:flex; align-items:center; gap:var(--kv2-sp-2); padding:var(--kv2-sp-2); background:var(--kv2-surface-hover); overflow-wrap:anywhere; }
+.kv2-refine-card-body { margin:0; padding:var(--kv2-sp-2); white-space:pre-wrap; overflow-wrap:anywhere; font-size:var(--kv2-text-ui-sm); }
+.kv2-refine-card > textarea { display:block; width:calc(100% - 2 * var(--kv2-sp-2)); margin:var(--kv2-sp-2); }
+.kv2-refine-card > footer { display:flex; flex-wrap:wrap; align-items:center; gap:var(--kv2-sp-1); padding:var(--kv2-sp-2); border-top:1px solid var(--kv2-border); }
+.kv2-refine-card-state { margin-left:auto; font-size:var(--kv2-text-ui-sm); color:var(--kv2-text-secondary); }
+.kv2-refine-badge { font-size:var(--kv2-text-ui-sm); padding:0 var(--kv2-sp-1); border:1px solid currentColor; border-radius:var(--kv2-radius-sm); white-space:nowrap; }
+.kv2-refine-badge[data-kind=decision] { color:var(--kv2-purple-accent); }
+.kv2-refine-badge[data-kind=question] { color:var(--kv2-orange-accent); }
+.kv2-refine-badge[data-kind=suggestion] { color:var(--kv2-text-link); }
+.kv2-refine-badge[data-kind=extracted] { color:var(--kv2-success-accent); }
+.kv2-refine-options { display:flex; flex-wrap:wrap; gap:var(--kv2-sp-1); padding:0 var(--kv2-sp-2) var(--kv2-sp-2); }
+.kv2-refine-options label { display:inline-flex; align-items:center; gap:4px; padding:2px var(--kv2-sp-2); border:1px solid var(--kv2-border); border-radius:999px; font-size:var(--kv2-text-ui-sm); cursor:pointer; }
+.kv2-refine-options label[data-on=true] { border-color:var(--kv2-purple-accent); }
+.kv2-refine-answer { display:block; width:calc(100% - 2 * var(--kv2-sp-2)); margin:0 var(--kv2-sp-2) var(--kv2-sp-2); }
+.kv2-refine-pending { font-size:var(--kv2-text-ui-sm); color:var(--kv2-purple-accent); align-self:center; }
+@container (max-width: 720px) {
+  .kv2-refine-split { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); grid-template-areas:"tabs" "pane"; }
+  .kv2-refine-tabs { display:grid; grid-area:tabs; grid-template-columns:repeat(3,1fr); border-bottom:1px solid var(--kv2-border); }
+  .kv2-refine-tabs button { font:inherit; padding:var(--kv2-sp-2); background:none; border:0; border-bottom:2px solid transparent; color:var(--kv2-text-secondary); cursor:pointer; }
+  .kv2-refine-tabs button[aria-selected=true] { color:var(--kv2-text-primary); border-bottom-color:var(--kv2-text-link); }
+  .kv2-refine-pane { grid-area:pane; display:none; }
+  .kv2-refine-split[data-tab=source] .kv2-refine-pane--source,
+  .kv2-refine-split[data-tab=suggest] .kv2-refine-pane--suggest,
+  .kv2-refine-split[data-tab=result] .kv2-refine-pane--result { display:block; }
 }

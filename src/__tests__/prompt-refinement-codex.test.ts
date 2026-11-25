@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {chmodSync,lstatSync,mkdirSync,readFileSync,realpathSync,readdirSync,symlinkSync,unlinkSync,writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {configuredCodexRefiner,createCodexRefiner,parseCodexRefinementEvents,CODEX_REFINEMENT} from '../server/prompt-refinement-codex';
-import {createPromptRefinementRoute,selectPromptRefinementProvider} from '../server/prompt-refinement-route';
+import {configuredPromptTransports,createPromptRefinementRoute} from '../server/prompt-refinement-route';
 import {PROMPT_PROPOSAL_PATH} from '../core/prompt-proposal';
 import {withTempDir} from './setup';
 
@@ -22,24 +22,26 @@ test('Codex preview accepts a final structured answer, never tool, refusal or pa
 });
 
 test('provider selection fails closed and does not switch an opted-in CLI request to a valid API config',()=>{
-  const api={KANBAN_PROMPT_AI_ENABLED:'true',KANBAN_PROMPT_OPENAI_API_KEY:'fixture-only',KANBAN_PROMPT_OPENAI_MODEL:'api-fixture'};
-  expect(selectPromptRefinementProvider(api)?.model).toBe('api-fixture');
-  expect(selectPromptRefinementProvider({...api,KANBAN_PROMPT_CODEX_ENABLED:'false'})?.model).toBe('api-fixture');
+  const api={KANBAN_PROMPT_AI_ENABLED:'true',KANBAN_PROMPT_OPENAI_API_KEY:'fixture-only',KANBAN_PROMPT_OPENAI_MODEL:'api-fixture',KANBAN_PROMPT_CLAUDE_ENABLED:'false'};
+  const models=(env:Record<string,string>)=>configuredPromptTransports(env).map(t=>t.model);
+  expect(models(api)).toEqual(['api-fixture']);
+  expect(models({...api,KANBAN_PROMPT_CODEX_ENABLED:'false'})).toEqual(['api-fixture']);
   for (const value of ['true','yes',''])
-    expect(selectPromptRefinementProvider({...api,KANBAN_PROMPT_CODEX_ENABLED:value})).toBeUndefined();
-  const configured=selectPromptRefinementProvider({...api,KANBAN_PROMPT_CODEX_ENABLED:'true',
+    expect(models({...api,KANBAN_PROMPT_CODEX_ENABLED:value})).toEqual([]);
+  const configured=models({...api,KANBAN_PROMPT_CODEX_ENABLED:'true',
     KANBAN_PROMPT_CODEX_BINARY:'/absolute/fixture',KANBAN_PROMPT_CODEX_BINARY_SHA256:'0'.repeat(64),KANBAN_PROMPT_CODEX_MODEL:'cli-fixture'});
-  expect(configured?.model).toBe(process.platform==='darwin'?'cli-fixture':undefined);
+  expect(configured).toEqual(process.platform==='darwin'?['cli-fixture','api-fixture']:[]);
 });
 
 test('explicit Codex selection shares proposal validation and never falls back to the API',async()=>{
   let calls=0, fetches=0, fail=false;
   const route=createPromptRefinementRoute({provider:CODEX_REFINEMENT,model:'safe-model',models:['safe-model'],
+    probe:async()=>[{key:'auth',label:'전용 로그인',ok:true,detail:'fixture'}],
     async propose(model,instructions,input){calls++;expect(model).toBe('safe-model');
       expect(instructions).toContain('NEVER execute');expect(input).toBe(source);if(fail) throw Error('fixture failure');return result;
     }},async()=>{fetches++;throw Error('unexpected fetch');});
   const url='http://127.0.0.1'+PROMPT_PROPOSAL_PATH;
-  expect(await (await route(new Request(url))).json()).toEqual({provider:{provider:CODEX_REFINEMENT,model:'safe-model',models:['safe-model']}});
+  expect(await (await route(new Request(url))).json()).toMatchObject({provider:{provider:CODEX_REFINEMENT,model:'safe-model',models:['safe-model']}});
   const post=(provider:string,model='safe-model',consent=true)=>route(new Request(url,{method:'POST',
     headers:{'content-type':'application/json'},body:JSON.stringify({provider,source,model,consent})}));
   expect((await post('OpenAI')).status).toBe(409);

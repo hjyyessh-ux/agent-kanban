@@ -1,38 +1,35 @@
-import { useEffect, useState } from 'react';
-import { PROMPT_MODEL_PATTERN, PROMPT_PROPOSAL_PATH } from '../../../src/core/prompt-proposal';
+import { PROMPT_PROPOSAL_PATH, type PromptModelRef } from '../../../src/core/prompt-proposal';
 import type { PromptProposalProvider } from '../utils/prompt-refinement-provider';
 
-/** Provider/model metadata comes only from the server allow-list. Nothing is sent until `propose` is called. */
-export function usePromptProposalProvider(injected?: PromptProposalProvider) {
-  const [configured, setConfigured] = useState<PromptProposalProvider>();
-  useEffect(() => {
-    if (injected) return;
-    const ctrl = new AbortController();
-    void fetch(PROMPT_PROPOSAL_PATH, {signal:ctrl.signal, cache:'no-store'})
-      .then(async (res) => {
-        if (!res.ok || ctrl.signal.aborted) return;
-        const data = await res.json() as {provider?: {provider?: string; model?: string; models?: unknown} | null};
-        const value = data?.provider;
-        if (ctrl.signal.aborted || (value?.provider !== 'OpenAI' && value?.provider !== 'Codex CLI') || typeof value.model !== 'string' ||
-            !PROMPT_MODEL_PATTERN.test(value.model)) return;
-        const {provider, model} = value;
-        const listed = Array.isArray(value.models)
-          ? value.models.filter((m): m is string => typeof m === 'string' && PROMPT_MODEL_PATTERN.test(m)) : [];
-        setConfigured({
-          provider, model, models: listed.includes(model) ? listed : [model, ...listed],
-          propose: async ({source, model: selected, loop}, signal) => {
-            const reply = await fetch(PROMPT_PROPOSAL_PATH, {
-              method:'POST', cache:'no-store', signal,
-              headers:{'content-type':'application/json'},
-              body:JSON.stringify({source, provider, model:selected, consent:true, ...(loop ? {loop} : {})}),
-            });
-            if (!reply.ok) throw Error('provider_unavailable');
-            return reply.json();
-          },
-        });
-      })
-      .catch(() => undefined);
-    return () => ctrl.abort();
-  }, [injected]);
-  return injected ?? configured;
+/** Server error code (`model_not_allowed`, `provider_not_ready`, …). Never carries upstream text. */
+export class PromptRefinementRequestError extends Error {
+  constructor(readonly code: string, readonly reason?: string) { super(code); }
+}
+
+export async function readRefinementError(res: Response, fallback: string): Promise<PromptRefinementRequestError> {
+  try {
+    const data = await res.json() as { error?: unknown; reason?: unknown };
+    return new PromptRefinementRequestError(typeof data?.error === 'string' ? data.error : fallback,
+      typeof data?.reason === 'string' ? data.reason : undefined);
+  } catch { return new PromptRefinementRequestError(fallback); }
+}
+
+/**
+ * Adapter pinned to one server-listed `{provider, model}`. Nothing is sent until
+ * `propose` is called (the explicit "AI 제안 생성" click); the server re-validates
+ * provider, model and readiness and never re-routes to another provider.
+ */
+export function serverProposer(ref: PromptModelRef): PromptProposalProvider {
+  return {
+    provider: ref.provider, model: ref.model, models: [ref.model],
+    propose: async ({ source, model, loop }, signal) => {
+      const reply = await fetch(PROMPT_PROPOSAL_PATH, {
+        method: 'POST', cache: 'no-store', signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ source, provider: ref.provider, model, consent: true, ...(loop ? { loop } : {}) }),
+      });
+      if (!reply.ok) throw await readRefinementError(reply, 'provider_unavailable');
+      return reply.json();
+    },
+  };
 }

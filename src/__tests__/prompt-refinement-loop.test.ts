@@ -17,7 +17,7 @@ test('selected refinement model reaches the (synthetic) wire; default model is n
   const { upstream, calls } = createSyntheticPromptUpstream();
   const route = createPromptRefinementRoute(config, upstream);
   expect(await (await route(new Request('http://localhost' + path))).json())
-    .toEqual({ provider: { provider: 'OpenAI', model: 'synthetic-default', models: ['synthetic-default', 'synthetic-alt'] } });
+    .toMatchObject({ provider: { provider: 'OpenAI', model: 'synthetic-default', models: ['synthetic-default', 'synthetic-alt'] } });
   const res = await route(post(base));
   expect(res.status).toBe(200);
   expect(calls).toHaveLength(1);

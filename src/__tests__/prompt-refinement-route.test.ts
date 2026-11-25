@@ -48,7 +48,7 @@ test('local request → fixed OpenAI wire format → actual fake HTTP service; n
     const ctx={clientAddress:'127.0.0.1'};
     const get = new Request('http://localhost:24680'+path,{headers:{authorization:'Bearer synthetic-local'}});
     expect((await handleRequest(get,ctx)).headers.get('cache-control')).toBe('no-store');
-    expect(await (await handleRequest(get,ctx)).json()).toEqual({provider:{provider:'OpenAI',model,models:[model]}});
+    expect(await (await handleRequest(get,ctx)).json()).toMatchObject({provider:{provider:'OpenAI',model,models:[model]}});
     expect((await handleRequest(post(),{clientAddress:'192.0.2.2'})).status).toBe(403);
     expect((await handleRequest(post())).status).toBe(403);
     expect((await handleRequest(post(settings,'wrong'),ctx)).status).toBe(401);

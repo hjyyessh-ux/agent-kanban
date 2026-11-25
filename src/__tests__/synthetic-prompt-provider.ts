@@ -23,12 +23,14 @@ export function createSyntheticPromptUpstream(calls: SyntheticCall[] = []) {
     const source = sourceOf(content);
     const loop = body.instructions.includes('loop-v1');
     const firstSentence = source.split(/\n|(?<=[.!?])\s/)[0]?.slice(0, 300) || source.slice(0, 300);
+    // Extended wire shape (slot + options). One decision so the UI's "결정 필요" path is exercised.
     const sections = [
-      { kind: 'extracted', title: '원문 첫 문장', body: firstSentence },
-      { kind: 'suggestion', title: '합성 응답 메타', body: `${SYNTHETIC_LABEL} model=${body.model}; loop=${loop ? 'on' : 'off'}; skill=${loop ? 'clarify-v1+loop-v1' : 'clarify-v1'}` },
+      { kind: 'extracted', slot: 'constraint', title: '원문 첫 문장', body: firstSentence, options: [] },
+      { kind: 'suggestion', slot: 'other', title: '합성 응답 메타', body: `${SYNTHETIC_LABEL} model=${body.model}; loop=${loop ? 'on' : 'off'}; skill=${loop ? 'clarify-v1+loop-v1' : 'clarify-v1'}`, options: [] },
       ...(loop && content.includes('[사용자 목표]\n(미입력')
-        ? [{ kind: 'question', title: '목표 확인', body: `${SYNTHETIC_LABEL} 목표가 입력되지 않았습니다. 최종 목표를 한 문장으로 알려 주세요.` }]
+        ? [{ kind: 'question', slot: 'goal', title: '목표 확인', body: `${SYNTHETIC_LABEL} 목표가 입력되지 않았습니다. 최종 목표를 한 문장으로 알려 주세요.`, options: [] }]
         : []),
+      { kind: 'decision', slot: 'research', title: '합성 결정', body: `${SYNTHETIC_LABEL} 조사 범위를 정해 주세요.`, options: ['합성 선택지 A', '합성 선택지 B'] },
     ];
     return Response.json({ status: 'completed', output: [{ type: 'message', role: 'assistant',
       content: [{ type: 'output_text', text: JSON.stringify({ sections }) }] }] });
