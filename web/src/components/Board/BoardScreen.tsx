@@ -1,3 +1,5 @@
+import { useCardSemanticSearch } from '../../hooks/useCardSemanticSearch';
+import { CardSemanticNotice, CardSemanticResults } from '../shared/CardSemanticResults';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KanbanCard, KanbanStatus, Work } from '../../../../src/core/types';
 import type { QuestionRequest } from '../../../../src/plugin/question-monitor';
@@ -158,6 +160,13 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
     const byWork = groupMode === 'works' ? filterCardsByWork(filtered, workFilter, worksIndex) : filtered;
     return unreadOnly ? filterUnreadOnly(byWork, { groupBySession: unreadBySession }) : byWork;
   }, [cards, effectiveFilters, unreadOnly, unreadBySession, groupMode, workFilter, worksIndex]);
+
+  const semantic = useCardSemanticSearch(effectiveFilters.search, {
+    kind: 'board', filter: { ...effectiveFilters, search: '' }, unread: unreadOnly, grouped: unreadBySession,
+    work: groupMode === 'works' && workFilter !== 'all'
+      ? workFilter === 'unassigned' ? 'unassigned' : workFilter.workId
+      : undefined,
+  });
 
   const columns = useMemo(
     () => selectColumns(filteredCards, questions),
@@ -350,8 +359,16 @@ export const BoardScreen: React.FC<BoardScreenProps> = ({
     };
   }, [revealRequest]);
 
+  const live = new Map(cards.map(card => [card.id, card]));
   return (
     <div ref={containerRef}>
+      <CardSemanticNotice result={semantic} />
+      {semantic && <CardSemanticResults keyword={filteredCards} result={{
+        ...semantic, exact: semantic.exact.filter(hit => live.has(hit.id)), semantic: semantic.semantic.filter(hit => live.has(hit.id)),
+      }} open={hit => {
+        const card = live.get(hit.id);
+        if (card) onCardClick(card);
+      }} />}
       {viewMode === 'board' ? (
         <>
           <nav className="kv2-board-mobile-nav" aria-label="Board status sections">

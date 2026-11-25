@@ -1,3 +1,6 @@
+import { useCardSemanticSearch } from '../../hooks/useCardSemanticSearch';
+import { CardSemanticNotice, CardSemanticResults } from '../shared/CardSemanticResults';
+import { fetchCard } from '../../hooks/useKanbanApi';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CardWikiState,
@@ -157,6 +160,7 @@ export function WikiView() {
   const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const semantic = useCardSemanticSearch(mode === 'archive' ? query : '', { kind: 'archive', status: archiveStatusFilter });
   const [showLogs, setShowLogs] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [viewMode, setViewMode] = useState<WikiViewMode>('graph');
@@ -660,6 +664,11 @@ export function WikiView() {
       {mode === 'archive' ? (
         <div className="wiki-archive-panel">
           {archiveError && <p className="wiki-error" role="alert">Archive Cards error: {archiveError}</p>}
+          <CardSemanticNotice result={semantic} />
+          {semantic && <CardSemanticResults keyword={archiveCards} result={semantic} open={hit => {
+            void fetchCard(hit.id, { includeArchived: true }).then(setSelectedCard)
+              .catch(() => setArchiveError('카드를 열지 못했습니다.'));
+          }} />}
           {archiveLoading && archiveCards.length === 0 ? (
             <div className="wiki-empty">Archive Cards를 불러오는 중…</div>
           ) : archiveCards.length === 0 ? (

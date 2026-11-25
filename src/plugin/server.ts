@@ -1,3 +1,4 @@
+import type { CardSemanticSearch } from './card-semantic-search';
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { PluginInput } from '@opencode-ai/plugin';
@@ -104,6 +105,7 @@ export class ServerMonitor {
     private readonly delegations?: import('./runtimes/external-delegation-service').ExternalDelegationService,
     private readonly setApiUrl?: (url: string) => void,
     private readonly delegationOperatorToken?: () => string | undefined,
+    private readonly semanticSearch?: CardSemanticSearch,
   ) {
     this.store = store;
     this.input = input;
@@ -178,6 +180,7 @@ export class ServerMonitor {
       undefined,
       this.delegations,
       this.delegationOperatorToken,
+      this.semanticSearch,
     );
     this.setApiUrl?.(`http://127.0.0.1:${instance.port}`);
     return instance;

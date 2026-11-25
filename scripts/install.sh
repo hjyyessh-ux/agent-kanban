@@ -92,10 +92,8 @@ if ! command -v jq &>/dev/null; then
   echo "   Install jq (e.g. 'brew install jq') and re-run for full setup."
 fi
 
-if [ ! -d "$PROJECT_DIR/node_modules" ]; then
-  echo "Installing dependencies (bun install)..."
-  bun install
-fi
+echo "Synchronizing dependencies (bun install --frozen-lockfile)..."
+bun install --frozen-lockfile
 
 # ── Build ──────────────────────────────────────────────────────────────────────
 echo "Building agent-kanban plugin..."
@@ -104,7 +102,7 @@ bun run build
 # ── opencode plugin install ────────────────────────────────────────────────────
 echo "Installing opencode plugin to $PLUGIN_DIR..."
 mkdir -p "$PLUGIN_DIR"
-cp -r dist/plugin/index.js "$PLUGIN_DIR/"
+cp dist/plugin/index.js dist/plugin/card-semantic-worker.js dist/plugin/card-semantic-scope-worker.js dist/plugin/ort-wasm-simd-threaded.{mjs,wasm} "$PLUGIN_DIR/"
 cp -r web/dist "$PLUGIN_DIR/web"
 
 echo "Updating global opencode config..."

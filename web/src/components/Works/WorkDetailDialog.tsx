@@ -1,3 +1,5 @@
+import { useCardSemanticSearch } from '../../hooks/useCardSemanticSearch';
+import { CardSemanticNotice, CardSemanticResults } from '../shared/CardSemanticResults';
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type {
   KanbanCard,
@@ -379,6 +381,7 @@ export function WorkDetailDialog({
     () => searchWorkSessions(sessionIdList, searchCards.cardsBySession, trimmedQuery),
     [sessionIdList, searchCards.cardsBySession, trimmedQuery],
   );
+  const semantic = useCardSemanticSearch(trimmedQuery, { kind: 'work', id: work.id });
   const searchHitCount = searchGroups.reduce((sum, group) => sum + group.hits.length, 0);
   const timelineHighlight = useMemo(
     () => (trimmedQuery ? searchHighlight(searchGroups) : null),
@@ -1141,6 +1144,16 @@ export function WorkDetailDialog({
               )}
             </div>
           )}
+          <CardSemanticNotice result={semantic} />
+          {semantic && <CardSemanticResults keyword={searchGroups.flatMap(group => group.hits.map(hit => ({
+            id: hit.cardId, title: hit.snippet, sessionId: group.sessionId,
+          })))} result={{
+            ...semantic,
+            exact: semantic.exact.filter(hit => hit.sessionId && sessionIdList.includes(hit.sessionId)),
+            semantic: semantic.semantic.filter(hit => hit.sessionId && sessionIdList.includes(hit.sessionId)),
+          }} open={hit => {
+            if (hit.sessionId) openHit(hit.sessionId, hit.id);
+          }} />}
           {links.length === 0 ? (
             <p className="works-empty">연결된 세션이 없습니다.</p>
           ) : trimmedQuery ? (

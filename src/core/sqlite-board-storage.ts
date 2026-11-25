@@ -3,8 +3,18 @@ import { lstatSync, readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Database } from 'bun:sqlite';
+import type { KanbanCard } from './types';
 
-type DocumentKey = 'cards' | 'works' | `archive:${string}`;
+export type CardDocumentKey = 'cards' | `archive:${string}`;
+type DocumentKey = CardDocumentKey | 'works';
+type IndexCard = Pick<KanbanCard, 'id' | 'title' | 'description' | 'deletedAt' | 'projectDir'>;
+type IndexDocument = { revision: number; cards: IndexCard[] };
+type IndexChange = { before: IndexDocument | null; after: IndexCard[] };
+function indexCards(value: unknown): IndexCard[] {
+  return (value as { cards: IndexCard[] }).cards.map(({ id, title, description, deletedAt, projectDir }) =>
+    ({ id, title, description, deletedAt, projectDir }));
+}
+type IndexObserver = { write(db: Database, changes: ReadonlyMap<CardDocumentKey, IndexChange>): void; failed(): void };
 type Transaction = {
   db: Database;
   observers: Map<DocumentKey,{before:string; commit:(before:string)=>void}>;
@@ -12,6 +22,8 @@ type Transaction = {
   active: boolean;
   afterCommit: (()=>void)[];
   afterRollback: (()=>void)[];
+  indexReads?: Map<CardDocumentKey, IndexDocument | null>;
+  indexChanges?: Map<CardDocumentKey, IndexChange>;
 };
 type Document = { body: string; revision: number };
 export const SQLITE_BOARD_SCHEMA = `CREATE TABLE IF NOT EXISTS board_documents (
@@ -33,8 +45,35 @@ export class SqliteBoardStorage {
   private readonly scope = new AsyncLocalStorage<Transaction>();
   readonly incarnation: string;
   private waiting: Promise<void> = Promise.resolve();
+  private indexObserver?: IndexObserver;
 
-  constructor(private readonly path: string, create = true, expected?:string) {
+  observeCardIndex(observer?: IndexObserver): void { this.indexObserver = observer; }
+
+  readCardIndex<T>(fn: (db: Database) => T): T { return this.read(fn); }
+
+  cardSearchRevision(): string {
+    return this.read(db => JSON.stringify(db.query<{key: DocumentKey; revision: number}, []>(
+      'SELECT key,revision FROM board_documents ORDER BY key').all()));
+  }
+
+  cardSearchWithinBudget(includeArchives: boolean): boolean {
+    // SQLite octet_length(column) reads the text size from the record header,
+    // not the entire archive payload. Bound both one large month and the
+    // combined search scope before materializing any JSON.
+    return this.read(db => {
+      const size = db.query<{largest: number; total: number}, [number]>(`
+        SELECT coalesce(max(bytes),0) AS largest, coalesce(sum(bytes),0) AS total
+        FROM (SELECT octet_length(body) AS bytes FROM board_documents WHERE
+          key='cards' OR (?=1 AND (key='works' OR key GLOB 'archive:*')))`).get(Number(includeArchives))!;
+      return size.largest <= 8 * 1024 * 1024 && size.total <= 32 * 1024 * 1024;
+    });
+  }
+
+  writeCardIndex<T>(fn: (db: Database) => T): Promise<T> {
+    return this.write(async () => fn(this.scope.getStore()!.db));
+  }
+
+  constructor(readonly path: string, create = true, expected?:string) {
     const db = new Database(path,{create,strict:true});
     try {
       db.exec('PRAGMA busy_timeout=3000');
@@ -67,9 +106,14 @@ export class SqliteBoardStorage {
   }
 
   readDocument<T>(key:DocumentKey):T | null {
-    const row=this.read(db=>db.query<Pick<Document,'body'>,[string]>(
-      'SELECT body FROM board_documents WHERE key=?').get(key));
-    return row ? JSON.parse(row.body) as T : null;
+    const row=this.read(db=>db.query<Document,[string]>(
+      'SELECT body,revision FROM board_documents WHERE key=?').get(key));
+    const value = row ? JSON.parse(row.body) as T : null;
+    const tx = this.scope.getStore();
+    if (key !== 'works' && tx?.indexReads && !tx.indexReads.has(key)) {
+      tx.indexReads.set(key, row ? { revision: row.revision, cards: indexCards(value) } : null);
+    }
+    return value;
   }
 
   identity(key:'cards'|'works'):string {
@@ -87,6 +131,12 @@ export class SqliteBoardStorage {
   writeDocument(key:DocumentKey, value:unknown):void {
     const tx=this.scope.getStore();
     if(!tx?.active||tx.mode!=='write') throw new Error('SQLite board write requires a transaction');
+    if (key !== 'works' && tx.indexChanges && tx.indexReads) {
+      const stored = tx.indexChanges.get(key);
+      if (!stored && !tx.indexReads.has(key)) this.readDocument(key);
+      const before = stored ? stored.before : tx.indexReads.get(key) ?? null;
+      tx.indexChanges.set(key, { before, after: (value as { cards: IndexCard[] }).cards });
+    }
     tx.db.run(`INSERT INTO board_documents (key,body,revision) VALUES (?,?,1)
       ON CONFLICT(key) DO UPDATE SET body=excluded.body,revision=revision+1,legacy_identity=NULL`,[key,JSON.stringify(value)]);
   }
@@ -153,11 +203,26 @@ export class SqliteBoardStorage {
       try {
         const db=new Database(this.path,{create:false,strict:true});
         const tx:Transaction={db,observers:new Map(),mode:'write',active:true,afterCommit:[],afterRollback:[]};
+        const observer = this.indexObserver;
+        if (observer) {
+          tx.indexReads = new Map();
+          tx.indexChanges = new Map();
+        }
         let result:T;
         try {
           db.exec('PRAGMA busy_timeout=3000; PRAGMA synchronous=FULL; BEGIN IMMEDIATE');
           try {
             result=await this.scope.run(tx,fn);
+            if (observer && tx.indexChanges?.size) {
+              db.exec('SAVEPOINT card_index');
+              try {
+                observer.write(db, tx.indexChanges);
+                db.exec('RELEASE card_index');
+              } catch {
+                db.exec('ROLLBACK TO card_index; RELEASE card_index');
+                tx.afterCommit.push(observer.failed);
+              }
+            }
             db.exec('COMMIT');
           } catch(error) {
             let rolledBack=false;
