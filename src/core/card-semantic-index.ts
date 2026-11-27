@@ -26,6 +26,7 @@ export const containsSensitiveSearchText = (text: string) => sensitive.test(text
 
 export interface IndexPolicy {
   directories: ReadonlySet<string>;
+  scope?: 'all' | 'directories';
   secrets: readonly string[];
   version: string;
 }
@@ -41,7 +42,7 @@ const versioned = (policy: IndexPolicy) => CARD_EMBEDDING_VERSION + ':' + policy
 
 export function cardEmbeddingInput(card: SourceCard, policy: IndexPolicy): string | null {
   const project = card.projectDir?.replace(/\/+$/, '');
-  if (!project || card.deletedAt || !policy.directories.has(project)) return null;
+  if (card.deletedAt || (policy.scope !== 'all' && (!project || !policy.directories.has(project)))) return null;
   const description = splitFeedbackHeader(stripReferenceBlock(card.description ?? '')).body;
   const text = `${card.title}\n${description}`.replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
   if (!text || sensitive.test(text) || policy.secrets.some(secret => text.includes(secret))) return null;

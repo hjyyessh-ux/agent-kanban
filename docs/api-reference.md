@@ -1069,7 +1069,7 @@ UI 테스트용 question 주입/정리에 사용됩니다.
 | 메서드 및 경로 | 동작 |
 | --- | --- |
 | `GET /api/settings/card-semantic` | 켜짐, 준비 상태, 대기·실패 건수를 반환한다. |
-| `PUT /api/settings/card-semantic` | `{ enabled, directories }`를 저장한다. 허용 범위 변경은 검색을 취소하고 파생 색인을 정리한다. |
+| `PUT /api/settings/card-semantic` | `{ enabled, directories, scope? }`를 저장한다. 허용 범위 변경은 검색을 취소하고 파생 색인을 정리한다. |
 | `POST /api/settings/card-semantic/retry` | 현재 버전의 실패 색인이나 Worker 초기화를 재시도한다. |
 | `POST /api/cards/search/semantic` | `{ query, scope }`를 받아 정확 히트와 의미 히트를 반환한다. 범위는 `board`, `work`, `archive` 중 하나다. |
 
@@ -1079,4 +1079,4 @@ SQLite로 전환한 로컬 앱에서만 쓸 수 있으며 기본값은 OFF다. �
 bun scripts/fetch-card-semantic-model.ts "${KANBAN_DATA_DIR:-$HOME/.agent-kanban}/semantic-search-model"
 ```
 
-설정에서 허용한 경로만 임베딩한다. 준비·시간초과·실패 상태에서는 기존 키워드 검색을 유지한다. 한 SQLite 원본 문서가 48MiB를 넘거나 조회 대상이 20,000건·투영 데이터가 12MiB·허용된 벡터 후보가 4,096건을 넘는 경우 의미 검색을 생략한다.
+기존 설정은 선택한 프로젝트 경로만 색인한다. 전체 카드 모드는 `{ enabled: true, scope: "all", directories: [] }`로 명시적으로 켠다. 활성·보관 카드에서 경로 없는 카드도 포함하되, 삭제되었거나 민감한 텍스트가 감지된 카드는 제외한다. 색인 입력은 카드 제목과 정리한 설명의 첫 8,192자다. 검색 결과는 현재 보드·Work·보관함의 필터를 그대로 따른다. 준비·시간초과·실패 상태에서는 기존 키워드 검색을 유지한다. 투영 경로에는 문서당 48 MiB, 합산 20,000건 및 12 MiB 제한이 있다. 경로 지정 모드와 비투영 경로의 4,096건 검색 제한은 유지한다. 전체 카드 모드는 첫 조회의 문서 준비 시간을 고려해 보드는 최대 1.5초, Work·보관함은 최대 6초까지 기다린다. 경로 지정 모드는 300ms를 유지한다.

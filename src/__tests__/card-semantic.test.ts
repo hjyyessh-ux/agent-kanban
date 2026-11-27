@@ -4,12 +4,12 @@ import { withTempDir } from './setup';
 import { SqliteBoardStorage, SQLITE_STORAGE_MARKER, sqliteBoardMarkerFor } from '../core/sqlite-board-storage';
 import { CARD_SEMANTIC_SETTINGS_PATH as settingsPath, CARD_SEMANTIC_SEARCH_PATH as searchPath, splitCardSearch } from '../core/card-semantic';
 import { CARD_EMBEDDING_DIMENSIONS } from '../core/card-semantic-model';
-import { CardSemanticIndex, type IndexPolicy } from '../core/card-semantic-index';
+import { cardEmbeddingInput, CardSemanticIndex, type IndexPolicy } from '../core/card-semantic-index';
 import { KanbanStore } from '../core/store';
 import { SettingsStore } from '../core/settings-store';
 import { WorkStore } from '../core/work-store';
-import { CardSemanticSearch } from '../plugin/card-semantic-search';
-import { boundedSearchProjection } from '../core/card-semantic-projection';
+import { CardSemanticSearch, parseSemanticConfig } from '../plugin/card-semantic-search';
+import { boundedSearchProjection, projectSearchCard } from '../core/card-semantic-projection';
 import type { CardSemanticResult, CardSemanticStatus } from '../core/card-semantic';
 import { writeFileSync } from 'node:fs';
 
@@ -251,7 +251,14 @@ test.skipIf(!modelDir)('actual application: local model, initial/restarted index
     'SELECT input_hash,token,state FROM card_embeddings WHERE card_id=?').get(id));
   const wait = async (check: () => boolean | Promise<boolean>, label = 'Index readiness') => {
     const end = performance.now() + (process.env.KANBAN_SEMANTIC_TEST_LARGE ? 40_000 : 10_000);
-    while (!await check()) {
+    for (;;) {
+      try {
+        if (await check()) return;
+      } catch (error) {
+        // The test opens a second SQLite connection against the isolated
+        // daemon. A concurrent WAL close/checkpoint can briefly block it.
+        if ((error as {code?: string}).code !== 'SQLITE_BUSY') throw error;
+      }
       if (performance.now() >= end) throw Error(label + ' timed out');
       await Bun.sleep(50);
     }
@@ -332,4 +339,132 @@ test.skipIf(!modelDir)('actual application: local model, initial/restarted index
     const result = await (await api(searchPath, 'POST', { query: 'Calendar', scope: { kind: 'board' } })).json() as CardSemanticResult;
     expect(result.semantic).toEqual([]);
   }, join(dir, 'nonexistent-model'));
-}), 90_000);
+  let newCardId: string | undefined;
+  await serve(async (_base, api) => {
+    expect((await api(settingsPath, 'PUT', { enabled: true, scope: 'all', directories: [] })).status).toBe(200);
+    await wait(async () => (await (await api(settingsPath)).json() as CardSemanticStatus).state === 'ready');
+    expect(row(other.id)?.state).toBe('ready');
+    const resp = await api('/api/cards', 'POST', { title: 'Whale migration and ocean conservation', description: 'Marine wildlife' });
+    expect(resp.ok).toBe(true);
+    const added = await resp.json() as { id: string; projectDir?: string };
+    expect(added.projectDir).toBeFalsy();
+    newCardId = added.id;
+    await wait(() => row(added.id)?.state === 'ready', 'Pathless incremental index');
+    const result = await (await api(searchPath, 'POST', { query: '고래가 바다를 이동하는 경로와 보호', scope: { kind: 'board' } })).json() as CardSemanticResult;
+    expect(result.status).toBe('ready');
+    expect(result.semantic.map(hit => hit.id)).toContain(added.id);
+  });
+  if (process.env.KANBAN_SEMANTIC_TEST_WHOLE_ARCHIVE) {
+    // Reuse one actual local-model vector and synthetic distractors to
+    // stress ranking deterministically without running 11,514 model calls.
+    const size = 11_514;
+    const source = 'archive:2025-12';
+    const hitId = 'zz-whale-archive-hit';
+    const addedCard = (await store.getCard(newCardId!))!;
+    const cards = [
+      ...Array.from({length: size - 1}, (_, i) => ({
+        ...other, id: 'archive-distractor-' + i.toString().padStart(5, '0'), status: 'done',
+      })),
+      { ...addedCard, id: hitId, status: 'done' },
+    ];
+    await storage.write(async () => {
+      storage.writeDocument(source, { cards, month: '2025-12', archivedAt: new Date().toISOString() });
+    });
+    await storage.writeCardIndex(db => {
+      // Large-document padding still exercises JSON projection, but it is
+      // not part of this controlled rank dataset.
+      db.run("DELETE FROM card_embeddings WHERE card_id GLOB 'archive-pad-*'");
+      const row = db.query<{ vector: Uint8Array }, [string]>(
+        "SELECT vector FROM card_embeddings WHERE card_id=? AND state='ready'").get(newCardId!);
+      expect(row?.vector.byteLength).toBe(CARD_EMBEDDING_DIMENSIONS * 4);
+      const targetVector = new Float32Array(row!.vector.buffer, row!.vector.byteOffset, CARD_EMBEDDING_DIMENSIONS);
+      const distractorVector = targetVector.map(value => -value);
+      const copy = db.query(`INSERT INTO card_embeddings
+        SELECT ?,?,model_version,dimensions,input_hash,?,state,?,priority,attempts,retry_at
+        FROM card_embeddings WHERE card_id=?`);
+      for (const {id} of cards) copy.run(id, source, id, id === hitId ? targetVector : distractorVector,
+        id === hitId ? newCardId! : other.id);
+      expect(db.query('SELECT count(*) AS count FROM card_embeddings WHERE source_key=?').get(source)).toEqual({ count: size });
+      db.run(`INSERT INTO card_embedding_progress
+        SELECT key,(SELECT model_version FROM card_embeddings WHERE card_id=?),revision,'complete',''
+        FROM board_documents WHERE key=?`, [hitId, source]);
+    });
+    await serve(async (_base, api) => {
+      await wait(async () => (await (await api(settingsPath)).json() as CardSemanticStatus).state === 'ready');
+      const samples: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        const start = performance.now();
+        const result = await (await api(searchPath, 'POST', {
+          query: '고래가 바다를 이동하는 경로와 보호', scope: { kind:'archive', status:'all' },
+        })).json() as CardSemanticResult;
+        samples.push(Math.round(performance.now() - start));
+        if (result.status !== 'ready') console.log('Whole-archive failure timings in ms:', samples);
+        expect(result.status).toBe('ready');
+        expect(result.exact).toEqual([]);
+        expect(result.semantic.map(hit => hit.id)).toContain(hitId);
+      }
+      console.log('Whole-archive actual-model timings in ms (first cold, then warm):', samples);
+    });
+  }
+}), 120_000);
+
+test('whole-board opt-in includes pathless and future projects, not deleted or sensitive cards', () => {
+  const all: IndexPolicy = { ...policy, scope: 'all', directories: new Set() };
+  const card = { id: 'fixture', title: 'Title', description: 'Plain description' };
+  expect(parseSemanticConfig({ enabled: true, scope: 'all', directories: [] })).toEqual({
+    enabled: true, scope: 'all', directories: [],
+  });
+  expect(parseSemanticConfig({ enabled: true, directories: [] })).toBeNull();
+  expect(parseSemanticConfig({ enabled: true, scope: 'all', directories: [projectDir] })).toBeNull();
+  expect(parseSemanticConfig({ enabled: true, directories: [projectDir] })).toEqual({
+    enabled: true, directories: [projectDir],
+  });
+  expect(cardEmbeddingInput(card, policy)).toBeNull();
+  expect(cardEmbeddingInput(card, all)).toBe('Title\nPlain description');
+  expect(cardEmbeddingInput({ ...card, projectDir: '/future/synthetic' }, all)).not.toBeNull();
+  expect(cardEmbeddingInput({ ...card, deletedAt: '2026-11-26T00:00:00Z' }, all)).toBeNull();
+  expect(cardEmbeddingInput({ ...card, description: 'SENSITIVE_FIXTURE' }, all)).toBeNull();
+  expect(cardEmbeddingInput({ ...card, description: 'password=example' }, all)).toBeNull();
+});
+
+test('whole-board projected archive query can return the candidate after position 4096', () => withTempDir(async dir => {
+  const storage = new SqliteBoardStorage(join(dir, 'board.sqlite'));
+  const store = new KanbanStore(dir, storage);
+  const target = await store.createCard({ title: 'Archived travel plans', description: 'local train timetable' });
+  const vector = new Float32Array(CARD_EMBEDDING_DIMENSIONS); vector[0] = 1;
+  const fakeWorker = {
+    onmessage: null as ((event: { data: unknown }) => void) | null,
+    onerror: null,
+    terminate() {},
+    postMessage(message: { id: number; type: string; texts?: unknown[]; vectors?: Float32Array }) {
+      const n = (message.vectors?.length ?? 0) / CARD_EMBEDDING_DIMENSIONS;
+      const data = { id: message.id, ok: true, ranked: n ? [n - 1] : [], vectors: (message.texts ?? []).map(() => vector) };
+      queueMicrotask(() => this.onmessage?.({ data }));
+    },
+  };
+  const service = new CardSemanticSearch(storage, new SettingsStore(dir), dir, () => fakeWorker as unknown as Worker);
+  service.start();
+  try {
+    await service.configure({ enabled: true, scope: 'all', directories: [] });
+    for (let i = 0; i < 60 && (await service.status()).state !== 'ready'; i++) await Bun.sleep(50);
+    expect((await service.status()).state).toBe('ready');
+    const all: IndexPolicy = { ...policy, scope: 'all', directories: new Set() };
+    const ids = Array.from({length:4096}, (_, i) => 'fixture-' + i.toString().padStart(5, '0'));
+    await storage.writeCardIndex(db => {
+      db.run("UPDATE card_embeddings SET card_id='zz-expected' WHERE card_id=?", [target.id]);
+      const insert = db.query("INSERT INTO card_embeddings SELECT ?,source_key,model_version,dimensions,input_hash,token,state,vector,priority,attempts,retry_at FROM card_embeddings WHERE card_id='zz-expected'");
+      for (const id of ids) insert.run(id);
+    });
+    const projected = [...ids,'zz-expected'].map(id => projectSearchCard({ ...target, id }, all));
+    let selected = false;
+    const result = await service.search('기차 여행 일정', async () => {
+      if (!selected) await Bun.sleep(350);
+      selected = true;
+      return projected;
+    },
+      new AbortController().signal, 'archive', true);
+    expect(result.status).toBe('ready');
+    expect(result.exact).toEqual([]);
+    expect(result.semantic.map(hit => hit.id)).toEqual(['zz-expected']);
+  } finally { service.stop(); }
+}), 6_000);

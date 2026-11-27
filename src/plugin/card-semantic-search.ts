@@ -6,11 +6,14 @@ import type { SqliteBoardStorage } from '../core/sqlite-board-storage';
 import { CardSemanticIndex, containsSensitiveSearchText, type IndexPolicy } from '../core/card-semantic-index';
 import { CARD_EMBEDDING_DIMENSIONS as dimensions } from '../core/card-semantic-model';
 import { CARD_SEMANTIC_SETTINGS_KEY as settingKey, exactCardSearchMatch, splitCardSearch, type CardSemanticConfig, type CardSemanticResult, type CardSemanticStatus } from '../core/card-semantic';
-import type { ProjectedSearchCard } from '../core/card-semantic-projection';
+import { MAX_PROJECTED_CARDS, type ProjectedSearchCard, type ProjectionReferences } from '../core/card-semantic-projection';
 import type { ScopeRead, ScopeReply } from './card-semantic-scope-worker';
 import type { CardEmbeddingRequest } from './card-semantic-worker';
 
 export const CARD_SEMANTIC_SCOPE_LIMIT = 4_096;
+const SEARCH_BUDGET_MS = 300;
+const WHOLE_BOARD_BUDGET_MS = 1_500;
+const WHOLE_BOARD_ARCHIVE_BUDGET_MS = 6_000;
 const defaultConfig: CardSemanticConfig = { enabled: false, directories: [] };
 const hit = ({ id, title, sessionId }: KanbanCard) => ({ id, title, sessionId });
 
@@ -20,6 +23,9 @@ type Reply = { id: number; ok: boolean; ranked?: number[]; vectors?: Float32Arra
 export function parseSemanticConfig(value: unknown): CardSemanticConfig | null {
   if (!value || typeof value !== 'object' || !('enabled' in value) || typeof value.enabled !== 'boolean' ||
     !('directories' in value) || !Array.isArray(value.directories) || value.directories.length > 50) return null;
+  const scope = 'scope' in value ? value.scope : undefined;
+  if (scope !== undefined && scope !== 'all' && scope !== 'directories') return null;
+  if (scope === 'all' && value.directories.length) return null;
   const directories = new Set<string>();
   for (const entry of value.directories) {
     if (typeof entry !== 'string' || entry.length > 1024 || entry.includes('\0')) return null;
@@ -27,8 +33,8 @@ export function parseSemanticConfig(value: unknown): CardSemanticConfig | null {
     if (!path.startsWith('/')) return null;
     directories.add(path);
   }
-  if (value.enabled && !directories.size) return null;
-  return { enabled: value.enabled, directories: [...directories].sort() };
+  if (value.enabled && scope !== 'all' && !directories.size) return null;
+  return { enabled: value.enabled, directories: [...directories].sort(), ...(scope ? { scope } : {}) };
 }
 
 export class CardSemanticSearch {
@@ -97,8 +103,8 @@ export class CardSemanticSearch {
 
     const secrets = entries.filter(item => item.masked !== false && item.key !== settingKey && typeof item.value === 'string' && item.value.length >= 4)
       .map(item => item.value).sort();
-    const version = Bun.CryptoHasher.hash('sha256', JSON.stringify([epoch, config.directories, secrets]), 'hex');
-    return { config, epoch, policy: { version, directories: new Set(config.directories), secrets } };
+    const version = Bun.CryptoHasher.hash('sha256', JSON.stringify(config.scope === 'all' ? [epoch, config.directories, secrets, 'all'] : [epoch, config.directories, secrets]), 'hex');
+    return { config, epoch, policy: { version, directories: new Set(config.directories), scope: config.scope, secrets } };
   }
 
   async status(): Promise<CardSemanticStatus> {
@@ -167,7 +173,8 @@ export class CardSemanticSearch {
       this.job = { id, cancel: () => finish() };
       worker.onmessage = ({ data }: MessageEvent<Reply>) => { if (data.id === id) finish(data); };
       worker.onerror = event => { event.preventDefault(); finish(); };
-      try { worker.postMessage({ ...message, id }); }
+      try { worker.postMessage({ ...message, id },
+        message.type === 'search' ? [message.vectors.buffer as ArrayBuffer] : []); }
       catch { finish(); }
     });
   }
@@ -238,12 +245,12 @@ export class CardSemanticSearch {
   }
 
   /** Read only bounded, projected card fields on a worker thread. */
-  async projectedCards(kind: ScopeRead['kind'], signal: AbortSignal): Promise<ProjectedSearchCard[] | null> {
+  async projectedCards(kind: ScopeRead['kind'], signal: AbortSignal, references: ProjectionReferences = 'all'): Promise<ProjectedSearchCard[] | null> {
     if (signal.aborted || !this.index || !this.policy || !this.config.enabled || this.scopeJob) return null;
     const worker = this.scopeWorker ??= new Worker(new URL(
       import.meta.url.endsWith('.ts') ? './card-semantic-scope-worker.ts' : './card-semantic-scope-worker.js', import.meta.url));
     const id = ++this.nextId;
-    const data: ScopeRead = { id, kind, path: this.index.storage.path, policy: this.policy };
+    const data: ScopeRead = { id, kind, path: this.index.storage.path, policy: this.policy, references };
     return new Promise(resolve => {
       const finish = (cards: ProjectedSearchCard[] | null) => {
         clearTimeout(timer);
@@ -275,19 +282,26 @@ export class CardSemanticSearch {
       ({ status, exact, semantic: [] });
     if (!this.timer || !this.config.enabled || !this.index || !this.policy || this.updating) return empty('off');
     const generation = this.generation;
-    const deadline = performance.now() + 300;
+    const startedAt = performance.now();
+    // Broad queries can hydrate a cold projection before ranking. Give that
+    // work more time without changing the budget for other callers.
+    const wholeBoard = projected && this.policy.scope === 'all';
+    const queryBudget = !wholeBoard ? SEARCH_BUDGET_MS : scope === 'board'
+      ? WHOLE_BOARD_BUDGET_MS : WHOLE_BOARD_ARCHIVE_BUDGET_MS;
+    const deadline = startedAt + queryBudget;
+    const queueDeadline = startedAt + SEARCH_BUDGET_MS;
     if (signal.aborted || this.waitingForQuery) return empty('timeout');
     if (this.querying) {
       this.waitingForQuery = true;
       try {
-        while (this.querying && !signal.aborted && generation === this.generation && performance.now() < deadline) {
+        while (this.querying && !signal.aborted && generation === this.generation && performance.now() < queueDeadline) {
           await Bun.sleep(5);
         }
       } finally {
         this.waitingForQuery = false;
       }
       if (signal.aborted || generation !== this.generation) return empty('off');
-      if (this.querying || performance.now() >= deadline) return empty('timeout');
+      if (this.querying || performance.now() >= queueDeadline) return empty('timeout');
     }
     const index = this.index;
     const policy = this.policy;
@@ -331,7 +345,7 @@ export class CardSemanticSearch {
         const eligible = projected
           ? cards.filter(card => (card as ProjectedSearchCard).searchProjection.inputHash !== null)
           : cards;
-        if (eligible.length > CARD_SEMANTIC_SCOPE_LIMIT) return empty('timeout');
+        if (eligible.length > (projected && policy.scope === 'all' ? MAX_PROJECTED_CARDS : CARD_SEMANTIC_SCOPE_LIMIT)) return empty('timeout');
         const rows = index.candidates(policy, new Map(eligible.map(card => [card.id, card])));
         if (!rows.length) return empty('ready', exact);
         const array = new Float32Array(rows.length * dimensions);
