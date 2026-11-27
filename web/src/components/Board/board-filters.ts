@@ -1,8 +1,9 @@
-import type { KanbanCard } from '../../../../src/core/types';
+import type { KanbanCard, KanbanStatus } from '../../../../src/core/types';
 import { isUnreadCompletion } from './board-selectors';
 
 export type BoardFilters = {
   search: string;
+  status?: KanbanStatus | '';
   directory: string;
   sessionName: string;
   sessionId: string;
@@ -14,6 +15,7 @@ export type BoardFilters = {
 
 export const DEFAULT_BOARD_FILTERS: BoardFilters = {
   search: '',
+  status: '',
   directory: '',
   sessionName: '',
   sessionId: '',
@@ -68,6 +70,7 @@ export function filterBoardCards(cards: KanbanCard[], filters: BoardFilters): Ka
   const sessionIdQuery = toLowerTrimmed(filters.sessionId);
 
   return cards.filter((card) => {
+    if (filters.status && card.status !== filters.status) return false;
     if (searchQuery) {
       const haystack = [card.title, card.description, card.progressSummary, card.result, card.sessionId]
         .map((field) => toLowerTrimmed(field))

@@ -3,7 +3,7 @@ import type { KanbanCard, Work } from '../../../../src/core/types';
 import { usePersistedDialogSize } from '../../hooks/usePersistedDialogSize';
 import type { BoardFilters } from './board-filters';
 import type { BoardWorkFilter } from './board-works';
-import { TOOLBAR_COPY } from '../../constants/copy';
+import { STATUS_LABELS, TOOLBAR_COPY } from '../../constants/copy';
 
 type DateInputWithPicker = HTMLInputElement & { showPicker?: () => void };
 
@@ -156,8 +156,8 @@ function getLatestSessionNameOptions(cards: KanbanCard[]): FilterOptionItem[] {
 
 function getActiveFilterCount(filters: BoardFilters): number {
   return Object.entries(filters)
-    .filter(([key]) => key !== 'directory')
-    .filter(([, value]) => value.trim().length > 0)
+    .filter(([key]) => key !== 'directory' && key !== 'search')
+    .filter(([, value]) => value?.trim())
     .length;
 }
 
@@ -339,20 +339,22 @@ export const BoardFilterBar: React.FC<BoardFilterBarProps> = ({
 
           <div className="kv2-filter-popover-body">
             <div className="kv2-filter-panel-grid">
-              <section className="kv2-filter-card kv2-filter-card--search">
-                <label className="kv2-filter-field" htmlFor="board-filter-search">
-                  <span className="kv2-filter-label">Keyword</span>
-                  <input
-                    id="board-filter-search"
-                    className="kv2-filter-input"
-                    type="search"
-                    aria-label="Search cards"
-                    placeholder="Title, description, progress, result"
-                    value={filters.search}
-                    onChange={(event) => update('search', event.target.value)}
-                  />
-                </label>
-              </section>
+              <fieldset className="kv2-filter-section kv2-filter-card">
+                <legend className="kv2-filter-label">상태</legend>
+                <div className="kv2-filter-checklist">
+                  {(Object.keys(STATUS_LABELS) as Array<keyof typeof STATUS_LABELS>).map(status => (
+                    <button
+                      key={status}
+                      type="button"
+                      className={`kv2-filter-option${filters.status === status ? ' is-selected' : ''}`}
+                      aria-pressed={filters.status === status}
+                      onClick={() => update('status', filters.status === status ? '' : status)}
+                    >
+                      {STATUS_LABELS[status]}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
 
               <fieldset className="kv2-filter-section kv2-filter-card">
                 <legend className="kv2-filter-label">Session Name</legend>

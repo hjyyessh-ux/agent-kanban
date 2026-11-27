@@ -402,3 +402,29 @@ export const RUNTIME_DEFAULTS_COPY = {
   lockedByBypass: 'bypass가 켜져 있어 무시됩니다',
   defaultBadge: '기본',
 };
+
+export const BOARD_SEARCH_COPY = {
+  label: '카드 검색',
+  clear: '검색어 지우기',
+  results: '카드 검색 결과',
+  archive: '보관함에서 검색',
+  boardScope: '현재 보드',
+  filterScope: (count: number) => `보드 · 필터 ${count}개`,
+  count: (count: number) => `${count}개`,
+  exact: '정확 일치',
+  semantic: '의미 일치',
+  empty: '검색 결과가 없습니다.',
+  keywordEmpty: '키워드와 정확 일치 결과가 없습니다.',
+  filteredEmpty: '현재 필터 범위에 일치하는 카드가 없습니다.',
+  excluded: (count: number) => `현재 필터로 일치 카드 ${count}개 제외`,
+  phase: {
+    composing: '한글 입력 조합이 끝나면 검색합니다.',
+    typing: '키워드 검색 중…',
+    pending: '의미 검색 중…',
+    preparing: '의미 검색 준비 중 · 첫 색인이 끝나면 의미 일치 결과를 볼 수 있습니다.',
+    off: '의미 검색이 꺼져 있습니다.',
+    timeout: '의미 검색 응답 시간이 초과되었습니다.',
+    failed: '의미 검색을 불러오지 못했습니다.',
+    ready: '',
+  },
+} as const;
