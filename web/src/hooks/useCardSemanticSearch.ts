@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   CARD_SEMANTIC_SEARCH_PATH, CARD_SEMANTIC_SETTINGS_PATH,
   type CardSemanticConfig, type CardSemanticScope, type CardSemanticStatus, type CardSemanticResult,
@@ -24,20 +24,28 @@ export function retryCardSemanticIndex() {
   return jsonRequest<CardSemanticStatus>(`${CARD_SEMANTIC_SETTINGS_PATH}/retry`, { method: 'POST' });
 }
 
-export function useCardSemanticSearch(query: string, scope: CardSemanticScope) {
+export function useCardSemanticSearchState(query: string, scope: CardSemanticScope) {
   const active = !!query.trim();
-  const [status, setStatus] = useState<CardSemanticStatus | null>(null);
-  const [result, setResult] = useState<{ key: string; value: CardSemanticResult } | null>(null);
   const key = active ? JSON.stringify({ query: query.trim(), scope }) : '';
+  const [status, setStatus] = useState<CardSemanticStatus | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
+  const request = useMemo(() => ({ key, revision: status?.revision, state: status?.state }),
+    [key, status?.revision, status?.state]);
+  const [result, setResult] = useState<{ request: typeof request; value: CardSemanticResult } | null>(null);
 
   useEffect(() => {
     if (!active) return;
     const controller = new AbortController();
     const refresh = () => {
-      void fetchCardSemanticStatus(controller.signal).then(value => {
-        if (!controller.signal.aborted) setStatus(value);
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(2_500)]);
+      void fetchCardSemanticStatus(signal).then(value => {
+        if (signal.aborted) return;
+        setStatus(value);
+        setStatusFailed(false);
       }).catch(() => {
-        if (!controller.signal.aborted) setStatus(null);
+        if (controller.signal.aborted) return;
+        setStatus(null);
+        setStatusFailed(true);
       });
     };
     refresh();
@@ -46,26 +54,33 @@ export function useCardSemanticSearch(query: string, scope: CardSemanticScope) {
   }, [active]);
 
   const enabled = status?.enabled && status.state !== 'unavailable';
-  const revision = status?.revision;
-  const requestKey = key && revision ? key + '\0' + revision : '';
   useEffect(() => {
-    if (!requestKey || !enabled) return;
+    if (!request.key || !request.revision || !enabled) return;
     const controller = new AbortController();
     let retry: ReturnType<typeof setTimeout> | undefined;
     const search = (canRetry: boolean) => {
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8_000)]);
       void jsonRequest<CardSemanticResult>(CARD_SEMANTIC_SEARCH_PATH, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: key, signal: controller.signal,
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: request.key, signal,
       }).then(value => {
-        if (controller.signal.aborted) return;
-        setResult({ key: requestKey, value });
+        if (signal.aborted) return;
+        setResult({ request, value });
         if (value.status === 'timeout' && canRetry) retry = setTimeout(() => search(false), 1_000);
       }).catch(() => {
-        if (!controller.signal.aborted) setResult({ key: requestKey, value: { status: 'failed', exact: [], semantic: [] } });
+        if (controller.signal.aborted) return;
+        setResult({ request, value: { status: signal.aborted ? 'timeout' : 'failed', exact: [], semantic: [] } });
       });
     };
     search(true);
     return () => { controller.abort(); clearTimeout(retry); };
-  }, [key, requestKey, enabled, status?.state]);
+  }, [request, enabled]);
 
-  return enabled && result?.key === requestKey ? result.value : null;
+  const current = active && enabled && result?.request === request ? result.value : null;
+  const phase: CardSemanticResult['status'] | 'pending' = current?.status ?? (statusFailed || status?.state === 'unavailable' ? 'failed'
+    : !status || status.state === 'ready' ? 'pending' : status.state);
+  return { result: current, phase };
+}
+
+export function useCardSemanticSearch(query: string, scope: CardSemanticScope) {
+  return useCardSemanticSearchState(query, scope).result;
 }

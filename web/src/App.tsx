@@ -1,4 +1,5 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BoardSearchInput, BoardSearchResults, useBoardSearch } from './components/Board/BoardCardSearch';
 import { BoardFilterBar } from './components/Board/BoardFilterBar';
 import { BoardProjectSwitcher } from './components/Board/BoardProjectSwitcher';
 import { BoardScreen, type UnreadJumpRequest } from './components/Board/BoardScreen';
@@ -54,7 +55,7 @@ import {
   workForCard,
   type BoardWorkFilter,
 } from './components/Board/board-works';
-import { BOARD_GROUP_MODE_STORAGE_KEY, parseBoardGroupMode, type BoardGroupMode } from './components/Board/board-group-mode';
+import { BOARD_GROUP_MODE_STORAGE_KEY, groupsCompleteBySession, parseBoardGroupMode, type BoardGroupMode } from './components/Board/board-group-mode';
 import { ApiError, fetchCard, fetchSessionCards, uploadScreenshot } from './hooks/useKanbanApi';
 import { useDeepLinkHistory } from './hooks/useDeepLinkHistory';
 import { DeepLinkNotice, type DeepLinkNoticeState } from './components/shared/DeepLinkNotice';
@@ -165,6 +166,7 @@ function linkFailureNotice(error: unknown, what: '카드' | '세션'): DeepLinkN
 export default function App() {
   const { cards, loading, error, updateCard, deleteCard, refreshCards, archiveCards, completeAllCards, dispatchCard, createCard, queueCard, unqueueCard, scheduleCard, cancelCardSchedule, reorderCards, setResumeSession, clearResumeSession, markCompletionSeen, markCompletionSeenMany, clearError, showError } = useKanbanBoard();
   const [activeTab, setActiveTab] = useState<MainTab>('board');
+  const [wikiArchiveEntry, setWikiArchiveEntry] = useState(false);
   const [boardViewMode, setBoardViewMode] = useState<BoardViewMode>(getStoredBoardViewMode);
   const [boardGroupMode, setBoardGroupMode] = useState<BoardGroupMode>(getStoredBoardGroupMode);
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(DEFAULT_BOARD_FILTERS);
@@ -187,7 +189,21 @@ export default function App() {
   // living in its own tab; everything below that reads `boardViewMode` only
   // ever sees the two card layouts.
   const timelineActive = activeTab === 'board' && boardViewMode === 'timeline';
-  const unreadJumpEnabled = activeTab === 'board' && !timelineActive;
+
+  const worksGroupActive = activeTab === 'board' && boardGroupMode === 'works';
+  // Gated like every other 10s poll, but the board needs the active Works list
+  // in every group mode now — `BoardCardWorkField` shows a todo/in-progress
+  // card's Work picker everywhere, not just `GROUP: WORKS`.
+  const works = useWorks(activeTab === 'works' || activeTab === 'board' || timelineActive);
+  const activeWorks = useMemo(() => works.works.filter((work) => work.status === 'active'), [works.works]);
+  // `WORK:` only exists in GROUP: WORKS; elsewhere it is ignored (not cleared),
+  // and a Work that closed meanwhile reads as `all`.
+  const effectiveWorkFilter = worksGroupActive ? resolveWorkFilter(boardWorkFilter, activeWorks) : 'all';
+  const boardSearch = useBoardSearch({
+    enabled: activeTab === 'board', cards, filters: boardFilters, workFilter: effectiveWorkFilter,
+    works: activeWorks, unread: unreadOnly, grouped: groupsCompleteBySession(boardGroupMode),
+  });
+  const unreadJumpEnabled = activeTab === 'board' && !timelineActive && !boardSearch.active;
 
   // `u` → next unread, `Shift+U` → previous. Matched on `code` so a Korean
   // layout (where the key types ㅕ) still works. Never while typing, never with
@@ -206,15 +222,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [requestUnreadJump, unreadJumpEnabled]);
-  const worksGroupActive = activeTab === 'board' && boardGroupMode === 'works';
-  // Gated like every other 10s poll, but the board needs the active Works list
-  // in every group mode now — `BoardCardWorkField` shows a todo/in-progress
-  // card's Work picker everywhere, not just `GROUP: WORKS`.
-  const works = useWorks(activeTab === 'works' || activeTab === 'board' || timelineActive);
-  const activeWorks = useMemo(() => works.works.filter((work) => work.status === 'active'), [works.works]);
-  // `WORK:` only exists in GROUP: WORKS; elsewhere it is ignored (not cleared),
-  // and a Work that closed meanwhile reads as `all`.
-  const effectiveWorkFilter = worksGroupActive ? resolveWorkFilter(boardWorkFilter, activeWorks) : 'all';
   // The toolbar `● N unread` counts what the unread-only filter (and `u`) can
   // actually reach: the board under the current filters (the tab badge above
   // stays the whole board).
@@ -848,90 +855,82 @@ export default function App() {
       >
         <div className="app-header-inner">
           <h1 className="app-title">{APP_TITLE}</h1>
-          <AppTabs activeTab={activeTab} onActivate={setActiveTab} badges={{ board: boardUnreadCount, works: works.inboxCount }} />
+          <AppTabs activeTab={activeTab} onActivate={(tab) => { setWikiArchiveEntry(false); setActiveTab(tab); }} badges={{ board: boardUnreadCount, works: works.inboxCount }} />
           {activeTab === 'board' && (
-            <button
-              type="button"
-              className={`app-board-mobile-tools-toggle${showBoardTools ? ' is-active' : ''}`}
-              aria-expanded={showBoardTools}
-              aria-controls="app-board-tools"
-              onClick={() => setShowBoardTools((open) => !open)}
-            >
-              {showBoardTools ? 'Board 도구 닫기' : '☰ Board 도구'}
-            </button>
-          )}
-          {activeTab === 'board' && (
-            <div
-              className={`app-board-view-controls${showBoardTools ? ' is-mobile-open' : ''}`}
-              id="app-board-tools"
-            >
-              {/* One toolbar for all three board views. The filter bar narrows
-                  the Timeline's session rows too (`sessionFilter`), and the
-                  session-grouping toggle keeps its state visible here even
-                  though only the list/board layouts render grouped columns —
-                  a control that vanished on one view read as a broken toolbar. */}
-              {/* `● N unread` is the unread-only filter itself: press to show only
-                  unread completions, press again for the whole board. Jumping
-                  between unread cards stays on the `u` / `Shift+U` keys. */}
-              <button
-                type="button"
-                className={`kv2-toolbar-ctl kv2-unread-filter${unreadOnly ? ' is-active' : ''}`}
-                aria-pressed={unreadOnly}
-                aria-live="polite"
-                title={timelineActive
-                  ? TOOLBAR_COPY.unreadOnlyTimelineTitle
-                  : unreadOnly ? TOOLBAR_COPY.unreadOnlyActiveTitle : TOOLBAR_COPY.unreadOnlyTitle}
-                disabled={!unreadOnly && visibleUnreadCount === 0}
-                onClick={() => setUnreadOnly((previous) => !previous)}
-              >
-                {unreadOnly ? '✓' : '●'} {visibleUnreadCount} {TOOLBAR_COPY.unread}
-              </button>
-              <BoardFilterBar
-                cards={cards}
-                filters={boardFilters}
-                onFiltersChange={setBoardFilters}
-                onFiltersReset={() => {
-                  setBoardFilters(DEFAULT_BOARD_FILTERS);
-                  setBoardWorkFilter(DEFAULT_BOARD_WORK_FILTER);
-                }}
-                workFilter={worksGroupActive
-                  ? { works: activeWorks, value: effectiveWorkFilter, onChange: setBoardWorkFilter }
-                  : undefined}
-              />
-              <fieldset className="kv2-toolbar-seg app-board-view-toggle">
-                <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.viewModeLegend}</legend>
-                {BOARD_VIEW_MODES.map(([viewMode, label]) => (
-                  <button
-                    key={viewMode}
-                    type="button"
-                    className={`kv2-toolbar-seg-btn app-board-view-toggle-btn${boardViewMode === viewMode ? ' is-active' : ''}`}
-                    aria-pressed={boardViewMode === viewMode}
-                    onClick={() => setBoardViewMode(viewMode)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </fieldset>
-              <fieldset
-                className="kv2-toolbar-seg app-board-group-toggle"
-                title={timelineActive ? TOOLBAR_COPY.groupTimelineTitle : undefined}
-              >
-                <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.groupLegend}</legend>
-                <span className="kv2-toolbar-seg-label" aria-hidden="true">{TOOLBAR_COPY.groupLabel}</span>
-                {BOARD_GROUP_MODE_OPTIONS.map(([mode, label, title]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={`kv2-toolbar-seg-btn${boardGroupMode === mode ? ' is-active' : ''}`}
-                    data-group={mode}
-                    aria-pressed={boardGroupMode === mode}
-                    title={timelineActive ? undefined : title}
-                    onClick={() => setBoardGroupMode(mode)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </fieldset>
+            <div className="app-board-toolbar">
+              <div className="app-board-primary-controls">
+                <BoardSearchInput search={boardSearch} onOpen={handleOpenCard} />
+                <button
+                  type="button"
+                  className={`kv2-toolbar-ctl kv2-unread-filter${unreadOnly ? ' is-active' : ''}`}
+                  aria-pressed={unreadOnly}
+                  aria-live="polite"
+                  title={timelineActive && !boardSearch.active
+                    ? TOOLBAR_COPY.unreadOnlyTimelineTitle
+                    : unreadOnly ? TOOLBAR_COPY.unreadOnlyActiveTitle : TOOLBAR_COPY.unreadOnlyTitle}
+                  disabled={!unreadOnly && visibleUnreadCount === 0}
+                  onClick={() => setUnreadOnly((previous) => !previous)}
+                >
+                  {unreadOnly ? '✓' : '●'} {visibleUnreadCount} {TOOLBAR_COPY.unread}
+                </button>
+                <BoardFilterBar
+                  cards={cards}
+                  filters={boardFilters}
+                  onFiltersChange={setBoardFilters}
+                  onFiltersReset={() => {
+                    setBoardFilters(DEFAULT_BOARD_FILTERS);
+                    setBoardWorkFilter(DEFAULT_BOARD_WORK_FILTER);
+                  }}
+                  workFilter={worksGroupActive
+                    ? { works: activeWorks, value: effectiveWorkFilter, onChange: setBoardWorkFilter }
+                    : undefined}
+                />
+                <button
+                  type="button"
+                  className={`app-board-mobile-tools-toggle${showBoardTools ? ' is-active' : ''}`}
+                  aria-expanded={showBoardTools}
+                  aria-controls="app-board-tools"
+                  onClick={() => setShowBoardTools((open) => !open)}
+                >
+                  {showBoardTools ? 'Board 도구 닫기' : '☰ Board 도구'}
+                </button>
+              </div>
+              <div className={`app-board-view-controls${showBoardTools ? ' is-mobile-open' : ''}`} id="app-board-tools">
+                <fieldset className="kv2-toolbar-seg app-board-view-toggle">
+                  <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.viewModeLegend}</legend>
+                  {BOARD_VIEW_MODES.map(([viewMode, label]) => (
+                    <button
+                      key={viewMode}
+                      type="button"
+                      className={`kv2-toolbar-seg-btn app-board-view-toggle-btn${boardViewMode === viewMode ? ' is-active' : ''}`}
+                      aria-pressed={boardViewMode === viewMode}
+                      onClick={() => setBoardViewMode(viewMode)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </fieldset>
+                <fieldset
+                  className="kv2-toolbar-seg app-board-group-toggle"
+                  title={timelineActive ? TOOLBAR_COPY.groupTimelineTitle : undefined}
+                >
+                  <legend className="app-board-view-toggle-legend">{TOOLBAR_COPY.groupLegend}</legend>
+                  <span className="kv2-toolbar-seg-label" aria-hidden="true">{TOOLBAR_COPY.groupLabel}</span>
+                  {BOARD_GROUP_MODE_OPTIONS.map(([mode, label, title]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`kv2-toolbar-seg-btn${boardGroupMode === mode ? ' is-active' : ''}`}
+                      data-group={mode}
+                      aria-pressed={boardGroupMode === mode}
+                      title={timelineActive ? undefined : title}
+                      onClick={() => setBoardGroupMode(mode)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </fieldset>
+              </div>
             </div>
           )}
           {activeTab === 'board' && !timelineActive && (
@@ -956,6 +955,11 @@ export default function App() {
         role="tabpanel"
         aria-labelledby={TAB_IDS[activeTab]}
       >
+        {boardSearch.active && (
+          <BoardSearchResults search={boardSearch} works={works.works} loading={loading && cards.length === 0} onOpen={handleOpenCard}
+            onArchive={() => { setWikiArchiveEntry(true); setActiveTab('wiki'); }} />
+        )}
+        <div className="app-preserved-view" inert={boardSearch.active} aria-hidden={boardSearch.active || undefined}>
         {timelineActive ? (
           <TimelineView
             works={works.works}
@@ -1099,7 +1103,7 @@ export default function App() {
           />
         ) : activeTab === 'wiki' ? (
           <Suspense fallback={<div className="loading-spinner" role="status" aria-label="Loading wiki..." />}>
-            <WikiView />
+            <WikiView initialMode={wikiArchiveEntry ? 'archive' : 'documents'} />
           </Suspense>
         ) : activeTab === 'scheduler' ? (
           <SchedulerView
@@ -1158,6 +1162,7 @@ export default function App() {
             onClearError={settings.clearError}
           />
         )}
+        </div>
       </main>
 
       {showCreateModal && (

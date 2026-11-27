@@ -142,7 +142,7 @@ function collapseByDoc(cards: KanbanCard[]): WikiTile[] {
   return tiles;
 }
 
-export function WikiView() {
+export function WikiView({ initialMode = 'documents' }: { initialMode?: WikiMode } = {}) {
   const { runtimes } = useRuntimes();
   const [status, setStatus] = useState<WikiWorkerStatus | null>(null);
   const [config, setConfig] = useState<WikiConfigDto | null>(null);
@@ -151,7 +151,7 @@ export function WikiView() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<WikiMode>('documents');
+  const [mode, setMode] = useState<WikiMode>(initialMode);
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>('kept');
   const [archiveCards, setArchiveCards] = useState<KanbanCard[]>([]);
   const [archiveCursor, setArchiveCursor] = useState<string | null>(null);
