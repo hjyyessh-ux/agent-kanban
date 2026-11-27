@@ -9,7 +9,7 @@ import { DialogSkeleton } from '../Card/DialogSkeleton';
 
 const COMMANDS = [
   'bash scripts/install.sh',
-  'bash scripts/restart-opencode-plugin.sh --yes',
+  'bash scripts/restart-agent-kanban.sh --yes',
 ];
 
 function getStatusLabel(status: MaintenanceStatus | null): string {

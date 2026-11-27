@@ -8,8 +8,6 @@ cd "$PROJECT_DIR"
 # bun은 보통 ~/.bun/bin에 설치되므로 비로그인 셸에서도 찾을 수 있게 PATH에 추가
 export PATH="$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-PLUGIN_DIR="$HOME/.config/opencode/plugins/agent-kanban"
-GLOBAL_OPENCODE_CONFIG="$HOME/.config/opencode/opencode.json"
 GLOBAL_CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 GLOBAL_CODEX_HOOKS="$HOME/.codex/hooks.json"
 HOOKS_INSTALL_DIR="$HOME/.agent-kanban/hooks"
@@ -88,52 +86,17 @@ if ! command -v bun &>/dev/null; then
 fi
 
 if ! command -v jq &>/dev/null; then
-  echo "⚠️  jq not found — Claude Code / Codex hook registration will be skipped."
-  echo "   Install jq (e.g. 'brew install jq') and re-run for full setup."
+  echo "❌ jq is required to register Claude Code and Codex hooks."
+  echo "   Install jq (e.g. 'brew install jq') and rerun this script."
+  exit 1
 fi
 
 echo "Synchronizing dependencies (bun install --frozen-lockfile)..."
 bun install --frozen-lockfile
 
 # ── Build ──────────────────────────────────────────────────────────────────────
-echo "Building agent-kanban plugin..."
+echo "Building Agent Kanban daemon and web UI..."
 bun run build
-
-# ── opencode plugin install ────────────────────────────────────────────────────
-echo "Installing opencode plugin to $PLUGIN_DIR..."
-mkdir -p "$PLUGIN_DIR"
-cp dist/plugin/index.js dist/plugin/card-semantic-worker.js dist/plugin/card-semantic-scope-worker.js dist/plugin/ort-wasm-simd-threaded.{mjs,wasm} "$PLUGIN_DIR/"
-cp -r web/dist "$PLUGIN_DIR/web"
-
-echo "Updating global opencode config..."
-PLUGIN_ENTRY="$PLUGIN_DIR/index.js"
-if [ -f "$GLOBAL_OPENCODE_CONFIG" ]; then
-  if command -v jq &>/dev/null; then
-    tmp=$(mktemp)
-    jq --arg p "$PLUGIN_ENTRY" '
-      .plugin = ((.plugin // [])
-        | map(select(. != $p))
-        | . + [$p])
-    ' "$GLOBAL_OPENCODE_CONFIG" > "$tmp" && mv "$tmp" "$GLOBAL_OPENCODE_CONFIG"
-  else
-    if grep -q "$PLUGIN_ENTRY" "$GLOBAL_OPENCODE_CONFIG" 2>/dev/null; then
-      echo "Plugin already registered in $GLOBAL_OPENCODE_CONFIG"
-    else
-      if grep -q '"plugin"' "$GLOBAL_OPENCODE_CONFIG" 2>/dev/null; then
-        sed -i.bak 's|\("plugin"[[:space:]]*:[[:space:]]*\[.*\)\]|\1, "'"$PLUGIN_ENTRY"'"]|' "$GLOBAL_OPENCODE_CONFIG"
-        rm -f "${GLOBAL_OPENCODE_CONFIG}.bak"
-      else
-        sed -i.bak 's|^{|{"plugin": ["'"$PLUGIN_ENTRY"'"],|' "$GLOBAL_OPENCODE_CONFIG"
-        rm -f "${GLOBAL_OPENCODE_CONFIG}.bak"
-      fi
-    fi
-  fi
-  echo "Plugin registered in $GLOBAL_OPENCODE_CONFIG"
-else
-  mkdir -p "$(dirname "$GLOBAL_OPENCODE_CONFIG")"
-  echo '{"plugin": ["'"$PLUGIN_ENTRY"'"]}' > "$GLOBAL_OPENCODE_CONFIG"
-  echo "Created $GLOBAL_OPENCODE_CONFIG with plugin entry"
-fi
 
 # ── Claude Code hooks install ──────────────────────────────────────────────────
 echo "Installing Claude Code hooks..."
@@ -248,15 +211,13 @@ fi
 
 echo ""
 echo "✅ agent-kanban installed successfully!"
-echo "   • opencode: restart opencode to activate the plugin"
 echo "   • Claude Code: restart Claude Code to activate hooks"
 echo "   • Codex: restart Codex to activate hooks"
 echo ""
 echo "▶ Open the kanban board:"
 echo "   1. Start the server (pick one):"
 echo "      - Run 'bun start' in $PROJECT_DIR (standalone daemon), or"
-echo "      - Just start a new opencode / Claude Code / Codex session —"
-echo "        the plugin/hooks launch the daemon automatically."
+echo "      - Start a new Claude Code or Codex session to launch the shared daemon automatically."
 echo "   2. Open http://localhost:24680 in your browser."
 echo ""
 echo "   If the port is busy the server tries 24681, 24682 next."

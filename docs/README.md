@@ -52,12 +52,10 @@ agent-kanban은 opencode/Codex/Claude runtime 세션, Telegram follow-up, feedba
 ## 빠른 시작
 
 ```bash
-bun install        # 의존성 설치
-bun run build      # 플러그인 + 웹 UI 빌드
-bun run dev        # 개발 서버 실행 (포트 5173)
+bash scripts/install.sh
 ```
 
-빌드 후 opencode 설정에 플러그인을 등록하면 AI 세션에서 kanban 도구를 바로 사용할 수 있습니다. 자세한 설정 방법은 [시작하기](./getting-started.md)를 참고하세요.
+새 Codex 또는 Claude Code 세션을 열면 공용 데몬이 시작됩니다. 브라우저에서 `http://localhost:24680`을 엽니다. [시작하기](./getting-started.md)
 
 ## 기술 스택
 

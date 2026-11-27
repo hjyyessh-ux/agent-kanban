@@ -9,8 +9,9 @@ bun install                # Install dependencies
 bun run dev                # Vite dev server (port 5173, proxies /api → :24680)
 bun start                  # Run standalone daemon (primary entrypoint)
 bun run dev:plugin         # Run opencode plugin directly
-bun run build              # Build backend (daemon + plugin) + web
-bun run build:backend      # Daemon + plugin only
+bun run build              # Build standalone daemon + web
+bun run build:backend      # Standalone daemon and workers
+bun run build:plugin       # Optional plugin bundle
 bun run build:web          # Web SPA only
 bunx tsc --noEmit          # Type check
 bun test                   # All unit/integration tests
