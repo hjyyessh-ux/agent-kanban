@@ -13,6 +13,7 @@ const stateText: Record<CardSemanticStatus['state'], string> = {
 export function CardSemanticPanel() {
   const [status, setStatus] = useState<CardSemanticStatus | null>(null);
   const [draft, setDraft] = useState<string>();
+  const [scopeDraft, setScopeDraft] = useState<'all' | 'directories'>();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   useEffect(() => {
@@ -27,6 +28,7 @@ export function CardSemanticPanel() {
     return () => { controller.abort(); clearInterval(timer); };
   }, []);
   if (!status) return null;
+  const scope = scopeDraft ?? status.scope ?? 'directories';
   const directories = (draft ?? status.directories.join('\n')).split('\n').filter(line => line.trim());
   const disabled = busy || status.state === 'unavailable';
   const apply = (operation: () => Promise<CardSemanticStatus>) => {
@@ -35,23 +37,32 @@ export function CardSemanticPanel() {
     void operation().then(next => {
       setStatus(next);
       setDraft(undefined);
+      setScopeDraft(undefined);
     }).catch(() => setMessage('설정을 적용하지 못했습니다. 디렉터리와 로컬 모델을 확인해 주세요.'))
       .finally(() => setBusy(false));
   };
   return <section className="kv2-section">
     <h3>카드 의미 검색</h3>
     <label>
+      색인 범위
+      <select className="kv2-input" value={scope} disabled={disabled}
+        onChange={event => setScopeDraft(event.target.value === 'all' ? 'all' : 'directories')}>
+        <option value="all">전체 카드 (활성·보관)</option>
+        <option value="directories">선택한 프로젝트만</option>
+      </select>
+    </label>
+    {scope === 'all' ? <p>프로젝트 경로가 없는 카드도 포함합니다. 제목과 설명만 맥에서 색인합니다.</p> : <label>
       색인을 허용할 비민감 프로젝트 절대 경로 (한 줄에 하나)
       <textarea className="kv2-input" value={draft ?? status.directories.join('\n')}
         rows={2} disabled={disabled} onChange={event => setDraft(event.target.value)} />
-    </label>
+    </label>}
     <div>
-      <button className="kv2-btn kv2-btn--primary" type="button" disabled={disabled || (!status.enabled && !directories.length)}
-        onClick={() => apply(() => saveCardSemanticConfig({ enabled: true, directories }))}>
+      <button className="kv2-btn kv2-btn--primary" type="button" disabled={disabled || (scope === 'directories' && !directories.length)}
+        onClick={() => apply(() => saveCardSemanticConfig({ enabled: true, scope, directories: scope === 'all' ? [] : directories }))}>
         {status.enabled ? '허용 범위 저장' : '켜기'}
       </button>
       {status.enabled && <button className="kv2-btn kv2-btn--outline" type="button" disabled={disabled}
-        onClick={() => apply(() => saveCardSemanticConfig({ enabled: false, directories: status.directories }))}>끄기</button>}
+        onClick={() => apply(() => saveCardSemanticConfig({ enabled: false, scope: status.scope, directories: status.directories }))}>끄기</button>}
       {(status.failed > 0 || status.state === 'failed') &&
         <button className="kv2-btn kv2-btn--outline" type="button" disabled={disabled}
           onClick={() => apply(retryCardSemanticIndex)}>재시도</button>}

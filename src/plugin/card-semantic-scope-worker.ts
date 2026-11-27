@@ -1,13 +1,13 @@
 import { Database } from 'bun:sqlite';
 import type { CardDocumentKey } from '../core/sqlite-board-storage';
-import { boundedSearchProjection, MAX_PROJECTED_BYTES, MAX_PROJECTED_CARDS, type ProjectedSearchCard } from '../core/card-semantic-projection';
+import { boundedSearchProjection, MAX_PROJECTED_BYTES, MAX_PROJECTED_CARDS, type ProjectedSearchCard, type ProjectionReferences } from '../core/card-semantic-projection';
 import type { IndexPolicy } from '../core/card-semantic-index';
 import type { KanbanCard } from '../core/types';
 
-export type ScopeRead = { id: number; path: string; kind: 'board' | 'work' | 'archive'; policy: IndexPolicy };
+export type ScopeRead = { id: number; path: string; kind: 'board' | 'work' | 'archive'; policy: IndexPolicy; references?: ProjectionReferences };
 export type ScopeReply = { id: number; cards: ProjectedSearchCard[] | null };
 type CardDocument = { key: CardDocumentKey; revision: number; bytes: number };
-type CacheEntry = { revision: number; cards: ProjectedSearchCard[]; bytes: number };
+type CacheEntry = { revision: number; references: ProjectionReferences; cards: ProjectedSearchCard[]; bytes: number };
 let policyVersion = '';
 const cache = new Map<CardDocumentKey, CacheEntry>();
 
@@ -20,6 +20,7 @@ self.onmessage = ({ data }: MessageEvent<ScopeRead>) => {
       cache.clear();
       policyVersion = data.policy.version;
     }
+    const references = data.references ?? "all";
     const docs = db.query<CardDocument, [string]>(`SELECT key,revision,octet_length(body) AS bytes FROM board_documents
       WHERE (?!='archive' AND key='cards') OR (?1!='board' AND key GLOB 'archive:*') ORDER BY key DESC`).all(data.kind);
     const ids = new Set(docs.map(doc => doc.key));
@@ -33,13 +34,13 @@ self.onmessage = ({ data }: MessageEvent<ScopeRead>) => {
       // Never deserialize a single unexpectedly huge record; leave keyword search in place.
       if (doc.bytes > 48 * 1024 * 1024) return send(null);
       let entry = cache.get(doc.key);
-      if (entry?.revision !== doc.revision) {
+      if (entry?.revision !== doc.revision || entry.references !== references) {
         const source = db.query<{ body: string }, [string]>('SELECT body FROM board_documents WHERE key=?').get(doc.key);
         const original = source ? (JSON.parse(source.body) as {cards: KanbanCard[]}).cards : [];
         const projected = boundedSearchProjection(original, data.policy, MAX_PROJECTED_CARDS - cards.length,
-          MAX_PROJECTED_BYTES - bytes);
+          MAX_PROJECTED_BYTES - bytes, references);
         if (!projected) return send(null);
-        entry = { revision: doc.revision, ...projected };
+        entry = { revision: doc.revision, references, ...projected };
       }
       if (cards.length + entry.cards.length > MAX_PROJECTED_CARDS || bytes + entry.bytes > MAX_PROJECTED_BYTES)
         return send(null);

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { KanbanStore } from '../core/store';
 import { matchesWikiArchiveStatus } from '../core/store';
 import type { WorkStore } from '../core/work-store';
-import { CARD_SEMANTIC_SEARCH_PATH, CARD_SEMANTIC_SETTINGS_PATH } from '../core/card-semantic';
+import { CARD_SEMANTIC_SEARCH_PATH, CARD_SEMANTIC_SETTINGS_PATH, exactReferenceKeys } from '../core/card-semantic';
 import { parseSemanticConfig, type CardSemanticSearch } from '../plugin/card-semantic-search';
 import { DEFAULT_BOARD_FILTERS, filterBoardCards, filterUnreadOnly } from '../../web/src/components/Board/board-filters';
 import { indexWorksBySession, filterCardsByWork, resolveWorkFilter } from '../../web/src/components/Board/board-works';
@@ -19,9 +19,10 @@ const requestSchema = z.object({
 });
 
 async function scopedCards(scope: z.infer<typeof requestSchema>['scope'], store: KanbanStore, works: WorkStore | undefined,
-  signal: AbortSignal, service: CardSemanticSearch) {
+  signal: AbortSignal, service: CardSemanticSearch, hasExactReferences: boolean) {
   return store.readBoardSnapshot(async () => {
-    const cards = await service.projectedCards(scope.kind, signal);
+    const cards = await service.projectedCards(scope.kind, signal,
+      !hasExactReferences ? 'none' : scope.kind === 'archive' ? 'archive' : 'all');
     if (!cards) return null;
     if (scope.kind === 'work' || scope.kind === 'archive') {
       const allowed = new Set<string>();
@@ -70,11 +71,14 @@ export async function handleCardSemanticRoute(options: {
   catch { return error('Invalid JSON', 400); }
   if (path === CARD_SEMANTIC_SETTINGS_PATH) {
     const config = parseSemanticConfig(input);
-    if (!config) return error('Provide at least one approved absolute directory to enable card search', 400);
+    if (!config) return error('Use whole-board scope or provide at least one approved absolute directory to enable card search', 400);
     await service.configure(config);
     return json(await service.status());
   }
   const result = requestSchema.safeParse(input);
   if (!result.success) return error('Invalid card search', 400);
-  return json(await service.search(result.data.query, (signal) => scopedCards(result.data.scope, store, workStore, signal, service), req.signal, result.data.scope.kind, true));
+  const { query, scope } = result.data;
+  const hasExactReferences = /^\d+$/.test(query) || exactReferenceKeys(query).length > 0;
+  return json(await service.search(query, signal => scopedCards(scope, store, workStore, signal, service,
+    hasExactReferences), req.signal, scope.kind, true));
 }

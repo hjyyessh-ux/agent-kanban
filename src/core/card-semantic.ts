@@ -4,6 +4,7 @@ export const CARD_SEMANTIC_SEARCH_PATH = '/api/cards/search/semantic';
 
 export interface CardSemanticConfig {
   enabled: boolean;
+  scope?: 'all' | 'directories';
   directories: string[];
 }
 
