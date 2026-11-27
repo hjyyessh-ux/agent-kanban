@@ -22,10 +22,9 @@ HANDOFF_DELAY_SECONDS=1
 LOG_FILE="$DATA_DIR/restart-main-session.log"
 DRY_RUN=0
 FORCE_KILL=0
-# Cold-start fallback: used whenever there is no live runtime owner to hand off
-# from (missing lock, stale/dead PID). The goal of this script is to ALWAYS end
-# up with a fresh session running, so these defaults must be runnable on their own.
-COLD_START_COMMAND="${KANBAN_RESTART_COMMAND:-opencode}"
+# Start the standalone daemon when there is no live owner to restart.
+printf -v DEFAULT_DAEMON_COMMAND 'bun run %q' "$REPO_ROOT/src/daemon/index.ts"
+COLD_START_COMMAND="${KANBAN_RESTART_COMMAND:-$DEFAULT_DAEMON_COMMAND}"
 COLD_START_CWD="${KANBAN_RESTART_CWD:-$REPO_ROOT}"
 
 usage() {
@@ -137,12 +136,12 @@ validate_restart_command() {
   local command_line="$1"
 
   case "$command_line" in
-    opencode*|*"/opencode "*|*src/plugin/index.ts*|*src/daemon/index.ts*|*"bun run dev:plugin"*)
+    *src/daemon/index.ts*|*dist/daemon/index.js*)
       return 0
       ;;
     *)
       echo "Unsupported restart command: $command_line" >&2
-      echo "Supported patterns: opencode / src/plugin/index.ts / src/daemon/index.ts / bun run dev:plugin" >&2
+      echo "Supported standalone entrypoints: src/daemon/index.ts / dist/daemon/index.js" >&2
       return 1
       ;;
   esac
@@ -272,7 +271,7 @@ fi
 
 mkdir -p "$(dirname "$LOG_FILE")"
 
-nohup /bin/zsh -lc '
+KANBAN_DATA_DIR="$DATA_DIR" nohup /bin/zsh -lc '
   target_pid="$1"
   target_cwd="$2"
   target_command="$3"

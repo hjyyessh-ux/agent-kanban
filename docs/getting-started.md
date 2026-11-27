@@ -1,6 +1,6 @@
 # agent-kanban 시작 가이드
 
-agent-kanban은 AI 코딩 보조 CLI 도구인 opencode의 플러그인입니다. AI 작업을 세션을 넘어 칸반 보드로 추적하고, 반복 작업을 자동화하는 스케줄러를 내장하고 있습니다. 수동 생성 작업은 Opencode, Codex, Claude runtime 중 하나로 실행할 수 있습니다. 이 가이드는 처음 사용하는 분들을 위해 설치부터 첫 번째 카드 생성까지 단계별로 안내합니다.
+Agent Kanban은 Codex와 Claude Code의 작업을 로컬 칸반 보드에서 추적합니다. 설치 스크립트가 두 CLI의 세션 시작 hook을 등록하고, hook이 웹 보드를 제공하는 공용 Bun 데몬을 시작합니다.
 
 ---
 
@@ -28,25 +28,14 @@ Playwright와 Vite production build가 Node.js를 사용합니다. Node 18에서
 node --version
 ```
 
-### opencode CLI
+### Codex 또는 Claude Code와 jq
 
-opencode는 터미널에서 동작하는 AI 코딩 보조 도구입니다. 코드 작성, 디버깅, 리팩터링 등 다양한 작업을 AI와 함께 수행할 수 있습니다. agent-kanban은 이 CLI의 플러그인으로 동작합니다.
-
-```bash
-# opencode 설치 (미설치 시)
-npm install -g opencode
-
-# 버전 확인
-opencode --version
-```
-
-### Codex / Claude CLI (선택)
-
-Codex 또는 Claude runtime으로 실제 dispatch를 실행하려면 로컬 CLI와 계정 설정이 필요합니다. CI/E2E에서는 실제 비용 호출을 하지 않고 fake binary와 fake runtime 서버로 검증합니다.
+사용할 CLI를 설치하고 로그인합니다. 설치 스크립트가 두 CLI의 hook 설정을 갱신할 때 `jq`를 사용합니다.
 
 ```bash
 codex --version
 claude --version
+jq --version
 ```
 
 ---
@@ -60,35 +49,17 @@ git clone https://github.com/hjyyessh-ux/agent-kanban.git
 cd agent-kanban
 ```
 
-### 의존성 설치
+### 데몬 빌드 및 hook 등록
 
 ```bash
-bun install
+bash scripts/install.sh
 ```
 
-### 빌드
-
-플러그인(Bun build)과 웹 UI(Vite)를 함께 빌드합니다.
-
-```bash
-bun run build
-```
-
-빌드가 완료되면 `dist/plugin/index.js`에 플러그인 번들이 생성되고, `web/dist/`에 웹 UI 정적 파일이 생성됩니다.
-
----
-
-## opencode 플러그인 등록
-
-`./scripts/install.sh`는 플러그인 번들(`dist/plugin/index.js`)과 웹 자산(`web/dist`)을 전역 플러그인 디렉터리 `~/.config/opencode/plugins/agent-kanban/`로 복사하고, `~/.config/opencode/opencode.json`의 `plugin` 배열에 전역 플러그인 엔트리를 추가합니다.
-
-이 저장소는 프로젝트 로컬 `opencode.json` 자동 감지가 아니라, 전역(global) 플러그인 로딩을 기준으로 설치/실행합니다.
-
----
+설치 스크립트가 `dist/daemon/index.js`와 `web/dist/`를 빌드하고, Claude Code와 Codex에 SessionStart hook을 등록합니다. 데몬 위치는 `~/.agent-kanban/daemon-project-path`에 기록합니다.
 
 ## 서버 실행
 
-별도로 서버를 수동으로 실행할 필요가 없습니다. opencode에서 플러그인이 로드되는 순간 `ServerMonitor` 클래스가 자동으로 HTTP 서버를 시작합니다.
+설치 후 새 터미널에서 `codex` 또는 `claude`를 실행합니다. SessionStart hook은 기존 데몬에 연결하거나 데몬을 시작합니다. 직접 실행하려면 저장소에서 `bun start`를 사용합니다.
 
 ### 기본 포트
 
@@ -113,7 +84,7 @@ http://localhost:24680
 환경 변수로 포트를 직접 지정할 수 있습니다.
 
 ```bash
-KANBAN_PORT=3000 opencode
+KANBAN_PORT=3000 bun start
 ```
 
 ### 서버 상태 모니터링
@@ -154,7 +125,7 @@ Board의 TODO 왼쪽 여백에 있는 **⚡ Quick ›** edge tab을 누르면 �
 
 ### Capabilities 탭: MCP와 Skill 관리
 
-Capabilities의 **Inventory**에서는 Claude/Codex MCP와 Claude/Codex/OpenCode Skill을 함께 확인합니다. All/Claude/Codex/OpenCode 필터는 MCP와 Skill 행에 동일하게 적용되며 각 행의 runtime badge로 같은 이름의 항목도 즉시 구분할 수 있습니다. 같은 이름의 Claude/Codex MCP는 각각 `claude:<name>`, `codex:<name>` identity를 사용하므로 상세 보기와 mutation 대상이 섞이지 않습니다.
+Capabilities의 **Inventory**에서 Claude와 Codex의 MCP 및 Skill을 확인하고 runtime 필터로 좁힐 수 있습니다. 같은 이름의 Claude/Codex MCP는 각각 `claude:<name>`, `codex:<name>` identity를 사용하므로 상세 보기와 mutation 대상이 섞이지 않습니다.
 
 MCP 설정 위치는 runtime에 따라 다릅니다.
 
@@ -217,7 +188,7 @@ Settings에 `TELEGRAM_CHANNEL_IDS` key를 추가하고 허용할 chat id를 쉼�
 데이터 디렉터리를 변경하려면 `KANBAN_DATA_DIR` 환경 변수를 설정합니다.
 
 ```bash
-KANBAN_DATA_DIR=/path/to/custom/dir opencode
+KANBAN_DATA_DIR=/path/to/custom/dir bun start
 ```
 
 ### 보안 주의사항
@@ -257,8 +228,6 @@ http://localhost:5173
 bun start
 ```
 
-opencode plugin runtime이 필요하면 `bun run dev:plugin`을 사용합니다.
-
 ---
 
 ## 첫 번째 카드 만들기
@@ -268,27 +237,15 @@ opencode plugin runtime이 필요하면 `bun run dev:plugin`을 사용합니다.
 1. 브라우저에서 `http://localhost:24680`에 접근합니다.
 2. Board 탭의 상단 오른쪽 "새 카드 만들기" 버튼을 클릭합니다.
 3. 제목(필수)과 설명을 입력합니다.
-4. Runtime을 선택합니다.
-5. Opencode는 preset/모델을 선택합니다.
-6. Codex는 모델, reasoning effort, sandbox를 선택합니다.
-7. Claude는 모델과 permission mode를 선택합니다.
-8. 선택적으로 프로젝트 디렉터리 경로를 입력합니다.
-9. "만들기" 버튼을 클릭하면 TODO 컬럼에 카드가 추가됩니다.
+4. Codex 또는 Claude를 선택합니다.
+5. Codex는 모델·reasoning effort·sandbox를, Claude는 모델·permission mode를 선택합니다.
+6. 프로젝트 디렉터리 경로를 입력하고 카드를 만듭니다.
 
-`agentRuntime`이 없는 기존 card는 `opencode`로 취급됩니다. dispatch 후 card의 `sessionId`는 runtime별 actual continuation id입니다. Codex는 `thread_id`, Claude는 `session_id`를 확보한 뒤에만 `sessionId`를 저장합니다.
+이어갈 세션 ID는 Codex의 `thread_id` 또는 Claude의 `session_id`를 확인한 뒤 저장합니다.
 
-### 방법 2: 플러그인 도구에서 생성
+### 방법 2: CLI 세션에서 생성
 
-opencode 세션 내에서 `kanban_create` 도구를 직접 호출할 수 있습니다.
-
-```
-kanban_create 도구 호출 예시:
-- title: "API 엔드포인트 구현"
-- description: "사용자 인증 관련 REST API 엔드포인트를 설계하고 구현합니다."
-- projectDir: "/Users/user/my-project"
-```
-
-카드가 생성되면 고유 ID와 함께 TODO 상태로 보드에 추가됩니다. 웹 UI를 새로고침하면 즉시 확인할 수 있습니다.
+터미널에서 Codex 또는 Claude Code를 시작하고 작업을 입력합니다. 설치된 hook이 해당 세션의 카드를 보드에 기록합니다.
 
 ---
 
@@ -351,7 +308,6 @@ bunx tsc --noEmit
 - 실제 Codex/Claude CLI 호출은 CI에 포함하지 않습니다. fake binary/unit test와 `e2e/runtime-integration.e2e.ts` fake runtime, 필요 시 수동 smoke로 검증합니다.
 - Codex/Claude 실행은 로컬 CLI 설치, 로그인 상태, 네트워크, 과금 정책의 영향을 받습니다.
 - Codex/Claude는 actual continuation id를 얻기 전까지 `sessionId`를 저장하지 않으므로, id timeout 시 card는 `todo`로 복귀하고 `progressSummary=[failed] ...`가 남습니다.
-- Telegram selected-session state는 runtime metadata를 보존합니다. 현재 `src/plugin/telegram-poller.ts`는 안전 가드로 `/sessions` 후보를 opencode session으로 제한하므로, Codex/Claude Telegram follow-up을 릴리즈하려면 runtime-aware adapter resume 테스트를 먼저 통과시켜야 합니다.
 
 ---
 
@@ -386,4 +342,4 @@ bun run build
 curl http://localhost:24680/api/cards
 ```
 
-응답이 없다면 플러그인이 로드되지 않은 것입니다. `./scripts/install.sh`를 다시 실행해 전역 플러그인 파일이 최신인지 확인하고, `~/.config/opencode/opencode.json`에 `agent-kanban` 플러그인 엔트리가 있는지 확인하세요.
+응답이 없다면 `~/.agent-kanban/daemon-project-path`의 경로와 Codex·Claude 설정의 SessionStart hook을 확인합니다. `bash scripts/install.sh`로 hook을 다시 등록한 뒤 새 세션을 시작할 수 있습니다.

@@ -223,7 +223,7 @@ export function startApplyUpdateRestart(): MaintenanceStartResult {
 
   const repoRoot = resolveRepoRoot(projectPath);
   const installPath = join(repoRoot, 'scripts', 'install.sh');
-  const restartPath = join(repoRoot, 'scripts', 'restart-opencode-plugin.sh');
+  const restartPath = join(repoRoot, 'scripts', 'restart-agent-kanban.sh');
 
   if (!existsSync(installPath)) {
     throw new Error(`Install script not found: ${installPath}`);

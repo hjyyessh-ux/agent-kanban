@@ -46,32 +46,27 @@ Capabilities 탭은 user-authored skills와 로컬 scripts를 같은 실행 자�
 - **Bun**: package manager와 runtime입니다. 미설치 시 `curl -fsSL https://bun.sh/install | bash`로 설치한 뒤 셸을 재시작하세요. `scripts/install.sh`는 bun이 없으면 설치 안내와 함께 중단됩니다.
 - **Node.js 18+**: Playwright와 일부 개발 도구에서 필요합니다.
 - **Git**: 저장소 clone과 업데이트에 필요합니다.
-- **opencode CLI**: opencode plugin/runtime으로 사용할 때 필요합니다.
 - **Codex CLI**: 선택 사항입니다. Codex runtime dispatch와 `gpt-*` Wiki 모델에 필요합니다.
 - **Claude CLI / Claude Code**: 선택 사항입니다. Claude runtime dispatch와 non-`gpt-*` Wiki 모델에 필요합니다.
-- **jq**: 권장 사항입니다. `scripts/install.sh`가 전역 Claude/Codex hook 설정을 안전하게 갱신할 때 사용합니다.
+- **jq**: 설치에 필요합니다. `scripts/install.sh`가 전역 Claude/Codex hook 설정을 안전하게 갱신할 때 사용합니다.
 
 ## 설치
 
 ```bash
 git clone https://github.com/hjyyessh-ux/agent-kanban.git
 cd agent-kanban
-bun install
-./scripts/install.sh
+bash scripts/install.sh
 ```
 
-`./scripts/install.sh`는 build를 실행한 뒤 opencode plugin bundle과 Claude Code / Codex hook을 등록합니다.
+`./scripts/install.sh`는 공용 Bun 데몬과 웹 화면을 빌드하고 Claude Code와 Codex의 전역 hook을 등록합니다.
 
-- opencode plugin: `~/.config/opencode/plugins/agent-kanban/`
 - Claude Code hooks: `~/.agent-kanban/hooks/`
 - Codex hooks: `~/.agent-kanban/codex-hooks/`
 - daemon project pointer: `~/.agent-kanban/daemon-project-path`
 
-설치 후 opencode, Claude Code, Codex를 재시작해야 plugin/hook 설정이 다시 로드됩니다.
+설치 후 터미널에서 `codex` 또는 `claude`를 시작하면 SessionStart hook이 공용 데몬을 띄웁니다. 브라우저에서 `http://localhost:24680`을 엽니다.
 
-설치가 끝나면 `bun start`로 데몬을 직접 실행하거나, 새 opencode/Claude Code/Codex 세션을 시작해 데몬을 자동 기동시킨 뒤 브라우저에서 `http://localhost:24680`을 엽니다. 설치 스크립트 완료 메시지에도 동일한 안내가 출력됩니다.
-
-설치된 hook과 plugin 참조를 제거하려면 다음 명령을 실행합니다.
+설치된 hook을 제거하려면 다음 명령을 실행합니다.
 
 ```bash
 ./scripts/install.sh --uninstall
@@ -85,7 +80,7 @@ bun install
 http://localhost:24680
 ```
 
-opencode plugin으로 로드되면 서버가 자동으로 시작됩니다. Codex 또는 Claude Code hook만 사용하는 경우에는 새 세션이 시작될 때 background daemon이 실행됩니다.
+새 Codex 또는 Claude Code 세션에서 데몬을 자동으로 시작합니다. 데몬에 이미 연결할 수 있으면 같은 서버를 사용합니다. 직접 실행하려면 `bun start`를 사용합니다.
 
 로컬 개발에서는 backend와 frontend를 별도 터미널에서 실행합니다.
 
@@ -211,10 +206,9 @@ Capabilities는 기존 Skills 중심 화면을 확장한 통합 실행 자산 �
 ## 개발
 
 ```bash
-bun run build       # backend(daemon+plugin)와 web UI build
+bun run build       # standalone daemon과 web UI build
 bun start           # standalone daemon 실행 (기본 진입점)
 bun run dev         # Vite dev server on 5173
-bun run dev:plugin  # opencode plugin runtime 직접 실행
 bunx tsc --noEmit   # typecheck
 bun test            # unit/integration tests
 bun run test:e2e    # Playwright specs

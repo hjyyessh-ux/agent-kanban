@@ -1,7 +1,7 @@
 {
   "name": "agent-kanban",
   "version": "0.1.0",
-  "description": "Kanban board plugin for opencode — dispatch and track agent (opencode / Codex / Claude) sessions",
+  "description": "Standalone kanban daemon for Codex and Claude Code sessions",
   "main": "dist/daemon/index.js",
   "exports": {
     ".": "./dist/daemon/index.js",
@@ -19,7 +19,6 @@
     "url": "https://github.com/hjyyessh-ux/agent-kanban/issues"
   },
   "keywords": [
-    "opencode",
     "kanban",
     "plugin",
     "agent",
@@ -55,7 +54,8 @@
   "scripts": {
     "dev": "bunx vite --port 5173",
     "build": "bun run build:backend && bun run build:web",
-    "build:backend": "bun build src/daemon/index.ts --outdir dist/daemon --target bun && bun build src/plugin/index.ts --outdir dist/plugin --target bun && bun scripts/build-card-semantic-worker.ts dist/daemon dist/plugin",
+    "build:backend": "bun build src/daemon/index.ts --outdir dist/daemon --target bun && bun scripts/build-card-semantic-worker.ts dist/daemon",
+    "build:plugin": "bun build src/plugin/index.ts --outdir dist/plugin --target bun && bun scripts/build-card-semantic-worker.ts dist/plugin",
     "build:web": "bunx vite build",
     "start": "bun run src/daemon/index.ts",
     "test": "bun test",
